@@ -5,6 +5,7 @@ import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.engine.observer.SessionSubject;
 import com.gen3.recommenderagent.storage.sessioncache.SessionCache;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;

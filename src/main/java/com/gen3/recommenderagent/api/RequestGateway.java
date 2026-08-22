@@ -20,6 +20,14 @@ public class RequestGateway {
         this.responseGenerator = responseGenerator;
     }
 
+    /**
+     * Handles the logic at the highest level, from request to response
+     *
+     * @param sessionId
+     * @param userId
+     * @param rawText
+     * @return
+     */
     public String handleRequest(String sessionId, String userId, String rawText) {
         // 1. Parser receives ONLY raw text
         SessionRequest currentRequest = inputParser.parse(rawText);
