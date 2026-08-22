@@ -15,7 +15,8 @@ public class SessionRequest {
     private Preferences preferences;
     private Constraints constraints;
     private Feedback feedback;
-    // private Reference reference;
+
+    private Reference reference;
 
     private Recommendations recommendations;
 
@@ -78,6 +79,14 @@ public class SessionRequest {
 
     public void setFeedback(Feedback feedback) {
         this.feedback = feedback;
+    }
+
+    public Reference getReference() {
+        return reference;
+    }
+
+    public void setReference(Reference reference) {
+        this.reference = reference;
     }
 
     public Recommendations getRecommendations() {

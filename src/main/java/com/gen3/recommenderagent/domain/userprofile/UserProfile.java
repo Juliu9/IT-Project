@@ -4,16 +4,10 @@ import jakarta.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
 
-@Entity
-@Table(name = "user_profiles")
 public class UserProfile {
 
-    @Id
-    @Column(name = "user_id")
     private String userId;
 
-    // CascadeType.ALL means saving a UserProfile automatically saves their Preferences
-    @OneToMany(mappedBy = "userProfile", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Preference> preferences = new ArrayList<>();
 
     public UserProfile() {
