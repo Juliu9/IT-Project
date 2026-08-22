@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.engine.observer;
+package com.gen3.recommenderagent.engine;
 
 import com.gen3.recommenderagent.domain.session.Session;
 

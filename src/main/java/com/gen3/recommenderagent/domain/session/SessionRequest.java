@@ -9,6 +9,7 @@ public class SessionRequest {
     private String requestId;
     private String rawText;
 
+    // IMPORTANT !!
     private Intent intent;
 
     private Query query;
@@ -16,7 +17,7 @@ public class SessionRequest {
     private Constraints constraints;
     private Feedback feedback;
 
-    private Reference reference;
+    private BookReference bookReference;
 
     private Recommendations recommendations;
 
@@ -81,12 +82,12 @@ public class SessionRequest {
         this.feedback = feedback;
     }
 
-    public Reference getReference() {
-        return reference;
+    public BookReference getReference() {
+        return bookReference;
     }
 
-    public void setReference(Reference reference) {
-        this.reference = reference;
+    public void setReference(BookReference bookReference) {
+        this.bookReference = bookReference;
     }
 
     public Recommendations getRecommendations() {

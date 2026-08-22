@@ -1,10 +1,10 @@
 package com.gen3.recommenderagent.domain.session;
 
-public class Reference {
+public class BookReference {
     private String bookId;
     private String context;
 
-    public Reference() {}
+    public BookReference() {}
 
     public String getBookId() { return bookId; }
     public void setBookId(String bookId) { this.bookId = bookId; }

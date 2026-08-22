@@ -6,8 +6,10 @@ import com.gen3.recommenderagent.engine.RecommendationEngine;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.response.ResponseGenerator;
 import org.springframework.stereotype.Component;
+import org.springframework.web.bind.annotation.*;
 
-@Component
+@RestController
+@RequestMapping("/api/v1/recommendations")
 public class RequestGateway {
 
     private final InputParser inputParser;
@@ -28,7 +30,11 @@ public class RequestGateway {
      * @param rawText
      * @return
      */
-    public String handleRequest(String sessionId, String userId, String rawText) {
+    @PostMapping
+    public String handleRequest(
+            @RequestHeader("X-Session-Id") String sessionId,
+            @RequestHeader("X-User-Id") String userId,
+            @RequestBody String rawText) {
         // 1. Parser receives ONLY raw text
         SessionRequest currentRequest = inputParser.parse(rawText);
 
