@@ -23,8 +23,8 @@ public class ResponseGenerator {
      */
     public String generate(Recommendations recommendations, SessionRequest currentRequest) {
         // 1. Validate inputs to prevent null pointer exceptions
-        if (recommendations == null || currentRequest == null) {
-            return "I'm sorry, I couldn't process your recommendations right now.";
+        if (recommendations == null && currentRequest == null) {
+            return "I'm sorry, I couldn't process your request right now.";
         }
 
         // 2. Construct the system/user prompts with structured data

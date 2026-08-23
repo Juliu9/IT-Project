@@ -5,7 +5,6 @@ import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.engine.RecommendationEngine;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.response.ResponseGenerator;
-import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.*;
 
 @RestController

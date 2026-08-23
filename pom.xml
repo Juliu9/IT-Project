@@ -38,7 +38,7 @@
 
 
         <!-- ========================= -->
-        <!-- PostgreSQL                 -->
+        <!-- PostgresSQL                 -->
         <!-- ========================= -->
 
         <dependency>
@@ -72,6 +72,10 @@
             <version>9.6.0</version>
         </dependency>
 
+        <!-- ========================= -->
+        <!-- AI Agents                 -->
+        <!-- ========================= -->
+
 
         <!-- ========================= -->
         <!-- Testing                   -->
@@ -92,6 +96,18 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>1.21.4</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa-test</artifactId>
             <scope>test</scope>
         </dependency>
 

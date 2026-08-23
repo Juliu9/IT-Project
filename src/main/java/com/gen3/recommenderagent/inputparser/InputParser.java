@@ -10,6 +10,8 @@ public class InputParser {
         // It ONLY sees rawText and returns a populated SessionRequest.
         SessionRequest request = new SessionRequest();
         request.setRawText(rawText);
+
+
         return request;
     }
 }

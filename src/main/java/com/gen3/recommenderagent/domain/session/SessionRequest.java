@@ -9,6 +9,9 @@ public class SessionRequest {
     private String requestId;
     private String rawText;
 
+    // Used to get personalised recommendations
+    private boolean isPersonalised;
+
     // IMPORTANT !!
     private Intent intent;
 
@@ -40,6 +43,14 @@ public class SessionRequest {
 
     public void setRawText(String rawText) {
         this.rawText = rawText;
+    }
+
+    public boolean isPersonalised() {
+        return isPersonalised;
+    }
+
+    public void setPersonalised(boolean personalised) {
+        isPersonalised = personalised;
     }
 
     public Intent getIntent() {
@@ -82,11 +93,11 @@ public class SessionRequest {
         this.feedback = feedback;
     }
 
-    public BookReference getReference() {
+    public BookReference getBookReference() {
         return bookReference;
     }
 
-    public void setReference(BookReference bookReference) {
+    public void setBookReference(BookReference bookReference) {
         this.bookReference = bookReference;
     }
 
