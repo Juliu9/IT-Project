@@ -137,6 +137,7 @@ cmake-build-*/
 secrets/
 
 # =========================
-# AI Outputs
+# Generated Outputs
 # =========================
 repomix-output.xml
+*.puml
