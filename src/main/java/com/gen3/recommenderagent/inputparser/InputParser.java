@@ -4,8 +4,13 @@ import com.gen3.recommenderagent.domain.session.SessionRequest;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Component;
 
+import java.security.SecureRandom;
+import java.util.UUID;
+
 @Component
 public class InputParser {
+    private static final SecureRandom RANDOM = new SecureRandom();
+
     private final ChatClient chatClient;
 
     public InputParser(ChatClient.Builder chatClientBuilder) {
@@ -29,7 +34,7 @@ public class InputParser {
                         
                                 Only create feedback when the user is commenting on recommendations they have already received. Do not guess or add details that the user did not mention.
                         
-                                Leave requestId, createdAt, and recommendations null because they will be handled by other parts of the system.
+                                Ignore requestId, createdAt, and recommendations because they will be handled by other parts of the system.
                         """)
                 .user(rawText)
                 .call()
@@ -41,8 +46,20 @@ public class InputParser {
             );
         }
 
+        request.setRequestId(createUuidV7().toString());
         request.setRawText(rawText);
 
         return request;
+    }
+
+    private UUID createUuidV7() {
+        long timestamp = System.currentTimeMillis() & 0xFFFFFFFFFFFFL;
+        long randomA = RANDOM.nextLong() & 0x0FFFL;
+        long randomB = RANDOM.nextLong() & 0x3FFFFFFFFFFFFFFFL;
+
+        long mostSignificantBits = (timestamp << 16) | 0x7000L | randomA;
+        long leastSignificantBits = 0x8000000000000000L | randomB;
+
+        return new UUID(mostSignificantBits, leastSignificantBits);
     }
 }
