@@ -13,8 +13,9 @@ The `RecommenderAgent` acts as a middleware orchestration engine. Its primary re
 * **Input Parsing:** Taking raw text input and parsing it into structured intents and constraints (`InputParser`).
 * **Session Management:** Maintaining conversational state and history using Redis (`RedisSessionCache`).
 * **User Profiling:** Storing and retrieving long-term user preferences using PostgreSQL (`UserProfileDB`).
-* **Candidate Retrieval & Ranking:** Querying an external Apache Solr instance for audiobook candidates (`SolrAudiobookRepository`).
-* **Response Generation:** Compiling recommendations and user context into prompts for an external AI/LLM service (`ResponseGenerator`).
+* **Candidate Retrieval:** Querying an external Apache Solr instance for audiobook candidates (`SolrAudiobookRepository`).
+* **Candidate Ranking:** Using machine learning to rank the candidates based on similarity to the target and optional weightings (`RankingService`).
+* **Response Generation:** Compiling recommendations and user title into prompts for an external AI/LLM service (`ResponseGenerator`).
 
 The architecture is highly decoupled, utilizing Spring's `ApplicationEventPublisher` to handle asynchronous session updates without blocking the main request thread. It also leverages Java Virtual Threads for high-concurrency request handling.
 
@@ -124,7 +125,7 @@ The project uses JUnit 5 and Testcontainers.
 #### Important Test Requirements
 1. **Testcontainers:** The `UserProfileDBTest` and `RedisSessionCacheTest` use Testcontainers to automatically spin up ephemeral Postgres and Redis Docker containers. Docker must be running on your machine to execute these tests.
 2. **Solr Test:** The `SolrAudiobookRepositoryTest` attempts to connect to a live Solr instance using `System.getenv("SOLR_URL")`. You must have the `SOLR_URL`, `SOLR_USERNAME`, and `SOLR_PASSWORD` environment variables set in your terminal before running the tests, or this specific test will fail.
-3. **Context Load Test:** `RecommenderAgentApplicationTests` loads the full Spring context. It requires the `SOLR_URL` environment variable to be present (due to `application.properties`) and expects Postgres/Redis to be available on localhost (via `compose.yaml`).
+3. **Context Load Test:** `RecommenderAgentApplicationTests` loads the full Spring title. It requires the `SOLR_URL` environment variable to be present (due to `application.properties`) and expects Postgres/Redis to be available on localhost (via `compose.yaml`).
 
 #### Execution Command
 Export the required variables first, then execute the test suite:
@@ -182,3 +183,18 @@ src/main/java/com/gen3/recommenderagent/
 * **Never commit secrets:** Do not commit `.env` files, `AI_API_KEY` secrets, or database production passwords to version control systems.
 * **Gitignore:** The repository's `.gitignore` file is already configured to block `.env` files. Ensure you keep your local credentials confined to these ignored files.
 * **Production DDL:** In your production `application.properties` configuration, make sure the setup for `spring.jpa.hibernate.ddl-auto` is locked down.
+
+---
+
+### 11. Useful Commands
+
+| Task                       | Command                            |
+|----------------------------|------------------------------------|
+| **Start Docker Services**  | `docker compose up -d`             |
+| **Stop Docker Services**   | `docker compose down`              |
+| **Configure .env**         | `export KEY="value"`               |
+| **Run Application**        | `./mvnw spring-boot:run`           |
+| **Run Tests**              | `./mvnw test`                      |
+| **Build JAR (Skip Tests)** | `./mvnw clean package -DskipTests` |
+| **Clean Build Directory**  | `./mvnw clean`                     |
+
