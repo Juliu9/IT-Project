@@ -45,7 +45,7 @@ class InputParserTest {
 
         registry.add(
                 "spring.ai.openai.chat.model",
-                () -> "gpt-5-mini"
+                () -> "gpt-4o-mini"
         );
     }
 
@@ -90,11 +90,6 @@ class InputParserTest {
                         || genre.equalsIgnoreCase("sci-fi")
         ));
 
-        assertNotNull(sessionRequest.getConstraints());
-        assertEquals(3, sessionRequest.getConstraints().getCount());
-        assertTrue("English".equalsIgnoreCase(
-                sessionRequest.getConstraints().getLanguage()
-        ));
     }
 
     private void printAgentResponse(SessionRequest sessionRequest) {

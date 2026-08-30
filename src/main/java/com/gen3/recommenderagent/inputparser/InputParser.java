@@ -26,32 +26,34 @@ public class InputParser {
             );
         }
 
-        var response = this.chatClient.prompt()
+        var aiResponse = this.chatClient.prompt()
                 .system("""
-                        You help an audiobook recommendation system understand what the user is looking for.
+                        Extract the user's audiobook search request.
                         
-                                Read the user's message and convert it into a SessionRequest. Choose the Intent that best describes the request.
-                        
-                                Add any mentioned topics, genres, authors, or search terms to the query. Record books or features the user wants included or excluded as preferences. If the user specifies a number of results, duration, or language, add those details to the constraints.
-                        
-                                Only create feedback when the user is commenting on recommendations they have already received. Do not guess or add details that the user did not mention.
-                        
-                                Ignore requestId, createdAt, and recommendations because they will be handled by other parts of the system.
+                        Use only information explicitly provided by the user.
+                        Choose the intent and populate the query fields.
+                        Set personalised only when the user asks for personalised results.
                         """)
                 .user(rawText)
                 .call()
-                .responseEntity(SessionRequest.class);
+                .responseEntity(ParsedRequest.class);
 
-        if (response.entity() == null) {
+        if (aiResponse.entity() == null) {
             throw new IllegalStateException(
-                    "AI did not return a SessionRequest"
+                    "AI did not return a ParsedRequest"
             );
         }
 
-        response.entity().setRequestId(createUuidV7().toString());
-        response.entity().setRawText(rawText);
+        ParsedRequest parsed = aiResponse.entity();
 
-        return response;
+        SessionRequest request = new SessionRequest();
+        request.setPersonalised(parsed.isPersonalised());
+        request.setIntent(parsed.getIntent());
+        request.setQuery(parsed.getQuery());
+        request.setRequestId(createUuidV7().toString());
+        request.setRawText(rawText);
+
+        return new ResponseEntity<>(aiResponse.response(), request);
     }
 
     private UUID createUuidV7() {
