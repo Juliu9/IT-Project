@@ -2,6 +2,8 @@ package com.gen3.recommenderagent.inputparser;
 
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ResponseEntity;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.stereotype.Component;
 
 import java.security.SecureRandom;
@@ -17,14 +19,14 @@ public class InputParser {
         this.chatClient = chatClientBuilder.build();
     }
 
-    public SessionRequest parse(String rawText) {
+    public ResponseEntity<ChatResponse, SessionRequest> parse(String rawText) {
         if (rawText == null || rawText.isBlank()) {
             throw new IllegalArgumentException(
                     "Please enter your request"
             );
         }
 
-        SessionRequest request = this.chatClient.prompt()
+        var response = this.chatClient.prompt()
                 .system("""
                         You help an audiobook recommendation system understand what the user is looking for.
                         
@@ -38,18 +40,18 @@ public class InputParser {
                         """)
                 .user(rawText)
                 .call()
-                .entity(SessionRequest.class);
+                .responseEntity(SessionRequest.class);
 
-        if (request == null) {
+        if (response.entity() == null) {
             throw new IllegalStateException(
                     "AI did not return a SessionRequest"
             );
         }
 
-        request.setRequestId(createUuidV7().toString());
-        request.setRawText(rawText);
+        response.entity().setRequestId(createUuidV7().toString());
+        response.entity().setRawText(rawText);
 
-        return request;
+        return response;
     }
 
     private UUID createUuidV7() {

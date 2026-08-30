@@ -8,6 +8,7 @@ public class SessionRequest {
 
     private String requestId;
     private String rawText;
+    private Instant createdAt;
 
     // Used to get personalised recommendations
     private boolean isPersonalised;
@@ -23,8 +24,6 @@ public class SessionRequest {
     private BookReference bookReference;
 
     private Recommendations recommendations;
-
-    private Instant createdAt;
 
     public SessionRequest() {
     }

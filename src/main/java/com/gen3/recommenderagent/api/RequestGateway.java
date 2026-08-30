@@ -35,7 +35,7 @@ public class RequestGateway {
             @RequestHeader("X-User-Id") String userId,
             @RequestBody String rawText) {
         // 1. Parser receives ONLY raw text
-        SessionRequest currentRequest = inputParser.parse(rawText);
+        SessionRequest currentRequest = inputParser.parse(rawText).entity();
 
         // 2. Engine combines parsed request with Redis session state
         Recommendations recommendations = recommendationEngine.process(sessionId, userId, currentRequest);
