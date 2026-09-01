@@ -1,12 +1,11 @@
 package com.gen3.recommenderagent.ranker;
 
 import org.apache.solr.client.solrj.SolrClient;
-import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.impl.HttpJdkSolrClient;
-import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class SolrAudiobookRepositoryTest {
@@ -20,21 +19,13 @@ public class SolrAudiobookRepositoryTest {
 
         SolrClient solrClient =
                 new HttpJdkSolrClient.Builder(solrUrl)
+                        .withBasicAuthCredentials(username, password)
                         .build();
 
-        SolrQuery query = new SolrQuery("*:*");
-        query.setRows(1);
-
-        QueryRequest request = new QueryRequest(query);
-
-        request.setBasicAuthCredentials(
-                username,
-                password
-        );
-
         try {
-            QueryResponse response =
-                    request.process(solrClient, "combinedbooks");
+            SolrAudiobookRepository repository =
+                    new SolrAudiobookRepository(solrClient, "combinedbooks");
+            QueryResponse response = repository.search("mystery", 1);
 
             System.out.println("SUCCESS!");
             System.out.println(
@@ -49,6 +40,9 @@ public class SolrAudiobookRepositoryTest {
             );
 
             assertNotNull(response);
+            assertFalse(response.getResults().isEmpty());
+            assertNotNull(response.getResults().getFirst().getFieldValue("id"));
+            assertNotNull(response.getResults().getFirst().getFieldValue("title"));
 
         } finally {
             solrClient.close();

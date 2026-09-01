@@ -41,6 +41,7 @@ The application will fail to start if these are not provided, as they do not hav
 | Variable | Description | Example / Format |
 | :--- | :--- | :--- |
 | `SOLR_URL` | The full HTTP URL to your Solr instance | `http://localhost:8983/solr` |
+| `SOLR_COLLECTION` | The Solr collection/core containing books | `combinedbooks` (default) |
 | `SOLR_USERNAME` | The basic auth username for Solr | `admin` |
 | `SOLR_PASSWORD` | The basic auth password for Solr | `admin_secret` |
 | `AI_API_KEY` | The API key for the LLM/AI service used in the ResponseGenerator | `sk-your-api-key-here` |
@@ -114,6 +115,17 @@ docker compose down
      -H "Content-Type: text/plain" \
      -d "I am looking for a historical fiction audiobook about WWII."
    ```
+
+   To verify the catalogue connection without session, preference, or AI processing,
+   use the minimal book search endpoint:
+
+   ```bash
+   curl "http://localhost:8080/api/v1/books/search?q=mystery&limit=5"
+   ```
+
+   `q` is required. `limit` defaults to 5 and is capped at 20. The response contains
+   `totalItems` and the matching books' `id`, `source`, `title`, `authors`,
+   `description`, and Solr `score`.
 
 ---
 
