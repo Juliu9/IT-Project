@@ -40,6 +40,12 @@ public class ResponseGenerator {
             return "I'm sorry, I couldn't process your request right now.";
         }
 
+        if (currentRequest != null && currentRequest.getConstraints() != null
+                && currentRequest.getConstraints().getCount() != null
+                && currentRequest.getConstraints().getCount() > 5) {
+            return buildRecommendationLimitResponse(currentRequest);
+        }
+
         // If there are no reccomendations, it returns a fallback message
         if (recommendations == null || recommendations.getRecommendations() == null
                 || recommendations.getRecommendations().isEmpty()) {
@@ -132,6 +138,13 @@ public class ResponseGenerator {
                     .append(" request");
         }
 
+        if (currentRequest != null && currentRequest.getQuery() != null
+                && currentRequest.getQuery().getGenres() != null
+                && !currentRequest.getQuery().getGenres().isEmpty()) {
+            response.append(" in ")
+                    .append(String.join(", ", currentRequest.getQuery().getGenres()));
+        }
+
         response.append(":\n");
 
         List<Recommendation> items = getTopRecommendations(recommendations);
@@ -155,6 +168,15 @@ public class ResponseGenerator {
         }
 
         return response.toString().trim();
+    }
+
+    private String buildRecommendationLimitResponse(SessionRequest currentRequest) {
+        if (currentRequest != null && currentRequest.getRawText() != null && !currentRequest.getRawText().isBlank()) {
+            return "I can only give a maximum of 5 recommendations at a time, so I can't fulfil that request for "
+                    + currentRequest.getRawText() + ".";
+        }
+
+        return "I can only give a maximum of 5 recommendations at a time.";
     }
 
     private List<Recommendation> getTopRecommendations(Recommendations recommendations) {
