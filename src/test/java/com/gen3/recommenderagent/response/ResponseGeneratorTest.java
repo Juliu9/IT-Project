@@ -46,6 +46,34 @@ class ResponseGeneratorTest {
     }
 
     @Test
+    void shouldRejectRequestsForMoreThanFiveRecommendations() {
+        ResponseGenerator generator = new ResponseGenerator(null);
+
+        SessionRequest request = new SessionRequest();
+        request.setIntent(Intent.NEW_RECOMMENDATION);
+        request.setRawText("Give me 10 recommendations");
+
+        Constraints constraints = new Constraints();
+        constraints.setCount(10);
+        request.setConstraints(constraints);
+
+        Recommendations recommendations = new Recommendations();
+        recommendations.setRecommendations(List.of(
+                new Recommendation("book-101", 1, 0.91),
+                new Recommendation("book-202", 2, 0.84),
+                new Recommendation("book-303", 3, 0.80),
+                new Recommendation("book-404", 4, 0.76),
+                new Recommendation("book-505", 5, 0.72),
+                new Recommendation("book-606", 6, 0.68)));
+
+        String response = generator.generate(recommendations, request);
+
+        assertNotNull(response);
+        assertTrue(response.toLowerCase().contains("maximum of 5"));
+        assertTrue(response.toLowerCase().contains("recommendations"));
+    }
+
+    @Test
     void shouldReturnFriendlyFallbackWhenNoDataIsAvailable() {
         ResponseGenerator generator = new ResponseGenerator(null);
 
