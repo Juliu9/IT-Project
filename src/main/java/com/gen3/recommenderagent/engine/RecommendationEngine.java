@@ -4,35 +4,46 @@ import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Recommendations;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
-import com.gen3.recommenderagent.domain.userprofile.Preference;
 import com.gen3.recommenderagent.ranker.CandidateRetriever;
+import com.gen3.recommenderagent.ranker.RankingService;
 import com.gen3.recommenderagent.storage.sessioncache.SessionCache;
 import com.gen3.recommenderagent.storage.userprofiledb.UserProfileDB;
+import org.apache.solr.client.solrj.util.ClientUtils;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 public class RecommendationEngine {
 
+    private static final int CANDIDATE_LIMIT = 50;
+    private static final int DEFAULT_RESULT_LIMIT = 5;
+    private static final int MAX_RESULT_LIMIT = 5;
+
     private final SessionCache sessionCache;
     private final ApplicationEventPublisher eventPublisher;
     private final CandidateRetriever candidateRetriever;
+    private final RankingService rankingService;
     private final UserProfileDB userProfileDB;
 
     public RecommendationEngine(
             SessionCache sessionCache,
             UserProfileDB userProfileDB,
             ApplicationEventPublisher eventPublisher,
-            CandidateRetriever candidateRetriever
+            CandidateRetriever candidateRetriever,
+            RankingService rankingService
     ) {
         this.sessionCache = sessionCache;
         this.userProfileDB = userProfileDB;
         this.eventPublisher = eventPublisher;
         this.candidateRetriever = candidateRetriever;
+        this.rankingService = rankingService;
     }
 
     public Recommendations process(
@@ -59,6 +70,10 @@ public class RecommendationEngine {
         // ==========================================
 
         Intent intent = currentRequest.getIntent();
+        if (intent == null) {
+            intent = Intent.UNKNOWN;
+            currentRequest.setIntent(intent);
+        }
 
         // TODO:
         // Use session history + currentRequest to resolve
@@ -256,13 +271,13 @@ public class RecommendationEngine {
         // Candidate retrieval
         var candidates = candidateRetriever.getCandidates(
                 query,
-                50
+                CANDIDATE_LIMIT
         );
 
-        // TODO:
-        // Pass candidates into ranking model.
-
-        return new Recommendations();
+        return rankingService.rank(
+                candidates,
+                resolveResultLimit(request)
+        );
     }
 
 
@@ -511,18 +526,73 @@ public class RecommendationEngine {
     private String buildRecommendationQuery(
             SessionRequest request
     ) {
+        Set<String> generalTerms = new LinkedHashSet<>();
+        Set<String> authors = new LinkedHashSet<>();
+        Set<String> excludedTerms = new LinkedHashSet<>();
 
-        // TAKE A LOOK AT WHAT SessionRequest contains.
+        if (request.getQuery() != null) {
+            addTerms(generalTerms, request.getQuery().getTopics());
+            addTerms(generalTerms, request.getQuery().getGenres());
+            addTerms(generalTerms, request.getQuery().getKeywords());
+            addTerms(authors, request.getQuery().getAuthors());
+        }
 
-        // Very basic example.
-        //
-        // Eventually this should use:
-        // - user preferences
-        // - current request
-        // - session history
-        // - extracted entities
-        // - filters
+        if (request.getPreferences() != null) {
+            addTerms(generalTerms, request.getPreferences().getInclude());
+            addTerms(excludedTerms, request.getPreferences().getExclude());
+        }
 
-        return "*:*";
+        List<String> clauses = new ArrayList<>();
+
+        if (!generalTerms.isEmpty()) {
+            clauses.add(buildFieldClause("all", generalTerms));
+        }
+
+        if (!authors.isEmpty()) {
+            clauses.add(buildFieldClause("authors", authors));
+        }
+
+        String positiveQuery = clauses.isEmpty()
+                ? "*:*"
+                : String.join(" AND ", clauses);
+
+        if (!excludedTerms.isEmpty()) {
+            positiveQuery += " AND -" + buildFieldClause("all", excludedTerms);
+        }
+
+        return positiveQuery;
+    }
+
+    private void addTerms(Set<String> destination, List<String> terms) {
+        if (terms == null) {
+            return;
+        }
+
+        terms.stream()
+                .filter(term -> term != null && !term.isBlank())
+                .map(String::trim)
+                .forEach(destination::add);
+    }
+
+    private String buildFieldClause(String field, Set<String> terms) {
+        String values = terms.stream()
+                .map(ClientUtils::escapeQueryChars)
+                .map(term -> "\"" + term + "\"")
+                .reduce((left, right) -> left + " OR " + right)
+                .orElseThrow();
+
+        return field + ":(" + values + ")";
+    }
+
+    private int resolveResultLimit(SessionRequest request) {
+        if (request.getConstraints() == null
+                || request.getConstraints().getCount() == null) {
+            return DEFAULT_RESULT_LIMIT;
+        }
+
+        return Math.min(
+                Math.max(request.getConstraints().getCount(), 1),
+                MAX_RESULT_LIMIT
+        );
     }
 }
