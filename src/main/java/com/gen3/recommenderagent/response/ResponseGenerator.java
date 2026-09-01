@@ -5,7 +5,6 @@ import com.gen3.recommenderagent.domain.session.Recommendations;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Component;
-import org.testcontainers.shaded.org.checkerframework.checker.units.qual.t;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -24,7 +23,6 @@ public class ResponseGenerator {
         this.chatClient = (chatClientBuilder != null) ? chatClientBuilder.build() : null;
     }
 
-    
     /**
      * Translates structured recommendations and user request context into a natural
      * language response.
@@ -48,7 +46,8 @@ public class ResponseGenerator {
             return generateFallbackResponse(currentRequest);
         }
 
-        // Builds a text summary of the request + reccomendation list to send to the AI
+        // Builds a text summary of the request + top recommendation list to send to the
+        // AI
         // model
         String prompt = compilePrompt(recommendations, currentRequest);
 
@@ -91,9 +90,10 @@ public class ResponseGenerator {
                         ? String.join(", ", currentRequest.getQuery().getGenres())
                         : "not specified";
 
-        // Converts list of reccomendation objects into a plain text summary for AI to
-        // understand
-        String recommendationsSummary = recommendations.getRecommendations().stream()
+        // Converts only the top five reccomendation objects into a plain text summary
+        // for AI to understand
+        List<Recommendation> topFive = getTopRecommendations(recommendations);
+        String recommendationsSummary = topFive.stream()
                 .map(this::formatRecommendationForPrompt)
                 .collect(Collectors.joining("; "));
 
@@ -134,7 +134,7 @@ public class ResponseGenerator {
 
         response.append(":\n");
 
-        List<Recommendation> items = recommendations.getRecommendations();
+        List<Recommendation> items = getTopRecommendations(recommendations);
         for (Recommendation recommendation : items) {
             if (recommendation == null) {
                 continue;
@@ -155,6 +155,19 @@ public class ResponseGenerator {
         }
 
         return response.toString().trim();
+    }
+
+    private List<Recommendation> getTopRecommendations(Recommendations recommendations) {
+        if (recommendations == null || recommendations.getRecommendations() == null) {
+            return List.of();
+        }
+
+        List<Recommendation> all = recommendations.getRecommendations();
+        if (all.size() <= 5) {
+            return all;
+        }
+
+        return all.subList(0, 5);
     }
 
     // Safe node output
