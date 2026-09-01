@@ -24,6 +24,7 @@ public class ResponseGenerator {
         this.chatClient = (chatClientBuilder != null) ? chatClientBuilder.build() : null;
     }
 
+    
     /**
      * Translates structured recommendations and user request context into a natural
      * language response.
