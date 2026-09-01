@@ -1,12 +1,13 @@
 package com.gen3.recommenderagent.domain.session;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class Recommendations {
 
-    private List<Recommendation> recommendations;
-    private List<String> shownBooks;
-    private List<String> excludedBooks;
+    private List<Recommendation> recommendations = new ArrayList<>();
+    private List<String> shownBooks = new ArrayList<>();
+    private List<String> excludedBooks = new ArrayList<>();
 
     public Recommendations() {
     }
