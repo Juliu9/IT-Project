@@ -4,6 +4,8 @@ import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Recommendations;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ResponseEntity;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -15,12 +17,8 @@ public class ResponseGenerator {
     // Holds the AI
     private final ChatClient chatClient;
 
-    public ResponseGenerator() {
-        this(null);
-    }
-
     public ResponseGenerator(ChatClient.Builder chatClientBuilder) {
-        this.chatClient = (chatClientBuilder != null) ? chatClientBuilder.build() : null;
+        this.chatClient = chatClientBuilder.build();
     }
 
     /**
@@ -58,10 +56,6 @@ public class ResponseGenerator {
         String prompt = compilePrompt(recommendations, currentRequest);
 
         // If the AI call fails, don’t crash — fall back to a simple built-in response.
-        if (chatClient == null) {
-            return buildHumanReadableResponse(recommendations, currentRequest);
-        }
-
         try {
             return chatClient.prompt()
                     .system("""
@@ -75,6 +69,35 @@ public class ResponseGenerator {
                     .content();
         } catch (Exception exception) {
             return buildHumanReadableResponse(recommendations, currentRequest);
+        }
+    }
+
+    public ResponseEntity<ChatResponse, String> generateWithMetadata(
+            Recommendations recommendations, SessionRequest currentRequest) {
+        if (recommendations == null || recommendations.getRecommendations() == null
+                || recommendations.getRecommendations().isEmpty()) {
+            return new ResponseEntity<>(null, generate(recommendations, currentRequest));
+        }
+
+        if (currentRequest != null && currentRequest.getConstraints() != null
+                && currentRequest.getConstraints().getCount() != null
+                && currentRequest.getConstraints().getCount() > 5) {
+            return new ResponseEntity<>(null, generate(recommendations, currentRequest));
+        }
+
+        try {
+            var aiResponse = chatClient.prompt()
+                    .system("""
+                            You are a helpful audiobook recommendation assistant.
+                            Rewrite the structured recommendation data into a short, natural-sounding response.
+                            Tone should be friendly, concise, and easy to read.
+                            Include the user's intent and mention each recommendation by its id or ranking when possible.
+                            """)
+                    .user(compilePrompt(recommendations, currentRequest))
+                    .call();
+            return new ResponseEntity<>(aiResponse.chatResponse(), aiResponse.content());
+        } catch (Exception exception) {
+            return new ResponseEntity<>(null, buildHumanReadableResponse(recommendations, currentRequest));
         }
     }
 
