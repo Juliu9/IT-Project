@@ -1,8 +1,11 @@
 name: CI
 
 on:
-  push:
+  # Run before code is merged into either shared branch.
   pull_request:
+    branches:
+      - staging
+      - main
   workflow_dispatch:
 
 permissions:
