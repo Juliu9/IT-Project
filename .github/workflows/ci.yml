@@ -1,6 +1,12 @@
 name: CI
 
 on:
+  # Re-check the exact code after a PR is merged.
+  push:
+    branches:
+      - staging
+      - main
+
   # Run before code is merged into either shared branch.
   pull_request:
     branches:
