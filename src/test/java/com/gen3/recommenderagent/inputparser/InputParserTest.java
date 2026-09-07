@@ -2,6 +2,7 @@ package com.gen3.recommenderagent.inputparser;
 
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.model.chat.client.autoconfigure.ChatClientAutoConfiguration;
@@ -23,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringJUnitConfig(InputParserTest.TestConfiguration.class)
+@Tag("external")
 class InputParserTest {
 
     @Autowired
