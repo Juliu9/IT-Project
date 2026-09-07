@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  # Run before code is merged into either shared branch.
+  pull_request:
+    branches:
+      - staging
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Compile and run automated tests
+        env:
+          # This placeholder only lets the Spring context start. External AI tests are skipped.
+          OPENAI_API_KEY: ci-placeholder
+        run: mvn --batch-mode --no-transfer-progress verify -DexcludedGroups=external
