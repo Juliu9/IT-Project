@@ -7,6 +7,10 @@
 
     <modelVersion>4.0.0</modelVersion>
 
+    <!-- ========================================================= -->
+    <!-- Spring Boot                                               -->
+    <!-- ========================================================= -->
+
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
@@ -21,13 +25,28 @@
     <name>recommenderagent</name>
     <description>Audiobook recommendation agent</description>
 
+    <!-- ========================================================= -->
+    <!-- Properties                                                 -->
+    <!-- ========================================================= -->
+
     <properties>
-        <spring-ai.version>2.0.1</spring-ai.version>
         <java.version>21</java.version>
+        <spring-ai.version>2.0.1</spring-ai.version>
+
+        <!-- Code quality -->
+        <spotless.version>3.10.2</spotless.version>
+        <checkstyle.version>3.6.0</checkstyle.version>
+        <maven-enforcer-plugin.version>3.6.2</maven-enforcer-plugin.version>
+        <testcontainers.version>2.0.5</testcontainers.version>
     </properties>
+
+    <!-- ========================================================= -->
+    <!-- Dependency Management                                     -->
+    <!-- ========================================================= -->
 
     <dependencyManagement>
         <dependencies>
+
             <dependency>
                 <groupId>org.springframework.ai</groupId>
                 <artifactId>spring-ai-bom</artifactId>
@@ -35,13 +54,18 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+
         </dependencies>
     </dependencyManagement>
+
+    <!-- ========================================================= -->
+    <!-- Dependencies                                               -->
+    <!-- ========================================================= -->
 
     <dependencies>
 
         <!-- ========================= -->
-        <!-- Spring Boot / REST API     -->
+        <!-- Spring Boot / REST API    -->
         <!-- ========================= -->
 
         <dependency>
@@ -51,7 +75,7 @@
 
 
         <!-- ========================= -->
-        <!-- PostgresSQL                 -->
+        <!-- PostgreSQL / JPA           -->
         <!-- ========================= -->
 
         <dependency>
@@ -75,8 +99,14 @@
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+
         <!-- ========================= -->
-        <!-- Solr                      -->
+        <!-- Solr                       -->
         <!-- ========================= -->
 
         <dependency>
@@ -85,8 +115,9 @@
             <version>9.6.0</version>
         </dependency>
 
+
         <!-- ========================= -->
-        <!-- AI Agents                 -->
+        <!-- Spring AI / OpenAI         -->
         <!-- ========================= -->
 
         <dependency>
@@ -94,8 +125,9 @@
             <artifactId>spring-ai-starter-model-openai</artifactId>
         </dependency>
 
+
         <!-- ========================= -->
-        <!-- Testing                   -->
+        <!-- Testing                    -->
         <!-- ========================= -->
 
         <dependency>
@@ -118,8 +150,9 @@
 
         <dependency>
             <groupId>org.testcontainers</groupId>
-            <artifactId>postgresql</artifactId>
-            <version>1.21.4</version>
+            <artifactId>testcontainers-postgresql</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
         </dependency>
 
         <dependency>
@@ -128,20 +161,105 @@
             <scope>test</scope>
         </dependency>
 
-
     </dependencies>
 
 
-    <!-- ============================= -->
-    <!-- Build                         -->
-    <!-- ============================= -->
+    <!-- ========================================================= -->
+    <!-- Build                                                       -->
+    <!-- ========================================================= -->
 
     <build>
         <plugins>
 
+            <!-- Enforce the supported build toolchain on developer machines and CI. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>${maven-enforcer-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>enforce-build-toolchain</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireJavaVersion>
+                                    <version>[21,22)</version>
+                                </requireJavaVersion>
+                                <requireMavenVersion>
+                                    <version>[3.9.0,)</version>
+                                </requireMavenVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- ========================= -->
+            <!-- Spring Boot               -->
+            <!-- ========================= -->
+
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+
+            <!-- ========================= -->
+            <!-- Spotless                  -->
+            <!-- ========================= -->
+
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>${spotless.version}</version>
+
+                <configuration>
+                    <java>
+                        <googleJavaFormat/>
+                        <removeUnusedImports/>
+                    </java>
+                </configuration>
+
+                <executions>
+                    <execution>
+                        <id>spotless-check</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+
+            <!-- ========================= -->
+            <!-- Checkstyle                -->
+            <!-- ========================= -->
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <version>${checkstyle.version}</version>
+
+                <configuration>
+                    <configLocation>checkstyle.xml</configLocation>
+                    <includeTestSourceDirectory>true</includeTestSourceDirectory>
+                    <consoleOutput>true</consoleOutput>
+                    <failOnViolation>true</failOnViolation>
+                </configuration>
+
+                <executions>
+                    <execution>
+                        <id>checkstyle-check</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
 
         </plugins>
