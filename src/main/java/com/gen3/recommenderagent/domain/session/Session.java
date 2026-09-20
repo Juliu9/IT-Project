@@ -6,68 +6,67 @@ import java.util.List;
 
 public class Session {
 
-    private String sessionId;
-    private String userId;
+  private String sessionId;
+  private String userId;
 
-    private Instant createdAt;
-    private Instant updatedAt;
-    private Instant expiresAt;
+  private Instant createdAt;
+  private Instant updatedAt;
+  private Instant expiresAt;
 
-    private List<SessionRequest> requests = new ArrayList<>();
+  private List<SessionRequest> requests = new ArrayList<>();
 
-    public Session() {
-    }
+  public Session() {}
 
-    public String getSessionId() {
-        return sessionId;
-    }
+  public String getSessionId() {
+    return sessionId;
+  }
 
-    public void setSessionId(String sessionId) {
-        this.sessionId = sessionId;
-    }
+  public void setSessionId(String sessionId) {
+    this.sessionId = sessionId;
+  }
 
-    public String getUserId() {
-        return userId;
-    }
+  public String getUserId() {
+    return userId;
+  }
 
-    public void setUserId(String userId) {
-        this.userId = userId;
-    }
+  public void setUserId(String userId) {
+    this.userId = userId;
+  }
 
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
+  public Instant getCreatedAt() {
+    return createdAt;
+  }
 
-    public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
+  public void setCreatedAt(Instant createdAt) {
+    this.createdAt = createdAt;
+  }
 
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
+  public Instant getUpdatedAt() {
+    return updatedAt;
+  }
 
-    public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
-    }
+  public void setUpdatedAt(Instant updatedAt) {
+    this.updatedAt = updatedAt;
+  }
 
-    public Instant getExpiresAt() {
-        return expiresAt;
-    }
+  public Instant getExpiresAt() {
+    return expiresAt;
+  }
 
-    public void setExpiresAt(Instant expiresAt) {
-        this.expiresAt = expiresAt;
-    }
+  public void setExpiresAt(Instant expiresAt) {
+    this.expiresAt = expiresAt;
+  }
 
-    public List<SessionRequest> getRequests() {
-        return requests;
-    }
+  public List<SessionRequest> getRequests() {
+    return requests;
+  }
 
-    public void setRequests(List<SessionRequest> requests) {
-        this.requests = requests;
-    }
+  public void setRequests(List<SessionRequest> requests) {
+    this.requests = requests;
+  }
 
-    public void addRequest(SessionRequest request) {
-        this.requests.add(request);
-        this.updatedAt = Instant.now();
-    }
+  public void addRequest(SessionRequest request) {
+    this.requests.add(request);
+    this.updatedAt = Instant.now();
+  }
 }

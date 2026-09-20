@@ -1,16 +1,5 @@
 package com.gen3.recommenderagent.inputparser;
 
-import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.Query;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
-import org.junit.jupiter.api.Test;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.ResponseEntity;
-import org.springframework.ai.chat.model.ChatResponse;
-
-import java.util.List;
-import java.util.UUID;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -21,87 +10,87 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.Query;
+import com.gen3.recommenderagent.domain.session.SessionRequest;
+import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ResponseEntity;
+import org.springframework.ai.chat.model.ChatResponse;
+
 class InputParserTest {
 
-    @Test
-    void shouldMapAiResultWithoutCallingARealAiService() {
-        String rawText = "Recommend science fiction audiobooks.";
+  @Test
+  void shouldMapAiResultWithoutCallingARealAiService() {
+    String rawText = "Recommend science fiction audiobooks.";
 
-        Query query = new Query();
-        query.setGenres(List.of("science fiction"));
+    Query query = new Query();
+    query.setGenres(List.of("science fiction"));
 
-        ParsedRequest parsedRequest = new ParsedRequest();
-        parsedRequest.setIntent(Intent.NEW_RECOMMENDATION);
-        parsedRequest.setQuery(query);
+    ParsedRequest parsedRequest = new ParsedRequest();
+    parsedRequest.setIntent(Intent.NEW_RECOMMENDATION);
+    parsedRequest.setQuery(query);
 
-        ChatClient chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
-        when(chatClient.prompt()
-                .system(anyString())
-                .user(rawText)
-                .call()
-                .responseEntity(ParsedRequest.class))
-                .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(
-                        null,
-                        parsedRequest
-                ));
+    ChatClient chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    when(chatClient
+            .prompt()
+            .system(anyString())
+            .user(rawText)
+            .call()
+            .responseEntity(ParsedRequest.class))
+        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsedRequest));
 
-        ChatClient.Builder builder = mock(ChatClient.Builder.class);
-        when(builder.build()).thenReturn(chatClient);
+    ChatClient.Builder builder = mock(ChatClient.Builder.class);
+    when(builder.build()).thenReturn(chatClient);
 
-        SessionRequest result = new InputParser(builder)
-                .parse(rawText)
-                .entity();
+    SessionRequest result = new InputParser(builder).parse(rawText).entity();
 
-        assertNotNull(result);
-        assertEquals(rawText, result.getRawText());
-        assertEquals(Intent.NEW_RECOMMENDATION, result.getIntent());
-        assertSame(query, result.getQuery());
+    assertNotNull(result);
+    assertEquals(rawText, result.getRawText());
+    assertEquals(Intent.NEW_RECOMMENDATION, result.getIntent());
+    assertSame(query, result.getQuery());
 
-        UUID requestId = UUID.fromString(result.getRequestId());
-        assertEquals(7, requestId.version());
-        assertEquals(2, requestId.variant());
-    }
+    UUID requestId = UUID.fromString(result.getRequestId());
+    assertEquals(7, requestId.version());
+    assertEquals(2, requestId.variant());
+  }
 
-    @Test
-    void shouldRejectBlankTextBeforeCallingAi() {
-        ChatClient chatClient = mock(ChatClient.class);
-        ChatClient.Builder builder = mock(ChatClient.Builder.class);
-        when(builder.build()).thenReturn(chatClient);
+  @Test
+  void shouldRejectBlankTextBeforeCallingAi() {
+    ChatClient chatClient = mock(ChatClient.class);
+    ChatClient.Builder builder = mock(ChatClient.Builder.class);
+    when(builder.build()).thenReturn(chatClient);
 
-        InputParser parser = new InputParser(builder);
+    InputParser parser = new InputParser(builder);
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> parser.parse("   ")
-        );
+    IllegalArgumentException exception =
+        assertThrows(IllegalArgumentException.class, () -> parser.parse("   "));
 
-        assertEquals("Please enter your request", exception.getMessage());
-        verifyNoInteractions(chatClient);
-    }
+    assertEquals("Please enter your request", exception.getMessage());
+    verifyNoInteractions(chatClient);
+  }
 
-    @Test
-    void shouldFailClearlyWhenMockAiReturnsNoParsedRequest() {
-        String rawText = "Recommend an audiobook.";
+  @Test
+  void shouldFailClearlyWhenMockAiReturnsNoParsedRequest() {
+    String rawText = "Recommend an audiobook.";
 
-        ChatClient chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
-        when(chatClient.prompt()
-                .system(anyString())
-                .user(rawText)
-                .call()
-                .responseEntity(ParsedRequest.class))
-                .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(
-                        null,
-                        null
-                ));
+    ChatClient chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    when(chatClient
+            .prompt()
+            .system(anyString())
+            .user(rawText)
+            .call()
+            .responseEntity(ParsedRequest.class))
+        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, null));
 
-        ChatClient.Builder builder = mock(ChatClient.Builder.class);
-        when(builder.build()).thenReturn(chatClient);
+    ChatClient.Builder builder = mock(ChatClient.Builder.class);
+    when(builder.build()).thenReturn(chatClient);
 
-        IllegalStateException exception = assertThrows(
-                IllegalStateException.class,
-                () -> new InputParser(builder).parse(rawText)
-        );
+    IllegalStateException exception =
+        assertThrows(IllegalStateException.class, () -> new InputParser(builder).parse(rawText));
 
-        assertEquals("AI did not return a ParsedRequest", exception.getMessage());
-    }
+    assertEquals("AI did not return a ParsedRequest", exception.getMessage());
+  }
 }

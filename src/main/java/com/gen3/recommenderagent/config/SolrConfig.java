@@ -9,14 +9,13 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class SolrConfig {
 
-    @Bean
-    public SolrClient solrClient(
-            @Value("${solr.url}") String solrUrl,
-            @Value("${solr.username}") String username,
-            @Value("${solr.password}") String password
-    ) {
-        return new HttpJdkSolrClient.Builder(solrUrl)
-                .withBasicAuthCredentials(username, password)
-                .build();
-    }
+  @Bean
+  public SolrClient solrClient(
+      @Value("${solr.url}") String solrUrl,
+      @Value("${solr.username}") String username,
+      @Value("${solr.password}") String password) {
+    return new HttpJdkSolrClient.Builder(solrUrl)
+        .withBasicAuthCredentials(username, password)
+        .build();
+  }
 }
