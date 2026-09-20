@@ -1,6 +1,10 @@
 package com.gen3.recommenderagent.domain.userprofile;
 
-import jakarta.persistence.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -8,23 +12,31 @@ import java.util.List;
 @Table(name = "user_profiles")
 public class UserProfile {
 
-    @Id
-    private String userId;
+  @Id private String userId;
 
-    @OneToMany(mappedBy = "userProfile", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Preference> preferences = new ArrayList<>();
+  @OneToMany(mappedBy = "userProfile", cascade = CascadeType.ALL, orphanRemoval = true)
+  private List<Preference> preferences = new ArrayList<>();
 
-    public UserProfile() {
-    }
+  public UserProfile() {}
 
-    public String getUserId() { return userId; }
-    public void setUserId(String userId) { this.userId = userId; }
+  public String getUserId() {
+    return userId;
+  }
 
-    public List<Preference> getPreferences() { return preferences; }
-    public void setPreferences(List<Preference> preferences) { this.preferences = preferences; }
+  public void setUserId(String userId) {
+    this.userId = userId;
+  }
 
-    public void addPreference(Preference preference) {
-        preferences.add(preference);
-        preference.setUserProfile(this);
-    }
+  public List<Preference> getPreferences() {
+    return preferences;
+  }
+
+  public void setPreferences(List<Preference> preferences) {
+    this.preferences = preferences;
+  }
+
+  public void addPreference(Preference preference) {
+    preferences.add(preference);
+    preference.setUserProfile(this);
+  }
 }

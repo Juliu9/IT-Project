@@ -1,6 +1,12 @@
 name: CI
 
 on:
+  # Re-check the exact code after a PR is merged.
+  push:
+    branches:
+      - staging
+      - main
+
   # Run before code is merged into either shared branch.
   pull_request:
     branches:
@@ -34,6 +40,6 @@ jobs:
 
       - name: Compile and run automated tests
         env:
-          # This placeholder only lets the Spring context start. External AI tests are skipped.
+          # This placeholder only lets the Spring context start. External tests are excluded.
           OPENAI_API_KEY: ci-placeholder
         run: mvn --batch-mode --no-transfer-progress verify -DexcludedGroups=external
