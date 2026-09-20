@@ -233,9 +233,10 @@ public class RecommendationEngine {
     String query = buildRecommendationQuery(request);
 
     // Candidate retrieval
-    var candidates = vectorSearchEnabled
-        ? candidateRetriever.getSemanticCandidates(request, CANDIDATE_LIMIT)
-        : candidateRetriever.getCandidates(query, CANDIDATE_LIMIT);
+    var candidates =
+        vectorSearchEnabled
+            ? candidateRetriever.getSemanticCandidates(request, CANDIDATE_LIMIT)
+            : candidateRetriever.getCandidates(query, CANDIDATE_LIMIT);
 
     return rankingService.rank(candidates, resolveResultLimit(request));
   }
@@ -468,11 +469,12 @@ public class RecommendationEngine {
   }
 
   private String buildFieldClause(String field, Set<String> terms) {
-    String values = terms.stream()
-        .map(ClientUtils::escapeQueryChars)
-        .map(term -> "\"" + term + "\"")
-        .reduce((left, right) -> left + " OR " + right)
-        .orElseThrow();
+    String values =
+        terms.stream()
+            .map(ClientUtils::escapeQueryChars)
+            .map(term -> "\"" + term + "\"")
+            .reduce((left, right) -> left + " OR " + right)
+            .orElseThrow();
 
     return field + ":(" + values + ")";
   }

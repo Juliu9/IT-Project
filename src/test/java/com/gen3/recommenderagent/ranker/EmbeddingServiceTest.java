@@ -83,11 +83,11 @@ class EmbeddingServiceTest {
         assertEquals("Audiobook must not be null", exception.getMessage());
     }
 
-        @Test
-        void shouldRejectZeroEmbeddingVector() {
-                EmbeddingService service = new EmbeddingService(embeddingModel);
-                when(embeddingModel.embed("valid text")).thenReturn(new float[] {0.0f, 0.0f});
+  @Test
+  void shouldRejectZeroEmbeddingVector() {
+    EmbeddingService service = new EmbeddingService(embeddingModel);
+    when(embeddingModel.embed("valid text")).thenReturn(new float[] {0.0f, 0.0f});
 
-                assertThrows(IllegalArgumentException.class, () -> service.embedText("valid text"));
-        }
+    assertThrows(IllegalArgumentException.class, () -> service.embedText("valid text"));
+  }
 }

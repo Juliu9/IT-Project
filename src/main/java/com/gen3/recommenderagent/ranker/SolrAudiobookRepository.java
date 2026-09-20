@@ -2,6 +2,8 @@
 package com.gen3.recommenderagent.ranker;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrRequest;
@@ -55,6 +57,16 @@ public class SolrAudiobookRepository {
     return solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
   }
 
+  public QueryResponse findAudiobooks(int start, int limit)
+      throws SolrServerException, IOException {
+    SolrQuery solrQuery = new SolrQuery("*:*");
+    solrQuery.setStart(start);
+    solrQuery.setRows(limit);
+    solrQuery.setSort("id", SolrQuery.ORDER.asc);
+    solrQuery.setFields("id", "title", "authors", "description", "genres");
+    return solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
+  }
+
   // This method adds the vector to the Solr document.
   // Sends the document to Solr.
   // Commits the collection.
@@ -67,6 +79,27 @@ public class SolrAudiobookRepository {
     document.setField(vectorField, embedding);
     solrClient.add(collection, document);
     solrClient.commit(collection);
+  }
+
+  public void updateEmbeddings(List<SolrInputDocument> documents)
+      throws SolrServerException, IOException {
+    if (documents == null || documents.isEmpty()) {
+      throw new IllegalArgumentException("Embedding documents must not be empty");
+    }
+
+    solrClient.add(collection, documents);
+    solrClient.commit(collection);
+  }
+
+  public SolrInputDocument vectorUpdate(String id, float[] embedding, String vectorField) {
+    if (id == null || id.isBlank() || embedding == null || embedding.length == 0) {
+      throw new IllegalArgumentException("Document id and embedding are required");
+    }
+
+    SolrInputDocument update = new SolrInputDocument();
+    update.setField("id", id);
+    update.setField(vectorField, Map.of("set", embedding));
+    return update;
   }
 
   private String formatVector(float[] vector) {

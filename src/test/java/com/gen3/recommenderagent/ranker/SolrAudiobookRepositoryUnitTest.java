@@ -21,9 +21,9 @@ class SolrAudiobookRepositoryUnitTest {
     SolrClient client = mock(SolrClient.class);
     QueryResponse expected = new QueryResponse();
     when(client.query(
-        org.mockito.ArgumentMatchers.eq("combinedbooks"),
-        org.mockito.ArgumentMatchers.any(SolrQuery.class),
-        org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST)))
+            org.mockito.ArgumentMatchers.eq("combinedbooks"),
+            org.mockito.ArgumentMatchers.any(SolrQuery.class),
+            org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST)))
         .thenReturn(expected);
 
     SolrAudiobookRepository repository = new SolrAudiobookRepository(client, "combinedbooks");
@@ -51,14 +51,14 @@ class SolrAudiobookRepositoryUnitTest {
     SolrClient client = mock(SolrClient.class);
     QueryResponse expected = new QueryResponse();
     when(client.query(
-        org.mockito.ArgumentMatchers.eq("combinedbooks"),
-        org.mockito.ArgumentMatchers.any(SolrQuery.class),
-        org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST)))
+            org.mockito.ArgumentMatchers.eq("combinedbooks"),
+            org.mockito.ArgumentMatchers.any(SolrQuery.class),
+            org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST)))
         .thenReturn(expected);
 
     SolrAudiobookRepository repository = new SolrAudiobookRepository(client, "combinedbooks");
 
-    QueryResponse actual = repository.searchByVector(new float[] { 0.1f, -0.2f }, 10, "book_vector");
+    QueryResponse actual = repository.searchByVector(new float[] {0.1f, -0.2f}, 10, "book_vector");
 
     ArgumentCaptor<SolrQuery> queryCaptor = ArgumentCaptor.forClass(SolrQuery.class);
     verify(client)
@@ -79,7 +79,7 @@ class SolrAudiobookRepositoryUnitTest {
     SolrAudiobookRepository repository = new SolrAudiobookRepository(client, "combinedbooks");
     SolrInputDocument document = new SolrInputDocument();
     document.addField("id", "book-1");
-    float[] embedding = new float[] { 0.3f, 0.4f };
+    float[] embedding = new float[] {0.3f, 0.4f};
 
     repository.indexWithEmbedding(document, embedding, "book_vector");
 

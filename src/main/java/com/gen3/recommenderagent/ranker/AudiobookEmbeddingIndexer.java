@@ -3,6 +3,8 @@
 */
 package com.gen3.recommenderagent.ranker;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,5 +41,41 @@ public class AudiobookEmbeddingIndexer {
     // Sends document and vector to SolrAudiobookRepository
     audiobookRepository.indexWithEmbedding(
         document, embeddingService.embedAudiobook(audiobook), vectorField);
+  }
+
+  public int reindexAll(int batchSize) throws Exception {
+    if (batchSize <= 0) {
+      throw new IllegalArgumentException("Batch size must be greater than zero");
+    }
+
+    int start = 0;
+    int indexed = 0;
+    while (true) {
+      var results = audiobookRepository.findAudiobooks(start, batchSize).getResults();
+      if (results == null || results.isEmpty()) {
+        return indexed;
+      }
+
+      List<org.apache.solr.common.SolrInputDocument> updates = new ArrayList<>();
+      for (SolrDocument audiobook : results) {
+        Object id = audiobook.getFieldValue("id");
+        if (id == null) {
+          continue;
+        }
+        updates.add(
+            audiobookRepository.vectorUpdate(
+                id.toString(), embeddingService.embedAudiobook(audiobook), vectorField));
+      }
+
+      if (!updates.isEmpty()) {
+        audiobookRepository.updateEmbeddings(updates);
+        indexed += updates.size();
+      }
+
+      start += results.size();
+      if (results.size() < batchSize) {
+        return indexed;
+      }
+    }
   }
 }

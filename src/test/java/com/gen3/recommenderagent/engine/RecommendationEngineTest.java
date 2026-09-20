@@ -31,24 +31,21 @@ import org.springframework.context.ApplicationEventPublisher;
 @ExtendWith(MockitoExtension.class)
 class RecommendationEngineTest {
 
-  @Mock
-  private SessionCache sessionCache;
+  @Mock private SessionCache sessionCache;
 
-  @Mock
-  private UserProfileDB userProfileDB;
+  @Mock private UserProfileDB userProfileDB;
 
-  @Mock
-  private ApplicationEventPublisher eventPublisher;
+  @Mock private ApplicationEventPublisher eventPublisher;
 
-  @Mock
-  private CandidateRetriever candidateRetriever;
+  @Mock private CandidateRetriever candidateRetriever;
 
   private RecommendationEngine recommendationEngine;
 
   @BeforeEach
   void setUp() {
-    recommendationEngine = new RecommendationEngine(
-        sessionCache, userProfileDB, eventPublisher, candidateRetriever, new RankingService());
+    recommendationEngine =
+        new RecommendationEngine(
+            sessionCache, userProfileDB, eventPublisher, candidateRetriever, new RankingService());
   }
 
   @Test
@@ -112,13 +109,14 @@ class RecommendationEngineTest {
 
   @Test
   void shouldUseSemanticCandidatesWhenVectorSearchIsEnabled() {
-    RecommendationEngine semanticEngine = new RecommendationEngine(
-        sessionCache,
-        userProfileDB,
-        eventPublisher,
-        candidateRetriever,
-        new RankingService(),
-        true);
+    RecommendationEngine semanticEngine =
+        new RecommendationEngine(
+            sessionCache,
+            userProfileDB,
+            eventPublisher,
+            candidateRetriever,
+            new RankingService(),
+            true);
     SessionRequest request = new SessionRequest();
     request.setIntent(Intent.NEW_RECOMMENDATION);
     when(sessionCache.getSession("semantic-session")).thenReturn(null);

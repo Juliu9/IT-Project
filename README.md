@@ -76,6 +76,14 @@ Before setting `SOLR_VECTOR_SEARCH_ENABLED=true`, add a vector field to the Solr
 
 Use `AudiobookEmbeddingIndexer.index(...)` when importing or re-indexing audiobook records. It builds and L2-normalizes the embedding from title, authors, description, and genres before storing it in the configured vector field. User request embeddings are normalized in the same way before kNN search. Re-index all records when changing embedding models or vector similarity settings.
 
+To re-index existing records, call `AudiobookEmbeddingIndexer.reindexAll(...)` from an import or maintenance job after configuring `OPENAI_API_KEY` and the Solr connection:
+
+```java
+int indexed = audiobookEmbeddingIndexer.reindexAll(100);
+```
+
+The argument is the batch size. Each batch updates only the vector field and commits once, preserving the existing audiobook fields. After the operation completes successfully, set `SOLR_VECTOR_SEARCH_ENABLED=true` and restart the application.
+
 ---
 
 ### 4. Docker Setup

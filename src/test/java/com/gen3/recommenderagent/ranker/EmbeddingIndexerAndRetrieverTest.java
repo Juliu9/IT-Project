@@ -2,6 +2,7 @@ package com.gen3.recommenderagent.ranker;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -76,5 +77,44 @@ class EmbeddingIndexerAndRetrieverTest {
 
         assertEquals(List.of(result), candidates);
         verify(audiobookRepository).searchByVector(embedding, 10, "audiobook_vector");
+    }
+
+    @Test
+    void shouldReindexExistingAudiobooksInOneBatch() throws Exception {
+        AudiobookEmbeddingIndexer indexer = new AudiobookEmbeddingIndexer(embeddingService, audiobookRepository,
+                "audiobook_vector");
+        SolrDocument first = audiobook("book-1", "First book");
+        SolrDocument second = audiobook("book-2", "Second book");
+        QueryResponse response = mock(QueryResponse.class);
+        SolrDocumentList results = new SolrDocumentList();
+        results.add(first);
+        results.add(second);
+        when(response.getResults()).thenReturn(results);
+        when(audiobookRepository.findAudiobooks(0, 10)).thenReturn(response);
+        when(embeddingService.embedAudiobook(first)).thenReturn(new float[] { 1.0f, 0.0f });
+        when(embeddingService.embedAudiobook(second)).thenReturn(new float[] { 0.0f, 1.0f });
+        when(audiobookRepository.vectorUpdate(any(), any(), eq("audiobook_vector")))
+                .thenReturn(new SolrInputDocument());
+
+        int indexed = indexer.reindexAll(10);
+
+        assertEquals(2, indexed);
+        verify(audiobookRepository).findAudiobooks(0, 10);
+        verify(audiobookRepository).updateEmbeddings(any());
+    }
+
+    @Test
+    void shouldRejectInvalidReindexBatchSize() {
+        AudiobookEmbeddingIndexer indexer = new AudiobookEmbeddingIndexer(embeddingService, audiobookRepository,
+                "audiobook_vector");
+
+        assertThrows(IllegalArgumentException.class, () -> indexer.reindexAll(0));
+    }
+
+    private SolrDocument audiobook(String id, String title) {
+        SolrDocument audiobook = new SolrDocument();
+        audiobook.setField("id", id);
+        audiobook.setField("title", title);
+        return audiobook;
     }
 }
