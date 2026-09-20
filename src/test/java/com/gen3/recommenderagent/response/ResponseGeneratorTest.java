@@ -1,7 +1,12 @@
 package com.gen3.recommenderagent.response;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Constraints;
@@ -11,8 +16,34 @@ import com.gen3.recommenderagent.domain.session.Recommendations;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.chat.client.ChatClient;
 
 class ResponseGeneratorTest {
+
+  @Test
+  void shouldUseMockAiToGenerateTheFinalResponse() {
+    ChatClient chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    when(chatClient.prompt().system(anyString()).user(anyString()).call().content())
+        .thenReturn("Here are three science fiction audiobooks.");
+
+    ChatClient.Builder builder = mock(ChatClient.Builder.class);
+    when(builder.build()).thenReturn(chatClient);
+
+    SessionRequest request = new SessionRequest();
+    request.setIntent(Intent.NEW_RECOMMENDATION);
+    request.setRawText("Recommend science fiction audiobooks");
+
+    Query query = new Query();
+    query.setGenres(List.of("science fiction"));
+    request.setQuery(query);
+
+    Recommendations recommendations = new Recommendations();
+    recommendations.setRecommendations(List.of(new Recommendation("book-101", 1, 0.91)));
+
+    String response = new ResponseGenerator(builder).generate(recommendations, request);
+
+    assertEquals("Here are three science fiction audiobooks.", response);
+  }
 
   @Test
   void shouldBuildAHumanReadableRecommendationMessage() {

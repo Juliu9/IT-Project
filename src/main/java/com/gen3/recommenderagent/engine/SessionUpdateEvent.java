@@ -3,13 +3,13 @@ package com.gen3.recommenderagent.engine;
 import com.gen3.recommenderagent.domain.session.Session;
 
 public class SessionUpdateEvent {
-    private final Session session;
+  private final Session session;
 
-    public SessionUpdateEvent(Session session) {
-        this.session = session;
-    }
+  public SessionUpdateEvent(Session session) {
+    this.session = session;
+  }
 
-    public Session getSession() {
-        return session;
-    }
+  public Session getSession() {
+    return session;
+  }
 }

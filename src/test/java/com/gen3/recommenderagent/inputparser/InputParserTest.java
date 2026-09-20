@@ -2,137 +2,95 @@ package com.gen3.recommenderagent.inputparser;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.util.List;
 import java.util.UUID;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.chat.metadata.Usage;
-import org.springframework.ai.model.chat.client.autoconfigure.ChatClientAutoConfiguration;
-import org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration;
-import org.springframework.ai.model.tool.autoconfigure.ToolCallingAutoConfiguration;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ResponseEntity;
+import org.springframework.ai.chat.model.ChatResponse;
 
-@SpringJUnitConfig(InputParserTest.TestConfiguration.class)
-@Tag("external")
 class InputParserTest {
 
-  @Autowired private InputParser parser;
+  @Test
+  void shouldMapAiResultWithoutCallingARealAiService() {
+    String rawText = "Recommend science fiction audiobooks.";
 
-  @DynamicPropertySource
-  static void configureOpenAi(DynamicPropertyRegistry registry) {
-    String apiKey = System.getenv("OPENAI_API_KEY");
+    Query query = new Query();
+    query.setGenres(List.of("science fiction"));
 
-    if (apiKey == null || apiKey.isBlank()) {
-      throw new IllegalStateException("OPENAI_API_KEY is not set");
-    }
+    ParsedRequest parsedRequest = new ParsedRequest();
+    parsedRequest.setIntent(Intent.NEW_RECOMMENDATION);
+    parsedRequest.setQuery(query);
 
-    registry.add("spring.ai.openai.api-key", () -> apiKey);
+    ChatClient chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    when(chatClient
+            .prompt()
+            .system(anyString())
+            .user(rawText)
+            .call()
+            .responseEntity(ParsedRequest.class))
+        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsedRequest));
 
-    registry.add("spring.ai.openai.chat.model", () -> "gpt-4o-mini");
+    ChatClient.Builder builder = mock(ChatClient.Builder.class);
+    when(builder.build()).thenReturn(chatClient);
+
+    SessionRequest result = new InputParser(builder).parse(rawText).entity();
+
+    assertNotNull(result);
+    assertEquals(rawText, result.getRawText());
+    assertEquals(Intent.NEW_RECOMMENDATION, result.getIntent());
+    assertSame(query, result.getQuery());
+
+    UUID requestId = UUID.fromString(result.getRequestId());
+    assertEquals(7, requestId.version());
+    assertEquals(2, requestId.variant());
   }
 
   @Test
-  void shouldConvertRawTextIntoSessionRequest() {
-    // Arrange
-    String rawText = "Recommend three English science fiction audiobooks.";
+  void shouldRejectBlankTextBeforeCallingAi() {
+    ChatClient chatClient = mock(ChatClient.class);
+    ChatClient.Builder builder = mock(ChatClient.Builder.class);
+    when(builder.build()).thenReturn(chatClient);
 
-    // Time
-    long start = System.nanoTime();
+    InputParser parser = new InputParser(builder);
 
-    // Act
-    var response = parser.parse(rawText);
-    SessionRequest sessionRequest = response.entity();
-    Usage chatUsage = response.response().getMetadata().getUsage();
+    IllegalArgumentException exception =
+        assertThrows(IllegalArgumentException.class, () -> parser.parse("   "));
 
-    long end = System.nanoTime();
-    long elapsedMs = (end - start) / 1_000_000;
-
-    // Print results
-    System.out.println("\n=== Agent Metrics ===");
-    System.out.println("Agent request time: " + elapsedMs + " ms");
-    System.out.println(chatUsage);
-    printAgentResponse(sessionRequest);
-
-    // Assert
-    assertNotNull(sessionRequest);
-    assertEquals(rawText, sessionRequest.getRawText());
-
-    assertNotNull(sessionRequest.getRequestId());
-    UUID requestId = UUID.fromString(sessionRequest.getRequestId());
-    assertEquals(7, requestId.version());
-    assertEquals(2, requestId.variant());
-
-    assertEquals(Intent.NEW_RECOMMENDATION, sessionRequest.getIntent());
-
-    assertNotNull(sessionRequest.getQuery());
-    List<String> genres = sessionRequest.getQuery().getGenres();
-    assertNotNull(genres);
-    assertTrue(
-        genres.stream()
-            .anyMatch(
-                genre ->
-                    genre.equalsIgnoreCase("science fiction") || genre.equalsIgnoreCase("sci-fi")));
+    assertEquals("Please enter your request", exception.getMessage());
+    verifyNoInteractions(chatClient);
   }
 
-  private void printAgentResponse(SessionRequest sessionRequest) {
-    System.out.println("\n=== Agent response ===");
-    System.out.println("rawText: " + sessionRequest.getRawText());
-    System.out.println("intent: " + sessionRequest.getIntent());
-    System.out.println("personalised: " + sessionRequest.isPersonalised());
+  @Test
+  void shouldFailClearlyWhenMockAiReturnsNoParsedRequest() {
+    String rawText = "Recommend an audiobook.";
 
-    if (sessionRequest.getQuery() != null) {
-      System.out.println("query.topics: " + sessionRequest.getQuery().getTopics());
-      System.out.println("query.genres: " + sessionRequest.getQuery().getGenres());
-      System.out.println("query.authors: " + sessionRequest.getQuery().getAuthors());
-      System.out.println("query.keywords: " + sessionRequest.getQuery().getKeywords());
-    } else {
-      System.out.println("query: null");
-    }
+    ChatClient chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    when(chatClient
+            .prompt()
+            .system(anyString())
+            .user(rawText)
+            .call()
+            .responseEntity(ParsedRequest.class))
+        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, null));
 
-    if (sessionRequest.getPreferences() != null) {
-      System.out.println("preferences.include: " + sessionRequest.getPreferences().getInclude());
-      System.out.println("preferences.exclude: " + sessionRequest.getPreferences().getExclude());
-    } else {
-      System.out.println("preferences: null");
-    }
+    ChatClient.Builder builder = mock(ChatClient.Builder.class);
+    when(builder.build()).thenReturn(chatClient);
 
-    if (sessionRequest.getConstraints() != null) {
-      System.out.println("constraints.count: " + sessionRequest.getConstraints().getCount());
-      System.out.println("constraints.duration: " + sessionRequest.getConstraints().getDuration());
-      System.out.println("constraints.language: " + sessionRequest.getConstraints().getLanguage());
-    } else {
-      System.out.println("constraints: null");
-    }
+    IllegalStateException exception =
+        assertThrows(IllegalStateException.class, () -> new InputParser(builder).parse(rawText));
 
-    if (sessionRequest.getFeedback() != null) {
-      System.out.println("feedback.type: " + sessionRequest.getFeedback().getType());
-      System.out.println("feedback.reason: " + sessionRequest.getFeedback().getReason());
-    } else {
-      System.out.println("feedback: null");
-    }
-
-    System.out.println("requestId: " + sessionRequest.getRequestId());
-    System.out.println("createdAt: " + sessionRequest.getCreatedAt());
-    System.out.println("recommendations: " + sessionRequest.getRecommendations());
-    System.out.println("======================\n");
+    assertEquals("AI did not return a ParsedRequest", exception.getMessage());
   }
-
-  @Configuration(proxyBeanMethods = false)
-  @Import(InputParser.class)
-  @ImportAutoConfiguration({
-    ToolCallingAutoConfiguration.class,
-    OpenAiChatAutoConfiguration.class,
-    ChatClientAutoConfiguration.class
-  })
-  static class TestConfiguration {}
 }

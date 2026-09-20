@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -20,7 +21,8 @@ class SolrAudiobookRepositoryUnitTest {
     QueryResponse expected = new QueryResponse();
     when(client.query(
             org.mockito.ArgumentMatchers.eq("combinedbooks"),
-            org.mockito.ArgumentMatchers.any(SolrQuery.class)))
+            org.mockito.ArgumentMatchers.any(SolrQuery.class),
+            org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST)))
         .thenReturn(expected);
 
     SolrAudiobookRepository repository = new SolrAudiobookRepository(client, "combinedbooks");
@@ -28,7 +30,11 @@ class SolrAudiobookRepositoryUnitTest {
     QueryResponse actual = repository.search("mystery", 5);
 
     ArgumentCaptor<SolrQuery> queryCaptor = ArgumentCaptor.forClass(SolrQuery.class);
-    verify(client).query(org.mockito.ArgumentMatchers.eq("combinedbooks"), queryCaptor.capture());
+    verify(client)
+        .query(
+            org.mockito.ArgumentMatchers.eq("combinedbooks"),
+            queryCaptor.capture(),
+            org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST));
 
     SolrQuery query = queryCaptor.getValue();
     assertSame(expected, actual);

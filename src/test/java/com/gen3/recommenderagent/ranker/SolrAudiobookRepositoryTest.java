@@ -1,43 +1,55 @@
 package com.gen3.recommenderagent.ranker;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import com.gen3.recommenderagent.testsupport.SolrContainerTestSupport;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.apache.solr.client.solrj.SolrClient;
-import org.apache.solr.client.solrj.impl.HttpJdkSolrClient;
 import org.apache.solr.client.solrj.response.QueryResponse;
-import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.solr.SolrContainer;
 
-@Tag("external")
-public class SolrAudiobookRepositoryTest {
+@Testcontainers
+class SolrAudiobookRepositoryTest {
 
-  @Test
-  public void testSearch() throws Exception {
+  @Container static final SolrContainer SOLR = SolrContainerTestSupport.newContainer();
 
-    String solrUrl = System.getenv("SOLR_URL");
-    String username = System.getenv("SOLR_USERNAME");
-    String password = System.getenv("SOLR_PASSWORD");
+  private static SolrClient solrClient;
 
-    SolrClient solrClient =
-        new HttpJdkSolrClient.Builder(solrUrl).withBasicAuthCredentials(username, password).build();
+  @BeforeAll
+  static void setUpSolr() throws Exception {
+    solrClient = SolrContainerTestSupport.newClient(SOLR);
+    SolrContainerTestSupport.configureSchema(solrClient);
+    SolrContainerTestSupport.seedBooks(solrClient);
+  }
 
-    try {
-      SolrAudiobookRepository repository = new SolrAudiobookRepository(solrClient, "combinedbooks");
-      QueryResponse response = repository.search("mystery", 1);
-
-      System.out.println("SUCCESS!");
-      System.out.println("Status Code: " + response.getStatus());
-      System.out.println("Query Time: " + response.getQTime() + "ms");
-      System.out.println("Documents Found: " + response.getResults().getNumFound());
-
-      assertNotNull(response);
-      assertFalse(response.getResults().isEmpty());
-      assertNotNull(response.getResults().getFirst().getFieldValue("id"));
-      assertNotNull(response.getResults().getFirst().getFieldValue("title"));
-
-    } finally {
+  @AfterAll
+  static void closeSolrClient() throws Exception {
+    if (solrClient != null) {
       solrClient.close();
     }
+  }
+
+  @Test
+  void shouldRetrieveOnlyScienceFictionBooksFromDockerSolr() throws Exception {
+    SolrAudiobookRepository repository =
+        new SolrAudiobookRepository(solrClient, SolrContainerTestSupport.COLLECTION);
+
+    QueryResponse response = repository.search("science fiction", 10);
+
+    Set<String> returnedIds =
+        response.getResults().stream()
+            .map(document -> document.getFieldValue("id").toString())
+            .collect(Collectors.toSet());
+
+    assertEquals(5, response.getResults().getNumFound());
+    assertEquals(Set.of("book-101", "book-202", "book-303", "book-505", "book-606"), returnedIds);
+    assertFalse(returnedIds.contains("book-404"));
   }
 }
