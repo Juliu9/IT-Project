@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.apache.solr.client.solrj.util.ClientUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
@@ -30,6 +32,7 @@ public class RecommendationEngine {
   private final CandidateRetriever candidateRetriever;
   private final RankingService rankingService;
   private final UserProfileDB userProfileDB;
+  private final boolean vectorSearchEnabled;
 
   public RecommendationEngine(
       SessionCache sessionCache,
@@ -37,11 +40,23 @@ public class RecommendationEngine {
       ApplicationEventPublisher eventPublisher,
       CandidateRetriever candidateRetriever,
       RankingService rankingService) {
+    this(sessionCache, userProfileDB, eventPublisher, candidateRetriever, rankingService, false);
+  }
+
+  @Autowired
+  public RecommendationEngine(
+      SessionCache sessionCache,
+      UserProfileDB userProfileDB,
+      ApplicationEventPublisher eventPublisher,
+      CandidateRetriever candidateRetriever,
+      RankingService rankingService,
+      @Value("${solr.vector-search-enabled:false}") boolean vectorSearchEnabled) {
     this.sessionCache = sessionCache;
     this.userProfileDB = userProfileDB;
     this.eventPublisher = eventPublisher;
     this.candidateRetriever = candidateRetriever;
     this.rankingService = rankingService;
+    this.vectorSearchEnabled = vectorSearchEnabled;
   }
 
   public Recommendations process(String sessionId, String userId, SessionRequest currentRequest) {
@@ -74,12 +89,12 @@ public class RecommendationEngine {
     // additional context required by the intent.
 
     /*
-    USE PREFERENCES TO BIAS WEIGHTS WHEN RANKING RECOMMENDATIONS
-
-    List<Preference> userPreferences;
-    if currentRequest.isPersonalised() {
-        userPreferences = userProfileDB.getReferenceById(userId).getPreferences();
-    }
+     * USE PREFERENCES TO BIAS WEIGHTS WHEN RANKING RECOMMENDATIONS
+     *
+     * List<Preference> userPreferences;
+     * if currentRequest.isPersonalised() {
+     * userPreferences = userProfileDB.getReferenceById(userId).getPreferences();
+     * }
      */
 
     // ==========================================
@@ -218,7 +233,9 @@ public class RecommendationEngine {
     String query = buildRecommendationQuery(request);
 
     // Candidate retrieval
-    var candidates = candidateRetriever.getCandidates(query, CANDIDATE_LIMIT);
+    var candidates = vectorSearchEnabled
+        ? candidateRetriever.getSemanticCandidates(request, CANDIDATE_LIMIT)
+        : candidateRetriever.getCandidates(query, CANDIDATE_LIMIT);
 
     return rankingService.rank(candidates, resolveResultLimit(request));
   }
@@ -451,12 +468,11 @@ public class RecommendationEngine {
   }
 
   private String buildFieldClause(String field, Set<String> terms) {
-    String values =
-        terms.stream()
-            .map(ClientUtils::escapeQueryChars)
-            .map(term -> "\"" + term + "\"")
-            .reduce((left, right) -> left + " OR " + right)
-            .orElseThrow();
+    String values = terms.stream()
+        .map(ClientUtils::escapeQueryChars)
+        .map(term -> "\"" + term + "\"")
+        .reduce((left, right) -> left + " OR " + right)
+        .orElseThrow();
 
     return field + ":(" + values + ")";
   }

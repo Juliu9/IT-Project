@@ -31,21 +31,24 @@ import org.springframework.context.ApplicationEventPublisher;
 @ExtendWith(MockitoExtension.class)
 class RecommendationEngineTest {
 
-  @Mock private SessionCache sessionCache;
+  @Mock
+  private SessionCache sessionCache;
 
-  @Mock private UserProfileDB userProfileDB;
+  @Mock
+  private UserProfileDB userProfileDB;
 
-  @Mock private ApplicationEventPublisher eventPublisher;
+  @Mock
+  private ApplicationEventPublisher eventPublisher;
 
-  @Mock private CandidateRetriever candidateRetriever;
+  @Mock
+  private CandidateRetriever candidateRetriever;
 
   private RecommendationEngine recommendationEngine;
 
   @BeforeEach
   void setUp() {
-    recommendationEngine =
-        new RecommendationEngine(
-            sessionCache, userProfileDB, eventPublisher, candidateRetriever, new RankingService());
+    recommendationEngine = new RecommendationEngine(
+        sessionCache, userProfileDB, eventPublisher, candidateRetriever, new RankingService());
   }
 
   @Test
@@ -105,6 +108,27 @@ class RecommendationEngineTest {
 
     assertEquals(Intent.UNKNOWN, request.getIntent());
     assertTrue(result.getRecommendations().isEmpty());
+  }
+
+  @Test
+  void shouldUseSemanticCandidatesWhenVectorSearchIsEnabled() {
+    RecommendationEngine semanticEngine = new RecommendationEngine(
+        sessionCache,
+        userProfileDB,
+        eventPublisher,
+        candidateRetriever,
+        new RankingService(),
+        true);
+    SessionRequest request = new SessionRequest();
+    request.setIntent(Intent.NEW_RECOMMENDATION);
+    when(sessionCache.getSession("semantic-session")).thenReturn(null);
+    when(candidateRetriever.getSemanticCandidates(request, 50))
+        .thenReturn(List.of(document("semantic-book")));
+
+    Recommendations result = semanticEngine.process("semantic-session", "user-1", request);
+
+    assertEquals("semantic-book", result.getRecommendations().get(0).getBookId());
+    verify(candidateRetriever).getSemanticCandidates(request, 50);
   }
 
   private SolrDocument document(String id) {

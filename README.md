@@ -14,6 +14,7 @@ The `RecommenderAgent` acts as a middleware orchestration engine. Its primary re
 * **Session Management:** Maintaining conversational state and history using Redis (`RedisSessionCache`).
 * **User Profiling:** Storing and retrieving long-term user preferences using PostgreSQL (`UserProfileDB`).
 * **Candidate Retrieval:** Querying an external Apache Solr instance for audiobook candidates (`SolrAudiobookRepository`).
+* **Vector Retrieval:** Embedding audiobook metadata and user requests with the configured OpenAI embedding model, then optionally retrieving candidates with Solr kNN search.
 * **Candidate Ranking:** Using machine learning to rank the candidates based on similarity to the target and optional weightings (`RankingService`).
 * **Response Generation:** Compiling recommendations and user title into prompts for an external AI/LLM service (`ResponseGenerator`).
 
@@ -58,6 +59,22 @@ The application will fail to start if these are not provided, as they do not hav
 | `REDIS_PORT` | Redis port | `6379` |
 | `REDIS_USERNAME` | Redis username | *(Empty)* |
 | `REDIS_PASSWORD` | Redis password | *(Empty)* |
+| `OPENAI_API_KEY` | Spring AI OpenAI API key used for embeddings and chat | *(Required for AI features)* |
+| `OPENAI_EMBEDDING_MODEL` | OpenAI embedding model | `text-embedding-3-small` |
+| `SOLR_VECTOR_SEARCH_ENABLED` | Use request embeddings for new recommendations | `false` |
+| `SOLR_VECTOR_FIELD` | Solr vector field name | `audiobook_vector` |
+
+#### Solr vector field
+
+Before setting `SOLR_VECTOR_SEARCH_ENABLED=true`, add a vector field to the Solr collection schema. The dimension must match the selected embedding model. For `text-embedding-3-small`, use the model's configured output dimension.
+
+```xml
+<fieldType name="knn_vector" class="solr.DenseVectorField"
+           vectorDimension="1536" similarityFunction="dot_product"/>
+<field name="audiobook_vector" type="knn_vector" indexed="true" stored="false"/>
+```
+
+Use `AudiobookEmbeddingIndexer.index(...)` when importing or re-indexing audiobook records. It builds and L2-normalizes the embedding from title, authors, description, and genres before storing it in the configured vector field. User request embeddings are normalized in the same way before kNN search. Re-index all records when changing embedding models or vector similarity settings.
 
 ---
 
