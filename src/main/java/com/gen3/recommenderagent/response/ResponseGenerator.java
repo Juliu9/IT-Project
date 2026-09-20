@@ -3,6 +3,7 @@ package com.gen3.recommenderagent.response;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Recommendations;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Component;
 
@@ -19,6 +20,7 @@ public class ResponseGenerator {
         this(null);
     }
 
+    @Autowired
     public ResponseGenerator(ChatClient.Builder chatClientBuilder) {
         this.chatClient = (chatClientBuilder != null) ? chatClientBuilder.build() : null;
     }

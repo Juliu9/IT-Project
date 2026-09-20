@@ -2,6 +2,7 @@ package com.gen3.recommenderagent.ranker;
 
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -19,7 +20,8 @@ class SolrAudiobookRepositoryUnitTest {
         SolrClient client = mock(SolrClient.class);
         QueryResponse expected = new QueryResponse();
         when(client.query(org.mockito.ArgumentMatchers.eq("combinedbooks"),
-                org.mockito.ArgumentMatchers.any(SolrQuery.class)))
+                org.mockito.ArgumentMatchers.any(SolrQuery.class),
+                org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST)))
                 .thenReturn(expected);
 
         SolrAudiobookRepository repository =
@@ -31,7 +33,8 @@ class SolrAudiobookRepositoryUnitTest {
                 ArgumentCaptor.forClass(SolrQuery.class);
         verify(client).query(
                 org.mockito.ArgumentMatchers.eq("combinedbooks"),
-                queryCaptor.capture()
+                queryCaptor.capture(),
+                org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST)
         );
 
         SolrQuery query = queryCaptor.getValue();

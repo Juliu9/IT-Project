@@ -2,6 +2,7 @@ package com.gen3.recommenderagent.ranker;
 
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
@@ -40,6 +41,10 @@ public class SolrAudiobookRepository {
                 "score"
         );
 
-        return solrClient.query(collection, solrQuery);
+        return solrClient.query(
+                collection,
+                solrQuery,
+                SolrRequest.METHOD.POST
+        );
     }
 }
