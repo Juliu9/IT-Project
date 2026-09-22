@@ -15,7 +15,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.solr.SolrContainer;
 
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 class SolrAudiobookRepositoryTest {
 
   @Container static final SolrContainer SOLR = SolrContainerTestSupport.newContainer();

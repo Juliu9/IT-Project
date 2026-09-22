@@ -1,68 +1,43 @@
 package com.gen3.recommenderagent.ranker;
 
 import com.gen3.recommenderagent.domain.session.Recommendation;
-import com.gen3.recommenderagent.domain.session.Recommendations;
-import java.util.ArrayList;
-import java.util.HashSet;
+import com.gen3.recommenderagent.ranker.strategy.HybridRankingStrategy;
+import com.gen3.recommenderagent.ranker.strategy.PreferenceRankingStrategy;
+import com.gen3.recommenderagent.ranker.strategy.RelevanceRankingStrategy;
 import java.util.List;
-import java.util.Set;
 import org.apache.solr.common.SolrDocument;
 import org.springframework.stereotype.Service;
 
 /*
-   Does machine learning on some candidates, and return a ranking of the top _ results
+   Selects and delegates to a ranking strategy based on the request.
 */
 @Service
-public class RankingService {
+public class RankingService implements Ranker {
 
-  private static final int MAX_RESULTS = 5;
+  private final RelevanceRankingStrategy relevanceRankingStrategy;
+  private final PreferenceRankingStrategy preferenceRankingStrategy;
+  private final HybridRankingStrategy hybridRankingStrategy;
 
-  /**
-   * Baseline ranking used until the ML ranking model is introduced.
-   *
-   * <p>Solr already returns documents in relevance order, so this implementation preserves that
-   * order, removes duplicate IDs, and selects at most five books. The method is deliberately
-   * isolated so an ML implementation can replace it without changing RecommendationEngine.
-   */
-  public Recommendations rank(List<SolrDocument> candidates, int requestedLimit) {
-    Recommendations result = new Recommendations();
+  public RankingService(
+      RelevanceRankingStrategy relevanceRankingStrategy,
+      PreferenceRankingStrategy preferenceRankingStrategy,
+      HybridRankingStrategy hybridRankingStrategy) {
+    this.relevanceRankingStrategy = relevanceRankingStrategy;
+    this.preferenceRankingStrategy = preferenceRankingStrategy;
+    this.hybridRankingStrategy = hybridRankingStrategy;
+  }
 
-    if (candidates == null || candidates.isEmpty()) {
-      return result;
-    }
+  /** Baseline ranking used until the ML ranking model is introduced. */
+  @Override
+  public List<Recommendation> rank(List<SolrDocument> candidates, int requestedLimit) {
+    return relevanceRankingStrategy.rank(candidates, requestedLimit);
+  }
 
-    int limit = Math.min(Math.max(requestedLimit, 1), MAX_RESULTS);
-
-    List<Recommendation> ranked = new ArrayList<>();
-    List<String> shownBooks = new ArrayList<>();
-    Set<String> seenBookIds = new HashSet<>();
-
-    for (SolrDocument candidate : candidates) {
-      Object idValue = candidate.getFieldValue("id");
-
-      if (idValue == null) {
-        continue;
-      }
-
-      String bookId = idValue.toString();
-      if (bookId.isBlank() || !seenBookIds.add(bookId)) {
-        continue;
-      }
-
-      Object scoreValue = candidate.getFieldValue("score");
-      Double score = scoreValue instanceof Number number ? number.doubleValue() : null;
-
-      int rank = ranked.size() + 1;
-      ranked.add(new Recommendation(bookId, rank, score));
-      shownBooks.add(bookId);
-
-      if (ranked.size() == limit) {
-        break;
-      }
-    }
-
-    result.setRecommendations(ranked);
-    result.setShownBooks(shownBooks);
-    return result;
+  @Override
+  public List<Recommendation> rank(
+      List<SolrDocument> candidates, int requestedLimit, boolean personalised) {
+    return personalised
+        ? hybridRankingStrategy.rank(candidates, requestedLimit)
+        : relevanceRankingStrategy.rank(candidates, requestedLimit);
   }
 }

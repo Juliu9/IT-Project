@@ -12,10 +12,19 @@ public class Session {
   private Instant createdAt;
   private Instant updatedAt;
   private Instant expiresAt;
+  private List<Recommendation> shownBooks;
 
   private List<SessionRequest> requests = new ArrayList<>();
 
   public Session() {}
+
+  public List<Recommendation> getShownBooks() {
+    return shownBooks;
+  }
+
+  public void setShownBooks(List<Recommendation> shownBooks) {
+    this.shownBooks = shownBooks;
+  }
 
   public String getSessionId() {
     return sessionId;
@@ -68,5 +77,12 @@ public class Session {
   public void addRequest(SessionRequest request) {
     this.requests.add(request);
     this.updatedAt = Instant.now();
+  }
+
+  public void addShownBooks(List<Recommendation> books) {
+    if (this.shownBooks == null) {
+      this.shownBooks = new ArrayList<>();
+    }
+    this.shownBooks.addAll(books);
   }
 }

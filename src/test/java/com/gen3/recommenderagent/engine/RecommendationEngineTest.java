@@ -12,12 +12,19 @@ import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Constraints;
 import com.gen3.recommenderagent.domain.session.Preferences;
 import com.gen3.recommenderagent.domain.session.Query;
-import com.gen3.recommenderagent.domain.session.Recommendations;
+import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.engine.events.DomainEventPublisher;
+import com.gen3.recommenderagent.engine.events.SessionUpdatedEvent;
+import com.gen3.recommenderagent.engine.handlers.IntentHandlerFactory;
+import com.gen3.recommenderagent.engine.handlers.NewRecommendationHandler;
 import com.gen3.recommenderagent.ranker.CandidateRetriever;
 import com.gen3.recommenderagent.ranker.RankingService;
-import com.gen3.recommenderagent.storage.sessioncache.SessionCache;
-import com.gen3.recommenderagent.storage.userprofiledb.UserProfileDB;
+import com.gen3.recommenderagent.ranker.RecommendationQueryBuilder;
+import com.gen3.recommenderagent.ranker.strategy.HybridRankingStrategy;
+import com.gen3.recommenderagent.ranker.strategy.PreferenceRankingStrategy;
+import com.gen3.recommenderagent.ranker.strategy.RelevanceRankingStrategy;
+import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
 import java.util.List;
 import org.apache.solr.common.SolrDocument;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,16 +33,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class RecommendationEngineTest {
 
-  @Mock private SessionCache sessionCache;
+  @Mock private SessionRepository sessionCache;
 
-  @Mock private UserProfileDB userProfileDB;
-
-  @Mock private ApplicationEventPublisher eventPublisher;
+  @Mock private DomainEventPublisher eventPublisher;
 
   @Mock private CandidateRetriever candidateRetriever;
 
@@ -43,9 +47,20 @@ class RecommendationEngineTest {
 
   @BeforeEach
   void setUp() {
+    NewRecommendationHandler newRecommendationHandler =
+        new NewRecommendationHandler(
+            candidateRetriever,
+            new RankingService(
+                new RelevanceRankingStrategy(),
+                new PreferenceRankingStrategy(),
+                new HybridRankingStrategy()),
+            new RecommendationQueryBuilder());
+
     recommendationEngine =
         new RecommendationEngine(
-            sessionCache, userProfileDB, eventPublisher, candidateRetriever, new RankingService());
+            sessionCache,
+            eventPublisher,
+            new IntentHandlerFactory(List.of(newRecommendationHandler)));
   }
 
   @Test
@@ -77,11 +92,11 @@ class RecommendationEngineTest {
                 document("book-5"),
                 document("book-6")));
 
-    Recommendations result = recommendationEngine.process("session-1", "user-1", request);
+    List<Recommendation> result = recommendationEngine.process("session-1", "user-1", request);
 
-    assertEquals(5, result.getRecommendations().size());
-    assertEquals("book-1", result.getRecommendations().get(0).getBookId());
-    assertEquals("book-5", result.getRecommendations().get(4).getBookId());
+    assertEquals(5, result.size());
+    assertEquals("book-1", result.get(0).getBookId());
+    assertEquals("book-5", result.get(4).getBookId());
     assertSame(result, request.getRecommendations());
     assertEquals(Intent.NEW_RECOMMENDATION, request.getIntent());
 
@@ -93,7 +108,7 @@ class RecommendationEngineTest {
     assertTrue(solrQuery.contains("light"));
     assertTrue(solrQuery.contains("-all:(\"horror\")"));
 
-    verify(eventPublisher).publishEvent(org.mockito.ArgumentMatchers.any(SessionUpdateEvent.class));
+    verify(eventPublisher).publish(org.mockito.ArgumentMatchers.any(SessionUpdatedEvent.class));
   }
 
   @Test
@@ -101,10 +116,10 @@ class RecommendationEngineTest {
     SessionRequest request = new SessionRequest();
     when(sessionCache.getSession("session-2")).thenReturn(null);
 
-    Recommendations result = recommendationEngine.process("session-2", "user-2", request);
+    List<Recommendation> result = recommendationEngine.process("session-2", "user-2", request);
 
     assertEquals(Intent.UNKNOWN, request.getIntent());
-    assertTrue(result.getRecommendations().isEmpty());
+    assertTrue(result.isEmpty());
   }
 
   private SolrDocument document(String id) {

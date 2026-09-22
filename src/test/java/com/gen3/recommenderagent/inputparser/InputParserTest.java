@@ -45,7 +45,7 @@ class InputParserTest {
     ChatClient.Builder builder = mock(ChatClient.Builder.class);
     when(builder.build()).thenReturn(chatClient);
 
-    SessionRequest result = new InputParser(builder).parse(rawText).entity();
+    SessionRequest result = new AiInputParser(builder).parse(rawText).entity();
 
     assertNotNull(result);
     assertEquals(rawText, result.getRawText());
@@ -63,7 +63,7 @@ class InputParserTest {
     ChatClient.Builder builder = mock(ChatClient.Builder.class);
     when(builder.build()).thenReturn(chatClient);
 
-    InputParser parser = new InputParser(builder);
+    InputParser parser = new AiInputParser(builder);
 
     IllegalArgumentException exception =
         assertThrows(IllegalArgumentException.class, () -> parser.parse("   "));
@@ -89,7 +89,7 @@ class InputParserTest {
     when(builder.build()).thenReturn(chatClient);
 
     IllegalStateException exception =
-        assertThrows(IllegalStateException.class, () -> new InputParser(builder).parse(rawText));
+        assertThrows(IllegalStateException.class, () -> new AiInputParser(builder).parse(rawText));
 
     assertEquals("AI did not return a ParsedRequest", exception.getMessage());
   }

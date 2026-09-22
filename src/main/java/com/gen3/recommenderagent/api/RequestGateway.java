@@ -1,10 +1,11 @@
 package com.gen3.recommenderagent.api;
 
-import com.gen3.recommenderagent.domain.session.Recommendations;
+import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.engine.RecommendationEngine;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.response.ResponseGenerator;
+import java.util.List;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -45,7 +46,7 @@ public class RequestGateway {
     SessionRequest currentRequest = inputParser.parse(rawText).entity();
 
     // 2. Engine combines parsed request with Redis session state
-    Recommendations recommendations =
+    List<Recommendation> recommendations =
         recommendationEngine.process(sessionId, userId, currentRequest);
 
     // 3. Generate natural language response

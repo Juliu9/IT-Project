@@ -10,12 +10,12 @@ This application processes natural language requests for audiobooks, manages use
 
 The `RecommenderAgent` acts as a middleware orchestration engine. Its primary responsibilities include:
 
-* **Input Parsing:** Taking raw text input and parsing it into structured intents and constraints (`InputParser`).
-* **Session Management:** Maintaining conversational state and history using Redis (`RedisSessionCache`).
-* **User Profiling:** Storing and retrieving long-term user preferences using PostgreSQL (`UserProfileDB`).
+* **Input Parsing:** Taking raw text input and parsing it into structured intents and constraints (`AiInputParser`).
+* **Session Management:** Maintaining conversational state and history using Redis (`RedisSessionRepository`).
+* **User Profiling:** Storing and retrieving long-term user preferences using PostgreSQL (`UserProfileRepository`).
 * **Candidate Retrieval:** Querying an external Apache Solr instance for audiobook candidates (`SolrAudiobookRepository`).
 * **Candidate Ranking:** Using machine learning to rank the candidates based on similarity to the target and optional weightings (`RankingService`).
-* **Response Generation:** Compiling recommendations and user title into prompts for an external AI/LLM service (`ResponseGenerator`).
+* **Response Generation:** Compiling recommendations and user title into prompts for an external AI/LLM service (`AiResponseGenerator`).
 
 The architecture is highly decoupled, utilizing Spring's `ApplicationEventPublisher` to handle asynchronous session updates without blocking the main request thread. It also leverages Java Virtual Threads for high-concurrency request handling.
 
@@ -135,7 +135,7 @@ docker compose down
 The project uses JUnit 5 and Testcontainers.
 
 #### Important Test Requirements
-1. **Testcontainers:** The `UserProfileDBTest` and `RedisSessionCacheTest` use Testcontainers to automatically spin up ephemeral Postgres and Redis Docker containers. Docker must be running on your machine to execute these tests.
+1. **Testcontainers:** The `UserProfileRepositoryTest` and `RedisSessionRepositoryTest` use Testcontainers to automatically spin up ephemeral Postgres and Redis Docker containers. Docker must be running on your machine to execute these tests.
 2. **Solr Test:** The `SolrAudiobookRepositoryTest` attempts to connect to a live Solr instance using `System.getenv("SOLR_URL")`. You must have the `SOLR_URL`, `SOLR_USERNAME`, and `SOLR_PASSWORD` environment variables set in your terminal before running the tests, or this specific test will fail.
 3. **Context Load Test:** `RecommenderAgentApplicationTests` loads the full Spring title. It requires the `SOLR_URL` environment variable to be present (due to `application.properties`) and expects Postgres/Redis to be available on localhost (via `compose.yaml`).
 
@@ -173,7 +173,7 @@ src/main/java/com/gen3/recommenderagent/
   *(Note: "update" should be changed to "validate" in production environments)*
 * **Redis (Session Cache):** Configured using `RedisTemplate` with a `JacksonJsonRedisSerializer` to store `Session` objects as JSON strings.
 * **Solr (Search):** Configured via `HttpJdkSolrClient`. The `SolrAudiobookRepository` queries this service to retrieve audiobook candidates.
-* **AI Service:** The `ResponseGenerator` currently contains placeholder logic for an LLM client. It requires an `AI_API_KEY` to be injected for future implementation.
+* **AI Service:** The `AiResponseGenerator` currently contains placeholder logic for an LLM client. It requires an `AI_API_KEY` to be injected for future implementation.
 
 ---
 

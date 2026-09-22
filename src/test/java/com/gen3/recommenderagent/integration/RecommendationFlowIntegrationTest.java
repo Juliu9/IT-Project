@@ -17,15 +17,22 @@ import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.engine.RecommendationEngine;
+import com.gen3.recommenderagent.engine.handlers.IntentHandlerFactory;
+import com.gen3.recommenderagent.engine.handlers.NewRecommendationHandler;
 import com.gen3.recommenderagent.inputparser.InputParser;
+import com.gen3.recommenderagent.ranker.BaseSolrCandidateRetriever;
 import com.gen3.recommenderagent.ranker.CandidateRetriever;
 import com.gen3.recommenderagent.ranker.RankingService;
+import com.gen3.recommenderagent.ranker.RecommendationQueryBuilder;
 import com.gen3.recommenderagent.ranker.SolrAudiobookRepository;
-import com.gen3.recommenderagent.response.ResponseGenerator;
-import com.gen3.recommenderagent.storage.userprofiledb.UserProfileDB;
+import com.gen3.recommenderagent.ranker.strategy.HybridRankingStrategy;
+import com.gen3.recommenderagent.ranker.strategy.PreferenceRankingStrategy;
+import com.gen3.recommenderagent.ranker.strategy.RelevanceRankingStrategy;
+import com.gen3.recommenderagent.response.AiResponseGenerator;
 import com.gen3.recommenderagent.testsupport.SolrContainerTestSupport;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.apache.solr.client.solrj.SolrClient;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -39,7 +46,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.solr.SolrContainer;
 
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 class RecommendationFlowIntegrationTest {
 
   @Container static final SolrContainer SOLR = SolrContainerTestSupport.newContainer();
@@ -71,20 +78,25 @@ class RecommendationFlowIntegrationTest {
 
     SolrAudiobookRepository repository =
         new SolrAudiobookRepository(solrClient, SolrContainerTestSupport.COLLECTION);
-    CandidateRetriever candidateRetriever = new CandidateRetriever(repository);
-    RankingService rankingService = new RankingService();
-    RecommendationFlowTestSupport.InMemorySessionCache sessionCache =
-        new RecommendationFlowTestSupport.InMemorySessionCache();
+    CandidateRetriever candidateRetriever = new BaseSolrCandidateRetriever(repository);
+    RankingService rankingService =
+        new RankingService(
+            new RelevanceRankingStrategy(),
+            new PreferenceRankingStrategy(),
+            new HybridRankingStrategy());
+    NewRecommendationHandler newRecommendationHandler =
+        new NewRecommendationHandler(
+            candidateRetriever, rankingService, new RecommendationQueryBuilder());
+    RecommendationFlowTestSupport.InMemorySessionRepository sessionRepository =
+        new RecommendationFlowTestSupport.InMemorySessionRepository();
 
     RecommendationEngine engine =
         new RecommendationEngine(
-            sessionCache,
-            mock(UserProfileDB.class),
-            sessionPublisher(sessionCache),
-            candidateRetriever,
-            rankingService);
+            sessionRepository,
+            sessionPublisher(sessionRepository),
+            new IntentHandlerFactory(List.of(newRecommendationHandler)));
 
-    RequestGateway gateway = new RequestGateway(inputParser, engine, new ResponseGenerator(null));
+    RequestGateway gateway = new RequestGateway(inputParser, engine, new AiResponseGenerator(null));
 
     MockMvc mockMvc = MockMvcBuilders.standaloneSetup(gateway).build();
 
@@ -101,19 +113,24 @@ class RecommendationFlowIntegrationTest {
             .getResponse()
             .getContentAsString();
 
-    Session savedSession = sessionCache.getSession("session-1");
+    Session savedSession = sessionRepository.getSession("session-1");
     assertNotNull(savedSession);
     assertEquals("user-1", savedSession.getUserId());
     assertEquals(1, savedSession.getRequests().size());
     var recommendations = savedSession.getRequests().getFirst().getRecommendations();
-    assertEquals(3, recommendations.getRecommendations().size());
+    assertEquals(3, recommendations.size());
+
+    Set<String> returnedBookIds =
+        recommendations.stream()
+            .map(recommendation -> recommendation.getBookId())
+            .collect(Collectors.toSet());
 
     Set<String> allowedScienceFictionIds =
         Set.of("book-101", "book-202", "book-303", "book-505", "book-606");
-    assertTrue(allowedScienceFictionIds.containsAll(recommendations.getShownBooks()));
-    assertFalse(recommendations.getShownBooks().contains("book-404"));
+    assertTrue(allowedScienceFictionIds.containsAll(returnedBookIds));
+    assertFalse(returnedBookIds.contains("book-404"));
     assertFalse(response.contains("book-404"));
-    recommendations.getShownBooks().forEach(bookId -> assertTrue(response.contains(bookId)));
+    returnedBookIds.forEach(bookId -> assertTrue(response.contains(bookId)));
   }
 
   private SessionRequest parsedRequest(String rawText) {

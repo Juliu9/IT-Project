@@ -1,16 +1,13 @@
-package com.gen3.recommenderagent.storage.sessioncache;
+package com.gen3.recommenderagent.storage.sessionrepository;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-import com.gen3.recommenderagent.domain.session.BookReference;
 import com.gen3.recommenderagent.domain.session.Constraints;
-import com.gen3.recommenderagent.domain.session.Feedback;
 import com.gen3.recommenderagent.domain.session.Preferences;
 import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.Recommendation;
-import com.gen3.recommenderagent.domain.session.Recommendations;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.util.List;
@@ -24,16 +21,15 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 @Testcontainers(disabledWithoutDocker = true)
-class RedisSessionCacheTest {
+class RedisSessionRepositoryTest {
 
   @Container
   static GenericContainer<?> redis =
-      new GenericContainer<>(DockerImageName.parse("redis:7-alpine")).withExposedPorts(6379);
+      new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
 
-  private RedisSessionCache redisSessionCache;
+  private RedisSessionRepository redisSessionCache;
 
   private LettuceConnectionFactory connectionFactory;
 
@@ -60,7 +56,7 @@ class RedisSessionCacheTest {
 
     redisTemplate.afterPropertiesSet();
 
-    redisSessionCache = new RedisSessionCache(redisTemplate);
+    redisSessionCache = new RedisSessionRepository(redisTemplate);
   }
 
   // ============================================================
@@ -228,73 +224,6 @@ class RedisSessionCacheTest {
   }
 
   // ============================================================
-  // FEEDBACK
-  // ============================================================
-
-  @Test
-  void shouldSaveAndRetrieveFeedback() {
-
-    Session session = new Session();
-
-    session.setSessionId("feedback-test");
-
-    Feedback feedback = new Feedback();
-
-    feedback.setType("DISLIKE");
-    feedback.setReason("Too slow paced");
-
-    SessionRequest request = new SessionRequest();
-
-    request.setFeedback(feedback);
-
-    session.setRequests(List.of(request));
-
-    redisSessionCache.updateSession(session);
-
-    Session retrieved = redisSessionCache.getSession("feedback-test");
-
-    Feedback retrievedFeedback = retrieved.getRequests().get(0).getFeedback();
-
-    assertNotNull(retrievedFeedback);
-
-    assertEquals("DISLIKE", retrievedFeedback.getType());
-
-    assertEquals("Too slow paced", retrievedFeedback.getReason());
-  }
-
-  // ============================================================
-  // REFERENCES
-  // ============================================================
-
-  @Test
-  void shouldSaveAndRetrieveReferences() {
-
-    Session session = new Session();
-
-    session.setSessionId("references-test");
-
-    BookReference bookReference = new BookReference();
-
-    bookReference.setBookId("book-123");
-
-    SessionRequest request = new SessionRequest();
-
-    request.setBookReference(bookReference);
-
-    session.setRequests(List.of(request));
-
-    redisSessionCache.updateSession(session);
-
-    Session retrieved = redisSessionCache.getSession("references-test");
-
-    BookReference retrievedReferences = retrieved.getRequests().get(0).getBookReference();
-
-    assertNotNull(retrievedReferences);
-
-    assertEquals("book-123", retrievedReferences.getBookId());
-  }
-
-  // ============================================================
   // RECOMMENDATIONS
   // ============================================================
 
@@ -305,14 +234,10 @@ class RedisSessionCacheTest {
 
     session.setSessionId("recommendations-test");
 
-    Recommendations recommendations = new Recommendations();
-
-    recommendations.setRecommendations(
-        List.of(new Recommendation("book1", 1, 10.0), new Recommendation("book2", 1, 20.0)));
-
-    recommendations.setShownBooks(List.of("book-1", "book-2"));
-
-    recommendations.setExcludedBooks(List.of("book-3"));
+    List<Recommendation> recommendations =
+        List.of(
+            new Recommendation("book1", 1, 10.0, "Book One"),
+            new Recommendation("book2", 1, 20.0, "Book Two"));
 
     SessionRequest request = new SessionRequest();
 
@@ -324,23 +249,20 @@ class RedisSessionCacheTest {
 
     Session retrieved = redisSessionCache.getSession("recommendations-test");
 
-    Recommendations retrievedRecommendations = retrieved.getRequests().get(0).getRecommendations();
+    List<Recommendation> retrievedRecommendations =
+        retrieved.getRequests().get(0).getRecommendations();
 
     assertNotNull(retrievedRecommendations);
 
-    assertEquals(2, retrievedRecommendations.getRecommendations().size());
+    assertEquals(2, retrievedRecommendations.size());
 
-    assertEquals("book1", retrievedRecommendations.getRecommendations().get(0).getBookId());
-    assertEquals(1, retrievedRecommendations.getRecommendations().get(0).getRank());
-    assertEquals(10.0, retrievedRecommendations.getRecommendations().get(0).getScore());
+    assertEquals("book1", retrievedRecommendations.get(0).getBookId());
+    assertEquals(1, retrievedRecommendations.get(0).getRank());
+    assertEquals(10.0, retrievedRecommendations.get(0).getScore());
 
-    assertEquals("book2", retrievedRecommendations.getRecommendations().get(1).getBookId());
-    assertEquals(1, retrievedRecommendations.getRecommendations().get(1).getRank());
-    assertEquals(20.0, retrievedRecommendations.getRecommendations().get(1).getScore());
-
-    assertEquals(List.of("book-1", "book-2"), retrievedRecommendations.getShownBooks());
-
-    assertEquals(List.of("book-3"), retrievedRecommendations.getExcludedBooks());
+    assertEquals("book2", retrievedRecommendations.get(1).getBookId());
+    assertEquals(1, retrievedRecommendations.get(1).getRank());
+    assertEquals(20.0, retrievedRecommendations.get(1).getScore());
   }
 
   // ============================================================
@@ -369,10 +291,6 @@ class RedisSessionCacheTest {
     assertNull(retrievedRequest.getPreferences());
 
     assertNull(retrievedRequest.getConstraints());
-
-    assertNull(retrievedRequest.getFeedback());
-
-    assertNull(retrievedRequest.getBookReference());
   }
 
   // ============================================================
