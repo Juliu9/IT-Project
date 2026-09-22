@@ -10,7 +10,7 @@ import com.gen3.recommenderagent.api.RequestGateway;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
-import com.gen3.recommenderagent.storage.sessioncache.SessionCache;
+import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -64,7 +64,7 @@ class FinalLiveIntegrationTest {
 
   @Autowired private RequestGateway requestGateway;
 
-  @Autowired private SessionCache sessionCache;
+  @Autowired private SessionRepository sessionRepository;
 
   @Test
   void shouldRunFromRawTextThroughOpenAiAndStagingSolr() throws Exception {
@@ -119,7 +119,7 @@ class FinalLiveIntegrationTest {
     Instant deadline = Instant.now().plus(timeout);
 
     while (Instant.now().isBefore(deadline)) {
-      Session session = sessionCache.getSession(sessionId);
+      Session session = sessionRepository.getSession(sessionId);
       if (session != null) {
         return session;
       }
