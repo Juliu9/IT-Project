@@ -6,10 +6,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
+import org.apache.solr.common.SolrDocument;
+import org.apache.solr.common.SolrDocumentList;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -43,5 +46,83 @@ class SolrAudiobookRepositoryUnitTest {
     assertEquals("title rt_title authors rt_authors all", query.get("qf"));
     assertEquals(5, query.getRows());
     assertEquals("id,source,title,authors,description,score", query.getFields());
+  }
+
+  /** The public repository boundary exposes plain records rather than Solr documents. */
+  @Test
+  void shouldMapSearchResultsToAudiobookRecords() throws Exception {
+    SolrClient client = mock(SolrClient.class);
+    QueryResponse response = mock(QueryResponse.class);
+    SolrDocument document = new SolrDocument();
+    document.setField("id", "book-1");
+    document.setField("authors", java.util.List.of("Author One", "Author Two"));
+    document.setField("score", 2.5f);
+    SolrDocumentList documents = new SolrDocumentList();
+    documents.setNumFound(7);
+    documents.add(document);
+    when(response.getResults()).thenReturn(documents);
+    when(client.query(
+            org.mockito.ArgumentMatchers.eq("combinedbooks"),
+            org.mockito.ArgumentMatchers.any(SolrQuery.class),
+            org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST)))
+        .thenReturn(response);
+
+    AudiobookSearchPage page =
+        new SolrAudiobookRepository(client, "combinedbooks").searchBooks("mystery", 5);
+
+    assertEquals(7, page.totalItems());
+    assertEquals("book-1", page.records().getFirst().id());
+    assertEquals(
+        java.util.List.of("Author One", "Author Two"), page.records().getFirst().authors());
+    assertEquals(2.5, page.records().getFirst().score());
+  }
+
+  @Test
+  void shouldBlendLexicalAndVectorScores() throws Exception {
+    SolrClient client = mock(SolrClient.class);
+    QueryResponse keywordResponse = mock(QueryResponse.class);
+    SolrDocumentList keywordDocuments = new SolrDocumentList();
+    keywordDocuments.setNumFound(2);
+    keywordDocuments.add(document("book-1", 10.0, "Keyword match"));
+    keywordDocuments.add(document("book-2", 5.0, "Semantic match"));
+    when(keywordResponse.getResults()).thenReturn(keywordDocuments);
+
+    QueryResponse vectorResponse = mock(QueryResponse.class);
+    SolrDocumentList vectorDocuments = new SolrDocumentList();
+    vectorDocuments.setNumFound(2);
+    vectorDocuments.add(document("book-2", 0.9, "Semantic match"));
+    vectorDocuments.add(document("book-3", 0.5, "Vector only"));
+    when(vectorResponse.getResults()).thenReturn(vectorDocuments);
+
+    when(client.query(
+            org.mockito.ArgumentMatchers.eq("combinedbooks"),
+            org.mockito.ArgumentMatchers.any(SolrQuery.class),
+            org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST)))
+        .thenReturn(keywordResponse, vectorResponse);
+
+    AudiobookSearchPage page =
+        new SolrAudiobookRepository(client, "combinedbooks", "embedding", 2)
+            .searchBooks("mystery", 2, new float[] {0.6f, 0.8f});
+
+    assertEquals(
+        List.of("book-2", "book-1"), page.records().stream().map(AudiobookRecord::id).toList());
+    assertEquals(0.8, page.records().getFirst().score(), 0.000001);
+
+    ArgumentCaptor<SolrQuery> queryCaptor = ArgumentCaptor.forClass(SolrQuery.class);
+    verify(client, org.mockito.Mockito.times(2))
+        .query(
+            org.mockito.ArgumentMatchers.eq("combinedbooks"),
+            queryCaptor.capture(),
+            org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST));
+    assertEquals(
+        "{!knn f=embedding topK=4}[0.6,0.8]", queryCaptor.getAllValues().get(1).getQuery());
+  }
+
+  private SolrDocument document(String id, double score, String title) {
+    SolrDocument document = new SolrDocument();
+    document.setField("id", id);
+    document.setField("score", score);
+    document.setField("title", title);
+    return document;
   }
 }

@@ -1,0 +1,5 @@
+<!-- Add these definitions to the target Solr collection schema. -->
+<schema>
+  <fieldType name="audiobook_vector" class="solr.DenseVectorField" vectorDimension="1536" similarity="cosine"/>
+  <field name="embedding" type="audiobook_vector" indexed="true" stored="true"/>
+</schema>

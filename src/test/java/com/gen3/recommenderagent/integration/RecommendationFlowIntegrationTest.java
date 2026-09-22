@@ -78,7 +78,10 @@ class RecommendationFlowIntegrationTest {
 
     SolrAudiobookRepository repository =
         new SolrAudiobookRepository(solrClient, SolrContainerTestSupport.COLLECTION);
-    CandidateRetriever candidateRetriever = new BaseSolrCandidateRetriever(repository);
+    com.gen3.recommenderagent.embedding.EmbeddingIndexer embeddingIndexer =
+        mock(com.gen3.recommenderagent.embedding.EmbeddingIndexer.class);
+    CandidateRetriever candidateRetriever =
+        new BaseSolrCandidateRetriever(repository, embeddingIndexer);
     RankingService rankingService =
         new RankingService(
             new RelevanceRankingStrategy(),
@@ -96,7 +99,8 @@ class RecommendationFlowIntegrationTest {
             sessionPublisher(sessionRepository),
             new IntentHandlerFactory(List.of(newRecommendationHandler)));
 
-    RequestGateway gateway = new RequestGateway(inputParser, engine, new AiResponseGenerator(null));
+    RequestGateway gateway =
+        new RequestGateway(inputParser, engine, new AiResponseGenerator(null), embeddingIndexer);
 
     MockMvc mockMvc = MockMvcBuilders.standaloneSetup(gateway).build();
 

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -82,7 +83,7 @@ class RecommendationEngineTest {
     request.setConstraints(constraints);
 
     when(sessionCache.getSession("session-1")).thenReturn(null);
-    when(candidateRetriever.getCandidates(anyString(), eq(50)))
+    when(candidateRetriever.getCandidates(anyString(), eq(50), same(request)))
         .thenReturn(
             List.of(
                 document("book-1"),
@@ -101,7 +102,7 @@ class RecommendationEngineTest {
     assertEquals(Intent.NEW_RECOMMENDATION, request.getIntent());
 
     ArgumentCaptor<String> queryCaptor = ArgumentCaptor.forClass(String.class);
-    verify(candidateRetriever).getCandidates(queryCaptor.capture(), eq(50));
+    verify(candidateRetriever).getCandidates(queryCaptor.capture(), eq(50), same(request));
 
     String solrQuery = queryCaptor.getValue();
     assertTrue(solrQuery.contains("mystery"));

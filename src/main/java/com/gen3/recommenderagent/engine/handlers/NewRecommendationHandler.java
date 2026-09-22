@@ -39,7 +39,7 @@ public class NewRecommendationHandler implements IntentHandler {
   public List<Recommendation> handle(SessionRequest request, Session session) {
     String query = queryBuilder.build(request);
 
-    var candidates = candidateRetriever.getCandidates(query, CANDIDATE_LIMIT);
+    var candidates = candidateRetriever.getCandidates(query, CANDIDATE_LIMIT, request);
 
     return ranker.rank(candidates, resolveResultLimit(request), request.isPersonalised());
   }

@@ -2,6 +2,7 @@ package com.gen3.recommenderagent.api;
 
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
 import com.gen3.recommenderagent.engine.RecommendationEngine;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.response.ResponseGenerator;
@@ -19,14 +20,17 @@ public class RequestGateway {
   private final InputParser inputParser;
   private final RecommendationEngine recommendationEngine;
   private final ResponseGenerator responseGenerator;
+  private final EmbeddingIndexer embeddingIndexer;
 
   public RequestGateway(
       InputParser inputParser,
       RecommendationEngine recommendationEngine,
-      ResponseGenerator responseGenerator) {
+      ResponseGenerator responseGenerator,
+      EmbeddingIndexer embeddingIndexer) {
     this.inputParser = inputParser;
     this.recommendationEngine = recommendationEngine;
     this.responseGenerator = responseGenerator;
+    this.embeddingIndexer = embeddingIndexer;
   }
 
   /**
@@ -48,6 +52,9 @@ public class RequestGateway {
     // 2. Engine combines parsed request with Redis session state
     List<Recommendation> recommendations =
         recommendationEngine.process(sessionId, userId, currentRequest);
+
+    // The engine assigns the final request ID; persist the normalized vector under that ID.
+    embeddingIndexer.indexRequest(currentRequest);
 
     // 3. Generate natural language response
     return responseGenerator.generate(recommendations, currentRequest);

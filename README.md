@@ -13,7 +13,8 @@ The `RecommenderAgent` acts as a middleware orchestration engine. Its primary re
 * **Input Parsing:** Taking raw text input and parsing it into structured intents and constraints (`AiInputParser`).
 * **Session Management:** Maintaining conversational state and history using Redis (`RedisSessionRepository`).
 * **User Profiling:** Storing and retrieving long-term user preferences using PostgreSQL (`UserProfileRepository`).
-* **Candidate Retrieval:** Querying an external Apache Solr instance for audiobook candidates (`SolrAudiobookRepository`).
+* **Candidate Retrieval:** Querying audiobook candidates through `AudiobookRepository`, currently implemented by `SolrAudiobookRepository`.
+* **Embeddings:** Generating unit-length vectors for returned audiobooks and combined raw/parsed requests (`embedding/`).
 * **Candidate Ranking:** Using machine learning to rank the candidates based on similarity to the target and optional weightings (`RankingService`).
 * **Response Generation:** Compiling recommendations and user title into prompts for an external AI/LLM service (`AiResponseGenerator`).
 
@@ -173,6 +174,7 @@ src/main/java/com/gen3/recommenderagent/
   *(Note: "update" should be changed to "validate" in production environments)*
 * **Redis (Session Cache):** Configured using `RedisTemplate` with a `JacksonJsonRedisSerializer` to store `Session` objects as JSON strings.
 * **Solr (Search):** Configured via `HttpJdkSolrClient`. The `SolrAudiobookRepository` queries this service to retrieve audiobook candidates.
+* **Embeddings (Solr + PostgreSQL):** `EmbeddingIndexer` builds human-readable text from audiobook title, authors, description, genres, and narrator, then uses Spring AI's configured `text-embedding-3-small` model. On startup, `AudiobookEmbeddingStartupIndexer` pages through the complete Solr catalogue, creates or reuses every audiobook vector, and batch-writes the vectors to Solr before the application becomes ready for searches. Solr stores vectors in the `embedding` `DenseVectorField`, while PostgreSQL keeps the source text and a reusable copy of each normalized vector. Requests combine raw text with intent, query fields, preferences, and constraints. Candidate retrieval keeps lexical `edismax`, adds Solr kNN retrieval, and blends normalized scores with `0.4` keyword and `0.6` vector weights. Configure the Solr field as `type=knn_vector`/`DenseVectorField` with `dimension=1536` (or set `SOLR_EMBEDDING_DIMENSION` to match a deliberately changed model), then re-index all audiobook vectors after changing the model.
 * **AI Service:** The `AiResponseGenerator` currently contains placeholder logic for an LLM client. It requires an `AI_API_KEY` to be injected for future implementation.
 
 ---
