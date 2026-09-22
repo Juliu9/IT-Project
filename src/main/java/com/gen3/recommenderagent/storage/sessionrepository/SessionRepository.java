@@ -4,8 +4,7 @@ import com.gen3.recommenderagent.domain.session.Session;
 
 public interface SessionRepository {
 
-    Session getSession(String sessionId);
+  Session getSession(String sessionId);
 
-    void updateSession(Session session);
-
+  void updateSession(Session session);
 }

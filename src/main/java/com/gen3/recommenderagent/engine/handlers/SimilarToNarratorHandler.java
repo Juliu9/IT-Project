@@ -4,27 +4,26 @@ import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
-import org.springframework.stereotype.Component;
-
 import java.util.List;
+import org.springframework.stereotype.Component;
 
 @Component
 public class SimilarToNarratorHandler implements IntentHandler {
 
-    @Override
-    public Intent supportedIntent() {
-        return Intent.SIMILAR_TO_NARRATOR;
-    }
+  @Override
+  public Intent supportedIntent() {
+    return Intent.SIMILAR_TO_NARRATOR;
+  }
 
-    @Override
-    public List<Recommendation> handle(SessionRequest request, Session session) {
+  @Override
+  public List<Recommendation> handle(SessionRequest request, Session session) {
 
-        // TODO:
-        // Extract narrator.
-        // Build narrator query.
-        // Retrieve candidates.
-        // Rank candidates.
+    // TODO:
+    // Extract narrator.
+    // Build narrator query.
+    // Retrieve candidates.
+    // Rank candidates.
 
-        return List.of();
-    }
+    return List.of();
+  }
 }

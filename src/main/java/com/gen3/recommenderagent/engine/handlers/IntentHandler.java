@@ -8,7 +8,7 @@ import java.util.List;
 
 public interface IntentHandler {
 
-    Intent supportedIntent();
+  Intent supportedIntent();
 
-    List<Recommendation> handle(SessionRequest request, Session session);
+  List<Recommendation> handle(SessionRequest request, Session session);
 }

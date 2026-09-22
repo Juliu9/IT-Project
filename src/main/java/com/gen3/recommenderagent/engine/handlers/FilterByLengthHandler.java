@@ -4,24 +4,23 @@ import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
-import org.springframework.stereotype.Component;
-
 import java.util.List;
+import org.springframework.stereotype.Component;
 
 @Component
 public class FilterByLengthHandler implements IntentHandler {
 
-    @Override
-    public Intent supportedIntent() {
-        return Intent.FILTER_BY_LENGTH;
-    }
+  @Override
+  public Intent supportedIntent() {
+    return Intent.FILTER_BY_LENGTH;
+  }
 
-    @Override
-    public List<Recommendation> handle(SessionRequest request, Session session) {
+  @Override
+  public List<Recommendation> handle(SessionRequest request, Session session) {
 
-        // TODO:
-        // Filter candidates by audiobook duration.
+    // TODO:
+    // Filter candidates by audiobook duration.
 
-        return List.of();
-    }
+    return List.of();
+  }
 }

@@ -6,5 +6,5 @@ import org.springframework.ai.chat.model.ChatResponse;
 
 public interface InputParser {
 
-    ResponseEntity<ChatResponse, SessionRequest> parse(String rawText);
+  ResponseEntity<ChatResponse, SessionRequest> parse(String rawText);
 }

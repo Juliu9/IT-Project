@@ -6,8 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class RecommenderAgentApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(RecommenderAgentApplication.class, args);
-	}
-
+  public static void main(String[] args) {
+    SpringApplication.run(RecommenderAgentApplication.class, args);
+  }
 }

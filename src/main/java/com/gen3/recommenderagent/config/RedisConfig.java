@@ -12,23 +12,23 @@ import tools.jackson.databind.ObjectMapper;
 @Configuration
 public class RedisConfig {
 
-    @Bean
-    public RedisTemplate<String, Session> redisTemplate(
-            RedisConnectionFactory connectionFactory,
-            ObjectMapper objectMapper) {
+  @Bean
+  public RedisTemplate<String, Session> redisTemplate(
+      RedisConnectionFactory connectionFactory, ObjectMapper objectMapper) {
 
-        RedisTemplate<String, Session> template = new RedisTemplate<>();
-        template.setConnectionFactory(connectionFactory);
+    RedisTemplate<String, Session> template = new RedisTemplate<>();
+    template.setConnectionFactory(connectionFactory);
 
-        // Keys are saved as plain strings
-        template.setKeySerializer(new StringRedisSerializer());
-        template.setHashKeySerializer(new StringRedisSerializer());
+    // Keys are saved as plain strings
+    template.setKeySerializer(new StringRedisSerializer());
+    template.setHashKeySerializer(new StringRedisSerializer());
 
-        JacksonJsonRedisSerializer<Session> serializer = new JacksonJsonRedisSerializer<>(objectMapper, Session.class);
+    JacksonJsonRedisSerializer<Session> serializer =
+        new JacksonJsonRedisSerializer<>(objectMapper, Session.class);
 
-        template.setValueSerializer(serializer);
-        template.setHashValueSerializer(serializer);
+    template.setValueSerializer(serializer);
+    template.setHashValueSerializer(serializer);
 
-        return template;
-    }
+    return template;
+  }
 }

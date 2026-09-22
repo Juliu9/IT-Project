@@ -4,24 +4,23 @@ import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
-import org.springframework.stereotype.Component;
-
 import java.util.List;
+import org.springframework.stereotype.Component;
 
 @Component
 public class BookDetailsHandler implements IntentHandler {
 
-    @Override
-    public Intent supportedIntent() {
-        return Intent.BOOK_DETAILS;
-    }
+  @Override
+  public Intent supportedIntent() {
+    return Intent.BOOK_DETAILS;
+  }
 
-    @Override
-    public List<Recommendation> handle(SessionRequest request, Session session) {
+  @Override
+  public List<Recommendation> handle(SessionRequest request, Session session) {
 
-        // TODO:
-        // Find requested book and return its details.
+    // TODO:
+    // Find requested book and return its details.
 
-        return List.of();
-    }
+    return List.of();
+  }
 }

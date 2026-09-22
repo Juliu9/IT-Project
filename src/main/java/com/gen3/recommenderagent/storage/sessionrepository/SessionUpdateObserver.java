@@ -8,15 +8,15 @@ import org.springframework.stereotype.Component;
 @Component
 public class SessionUpdateObserver {
 
-    private final SessionRepository sessionRepository;
+  private final SessionRepository sessionRepository;
 
-    public SessionUpdateObserver(SessionRepository sessionRepository) {
-        this.sessionRepository = sessionRepository;
-    }
+  public SessionUpdateObserver(SessionRepository sessionRepository) {
+    this.sessionRepository = sessionRepository;
+  }
 
-    @Async
-    @EventListener
-    public void onSessionUpdated(SessionUpdatedEvent event) {
-        sessionRepository.updateSession(event.getSession());
-    }
+  @Async
+  @EventListener
+  public void onSessionUpdated(SessionUpdatedEvent event) {
+    sessionRepository.updateSession(event.getSession());
+  }
 }

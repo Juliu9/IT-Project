@@ -4,24 +4,23 @@ import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
-import org.springframework.stereotype.Component;
-
 import java.util.List;
+import org.springframework.stereotype.Component;
 
 @Component
 public class ClearHistoryHandler implements IntentHandler {
 
-    @Override
-    public Intent supportedIntent() {
-        return Intent.CLEAR_HISTORY;
-    }
+  @Override
+  public Intent supportedIntent() {
+    return Intent.CLEAR_HISTORY;
+  }
 
-    @Override
-    public List<Recommendation> handle(SessionRequest request, Session session) {
+  @Override
+  public List<Recommendation> handle(SessionRequest request, Session session) {
 
-        // TODO:
-        // Clear session history.
+    // TODO:
+    // Clear session history.
 
-        return List.of();
-    }
+    return List.of();
+  }
 }

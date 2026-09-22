@@ -1,44 +1,80 @@
 package com.gen3.recommenderagent.domain.userprofile;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "preferences")
 public class Preference {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id; // Required by JPA for the primary key
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  private Long id; // Required by JPA for the primary key
 
-    private String attributeType;
-    private String attribute;
-    private Double preferenceScore;
-    private Double confidence;
+  private String attributeType;
+  private String attribute;
+  private Double preferenceScore;
+  private Double confidence;
 
-    // Links back to the UserProfile table
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id")
-    private UserProfile userProfile;
+  // Links back to the UserProfile table
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "user_id")
+  private UserProfile userProfile;
 
-    public Preference() {
-    }
+  public Preference() {}
 
-    // Getters and Setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+  // Getters and Setters
+  public Long getId() {
+    return id;
+  }
 
-    public String getAttributeType() { return attributeType; }
-    public void setAttributeType(String attributeType) { this.attributeType = attributeType; }
+  public void setId(Long id) {
+    this.id = id;
+  }
 
-    public String getAttribute() { return attribute; }
-    public void setAttribute(String attribute) { this.attribute = attribute; }
+  public String getAttributeType() {
+    return attributeType;
+  }
 
-    public Double getPreferenceScore() { return preferenceScore; }
-    public void setPreferenceScore(Double preferenceScore) { this.preferenceScore = preferenceScore; }
+  public void setAttributeType(String attributeType) {
+    this.attributeType = attributeType;
+  }
 
-    public Double getConfidence() { return confidence; }
-    public void setConfidence(Double confidence) { this.confidence = confidence; }
+  public String getAttribute() {
+    return attribute;
+  }
 
-    public UserProfile getUserProfile() { return userProfile; }
-    public void setUserProfile(UserProfile userProfile) { this.userProfile = userProfile; }
+  public void setAttribute(String attribute) {
+    this.attribute = attribute;
+  }
+
+  public Double getPreferenceScore() {
+    return preferenceScore;
+  }
+
+  public void setPreferenceScore(Double preferenceScore) {
+    this.preferenceScore = preferenceScore;
+  }
+
+  public Double getConfidence() {
+    return confidence;
+  }
+
+  public void setConfidence(Double confidence) {
+    this.confidence = confidence;
+  }
+
+  public UserProfile getUserProfile() {
+    return userProfile;
+  }
+
+  public void setUserProfile(UserProfile userProfile) {
+    this.userProfile = userProfile;
+  }
 }

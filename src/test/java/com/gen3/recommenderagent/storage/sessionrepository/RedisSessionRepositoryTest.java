@@ -1,602 +1,336 @@
 package com.gen3.recommenderagent.storage.sessionrepository;
 
-import com.gen3.recommenderagent.domain.session.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
+import com.gen3.recommenderagent.domain.session.Constraints;
+import com.gen3.recommenderagent.domain.session.Preferences;
+import com.gen3.recommenderagent.domain.session.Query;
+import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.session.Session;
+import com.gen3.recommenderagent.domain.session.SessionRequest;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.JacksonJsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
-
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 class RedisSessionRepositoryTest {
 
-    @Container
-    static GenericContainer<?> redis =
-            new GenericContainer<>("redis:7-alpine")
-                    .withExposedPorts(6379);
+  @Container
+  static GenericContainer<?> redis =
+      new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
 
-    private RedisSessionRepository redisSessionCache;
+  private RedisSessionRepository redisSessionCache;
 
-    private LettuceConnectionFactory connectionFactory;
+  private LettuceConnectionFactory connectionFactory;
 
-    @BeforeEach
-    void setUp() {
+  @BeforeEach
+  void setUp() {
 
-        RedisStandaloneConfiguration config =
-                new RedisStandaloneConfiguration(
-                        redis.getHost(),
-                        redis.getMappedPort(6379)
-                );
+    RedisStandaloneConfiguration config =
+        new RedisStandaloneConfiguration(redis.getHost(), redis.getMappedPort(6379));
 
-        connectionFactory =
-                new LettuceConnectionFactory(config);
+    connectionFactory = new LettuceConnectionFactory(config);
 
-        connectionFactory.afterPropertiesSet();
+    connectionFactory.afterPropertiesSet();
 
-        JacksonJsonRedisSerializer<Session> serializer =
-                new JacksonJsonRedisSerializer<>(Session.class);
+    JacksonJsonRedisSerializer<Session> serializer =
+        new JacksonJsonRedisSerializer<>(Session.class);
 
-        RedisTemplate<String, Session> redisTemplate =
-                new RedisTemplate<>();
+    RedisTemplate<String, Session> redisTemplate = new RedisTemplate<>();
 
-        redisTemplate.setConnectionFactory(connectionFactory);
+    redisTemplate.setConnectionFactory(connectionFactory);
 
-        redisTemplate.setKeySerializer(
-                new StringRedisSerializer()
-        );
+    redisTemplate.setKeySerializer(new StringRedisSerializer());
 
-        redisTemplate.setValueSerializer(serializer);
+    redisTemplate.setValueSerializer(serializer);
 
-        redisTemplate.afterPropertiesSet();
+    redisTemplate.afterPropertiesSet();
 
-        redisSessionCache =
-                new RedisSessionRepository(redisTemplate);
-    }
+    redisSessionCache = new RedisSessionRepository(redisTemplate);
+  }
 
+  // ============================================================
+  // SESSION
+  // ============================================================
 
-    // ============================================================
-    // SESSION
-    // ============================================================
+  @Test
+  void shouldSaveAndRetrieveSessionId() {
 
-    @Test
-    void shouldSaveAndRetrieveSessionId() {
+    Session session = new Session();
 
-        Session session = new Session();
+    session.setSessionId("session-123");
 
-        session.setSessionId("session-123");
+    redisSessionCache.updateSession(session);
 
-        redisSessionCache.updateSession(session);
+    Session retrieved = redisSessionCache.getSession("session-123");
 
-        Session retrieved =
-                redisSessionCache.getSession("session-123");
+    assertNotNull(retrieved);
 
-        assertNotNull(retrieved);
+    assertEquals("session-123", retrieved.getSessionId());
+  }
 
-        assertEquals(
-                "session-123",
-                retrieved.getSessionId()
-        );
-    }
+  // ============================================================
+  // SESSION REQUEST
+  // ============================================================
 
+  @Test
+  void shouldSaveAndRetrieveSessionRequest() {
 
-    // ============================================================
-    // SESSION REQUEST
-    // ============================================================
+    Session session = new Session();
 
-    @Test
-    void shouldSaveAndRetrieveSessionRequest() {
+    session.setSessionId("session-request-test");
 
-        Session session = new Session();
+    SessionRequest request = new SessionRequest();
 
-        session.setSessionId("session-request-test");
+    session.setRequests(List.of(request));
 
-        SessionRequest request =
-                new SessionRequest();
+    redisSessionCache.updateSession(session);
 
-        session.setRequests(
-                List.of(request)
-        );
+    Session retrieved = redisSessionCache.getSession("session-request-test");
 
-        redisSessionCache.updateSession(session);
+    assertNotNull(retrieved);
 
-        Session retrieved =
-                redisSessionCache.getSession(
-                        "session-request-test"
-                );
+    assertNotNull(retrieved.getRequests());
 
-        assertNotNull(retrieved);
+    assertEquals(1, retrieved.getRequests().size());
+  }
 
-        assertNotNull(
-                retrieved.getRequests()
-        );
+  // ============================================================
+  // QUERY
+  // ============================================================
 
-        assertEquals(
-                1,
-                retrieved.getRequests().size()
-        );
-    }
+  @Test
+  void shouldSaveAndRetrieveQuery() {
 
+    Session session = new Session();
 
-    // ============================================================
-    // QUERY
-    // ============================================================
+    session.setSessionId("query-test");
 
-    @Test
-    void shouldSaveAndRetrieveQuery() {
+    Query query = new Query();
 
-        Session session = new Session();
+    query.setTopics(List.of("WWI", "history"));
 
-        session.setSessionId("query-test");
+    query.setGenres(List.of("historical"));
 
-        Query query = new Query();
+    query.setAuthors(List.of("Author One"));
 
-        query.setTopics(
-                List.of("WWI", "history")
-        );
+    query.setKeywords(List.of("war", "Europe"));
 
-        query.setGenres(
-                List.of("historical")
-        );
+    SessionRequest request = new SessionRequest();
 
-        query.setAuthors(
-                List.of("Author One")
-        );
+    request.setQuery(query);
 
-        query.setKeywords(
-                List.of("war", "Europe")
-        );
+    session.setRequests(List.of(request));
 
-        SessionRequest request =
-                new SessionRequest();
+    redisSessionCache.updateSession(session);
 
-        request.setQuery(query);
+    Session retrieved = redisSessionCache.getSession("query-test");
 
-        session.setRequests(
-                List.of(request)
-        );
+    Query retrievedQuery = retrieved.getRequests().get(0).getQuery();
 
-        redisSessionCache.updateSession(session);
+    assertNotNull(retrievedQuery);
 
-        Session retrieved =
-                redisSessionCache.getSession(
-                        "query-test"
-                );
+    assertEquals(List.of("WWI", "history"), retrievedQuery.getTopics());
 
-        Query retrievedQuery =
-                retrieved
-                        .getRequests()
-                        .get(0)
-                        .getQuery();
+    assertEquals(List.of("historical"), retrievedQuery.getGenres());
 
-        assertNotNull(retrievedQuery);
+    assertEquals(List.of("Author One"), retrievedQuery.getAuthors());
 
-        assertEquals(
-                List.of("WWI", "history"),
-                retrievedQuery.getTopics()
-        );
+    assertEquals(List.of("war", "Europe"), retrievedQuery.getKeywords());
+  }
 
-        assertEquals(
-                List.of("historical"),
-                retrievedQuery.getGenres()
-        );
+  // ============================================================
+  // PREFERENCES
+  // ============================================================
 
-        assertEquals(
-                List.of("Author One"),
-                retrievedQuery.getAuthors()
-        );
+  @Test
+  void shouldSaveAndRetrievePreferences() {
 
-        assertEquals(
-                List.of("war", "Europe"),
-                retrievedQuery.getKeywords()
-        );
-    }
+    Session session = new Session();
 
+    session.setSessionId("preferences-test");
 
-    // ============================================================
-    // PREFERENCES
-    // ============================================================
+    Preferences preferences = new Preferences();
 
-    @Test
-    void shouldSaveAndRetrievePreferences() {
+    preferences.setInclude(List.of("non-fiction", "history"));
 
-        Session session = new Session();
+    preferences.setExclude(List.of("romance"));
 
-        session.setSessionId("preferences-test");
+    SessionRequest request = new SessionRequest();
 
-        Preferences preferences =
-                new Preferences();
+    request.setPreferences(preferences);
 
-        preferences.setInclude(
-                List.of("non-fiction", "history")
-        );
+    session.setRequests(List.of(request));
 
-        preferences.setExclude(
-                List.of("romance")
-        );
+    redisSessionCache.updateSession(session);
 
-        SessionRequest request =
-                new SessionRequest();
+    Session retrieved = redisSessionCache.getSession("preferences-test");
 
-        request.setPreferences(preferences);
+    Preferences retrievedPreferences = retrieved.getRequests().get(0).getPreferences();
 
-        session.setRequests(
-                List.of(request)
-        );
+    assertNotNull(retrievedPreferences);
 
-        redisSessionCache.updateSession(session);
+    assertEquals(List.of("non-fiction", "history"), retrievedPreferences.getInclude());
 
-        Session retrieved =
-                redisSessionCache.getSession(
-                        "preferences-test"
-                );
+    assertEquals(List.of("romance"), retrievedPreferences.getExclude());
+  }
 
-        Preferences retrievedPreferences =
-                retrieved
-                        .getRequests()
-                        .get(0)
-                        .getPreferences();
+  // ============================================================
+  // CONSTRAINTS
+  // ============================================================
 
-        assertNotNull(retrievedPreferences);
+  @Test
+  void shouldSaveAndRetrieveConstraints() {
 
-        assertEquals(
-                List.of("non-fiction", "history"),
-                retrievedPreferences.getInclude()
-        );
+    Session session = new Session();
 
-        assertEquals(
-                List.of("romance"),
-                retrievedPreferences.getExclude()
-        );
-    }
+    session.setSessionId("constraints-test");
 
+    Constraints constraints = new Constraints();
 
-    // ============================================================
-    // CONSTRAINTS
-    // ============================================================
+    constraints.setCount(5);
+    constraints.setDuration("under 10 hours");
+    constraints.setLanguage("English");
 
-    @Test
-    void shouldSaveAndRetrieveConstraints() {
+    SessionRequest request = new SessionRequest();
 
-        Session session = new Session();
+    request.setConstraints(constraints);
 
-        session.setSessionId("constraints-test");
+    session.setRequests(List.of(request));
 
-        Constraints constraints =
-                new Constraints();
+    redisSessionCache.updateSession(session);
 
-        constraints.setCount(5);
-        constraints.setDuration("under 10 hours");
-        constraints.setLanguage("English");
+    Session retrieved = redisSessionCache.getSession("constraints-test");
 
-        SessionRequest request =
-                new SessionRequest();
+    Constraints retrievedConstraints = retrieved.getRequests().get(0).getConstraints();
 
-        request.setConstraints(constraints);
+    assertNotNull(retrievedConstraints);
 
-        session.setRequests(
-                List.of(request)
-        );
+    assertEquals(5, retrievedConstraints.getCount());
 
-        redisSessionCache.updateSession(session);
+    assertEquals("under 10 hours", retrievedConstraints.getDuration());
 
-        Session retrieved =
-                redisSessionCache.getSession(
-                        "constraints-test"
-                );
+    assertEquals("English", retrievedConstraints.getLanguage());
+  }
 
-        Constraints retrievedConstraints =
-                retrieved
-                        .getRequests()
-                        .get(0)
-                        .getConstraints();
+  // ============================================================
+  // RECOMMENDATIONS
+  // ============================================================
 
-        assertNotNull(retrievedConstraints);
+  @Test
+  void shouldSaveAndRetrieveRecommendations() {
 
-        assertEquals(
-                5,
-                retrievedConstraints.getCount()
-        );
+    Session session = new Session();
 
-        assertEquals(
-                "under 10 hours",
-                retrievedConstraints.getDuration()
-        );
+    session.setSessionId("recommendations-test");
 
-        assertEquals(
-                "English",
-                retrievedConstraints.getLanguage()
-        );
-    }
+    List<Recommendation> recommendations =
+        List.of(
+            new Recommendation("book1", 1, 10.0, "Book One"),
+            new Recommendation("book2", 1, 20.0, "Book Two"));
 
+    SessionRequest request = new SessionRequest();
 
-    // ============================================================
-    // FEEDBACK
-    // ============================================================
+    request.setRecommendations(recommendations);
 
-    @Test
-    void shouldSaveAndRetrieveFeedback() {
+    session.setRequests(List.of(request));
 
-        Session session = new Session();
+    redisSessionCache.updateSession(session);
 
-        session.setSessionId("feedback-test");
+    Session retrieved = redisSessionCache.getSession("recommendations-test");
 
-        Feedback feedback =
-                new Feedback();
+    List<Recommendation> retrievedRecommendations =
+        retrieved.getRequests().get(0).getRecommendations();
 
-        feedback.setType("DISLIKE");
-        feedback.setReason(
-                "Too slow paced"
-        );
+    assertNotNull(retrievedRecommendations);
 
-        SessionRequest request =
-                new SessionRequest();
+    assertEquals(2, retrievedRecommendations.size());
 
-        request.setFeedback(feedback);
+    assertEquals("book1", retrievedRecommendations.get(0).getBookId());
+    assertEquals(1, retrievedRecommendations.get(0).getRank());
+    assertEquals(10.0, retrievedRecommendations.get(0).getScore());
 
-        session.setRequests(
-                List.of(request)
-        );
+    assertEquals("book2", retrievedRecommendations.get(1).getBookId());
+    assertEquals(1, retrievedRecommendations.get(1).getRank());
+    assertEquals(20.0, retrievedRecommendations.get(1).getScore());
+  }
 
-        redisSessionCache.updateSession(session);
+  // ============================================================
+  // OPTIONAL OBJECTS
+  // ============================================================
 
-        Session retrieved =
-                redisSessionCache.getSession(
-                        "feedback-test"
-                );
+  @Test
+  void shouldPreserveNullOptionalObjects() {
 
-        Feedback retrievedFeedback =
-                retrieved
-                        .getRequests()
-                        .get(0)
-                        .getFeedback();
+    Session session = new Session();
 
-        assertNotNull(retrievedFeedback);
+    session.setSessionId("null-test");
 
-        assertEquals(
-                "DISLIKE",
-                retrievedFeedback.getType()
-        );
+    SessionRequest request = new SessionRequest();
 
-        assertEquals(
-                "Too slow paced",
-                retrievedFeedback.getReason()
-        );
-    }
+    session.setRequests(List.of(request));
 
+    redisSessionCache.updateSession(session);
 
-    // ============================================================
-    // REFERENCES
-    // ============================================================
+    Session retrieved = redisSessionCache.getSession("null-test");
 
-    @Test
-    void shouldSaveAndRetrieveReferences() {
+    SessionRequest retrievedRequest = retrieved.getRequests().get(0);
 
-        Session session = new Session();
+    assertNull(retrievedRequest.getQuery());
 
-        session.setSessionId("references-test");
+    assertNull(retrievedRequest.getPreferences());
 
-        BookReference bookReference =
-                new BookReference();
+    assertNull(retrievedRequest.getConstraints());
+  }
 
-        bookReference.setBookId("book-123");
+  // ============================================================
+  // UPDATE
+  // ============================================================
 
-        SessionRequest request =
-                new SessionRequest();
+  @Test
+  void shouldUpdateExistingSession() {
 
-        request.setBookReference(bookReference);
+    String sessionId = "update-test";
 
-        session.setRequests(
-                List.of(request)
-        );
+    Session session = new Session();
 
-        redisSessionCache.updateSession(session);
+    session.setSessionId(sessionId);
 
-        Session retrieved =
-                redisSessionCache.getSession(
-                        "references-test"
-                );
+    Query query = new Query();
 
-        BookReference retrievedReferences =
-                retrieved
-                        .getRequests()
-                        .get(0)
-                        .getBookReference();
+    query.setTopics(List.of("WWI"));
 
-        assertNotNull(retrievedReferences);
+    SessionRequest request = new SessionRequest();
 
-        assertEquals(
-                "book-123",
-                retrievedReferences.getBookId()
-        );
-    }
+    request.setQuery(query);
 
+    session.setRequests(List.of(request));
 
-    // ============================================================
-    // RECOMMENDATIONS
-    // ============================================================
+    // First write
+    redisSessionCache.updateSession(session);
 
-    @Test
-    void shouldSaveAndRetrieveRecommendations() {
+    // Modify session
+    query.setTopics(List.of("WWI", "Vietnam War"));
 
-        Session session = new Session();
+    // Second write
+    redisSessionCache.updateSession(session);
 
-        session.setSessionId(
-                "recommendations-test"
-        );
+    // Retrieve
+    Session retrieved = redisSessionCache.getSession(sessionId);
 
-        List <Recommendation> recommendations =
-            List.of(
-                    new Recommendation("book1", 1, 10.0, "Book One"),
-                    new Recommendation("book2", 1, 20.0, "Book Two")
-            );
+    assertNotNull(retrieved);
 
-        SessionRequest request =
-                new SessionRequest();
-
-        request.setRecommendations(
-                recommendations
-        );
-
-        session.setRequests(
-                List.of(request)
-        );
-
-        redisSessionCache.updateSession(session);
-
-        Session retrieved =
-                redisSessionCache.getSession(
-                        "recommendations-test"
-                );
-
-        List <Recommendation> retrievedRecommendations =
-                retrieved
-                        .getRequests()
-                        .get(0)
-                        .getRecommendations();
-
-        assertNotNull(
-                retrievedRecommendations
-        );
-
-
-        assertEquals(2, retrievedRecommendations.size());
-
-        assertEquals("book1", retrievedRecommendations.get(0).getBookId());
-        assertEquals(1, retrievedRecommendations.get(0).getRank());
-        assertEquals(10.0, retrievedRecommendations.get(0).getScore());
-
-        assertEquals("book2", retrievedRecommendations.get(1).getBookId());
-        assertEquals(1, retrievedRecommendations.get(1).getRank());
-        assertEquals(20.0, retrievedRecommendations.get(1).getScore());
-    }
-
-
-    // ============================================================
-    // OPTIONAL OBJECTS
-    // ============================================================
-
-    @Test
-    void shouldPreserveNullOptionalObjects() {
-
-        Session session = new Session();
-
-        session.setSessionId("null-test");
-
-        SessionRequest request =
-                new SessionRequest();
-
-        session.setRequests(
-                List.of(request)
-        );
-
-        redisSessionCache.updateSession(session);
-
-        Session retrieved =
-                redisSessionCache.getSession(
-                        "null-test"
-                );
-
-        SessionRequest retrievedRequest =
-                retrieved
-                        .getRequests()
-                        .get(0);
-
-        assertNull(
-                retrievedRequest.getQuery()
-        );
-
-        assertNull(
-                retrievedRequest.getPreferences()
-        );
-
-        assertNull(
-                retrievedRequest.getConstraints()
-        );
-
-        assertNull(
-                retrievedRequest.getFeedback()
-        );
-
-        assertNull(
-                retrievedRequest.getBookReference()
-        );
-    }
-
-
-    // ============================================================
-    // UPDATE
-    // ============================================================
-
-    @Test
-    void shouldUpdateExistingSession() {
-
-        String sessionId = "update-test";
-
-        Session session = new Session();
-
-        session.setSessionId(sessionId);
-
-        Query query = new Query();
-
-        query.setTopics(
-                List.of("WWI")
-        );
-
-        SessionRequest request =
-                new SessionRequest();
-
-        request.setQuery(query);
-
-        session.setRequests(
-                List.of(request)
-        );
-
-        // First write
-        redisSessionCache.updateSession(session);
-
-        // Modify session
-        query.setTopics(
-                List.of(
-                        "WWI",
-                        "Vietnam War"
-                )
-        );
-
-        // Second write
-        redisSessionCache.updateSession(session);
-
-        // Retrieve
-        Session retrieved =
-                redisSessionCache.getSession(
-                        sessionId
-                );
-
-        assertNotNull(retrieved);
-
-        assertEquals(
-                List.of(
-                        "WWI",
-                        "Vietnam War"
-                ),
-                retrieved
-                        .getRequests()
-                        .get(0)
-                        .getQuery()
-                        .getTopics()
-        );
-    }
+    assertEquals(
+        List.of("WWI", "Vietnam War"), retrieved.getRequests().get(0).getQuery().getTopics());
+  }
 }

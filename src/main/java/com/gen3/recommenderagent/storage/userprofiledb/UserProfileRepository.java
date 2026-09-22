@@ -6,11 +6,10 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface UserProfileRepository extends JpaRepository<UserProfile, String> {
-    // Spring provides:
-    // findById(userId)
-    // save(userProfile)
-    // deleteById(userId)
-    // existsById(userId)
-    // etc.
+  // Spring provides:
+  // findById(userId)
+  // save(userProfile)
+  // deleteById(userId)
+  // existsById(userId)
+  // etc.
 }
-

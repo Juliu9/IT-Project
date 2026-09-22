@@ -7,30 +7,22 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class RedisSessionRepository implements SessionRepository {
 
-    private final RedisTemplate<String, Session> redisTemplate;
+  private final RedisTemplate<String, Session> redisTemplate;
 
-    public RedisSessionRepository(
-            RedisTemplate<String, Session> redisTemplate) {
+  public RedisSessionRepository(RedisTemplate<String, Session> redisTemplate) {
 
-        this.redisTemplate = redisTemplate;
-    }
+    this.redisTemplate = redisTemplate;
+  }
 
-    @Override
-    public Session getSession(String sessionId) {
+  @Override
+  public Session getSession(String sessionId) {
 
-        return redisTemplate
-                .opsForValue()
-                .get("session:" + sessionId);
-    }
+    return redisTemplate.opsForValue().get("session:" + sessionId);
+  }
 
-    @Override
-    public void updateSession(Session session) {
+  @Override
+  public void updateSession(Session session) {
 
-        redisTemplate
-                .opsForValue()
-                .set(
-                        "session:" + session.getSessionId(),
-                        session
-                );
-    }
+    redisTemplate.opsForValue().set("session:" + session.getSessionId(), session);
+  }
 }
