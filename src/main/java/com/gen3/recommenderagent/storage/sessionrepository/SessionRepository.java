@@ -1,8 +1,8 @@
-package com.gen3.recommenderagent.storage.sessioncache;
+package com.gen3.recommenderagent.storage.sessionrepository;
 
 import com.gen3.recommenderagent.domain.session.Session;
 
-public interface SessionCache {
+public interface SessionRepository {
 
     Session getSession(String sessionId);
 

@@ -16,14 +16,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DataJpaTest
 @org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Testcontainers
-class UserProfileDBTest {
+class UserProfileRepositoryTest {
 
     @Container
     @ServiceConnection
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
 
     @Autowired
-    private UserProfileDB userProfileDB;
+    private UserProfileRepository userProfileDB;
 
     @Test
     void shouldSaveAndRetrieveUserProfile() {

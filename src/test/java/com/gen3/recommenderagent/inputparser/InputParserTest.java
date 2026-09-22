@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class InputParserTest {
 
     @Autowired
-    private InputParser parser;
+    private AiInputParser parser;
 
     @DynamicPropertySource
     static void configureOpenAi(DynamicPropertyRegistry registry) {
@@ -136,7 +136,7 @@ class InputParserTest {
     }
 
     @Configuration(proxyBeanMethods = false)
-    @Import(InputParser.class)
+    @Import(AiInputParser.class)
     @ImportAutoConfiguration({
             ToolCallingAutoConfiguration.class,
             OpenAiChatAutoConfiguration.class,

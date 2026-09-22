@@ -3,15 +3,14 @@ package com.gen3.recommenderagent.domain.session;
 import com.gen3.recommenderagent.domain.Intent;
 
 import java.time.Instant;
+import java.util.List;
 
 public class SessionRequest {
 
     private String requestId;
     private String rawText;
     private Instant createdAt;
-
-    // Used to get personalised recommendations
-    private boolean isPersonalised;
+    private boolean personalised;
 
     // IMPORTANT !!
     private Intent intent;
@@ -19,11 +18,7 @@ public class SessionRequest {
     private Query query;
     private Preferences preferences;
     private Constraints constraints;
-    private Feedback feedback;
-
-    private BookReference bookReference;
-
-    private Recommendations recommendations;
+    private List<Recommendation> recommendations;
 
     public SessionRequest() {
     }
@@ -42,14 +37,6 @@ public class SessionRequest {
 
     public void setRawText(String rawText) {
         this.rawText = rawText;
-    }
-
-    public boolean isPersonalised() {
-        return isPersonalised;
-    }
-
-    public void setPersonalised(boolean personalised) {
-        isPersonalised = personalised;
     }
 
     public Intent getIntent() {
@@ -84,27 +71,11 @@ public class SessionRequest {
         this.constraints = constraints;
     }
 
-    public Feedback getFeedback() {
-        return feedback;
-    }
-
-    public void setFeedback(Feedback feedback) {
-        this.feedback = feedback;
-    }
-
-    public BookReference getBookReference() {
-        return bookReference;
-    }
-
-    public void setBookReference(BookReference bookReference) {
-        this.bookReference = bookReference;
-    }
-
-    public Recommendations getRecommendations() {
+    public List<Recommendation> getRecommendations() {
         return recommendations;
     }
 
-    public void setRecommendations(Recommendations recommendations) {
+    public void setRecommendations(List<Recommendation> recommendations) {
         this.recommendations = recommendations;
     }
 
@@ -114,5 +85,13 @@ public class SessionRequest {
 
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public boolean isPersonalised() {
+        return personalised;
+    }
+
+    public void setPersonalised(boolean personalised) {
+        this.personalised = personalised;
     }
 }
