@@ -7,8 +7,9 @@ import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.ranker.strategy.HybridRankingStrategy;
 import com.gen3.recommenderagent.ranker.strategy.PreferenceRankingStrategy;
 import com.gen3.recommenderagent.ranker.strategy.RelevanceRankingStrategy;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
 import java.util.List;
-import org.apache.solr.common.SolrDocument;
 import org.junit.jupiter.api.Test;
 
 class RankingServiceTest {
@@ -20,12 +21,12 @@ class RankingServiceTest {
           new HybridRankingStrategy());
 
   @Test
-  void shouldPreserveSolrOrderRemoveDuplicatesAndLimitResults() {
-    SolrDocument first = document("book-1", 3.5);
-    SolrDocument duplicate = document("book-1", 3.0);
-    SolrDocument missingId = new SolrDocument();
-    SolrDocument second = document("book-2", null);
-    SolrDocument third = document("book-3", 1.5);
+  void shouldPreserveCandidateOrderRemoveDuplicatesAndLimitResults() {
+    AudiobookCandidate first = candidate("book-1", 3.5);
+    AudiobookCandidate duplicate = candidate("book-1", 3.0);
+    AudiobookCandidate missingId = candidate(null, 4.0);
+    AudiobookCandidate second = candidate("book-2", null);
+    AudiobookCandidate third = candidate("book-3", 1.5);
 
     List<Recommendation> result =
         rankingService.rank(List.of(first, duplicate, missingId, second, third), 2);
@@ -39,12 +40,8 @@ class RankingServiceTest {
     assertNull(result.get(1).getScore());
   }
 
-  private SolrDocument document(String id, Double score) {
-    SolrDocument document = new SolrDocument();
-    document.setField("id", id);
-    if (score != null) {
-      document.setField("score", score);
-    }
-    return document;
+  private AudiobookCandidate candidate(String id, Double score) {
+    return new AudiobookCandidate(
+        new AudiobookRecord(id, "catalogue", "Title " + id, List.of(), null), score);
   }
 }

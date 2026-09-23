@@ -22,6 +22,21 @@ public interface AudiobookRepository {
     return searchBooks(query, limit);
   }
 
+  /** Searches for rankable candidates while keeping a database-provided score when available. */
+  default List<AudiobookCandidate> searchCandidates(String query, int limit) throws IOException {
+    return searchBooks(query, limit).records().stream()
+        .map(record -> new AudiobookCandidate(record, null))
+        .toList();
+  }
+
+  /** Searches with a semantic vector and keeps a database-provided score when available. */
+  default List<AudiobookCandidate> searchCandidates(
+      String query, int limit, float[] queryVector) throws IOException {
+    return searchBooks(query, limit, queryVector).records().stream()
+        .map(record -> new AudiobookCandidate(record, null))
+        .toList();
+  }
+
   /** Stores an audiobook vector in the repository implementation when supported. */
   default void indexEmbedding(AudiobookRecord record, float[] vector) throws IOException {
   }

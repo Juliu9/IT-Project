@@ -4,8 +4,8 @@ import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.ranker.strategy.HybridRankingStrategy;
 import com.gen3.recommenderagent.ranker.strategy.PreferenceRankingStrategy;
 import com.gen3.recommenderagent.ranker.strategy.RelevanceRankingStrategy;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
 import java.util.List;
-import org.apache.solr.common.SolrDocument;
 import org.springframework.stereotype.Service;
 
 /*
@@ -29,13 +29,13 @@ public class RankingService implements Ranker {
 
   /** Baseline ranking used until the ML ranking model is introduced. */
   @Override
-  public List<Recommendation> rank(List<SolrDocument> candidates, int requestedLimit) {
+  public List<Recommendation> rank(List<AudiobookCandidate> candidates, int requestedLimit) {
     return relevanceRankingStrategy.rank(candidates, requestedLimit);
   }
 
   @Override
   public List<Recommendation> rank(
-      List<SolrDocument> candidates, int requestedLimit, boolean personalised) {
+      List<AudiobookCandidate> candidates, int requestedLimit, boolean personalised) {
     return personalised
         ? hybridRankingStrategy.rank(candidates, requestedLimit)
         : relevanceRankingStrategy.rank(candidates, requestedLimit);

@@ -7,14 +7,13 @@ import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookSearchPage;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
 import java.util.List;
-import org.apache.solr.common.SolrDocument;
 import org.junit.jupiter.api.Test;
 
-/** Verifies that Qdrant retrieval uses the combined request embedding and adapts its result. */
+/** Verifies that Qdrant retrieval returns the shared candidate type with its score. */
 class QdrantCandidateRetrieverTest {
 
   /** Confirms the request vector is generated once and supplied to Qdrant. */
@@ -27,15 +26,16 @@ class QdrantCandidateRetrieverTest {
     AudiobookRecord book =
         new AudiobookRecord("42", "catalogue", "Book", List.of("Writer"), "Description");
     when(embeddingIndexer.embedRequest(request)).thenReturn(vector);
-    when(repository.searchBooks("mystery", 5, vector))
-        .thenReturn(new AudiobookSearchPage(1, List.of(book)));
+    when(repository.searchCandidates("mystery", 5, vector))
+        .thenReturn(List.of(new AudiobookCandidate(book, 0.91)));
 
-    List<SolrDocument> candidates =
+    List<AudiobookCandidate> candidates =
         new QdrantCandidateRetriever(repository, embeddingIndexer)
             .getCandidates("mystery", 5, request);
 
     assertThat(candidates).hasSize(1);
-    assertThat(candidates.getFirst().getFieldValue("id")).isEqualTo("42");
-    verify(repository).searchBooks("mystery", 5, vector);
+    assertThat(candidates.getFirst().audiobook().id()).isEqualTo("42");
+    assertThat(candidates.getFirst().score()).isEqualTo(0.91);
+    verify(repository).searchCandidates("mystery", 5, vector);
   }
 }

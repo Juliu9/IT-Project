@@ -25,9 +25,10 @@ import com.gen3.recommenderagent.ranker.RecommendationQueryBuilder;
 import com.gen3.recommenderagent.ranker.strategy.HybridRankingStrategy;
 import com.gen3.recommenderagent.ranker.strategy.PreferenceRankingStrategy;
 import com.gen3.recommenderagent.ranker.strategy.RelevanceRankingStrategy;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
 import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
 import java.util.List;
-import org.apache.solr.common.SolrDocument;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -123,9 +124,8 @@ class RecommendationEngineTest {
     assertTrue(result.isEmpty());
   }
 
-  private SolrDocument document(String id) {
-    SolrDocument document = new SolrDocument();
-    document.setField("id", id);
-    return document;
+  private AudiobookCandidate document(String id) {
+    return new AudiobookCandidate(
+        new AudiobookRecord(id, "catalogue", "Book " + id, List.of(), null), null);
   }
 }

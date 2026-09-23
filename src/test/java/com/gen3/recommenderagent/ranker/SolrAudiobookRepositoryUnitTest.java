@@ -6,7 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookSearchPage;
 import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
 import java.util.List;
@@ -102,12 +102,14 @@ class SolrAudiobookRepositoryUnitTest {
             org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST)))
         .thenReturn(keywordResponse, vectorResponse);
 
-    AudiobookSearchPage page =
+    List<AudiobookCandidate> candidates =
         new SolrAudiobookRepository(client, "combinedbooks", "embedding", 2)
-            .searchBooks("mystery", 2, new float[] {0.6f, 0.8f});
+            .searchCandidates("mystery", 2, new float[] {0.6f, 0.8f});
 
     assertEquals(
-        List.of("book-2", "book-1"), page.records().stream().map(AudiobookRecord::id).toList());
+        List.of("book-2", "book-1"),
+        candidates.stream().map(candidate -> candidate.audiobook().id()).toList());
+    assertEquals(0.8, candidates.getFirst().score());
 
     ArgumentCaptor<SolrQuery> queryCaptor = ArgumentCaptor.forClass(SolrQuery.class);
     verify(client, org.mockito.Mockito.times(2))

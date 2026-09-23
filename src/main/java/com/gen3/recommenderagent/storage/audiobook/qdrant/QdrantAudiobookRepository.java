@@ -3,6 +3,7 @@ package com.gen3.recommenderagent.storage.audiobook.qdrant;
 import static io.qdrant.client.WithPayloadSelectorFactory.enable;
 
 import com.gen3.recommenderagent.embedding.VectorMath;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookRepository;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookSearchPage;
@@ -57,8 +58,28 @@ public class QdrantAudiobookRepository implements AudiobookRepository {
   @Override
   public AudiobookSearchPage searchBooks(String query, int limit, float[] queryVector)
       throws IOException {
+    List<AudiobookRecord> records =
+        searchCandidates(query, limit, queryVector).stream()
+            .map(AudiobookCandidate::audiobook)
+            .toList();
+    return new AudiobookSearchPage(records.size(), records);
+  }
+
+  /** Embeds plain query text and returns scored, database-independent candidates. */
+  @Override
+  public List<AudiobookCandidate> searchCandidates(String query, int limit) throws IOException {
+    if (query == null || query.isBlank() || limit <= 0) {
+      return List.of();
+    }
+    return searchCandidates(query, limit, VectorMath.normalize(embeddingModel.embed(query)));
+  }
+
+  /** Searches Qdrant and keeps its dot-product score alongside each audiobook. */
+  @Override
+  public List<AudiobookCandidate> searchCandidates(
+      String query, int limit, float[] queryVector) throws IOException {
     if (queryVector == null || queryVector.length == 0 || limit <= 0) {
-      return new AudiobookSearchPage(0, List.of());
+      return List.of();
     }
     validateDimension(queryVector);
     ensureCollection();
@@ -71,8 +92,9 @@ public class QdrantAudiobookRepository implements AudiobookRepository {
             .setWithPayload(enable(true))
             .build();
     List<ScoredPoint> matches = await(client.searchAsync(request), "search Qdrant");
-    List<AudiobookRecord> records = matches.stream().map(mapper::toRecord).toList();
-    return new AudiobookSearchPage(records.size(), records);
+    return matches.stream()
+        .map(point -> new AudiobookCandidate(mapper.toRecord(point), (double) point.getScore()))
+        .toList();
   }
 
   /** Upserts one audiobook point, using a deterministic point ID for safe reruns. */

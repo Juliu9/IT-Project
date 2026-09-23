@@ -1,5 +1,6 @@
 package com.gen3.recommenderagent.storage.audiobook.solr;
 
+import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookRepository;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookSearchPage;
@@ -67,8 +68,19 @@ public class SolrAudiobookRepository implements AudiobookRepository {
   @Override
   public AudiobookSearchPage searchBooks(String query, int limit, float[] queryVector)
       throws IOException {
+    List<AudiobookRecord> records =
+        searchCandidates(query, limit, queryVector).stream()
+            .map(AudiobookCandidate::audiobook)
+            .toList();
+    return new AudiobookSearchPage(records.size(), records);
+  }
+
+  /** Runs lexical and vector retrieval while preserving the blended Solr score. */
+  @Override
+  public List<AudiobookCandidate> searchCandidates(
+      String query, int limit, float[] queryVector) throws IOException {
     if (queryVector == null || queryVector.length == 0) {
-      return searchBooks(query, limit);
+      return searchCandidates(query, limit);
     }
     validateDimension(queryVector);
 
@@ -79,14 +91,14 @@ public class SolrAudiobookRepository implements AudiobookRepository {
       try {
         vectorResponse = searchVector(queryVector, candidateLimit);
       } catch (SolrServerException exception) {
-        return new AudiobookSearchPage(
-            keywordResponse.getResults().getNumFound(),
-            keywordResponse.getResults().stream().limit(limit).map(this::toRecord).toList());
+        return keywordResponse.getResults().stream()
+            .limit(limit)
+            .map(this::toCandidate)
+            .toList();
       }
       List<SolrDocument> merged =
           mergeResults(keywordResponse.getResults(), vectorResponse.getResults());
-      return new AudiobookSearchPage(
-          merged.size(), merged.stream().limit(limit).map(this::toRecord).toList());
+      return merged.stream().limit(limit).map(this::toCandidate).toList();
     } catch (SolrServerException exception) {
       throw new IOException("Solr hybrid audiobook search failed", exception);
     }
@@ -260,6 +272,24 @@ public class SolrAudiobookRepository implements AudiobookRepository {
     } catch (SolrServerException exception) {
       throw new IOException("Solr audiobook search failed", exception);
     }
+  }
+
+  /** Runs a lexical Solr search and retains each result's relevance score. */
+  @Override
+  public List<AudiobookCandidate> searchCandidates(String query, int limit) throws IOException {
+    try {
+      QueryResponse response = search(query, limit);
+      return response.getResults().stream().map(this::toCandidate).toList();
+    } catch (SolrServerException exception) {
+      throw new IOException("Solr audiobook search failed", exception);
+    }
+  }
+
+  /** Converts a Solr result into the shared candidate type without adding score to the book. */
+  private AudiobookCandidate toCandidate(SolrDocument document) {
+    Object score = document.getFieldValue("score");
+    Double value = score instanceof Number number ? number.doubleValue() : null;
+    return new AudiobookCandidate(toRecord(document), value);
   }
 
   /** Maps one Solr document to the fields used by the application. */
