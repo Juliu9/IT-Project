@@ -1,5 +1,8 @@
-package com.gen3.recommenderagent.storage.audiobook;
+package com.gen3.recommenderagent.storage.audiobook.solr;
 
+import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookRepository;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookSearchPage;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
@@ -18,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
 
+/** Implements audiobook keyword, vector, catalogue, and indexing operations with Solr. */
 @Repository
 public class SolrAudiobookRepository implements AudiobookRepository {
 

@@ -5,6 +5,7 @@ import com.gen3.recommenderagent.storage.audiobook.AudiobookRepository;
 import java.io.IOException;
 import java.util.List;
 import org.apache.solr.client.solrj.util.ClientUtils;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,7 +21,8 @@ public class BookSearchController {
 
   private final AudiobookRepository audiobookRepository;
 
-  public BookSearchController(AudiobookRepository audiobookRepository) {
+  public BookSearchController(
+      @Qualifier("solrAudiobookRepository") AudiobookRepository audiobookRepository) {
     this.audiobookRepository = audiobookRepository;
   }
 

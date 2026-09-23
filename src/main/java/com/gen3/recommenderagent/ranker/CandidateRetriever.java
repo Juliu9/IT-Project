@@ -9,7 +9,7 @@ import org.apache.solr.common.SolrDocument;
 */
 public interface CandidateRetriever {
 
-  /** Retrieves audiobook candidates from Solr using the given query. */
+  /** Retrieves audiobook candidates from the configured search database using the given query. */
   List<SolrDocument> getCandidates(String query, int limit);
 
   /** Retrieves candidates using request-aware semantic retrieval when supported. */

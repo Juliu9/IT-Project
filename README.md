@@ -13,10 +13,31 @@ The `RecommenderAgent` acts as a middleware orchestration engine. Its primary re
 * **Input Parsing:** Taking raw text input and parsing it into structured intents and constraints (`AiInputParser`).
 * **Session Management:** Maintaining conversational state and history using Redis (`RedisSessionRepository`).
 * **User Profiling:** Storing and retrieving long-term user preferences using PostgreSQL (`UserProfileRepository`).
-* **Candidate Retrieval:** Querying audiobook candidates through `AudiobookRepository`, currently implemented by `SolrAudiobookRepository`.
+* **Candidate Retrieval:** Querying audiobook candidates through `AudiobookRepository`, with Solr and Qdrant adapters.
 * **Embeddings:** Generating unit-length vectors for returned audiobooks and combined raw/parsed requests (`embedding/`).
 * **Candidate Ranking:** Using machine learning to rank the candidates based on similarity to the target and optional weightings (`RankingService`).
 * **Response Generation:** Compiling recommendations and user title into prompts for an external AI/LLM service (`AiResponseGenerator`).
+
+### Qdrant candidate retrieval and migration
+
+The application keeps the Solr adapter and also provides `QdrantAudiobookRepository` and
+`QdrantCandidateRetriever`. Qdrant is the default candidate source. Set
+`AUDIOBOOK_CANDIDATE_RETRIEVER=solr` to use `BaseSolrCandidateRetriever` instead.
+
+Use environment variables for connection details. Do not place an API key in this repository:
+
+```text
+QDRANT_URL=https://your-cluster.example.cloud.qdrant.io
+QDRANT_GRPC_PORT=6334
+QDRANT_API=your-api-key
+QDRANT_COLLECTION=audiobooks
+```
+
+Migration is disabled by default. To copy the complete Solr catalogue, start the application once
+with `QDRANT_MIGRATION_ENABLED=true`. The runner reads Solr in pages, reuses existing normalized
+embeddings when available, generates missing embeddings, and upserts deterministic Qdrant point
+IDs. This makes rerunning the migration safe. Set `QDRANT_MIGRATION_ENABLED=false` after it reports
+completion.
 
 The architecture is highly decoupled, utilizing Spring's `ApplicationEventPublisher` to handle asynchronous session updates without blocking the main request thread. It also leverages Java Virtual Threads for high-concurrency request handling.
 

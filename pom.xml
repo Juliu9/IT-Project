@@ -115,6 +115,13 @@
             <version>9.6.0</version>
         </dependency>
 
+        <!-- Native Qdrant client used by the Qdrant repository adapter. -->
+        <dependency>
+            <groupId>io.qdrant</groupId>
+            <artifactId>client</artifactId>
+            <version>1.18.0</version>
+        </dependency>
+
 
         <!-- ========================= -->
         <!-- Spring AI / OpenAI         -->

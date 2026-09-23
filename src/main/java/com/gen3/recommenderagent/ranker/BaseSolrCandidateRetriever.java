@@ -7,19 +7,25 @@ import com.gen3.recommenderagent.storage.audiobook.AudiobookRepository;
 import java.io.IOException;
 import java.util.List;
 import org.apache.solr.common.SolrDocument;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 /*
    Gets candidates that can be used for machine learning.
 */
 @Service
+@ConditionalOnProperty(
+    name = "audiobook.candidate-retriever",
+    havingValue = "solr")
 public class BaseSolrCandidateRetriever implements CandidateRetriever {
 
   private final AudiobookRepository audiobookRepository;
   private final EmbeddingIndexer embeddingIndexer;
 
   public BaseSolrCandidateRetriever(
-      AudiobookRepository audiobookRepository, EmbeddingIndexer embeddingIndexer) {
+      @Qualifier("solrAudiobookRepository") AudiobookRepository audiobookRepository,
+      EmbeddingIndexer embeddingIndexer) {
     this.audiobookRepository = audiobookRepository;
     this.embeddingIndexer = embeddingIndexer;
   }

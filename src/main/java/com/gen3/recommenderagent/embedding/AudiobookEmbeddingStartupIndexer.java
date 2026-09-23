@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -25,7 +26,7 @@ public class AudiobookEmbeddingStartupIndexer implements ApplicationRunner {
     private final boolean enabled;
 
     public AudiobookEmbeddingStartupIndexer(
-            AudiobookRepository audiobookRepository,
+            @Qualifier("solrAudiobookRepository") AudiobookRepository audiobookRepository,
             EmbeddingIndexer embeddingIndexer,
             @Value("${solr.embedding-index-page-size:100}") int pageSize,
             @Value("${solr.embedding-index-on-startup:true}") boolean enabled) {
