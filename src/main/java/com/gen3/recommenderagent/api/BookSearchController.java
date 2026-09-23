@@ -1,7 +1,7 @@
 package com.gen3.recommenderagent.api;
 
-import com.gen3.recommenderagent.ranker.AudiobookRecord;
-import com.gen3.recommenderagent.ranker.AudiobookRepository;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookRepository;
 import java.io.IOException;
 import java.util.List;
 import org.apache.solr.client.solrj.util.ClientUtils;
@@ -52,11 +52,6 @@ public class BookSearchController {
 
   private BookSearchResult toResult(AudiobookRecord record) {
     return new BookSearchResult(
-        record.id(),
-        record.source(),
-        record.title(),
-        record.authors(),
-        record.description(),
-        record.score());
+        record.id(), record.source(), record.title(), record.authors(), record.description());
   }
 }

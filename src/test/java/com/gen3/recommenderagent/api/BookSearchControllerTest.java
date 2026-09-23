@@ -9,9 +9,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.gen3.recommenderagent.ranker.AudiobookRecord;
-import com.gen3.recommenderagent.ranker.AudiobookRepository;
-import com.gen3.recommenderagent.ranker.AudiobookSearchPage;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookRepository;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookSearchPage;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -28,8 +28,7 @@ class BookSearchControllerTest {
             "rnib",
             "Curse of the Mystery Mutt",
             List.of("Steven Butler"),
-            "A mystery story",
-            4.25);
+            "A mystery story");
     when(repository.searchBooks("mystery", 20))
         .thenReturn(new AudiobookSearchPage(42, List.of(record)));
 

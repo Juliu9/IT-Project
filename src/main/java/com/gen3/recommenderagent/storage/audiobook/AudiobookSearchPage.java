@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.ranker;
+package com.gen3.recommenderagent.storage.audiobook;
 
 import java.util.List;
 

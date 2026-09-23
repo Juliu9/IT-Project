@@ -6,6 +6,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookSearchPage;
+import com.gen3.recommenderagent.storage.audiobook.SolrAudiobookRepository;
 import java.util.List;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
@@ -74,7 +77,6 @@ class SolrAudiobookRepositoryUnitTest {
     assertEquals("book-1", page.records().getFirst().id());
     assertEquals(
         java.util.List.of("Author One", "Author Two"), page.records().getFirst().authors());
-    assertEquals(2.5, page.records().getFirst().score());
   }
 
   @Test
@@ -106,7 +108,6 @@ class SolrAudiobookRepositoryUnitTest {
 
     assertEquals(
         List.of("book-2", "book-1"), page.records().stream().map(AudiobookRecord::id).toList());
-    assertEquals(0.8, page.records().getFirst().score(), 0.000001);
 
     ArgumentCaptor<SolrQuery> queryCaptor = ArgumentCaptor.forClass(SolrQuery.class);
     verify(client, org.mockito.Mockito.times(2))

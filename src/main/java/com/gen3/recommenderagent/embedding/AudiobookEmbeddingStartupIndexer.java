@@ -1,7 +1,7 @@
 package com.gen3.recommenderagent.embedding;
 
-import com.gen3.recommenderagent.ranker.AudiobookRecord;
-import com.gen3.recommenderagent.ranker.AudiobookRepository;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookRepository;
 import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;

@@ -6,8 +6,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.ranker.AudiobookRecord;
-import com.gen3.recommenderagent.ranker.AudiobookRepository;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookRepository;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.DefaultApplicationArguments;
@@ -51,6 +51,6 @@ class AudiobookEmbeddingStartupIndexerTest {
     }
 
     private AudiobookRecord book(String id) {
-        return new AudiobookRecord(id, "source", "Title " + id, List.of("Author"), "Description", null);
+        return new AudiobookRecord(id, "source", "Title " + id, List.of("Author"), "Description");
     }
 }

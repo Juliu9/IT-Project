@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
-import com.gen3.recommenderagent.ranker.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -25,26 +25,12 @@ public class EmbeddingIndexer {
     this.mapper = mapper;
   }
 
-  /** Indexes a returned audiobook once; records without an ID or useful text are skipped. */
-  public void indexAudiobook(AudiobookRecord book) {
-    String id = book.id();
-    if (id == null || id.isBlank() || store.existsById("audiobook:" + id)) {
-      return;
-    }
-    String text = buildAudiobookText(book);
-    if (!text.isBlank()) {
-      save("audiobook:" + id, text);
-    }
-  }
-
   /** Builds the stable, human-readable catalogue representation sent to the model. */
   public String buildAudiobookText(AudiobookRecord book) {
     return List.of(
             part("title", book.title()),
             part("authors", book.authors()),
-            part("description", book.description()),
-            part("genres", book.genres()),
-            part("narrator", book.narrator()))
+            part("description", book.description()))
         .stream()
         .filter(value -> !value.isBlank())
         .collect(Collectors.joining("\n"));
@@ -77,10 +63,6 @@ public class EmbeddingIndexer {
       save(id, buildAudiobookText(book), vector);
     }
     return vector;
-  }
-
-  public boolean hasAudiobookEmbedding(AudiobookRecord book) {
-    return book.id() != null && !book.id().isBlank() && store.existsById("audiobook:" + book.id());
   }
 
   /** Returns a normalized vector for the raw request and its parsed search constraints. */

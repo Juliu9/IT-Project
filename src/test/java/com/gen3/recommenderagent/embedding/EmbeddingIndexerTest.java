@@ -11,7 +11,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
-import com.gen3.recommenderagent.ranker.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -29,15 +29,10 @@ class EmbeddingIndexerTest {
   void indexesAudiobook() throws Exception {
     AudiobookRecord book =
         new AudiobookRecord(
-            "book-1",
-            "source",
-            "A Space Journey",
-            List.of("A. Writer"),
-            "A trip through space",
-            null);
+            "book-1", "source", "A Space Journey", List.of("A. Writer"), "A trip through space");
     when(model.embed(any(String.class))).thenReturn(new float[] {3, 4});
 
-    indexer.indexAudiobook(book);
+    float[] indexed = indexer.ensureAudiobookEmbedding(book);
 
     ArgumentCaptor<StoredEmbedding> saved = ArgumentCaptor.forClass(StoredEmbedding.class);
     verify(store).save(saved.capture());
@@ -48,6 +43,8 @@ class EmbeddingIndexerTest {
     float[] vector = new ObjectMapper().readValue(saved.getValue().getVectorJson(), float[].class);
     assertEquals(0.6, vector[0], 0.000001);
     assertEquals(0.8, vector[1], 0.000001);
+    assertEquals(0.6, indexed[0], 0.000001);
+    assertEquals(0.8, indexed[1], 0.000001);
   }
 
   /** Raw and parsed request text share one embedding and the final request ID. */
@@ -74,14 +71,19 @@ class EmbeddingIndexerTest {
 
   /** Existing audiobook vectors are reused to avoid repeated embedding calls. */
   @Test
-  void skipsExistingAudiobook() {
-    AudiobookRecord book = new AudiobookRecord("book-1", "source", null, List.of(), null, null);
-    when(store.existsById("audiobook:book-1")).thenReturn(true);
+  void reusesExistingAudiobook() {
+    AudiobookRecord book = new AudiobookRecord("book-1", "source", null, List.of(), null);
+    when(store.findById("audiobook:book-1"))
+        .thenReturn(
+            java.util.Optional.of(
+                new StoredEmbedding("audiobook:book-1", "stored text", "[0.0,1.0]")));
 
-    indexer.indexAudiobook(book);
+    float[] vector = indexer.ensureAudiobookEmbedding(book);
 
     verify(model, never()).embed(any(String.class));
     verify(store, never()).save(any(StoredEmbedding.class));
+    assertEquals(0.0, vector[0], 0.000001);
+    assertEquals(1.0, vector[1], 0.000001);
   }
 
   /** Zero vectors cannot be stored because their dot product has no cosine meaning. */

@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.ranker;
+package com.gen3.recommenderagent.storage.audiobook;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -45,10 +45,7 @@ public class SolrAudiobookRepository implements AudiobookRepository {
     this(solrClient, collection, "embedding", 1536);
   }
 
-  /**
-   * Queries Solr using its native response type for the Solr adapter and its
-   * tests.
-   */
+  /** Queries Solr using its native response type for the Solr adapter and its tests. */
   public QueryResponse search(String query, int limit) throws SolrServerException, IOException {
 
     SolrQuery solrQuery = new SolrQuery();
@@ -62,10 +59,7 @@ public class SolrAudiobookRepository implements AudiobookRepository {
     return solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
   }
 
-  /**
-   * Runs lexical edismax and Solr kNN retrieval, then blends their normalized
-   * scores.
-   */
+  /** Runs lexical edismax and Solr kNN retrieval, then blends their normalized scores. */
   @Override
   public AudiobookSearchPage searchBooks(String query, int limit, float[] queryVector)
       throws IOException {
@@ -85,7 +79,8 @@ public class SolrAudiobookRepository implements AudiobookRepository {
             keywordResponse.getResults().getNumFound(),
             keywordResponse.getResults().stream().limit(limit).map(this::toRecord).toList());
       }
-      List<SolrDocument> merged = mergeResults(keywordResponse.getResults(), vectorResponse.getResults());
+      List<SolrDocument> merged =
+          mergeResults(keywordResponse.getResults(), vectorResponse.getResults());
       return new AudiobookSearchPage(
           merged.size(), merged.stream().limit(limit).map(this::toRecord).toList());
     } catch (SolrServerException exception) {
@@ -93,10 +88,7 @@ public class SolrAudiobookRepository implements AudiobookRepository {
     }
   }
 
-  /**
-   * Stores a normalized embedding using an atomic update to the configured
-   * DenseVectorField.
-   */
+  /** Stores a normalized embedding using an atomic update to the configured DenseVectorField. */
   @Override
   public void indexEmbedding(AudiobookRecord record, float[] vector) throws IOException {
     if (record.id() == null || record.id().isBlank() || vector == null || vector.length == 0) {
@@ -115,21 +107,23 @@ public class SolrAudiobookRepository implements AudiobookRepository {
       return;
     }
 
-    List<SolrInputDocument> documents = embeddings.stream()
-        .filter(
-            embedding -> embedding.record().id() != null
-                && !embedding.record().id().isBlank()
-                && embedding.vector() != null
-                && embedding.vector().length > 0)
-        .peek(embedding -> validateDimension(embedding.vector()))
-        .map(
-            embedding -> {
-              SolrInputDocument document = new SolrInputDocument();
-              document.addField("id", embedding.record().id());
-              document.addField(vectorField, Map.of("set", toList(embedding.vector())));
-              return document;
-            })
-        .toList();
+    List<SolrInputDocument> documents =
+        embeddings.stream()
+            .filter(
+                embedding ->
+                    embedding.record().id() != null
+                        && !embedding.record().id().isBlank()
+                        && embedding.vector() != null
+                        && embedding.vector().length > 0)
+            .peek(embedding -> validateDimension(embedding.vector()))
+            .map(
+                embedding -> {
+                  SolrInputDocument document = new SolrInputDocument();
+                  document.addField("id", embedding.record().id());
+                  document.addField(vectorField, Map.of("set", toList(embedding.vector())));
+                  return document;
+                })
+            .toList();
     if (documents.isEmpty()) {
       return;
     }
@@ -142,16 +136,14 @@ public class SolrAudiobookRepository implements AudiobookRepository {
     }
   }
 
-  /**
-   * Reads the complete catalogue in deterministic pages for the startup importer.
-   */
+  /** Reads the complete catalogue in deterministic pages for the startup importer. */
   @Override
   public List<AudiobookRecord> findAllBooks(int offset, int limit) throws IOException {
     SolrQuery solrQuery = new SolrQuery("*:* ".trim());
     solrQuery.setStart(Math.max(offset, 0));
     solrQuery.setRows(Math.max(limit, 1));
     solrQuery.setSort("id", SolrQuery.ORDER.asc);
-    solrQuery.setFields("id", "source", "title", "authors", "description", "genres", "narrator");
+    solrQuery.setFields("id", "source", "title", "authors", "description");
     try {
       QueryResponse response = solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
       return response.getResults().stream().map(this::toRecord).toList();
@@ -166,8 +158,7 @@ public class SolrAudiobookRepository implements AudiobookRepository {
     solrQuery.setQuery(
         "{!knn f=" + vectorField + " topK=" + limit + "}" + vectorLiteral(queryVector));
     solrQuery.setRows(limit);
-    solrQuery.setFields(
-        "id", "source", "title", "authors", "description", "genres", "narrator", "score");
+    solrQuery.setFields("id", "source", "title", "authors", "description", "score");
     return solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
   }
 
@@ -195,10 +186,11 @@ public class SolrAudiobookRepository implements AudiobookRepository {
     double maxKeyword = maxScore(keywordScores);
     double maxVector = maxScore(vectorScores);
     documents.forEach(
-        (id, document) -> document.setField(
-            "score",
-            KEYWORD_WEIGHT * normalized(keywordScores.get(id), maxKeyword)
-                + VECTOR_WEIGHT * normalized(vectorScores.get(id), maxVector)));
+        (id, document) ->
+            document.setField(
+                "score",
+                KEYWORD_WEIGHT * normalized(keywordScores.get(id), maxKeyword)
+                    + VECTOR_WEIGHT * normalized(vectorScores.get(id), maxVector)));
 
     return documents.values().stream()
         .sorted((left, right) -> Double.compare(numericScore(right), numericScore(left)))
@@ -253,10 +245,7 @@ public class SolrAudiobookRepository implements AudiobookRepository {
     }
   }
 
-  /**
-   * Converts Solr's response into the repository's database-independent search
-   * page.
-   */
+  /** Converts Solr's response into the repository's database-independent search page. */
   @Override
   public AudiobookSearchPage searchBooks(String query, int limit) throws IOException {
     try {
@@ -272,26 +261,16 @@ public class SolrAudiobookRepository implements AudiobookRepository {
   /** Maps one Solr document to the fields used by the application. */
   private AudiobookRecord toRecord(SolrDocument document) {
     Object authorValue = document.getFieldValue("authors");
-    List<String> authors = authorValue instanceof Collection<?> values
-        ? values.stream().filter(value -> value != null).map(Object::toString).toList()
-        : authorValue == null ? List.of() : List.of(authorValue.toString());
-    Object scoreValue = document.getFieldValue("score");
+    List<String> authors =
+        authorValue instanceof Collection<?> values
+            ? values.stream().filter(value -> value != null).map(Object::toString).toList()
+            : authorValue == null ? List.of() : List.of(authorValue.toString());
     return new AudiobookRecord(
         field(document, "id"),
         field(document, "source"),
         field(document, "title"),
         authors,
-        field(document, "description"),
-        scoreValue instanceof Number number ? number.doubleValue() : null,
-        values(document, "genres"),
-        field(document, "narrator"));
-  }
-
-  private List<String> values(SolrDocument document, String name) {
-    Object value = document.getFieldValue(name);
-    return value instanceof Collection<?> values
-        ? values.stream().filter(item -> item != null).map(Object::toString).toList()
-        : value == null ? List.of() : List.of(value.toString());
+        field(document, "description"));
   }
 
   /** Converts an absent Solr value to null, as expected by the result record. */

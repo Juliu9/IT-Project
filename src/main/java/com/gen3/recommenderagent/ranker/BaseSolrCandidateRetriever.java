@@ -2,6 +2,8 @@ package com.gen3.recommenderagent.ranker;
 
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookRepository;
 import java.io.IOException;
 import java.util.List;
 import org.apache.solr.common.SolrDocument;
@@ -28,7 +30,6 @@ public class BaseSolrCandidateRetriever implements CandidateRetriever {
 
     try {
       List<AudiobookRecord> records = audiobookRepository.searchBooks(query, limit).records();
-      records.forEach(embeddingIndexer::indexAudiobook);
       return records.stream().map(this::toSolrDocument).toList();
 
     } catch (IOException e) {
@@ -44,23 +45,6 @@ public class BaseSolrCandidateRetriever implements CandidateRetriever {
       if (queryVector == null || queryVector.length == 0) {
         return getCandidates(query, limit);
       }
-
-      var lexicalRecords = audiobookRepository.searchBooks(query, limit).records();
-      lexicalRecords.forEach(
-          record -> {
-            if (!embeddingIndexer.hasAudiobookEmbedding(record)) {
-              embeddingIndexer.indexAudiobook(record);
-              float[] bookVector = embeddingIndexer.ensureAudiobookEmbedding(record);
-              if (bookVector != null && bookVector.length > 0) {
-                try {
-                  audiobookRepository.indexEmbedding(record, bookVector);
-                } catch (IOException exception) {
-                  throw new RuntimeException(
-                      "Failed to index audiobook embedding in Solr", exception);
-                }
-              }
-            }
-          });
 
       return audiobookRepository.searchBooks(query, limit, queryVector).records().stream()
           .map(this::toSolrDocument)
@@ -78,7 +62,6 @@ public class BaseSolrCandidateRetriever implements CandidateRetriever {
     document.setField("title", record.title());
     document.setField("authors", record.authors());
     document.setField("description", record.description());
-    document.setField("score", record.score());
     return document;
   }
 }

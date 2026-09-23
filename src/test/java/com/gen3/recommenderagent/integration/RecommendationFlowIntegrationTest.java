@@ -24,7 +24,7 @@ import com.gen3.recommenderagent.ranker.BaseSolrCandidateRetriever;
 import com.gen3.recommenderagent.ranker.CandidateRetriever;
 import com.gen3.recommenderagent.ranker.RankingService;
 import com.gen3.recommenderagent.ranker.RecommendationQueryBuilder;
-import com.gen3.recommenderagent.ranker.SolrAudiobookRepository;
+import com.gen3.recommenderagent.storage.audiobook.SolrAudiobookRepository;
 import com.gen3.recommenderagent.ranker.strategy.HybridRankingStrategy;
 import com.gen3.recommenderagent.ranker.strategy.PreferenceRankingStrategy;
 import com.gen3.recommenderagent.ranker.strategy.RelevanceRankingStrategy;
