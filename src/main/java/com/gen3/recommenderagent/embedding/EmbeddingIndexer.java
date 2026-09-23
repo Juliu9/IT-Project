@@ -6,6 +6,7 @@ import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.stereotype.Service;
@@ -48,21 +49,31 @@ public class EmbeddingIndexer {
       return new float[0];
     }
 
-    String id = "audiobook:" + book.id();
-    var stored = store.findById(id);
+    var stored = findAudiobookEmbedding(book.id());
     if (stored.isPresent()) {
-      try {
-        return mapper.readValue(stored.get().getVectorJson(), float[].class);
-      } catch (JsonProcessingException exception) {
-        throw new IllegalStateException("Could not read stored audiobook embedding", exception);
-      }
+      return stored.get();
     }
 
+    String id = "audiobook:" + book.id();
     float[] vector = embedAudiobook(book);
     if (vector.length > 0) {
       save(id, buildAudiobookText(book), vector);
     }
     return vector;
+  }
+
+  /**
+   * Finds an existing normalized audiobook vector by its catalogue book ID.
+   *
+   * <p>The database key includes the {@code audiobook:} prefix so audiobook and request IDs cannot
+   * collide. An empty result means startup indexing has not stored a vector for that book.
+   */
+  public Optional<float[]> findAudiobookEmbedding(String bookId) {
+    if (bookId == null || bookId.isBlank()) {
+      return Optional.empty();
+    }
+
+    return store.findById("audiobook:" + bookId.trim()).map(this::readVector);
   }
 
   /** Returns a normalized vector for the raw request and its parsed search constraints. */
@@ -129,6 +140,15 @@ public class EmbeddingIndexer {
       store.save(new StoredEmbedding(id, text, mapper.writeValueAsString(vector)));
     } catch (JsonProcessingException exception) {
       throw new IllegalStateException("Could not serialize embedding", exception);
+    }
+  }
+
+  /** Deserializes the normalized vector stored as JSON in PostgreSQL. */
+  private float[] readVector(StoredEmbedding stored) {
+    try {
+      return mapper.readValue(stored.getVectorJson(), float[].class);
+    } catch (JsonProcessingException exception) {
+      throw new IllegalStateException("Could not read stored audiobook embedding", exception);
     }
   }
 

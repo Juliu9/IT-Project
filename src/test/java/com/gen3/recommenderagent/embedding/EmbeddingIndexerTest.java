@@ -2,6 +2,7 @@ package com.gen3.recommenderagent.embedding;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -84,6 +85,22 @@ class EmbeddingIndexerTest {
     verify(store, never()).save(any(StoredEmbedding.class));
     assertEquals(0.0, vector[0], 0.000001);
     assertEquals(1.0, vector[1], 0.000001);
+  }
+
+  /** A favourite book ID retrieves its stored normalized vector without calling the model. */
+  @Test
+  void findsAudiobookEmbeddingByBookId() {
+    when(store.findById("audiobook:book-1"))
+        .thenReturn(
+            java.util.Optional.of(
+                new StoredEmbedding("audiobook:book-1", "stored text", "[0.6,0.8]")));
+
+    var result = indexer.findAudiobookEmbedding("book-1");
+
+    assertTrue(result.isPresent());
+    assertEquals(0.6, result.get()[0], 0.000001);
+    assertEquals(0.8, result.get()[1], 0.000001);
+    verify(model, never()).embed(any(String.class));
   }
 
   /** Zero vectors cannot be stored because their dot product has no cosine meaning. */
