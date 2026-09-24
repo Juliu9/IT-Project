@@ -1,15 +1,19 @@
 package com.gen3.recommenderagent.embedding;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.stereotype.Service;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /** Builds comparable audiobook and request text, embeds it, and persists unit vectors. */
 @Service
@@ -62,6 +66,59 @@ public class EmbeddingIndexer {
       save(id, buildAudiobookText(book), vector);
     }
     return vector;
+  }
+
+  /**
+   * Resolves one migration page with a single cache lookup and one model request for all misses.
+   * Existing vectors retain their input order and newly generated vectors are persisted in bulk.
+   */
+  public List<AudiobookEmbedding> ensureAudiobookEmbeddings(List<AudiobookRecord> books) {
+    if (books == null || books.isEmpty()) {
+      return List.of();
+    }
+
+    List<AudiobookRecord> validBooks =
+        books.stream().filter(book -> book != null && hasText(book.id())).toList();
+    List<String> storageIds =
+        validBooks.stream().map(book -> "audiobook:" + book.id().trim()).toList();
+    Map<String, float[]> vectorsById = new HashMap<>();
+    store.findAllById(storageIds)
+        .forEach(stored -> vectorsById.put(stored.getId(), readVector(stored)));
+
+    List<AudiobookRecord> missingBooks = new ArrayList<>();
+    List<String> missingTexts = new ArrayList<>();
+    for (AudiobookRecord book : validBooks) {
+      String storageId = "audiobook:" + book.id().trim();
+      String text = buildAudiobookText(book);
+      if (!vectorsById.containsKey(storageId) && !text.isBlank()) {
+        missingBooks.add(book);
+        missingTexts.add(text);
+      }
+    }
+
+    if (!missingTexts.isEmpty()) {
+      List<float[]> generated = model.embed(missingTexts);
+      if (generated.size() != missingBooks.size()) {
+        throw new IllegalStateException("Embedding model returned an unexpected batch size");
+      }
+      List<StoredEmbedding> toSave = new ArrayList<>(generated.size());
+      for (int index = 0; index < generated.size(); index++) {
+        AudiobookRecord book = missingBooks.get(index);
+        String storageId = "audiobook:" + book.id().trim();
+        float[] normalized = VectorMath.normalize(generated.get(index));
+        vectorsById.put(storageId, normalized);
+        toSave.add(new StoredEmbedding(storageId, missingTexts.get(index), serialize(normalized)));
+      }
+      store.saveAll(toSave);
+    }
+
+    return validBooks.stream()
+        .map(
+            book ->
+                new AudiobookEmbedding(
+                    book, vectorsById.getOrDefault("audiobook:" + book.id().trim(), new float[0])))
+        .filter(embedding -> embedding.vector().length > 0)
+        .toList();
   }
 
   /**
@@ -139,9 +196,14 @@ public class EmbeddingIndexer {
   }
 
   private void save(String id, String text, float[] vector) {
+    store.save(new StoredEmbedding(id, text, serialize(vector)));
+  }
+
+  /** Serializes a normalized vector for the relational embedding cache. */
+  private String serialize(float[] vector) {
     try {
-      store.save(new StoredEmbedding(id, text, mapper.writeValueAsString(vector)));
-    } catch (JsonProcessingException exception) {
+      return mapper.writeValueAsString(vector);
+    } catch (JacksonException exception) {
       throw new IllegalStateException("Could not serialize embedding", exception);
     }
   }
@@ -150,7 +212,7 @@ public class EmbeddingIndexer {
   private float[] readVector(StoredEmbedding stored) {
     try {
       return mapper.readValue(stored.getVectorJson(), float[].class);
-    } catch (JsonProcessingException exception) {
+    } catch (JacksonException exception) {
       throw new IllegalStateException("Could not read stored audiobook embedding", exception);
     }
   }
@@ -158,6 +220,11 @@ public class EmbeddingIndexer {
   /** Adds a label only when a scalar value contains text. */
   private String part(String label, String value) {
     return value == null || value.isBlank() ? "" : label + ": " + value.trim();
+  }
+
+  /** Reports whether a catalogue identifier can safely be used as a cache key. */
+  private boolean hasText(String value) {
+    return value != null && !value.isBlank();
   }
 
   /** Adds a label only when a parsed list contains text. */

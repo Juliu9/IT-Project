@@ -5,7 +5,6 @@ import com.gen3.recommenderagent.storage.audiobook.AudiobookCatalogueRepository;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookVectorIndexer;
-import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,17 +26,20 @@ public class SolrToQdrantMigrator implements ApplicationRunner {
   private final AudiobookVectorIndexer destination;
   private final EmbeddingIndexer embeddingIndexer;
   private final int batchSize;
+  private final int maximumRecords;
 
   /** Creates an opt-in, paginated migration from the retained Solr adapter to Qdrant. */
   public SolrToQdrantMigrator(
       @Qualifier("solrAudiobookRepository") AudiobookCatalogueRepository source,
       @Qualifier("qdrantAudiobookRepository") AudiobookVectorIndexer destination,
       EmbeddingIndexer embeddingIndexer,
-      @Value("${audiobook.qdrant.migration.batch-size:100}") int batchSize) {
+      @Value("${audiobook.qdrant.migration.batch-size:100}") int batchSize,
+      @Value("${audiobook.qdrant.migration.max-records:0}") int maximumRecords) {
     this.source = source;
     this.destination = destination;
     this.embeddingIndexer = embeddingIndexer;
     this.batchSize = Math.max(batchSize, 1);
+    this.maximumRecords = Math.max(maximumRecords, 0);
   }
 
   /** Reads every Solr page and idempotently upserts each book into Qdrant. */
@@ -47,24 +49,23 @@ public class SolrToQdrantMigrator implements ApplicationRunner {
     int offset = 0;
     int migrated = 0;
     while (true) {
-      List<AudiobookRecord> books = source.findAllBooks(offset, batchSize);
+      int remaining = maximumRecords == 0 ? batchSize : maximumRecords - migrated;
+      if (remaining <= 0) {
+        break;
+      }
+      int pageLimit = Math.min(batchSize, remaining);
+      List<AudiobookRecord> books = source.findAllBooks(offset, pageLimit);
       if (books.isEmpty()) {
         break;
       }
 
-      List<AudiobookEmbedding> batch = new ArrayList<>();
-      for (AudiobookRecord book : books) {
-        float[] vector = embeddingIndexer.ensureAudiobookEmbedding(book);
-        if (vector.length > 0) {
-          batch.add(new AudiobookEmbedding(book, vector));
-        }
-      }
+      List<AudiobookEmbedding> batch = embeddingIndexer.ensureAudiobookEmbeddings(books);
       destination.indexEmbeddings(batch);
       migrated += batch.size();
       offset += books.size();
       LOGGER.info("Migrated {} audiobook vectors from Solr to Qdrant", migrated);
 
-      if (books.size() < batchSize) {
+      if (books.size() < pageLimit) {
         break;
       }
     }

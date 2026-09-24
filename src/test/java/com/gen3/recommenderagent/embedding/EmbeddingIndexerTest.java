@@ -4,12 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
@@ -17,6 +17,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.embedding.EmbeddingModel;
+import tools.jackson.databind.ObjectMapper;
 
 /** Verifies source composition and normalization at the persistence boundary. */
 class EmbeddingIndexerTest {
@@ -85,6 +86,27 @@ class EmbeddingIndexerTest {
     verify(store, never()).save(any(StoredEmbedding.class));
     assertEquals(0.0, vector[0], 0.000001);
     assertEquals(1.0, vector[1], 0.000001);
+  }
+
+  /** Migration pages generate all cache misses with one embedding-model batch call. */
+  @Test
+  void embedsMigrationPageInOneBatch() {
+    AudiobookRecord first =
+        new AudiobookRecord("book-1", "source", "First", List.of("Author"), "Description");
+    AudiobookRecord second =
+        new AudiobookRecord("book-2", "source", "Second", List.of("Author"), "Description");
+    when(store.findAllById(List.of("audiobook:book-1", "audiobook:book-2")))
+        .thenReturn(List.of());
+    when(model.embed(anyList()))
+        .thenReturn(List.of(new float[] {3, 4}, new float[] {0, 2}));
+
+    var embeddings = indexer.ensureAudiobookEmbeddings(List.of(first, second));
+
+    assertEquals(2, embeddings.size());
+    assertEquals(0.6, embeddings.getFirst().vector()[0], 0.000001);
+    assertEquals(1.0, embeddings.getLast().vector()[1], 0.000001);
+    verify(model).embed(anyList());
+    verify(store).saveAll(anyList());
   }
 
   /** A favourite book ID retrieves its stored normalized vector without calling the model. */
