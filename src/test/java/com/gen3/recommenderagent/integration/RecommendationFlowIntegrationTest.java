@@ -17,6 +17,7 @@ import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.engine.RecommendationEngine;
+import com.gen3.recommenderagent.engine.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.engine.handlers.IntentHandlerFactory;
 import com.gen3.recommenderagent.engine.handlers.NewRecommendationHandler;
 import com.gen3.recommenderagent.inputparser.InputParser;
@@ -24,7 +25,7 @@ import com.gen3.recommenderagent.ranker.BaseSolrCandidateRetriever;
 import com.gen3.recommenderagent.ranker.CandidateRetriever;
 import com.gen3.recommenderagent.ranker.RankingService;
 import com.gen3.recommenderagent.ranker.RecommendationQueryBuilder;
-import com.gen3.recommenderagent.ranker.SolrAudiobookRepository;
+import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.ranker.strategy.HybridRankingStrategy;
 import com.gen3.recommenderagent.ranker.strategy.PreferenceRankingStrategy;
 import com.gen3.recommenderagent.ranker.strategy.RelevanceRankingStrategy;
@@ -78,7 +79,10 @@ class RecommendationFlowIntegrationTest {
 
     SolrAudiobookRepository repository =
         new SolrAudiobookRepository(solrClient, SolrContainerTestSupport.COLLECTION);
-    CandidateRetriever candidateRetriever = new BaseSolrCandidateRetriever(repository);
+    com.gen3.recommenderagent.embedding.EmbeddingIndexer embeddingIndexer =
+        mock(com.gen3.recommenderagent.embedding.EmbeddingIndexer.class);
+    CandidateRetriever candidateRetriever =
+        new BaseSolrCandidateRetriever(repository, embeddingIndexer);
     RankingService rankingService =
         new RankingService(
             new RelevanceRankingStrategy(),
@@ -86,7 +90,8 @@ class RecommendationFlowIntegrationTest {
             new HybridRankingStrategy());
     NewRecommendationHandler newRecommendationHandler =
         new NewRecommendationHandler(
-            candidateRetriever, rankingService, new RecommendationQueryBuilder());
+            new AudiobookRecommendationWorkflow(
+                candidateRetriever, rankingService, new RecommendationQueryBuilder()));
     RecommendationFlowTestSupport.InMemorySessionRepository sessionRepository =
         new RecommendationFlowTestSupport.InMemorySessionRepository();
 
@@ -96,7 +101,8 @@ class RecommendationFlowIntegrationTest {
             sessionPublisher(sessionRepository),
             new IntentHandlerFactory(List.of(newRecommendationHandler)));
 
-    RequestGateway gateway = new RequestGateway(inputParser, engine, new AiResponseGenerator(null));
+    RequestGateway gateway =
+        new RequestGateway(inputParser, engine, new AiResponseGenerator(null), embeddingIndexer);
 
     MockMvc mockMvc = MockMvcBuilders.standaloneSetup(gateway).build();
 

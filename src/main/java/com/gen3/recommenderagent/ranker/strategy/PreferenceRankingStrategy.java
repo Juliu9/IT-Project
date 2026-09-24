@@ -1,11 +1,12 @@
 package com.gen3.recommenderagent.ranker.strategy;
 
 import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import org.apache.solr.common.SolrDocument;
 import org.springframework.stereotype.Component;
 
 /**
@@ -20,7 +21,7 @@ public class PreferenceRankingStrategy implements RankingStrategy {
   private static final int MAX_RESULTS = 5;
 
   @Override
-  public List<Recommendation> rank(List<SolrDocument> candidates, int requestedLimit) {
+  public List<Recommendation> rank(List<AudiobookCandidate> candidates, int requestedLimit) {
 
     if (candidates == null || candidates.isEmpty()) {
       return new ArrayList<>();
@@ -35,26 +36,19 @@ public class PreferenceRankingStrategy implements RankingStrategy {
     List<Recommendation> ranked = new ArrayList<>();
     Set<String> seenBookIds = new HashSet<>();
 
-    for (SolrDocument candidate : candidates) {
-      Object idValue = candidate.getFieldValue("id");
-
-      if (idValue == null) {
+    for (AudiobookCandidate candidate : candidates) {
+      if (candidate == null || candidate.audiobook() == null) {
         continue;
       }
 
-      String bookId = idValue.toString();
-      if (bookId.isBlank() || !seenBookIds.add(bookId)) {
+      AudiobookRecord audiobook = candidate.audiobook();
+      String bookId = audiobook.id();
+      if (bookId == null || bookId.isBlank() || !seenBookIds.add(bookId)) {
         continue;
       }
-
-      Object scoreValue = candidate.getFieldValue("score");
-      Double score = scoreValue instanceof Number number ? number.doubleValue() : null;
-
-      Object titleValue = candidate.getFieldValue("title");
-      String title = titleValue != null ? titleValue.toString() : null;
 
       int rank = ranked.size() + 1;
-      ranked.add(new Recommendation(bookId, rank, score, title));
+      ranked.add(new Recommendation(bookId, rank, candidate.score(), audiobook.title()));
       if (ranked.size() == limit) {
         break;
       }

@@ -3,6 +3,7 @@ package com.gen3.recommenderagent.ranker;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
+import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.testsupport.SolrContainerTestSupport;
 import java.util.Set;
 import java.util.stream.Collectors;

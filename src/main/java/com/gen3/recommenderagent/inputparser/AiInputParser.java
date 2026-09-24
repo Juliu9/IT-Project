@@ -32,7 +32,9 @@ public class AiInputParser implements InputParser {
                         Extract the user's audiobook search request.
 
                         Use only information explicitly provided by the user.
-                        Choose the intent and populate the query fields.
+                        Choose the intent and populate the query, preferences, and constraints fields.
+                        Put narrator names in query.narrators. Put language, duration, and count
+                        restrictions in constraints.
                         Set personalised only when the user asks for personalised results.
                         """)
             .user(rawText)
@@ -49,6 +51,8 @@ public class AiInputParser implements InputParser {
     request.setPersonalised(parsed.isPersonalised());
     request.setIntent(parsed.getIntent());
     request.setQuery(parsed.getQuery());
+    request.setPreferences(parsed.getPreferences());
+    request.setConstraints(parsed.getConstraints());
     request.setRequestId(createUuidV7().toString());
     request.setRawText(rawText);
 

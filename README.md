@@ -13,9 +13,37 @@ The `RecommenderAgent` acts as a middleware orchestration engine. Its primary re
 * **Input Parsing:** Taking raw text input and parsing it into structured intents and constraints (`AiInputParser`).
 * **Session Management:** Maintaining conversational state and history using Redis (`RedisSessionRepository`).
 * **User Profiling:** Storing and retrieving long-term user preferences using PostgreSQL (`UserProfileRepository`).
-* **Candidate Retrieval:** Querying an external Apache Solr instance for audiobook candidates (`SolrAudiobookRepository`).
+* **Candidate Retrieval:** Querying audiobook candidates through `AudiobookRepository`, with Solr and Qdrant adapters.
+* **Embeddings:** Generating unit-length vectors for returned audiobooks and combined raw/parsed requests (`embedding/`).
 * **Candidate Ranking:** Using machine learning to rank the candidates based on similarity to the target and optional weightings (`RankingService`).
 * **Response Generation:** Compiling recommendations and user title into prompts for an external AI/LLM service (`AiResponseGenerator`).
+
+### Qdrant candidate retrieval and migration
+
+The application keeps the Solr adapter and also provides `QdrantAudiobookRepository` and
+`QdrantCandidateRetriever`. Qdrant is the default candidate source. Set
+`AUDIOBOOK_CANDIDATE_RETRIEVER=solr` to use `BaseSolrCandidateRetriever` instead.
+
+Use environment variables for connection details. Do not place an API key in this repository:
+
+```text
+QDRANT_URL=https://your-cluster.example.cloud.qdrant.io
+QDRANT_GRPC_PORT=6334
+QDRANT_API=your-api-key
+QDRANT_COLLECTION=audiobooks_hybrid
+```
+
+The hybrid collection stores a normalized named dense vector (`dense`), a BM25-style named sparse
+vector (`keywords`), and filterable audiobook metadata. The application combines dense and sparse
+rankings with reciprocal rank fusion for hybrid intents. The sample narrator, language, and duration
+values are deterministic placeholders produced during Solr reads until the source catalogue provides
+real metadata.
+
+Migration is disabled by default. To copy the complete Solr catalogue, start the application once
+with `QDRANT_MIGRATION_ENABLED=true`. The runner reads Solr in pages, reuses existing normalized
+embeddings when available, generates missing embeddings, and upserts deterministic Qdrant point
+IDs. This makes rerunning the migration safe. Set `QDRANT_MIGRATION_ENABLED=false` after it reports
+completion.
 
 The architecture is highly decoupled, utilizing Spring's `ApplicationEventPublisher` to handle asynchronous session updates without blocking the main request thread. It also leverages Java Virtual Threads for high-concurrency request handling.
 
@@ -173,6 +201,7 @@ src/main/java/com/gen3/recommenderagent/
   *(Note: "update" should be changed to "validate" in production environments)*
 * **Redis (Session Cache):** Configured using `RedisTemplate` with a `JacksonJsonRedisSerializer` to store `Session` objects as JSON strings.
 * **Solr (Search):** Configured via `HttpJdkSolrClient`. The `SolrAudiobookRepository` queries this service to retrieve audiobook candidates.
+* **Embeddings (Solr + PostgreSQL):** `EmbeddingIndexer` builds human-readable text from audiobook title, authors, and description, then uses Spring AI's configured `text-embedding-3-small` model. On startup, `AudiobookEmbeddingStartupIndexer` pages through the complete Solr catalogue, creates or reuses every audiobook vector, and batch-writes the vectors to Solr before the application becomes ready for searches. Solr stores vectors in the `embedding` `DenseVectorField`, while PostgreSQL keeps the source text and a reusable copy of each normalized vector. Requests combine raw text with intent, query fields, preferences, and constraints. Candidate retrieval keeps lexical `edismax`, adds Solr kNN retrieval, and blends normalized scores with `0.4` keyword and `0.6` vector weights. Configure the Solr field as `type=knn_vector`/`DenseVectorField` with `dimension=1536` (or set `SOLR_EMBEDDING_DIMENSION` to match a deliberately changed model), then re-index all audiobook vectors after changing the model.
 * **AI Service:** The `AiResponseGenerator` currently contains placeholder logic for an LLM client. It requires an `AI_API_KEY` to be injected for future implementation.
 
 ---

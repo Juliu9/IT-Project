@@ -1,13 +1,11 @@
 package com.gen3.recommenderagent.api;
 
-import com.gen3.recommenderagent.ranker.SolrAudiobookRepository;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookCatalogueRepository;
 import java.io.IOException;
-import java.util.Collection;
 import java.util.List;
-import org.apache.solr.client.solrj.SolrServerException;
-import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.client.solrj.util.ClientUtils;
-import org.apache.solr.common.SolrDocument;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,9 +19,10 @@ public class BookSearchController {
 
   private static final int MAX_LIMIT = 20;
 
-  private final SolrAudiobookRepository audiobookRepository;
+  private final AudiobookCatalogueRepository audiobookRepository;
 
-  public BookSearchController(SolrAudiobookRepository audiobookRepository) {
+  public BookSearchController(
+      @Qualifier("solrAudiobookRepository") AudiobookCatalogueRepository audiobookRepository) {
     this.audiobookRepository = audiobookRepository;
   }
 
@@ -40,45 +39,28 @@ public class BookSearchController {
     int normalizedLimit = Math.min(Math.max(limit, 1), MAX_LIMIT);
 
     try {
-      QueryResponse response =
-          audiobookRepository.search(
+      var response =
+          audiobookRepository.searchBooks(
               ClientUtils.escapeQueryChars(normalizedQuery), normalizedLimit);
 
-      List<BookSearchResult> results = response.getResults().stream().map(this::toResult).toList();
+      List<BookSearchResult> results = response.records().stream().map(this::toResult).toList();
 
-      return new BookSearchResponse(response.getResults().getNumFound(), results);
-    } catch (SolrServerException | IOException exception) {
+      return new BookSearchResponse(response.totalItems(), results);
+    } catch (IOException exception) {
       throw new ResponseStatusException(
           HttpStatus.BAD_GATEWAY, "Book catalogue is temporarily unavailable", exception);
     }
   }
 
-  private BookSearchResult toResult(SolrDocument document) {
+  private BookSearchResult toResult(AudiobookRecord record) {
     return new BookSearchResult(
-        stringValue(document, "id"),
-        stringValue(document, "source"),
-        stringValue(document, "title"),
-        stringListValue(document.getFieldValue("authors")),
-        stringValue(document, "description"),
-        numberValue(document.getFieldValue("score")));
-  }
-
-  private String stringValue(SolrDocument document, String field) {
-    Object value = document.getFieldValue(field);
-    return value == null ? null : value.toString();
-  }
-
-  private List<String> stringListValue(Object value) {
-    if (value == null) {
-      return List.of();
-    }
-    if (value instanceof Collection<?> values) {
-      return values.stream().map(Object::toString).toList();
-    }
-    return List.of(value.toString());
-  }
-
-  private Double numberValue(Object value) {
-    return value instanceof Number number ? number.doubleValue() : null;
+        record.id(),
+        record.source(),
+        record.title(),
+        record.authors(),
+        record.description(),
+        record.narrators(),
+        record.language(),
+        record.durationMinutes());
   }
 }

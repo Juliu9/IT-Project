@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -24,9 +25,10 @@ import com.gen3.recommenderagent.ranker.RecommendationQueryBuilder;
 import com.gen3.recommenderagent.ranker.strategy.HybridRankingStrategy;
 import com.gen3.recommenderagent.ranker.strategy.PreferenceRankingStrategy;
 import com.gen3.recommenderagent.ranker.strategy.RelevanceRankingStrategy;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
 import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
 import java.util.List;
-import org.apache.solr.common.SolrDocument;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,12 +51,13 @@ class RecommendationEngineTest {
   void setUp() {
     NewRecommendationHandler newRecommendationHandler =
         new NewRecommendationHandler(
-            candidateRetriever,
-            new RankingService(
-                new RelevanceRankingStrategy(),
-                new PreferenceRankingStrategy(),
-                new HybridRankingStrategy()),
-            new RecommendationQueryBuilder());
+            new AudiobookRecommendationWorkflow(
+                candidateRetriever,
+                new RankingService(
+                    new RelevanceRankingStrategy(),
+                    new PreferenceRankingStrategy(),
+                    new HybridRankingStrategy()),
+                new RecommendationQueryBuilder()));
 
     recommendationEngine =
         new RecommendationEngine(
@@ -82,7 +85,7 @@ class RecommendationEngineTest {
     request.setConstraints(constraints);
 
     when(sessionCache.getSession("session-1")).thenReturn(null);
-    when(candidateRetriever.getCandidates(anyString(), eq(50)))
+    when(candidateRetriever.getCandidates(anyString(), eq(50), same(request)))
         .thenReturn(
             List.of(
                 document("book-1"),
@@ -101,7 +104,7 @@ class RecommendationEngineTest {
     assertEquals(Intent.NEW_RECOMMENDATION, request.getIntent());
 
     ArgumentCaptor<String> queryCaptor = ArgumentCaptor.forClass(String.class);
-    verify(candidateRetriever).getCandidates(queryCaptor.capture(), eq(50));
+    verify(candidateRetriever).getCandidates(queryCaptor.capture(), eq(50), same(request));
 
     String solrQuery = queryCaptor.getValue();
     assertTrue(solrQuery.contains("mystery"));
@@ -122,9 +125,8 @@ class RecommendationEngineTest {
     assertTrue(result.isEmpty());
   }
 
-  private SolrDocument document(String id) {
-    SolrDocument document = new SolrDocument();
-    document.setField("id", id);
-    return document;
+  private AudiobookCandidate document(String id) {
+    return new AudiobookCandidate(
+        new AudiobookRecord(id, "catalogue", "Book " + id, List.of(), null), null);
   }
 }

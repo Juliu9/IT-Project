@@ -1,29 +1,20 @@
 package com.gen3.recommenderagent.engine.handlers;
 
 import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.Recommendation;
-import com.gen3.recommenderagent.domain.session.Session;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
-import java.util.List;
+import com.gen3.recommenderagent.engine.AudiobookRecommendationWorkflow;
 import org.springframework.stereotype.Component;
 
 @Component
-public class SimilarToBookHandler implements IntentHandler {
+public class SimilarToBookHandler extends RetrievalIntentHandler {
+
+  /** Uses semantic retrieval for the referenced book request. */
+  public SimilarToBookHandler(AudiobookRecommendationWorkflow workflow) {
+    super(workflow);
+  }
 
   @Override
   public Intent supportedIntent() {
     return Intent.SIMILAR_TO_BOOK;
   }
 
-  @Override
-  public List<Recommendation> handle(SessionRequest request, Session session) {
-
-    // TODO:
-    // Extract the referenced book.
-    // Build a MoreLikeThis Solr query.
-    // Retrieve candidates.
-    // Rank candidates.
-
-    return List.of();
-  }
 }
