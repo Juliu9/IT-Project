@@ -48,7 +48,9 @@ class SolrAudiobookRepositoryUnitTest {
     assertEquals("edismax", query.get("defType"));
     assertEquals("title rt_title authors rt_authors all", query.get("qf"));
     assertEquals(5, query.getRows());
-    assertEquals("id,source,title,authors,description,score", query.getFields());
+    assertEquals(
+        "id,source,title,authors,description,narrators,language,durationMinutes,score",
+        query.getFields());
   }
 
   /** The public repository boundary exposes plain records rather than Solr documents. */

@@ -30,8 +30,14 @@ Use environment variables for connection details. Do not place an API key in thi
 QDRANT_URL=https://your-cluster.example.cloud.qdrant.io
 QDRANT_GRPC_PORT=6334
 QDRANT_API=your-api-key
-QDRANT_COLLECTION=audiobooks
+QDRANT_COLLECTION=audiobooks_hybrid
 ```
+
+The hybrid collection stores a normalized named dense vector (`dense`), a BM25-style named sparse
+vector (`keywords`), and filterable audiobook metadata. The application combines dense and sparse
+rankings with reciprocal rank fusion for hybrid intents. The sample narrator, language, and duration
+values are deterministic placeholders produced during Solr reads until the source catalogue provides
+real metadata.
 
 Migration is disabled by default. To copy the complete Solr catalogue, start the application once
 with `QDRANT_MIGRATION_ENABLED=true`. The runner reads Solr in pages, reuses existing normalized

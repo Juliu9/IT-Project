@@ -31,6 +31,8 @@ public class EmbeddingIndexer {
     return List.of(
             part("title", book.title()),
             part("authors", book.authors()),
+            part("narrators", book.narrators()),
+            part("language", book.language()),
             part("description", book.description()))
         .stream()
         .filter(value -> !value.isBlank())
@@ -103,6 +105,7 @@ public class EmbeddingIndexer {
                 part("Topics", query == null ? null : query.getTopics()),
                 part("Genres", query == null ? null : query.getGenres()),
                 part("Authors", query == null ? null : query.getAuthors()),
+                part("Narrators", query == null ? null : query.getNarrators()),
                 part("Keywords", query == null ? null : query.getKeywords()),
                 part(
                     "Included preferences",

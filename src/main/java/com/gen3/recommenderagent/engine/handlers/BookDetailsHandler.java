@@ -1,26 +1,20 @@
 package com.gen3.recommenderagent.engine.handlers;
 
 import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.Recommendation;
-import com.gen3.recommenderagent.domain.session.Session;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
-import java.util.List;
+import com.gen3.recommenderagent.engine.AudiobookRecommendationWorkflow;
 import org.springframework.stereotype.Component;
 
 @Component
-public class BookDetailsHandler implements IntentHandler {
+public class BookDetailsHandler extends RetrievalIntentHandler {
+
+  /** Uses structured fields when a detail request contains catalogue filters. */
+  public BookDetailsHandler(AudiobookRecommendationWorkflow workflow) {
+    super(workflow);
+  }
 
   @Override
   public Intent supportedIntent() {
     return Intent.BOOK_DETAILS;
   }
 
-  @Override
-  public List<Recommendation> handle(SessionRequest request, Session session) {
-
-    // TODO:
-    // Find requested book and return its details.
-
-    return List.of();
-  }
 }

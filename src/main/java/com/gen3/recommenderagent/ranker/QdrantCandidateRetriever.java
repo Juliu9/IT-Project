@@ -2,6 +2,8 @@ package com.gen3.recommenderagent.ranker;
 
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
+import com.gen3.recommenderagent.ranker.retrieval.AudiobookRetrievalPlan;
+import com.gen3.recommenderagent.ranker.retrieval.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
 import java.io.IOException;
@@ -19,12 +21,16 @@ public class QdrantCandidateRetriever implements CandidateRetriever {
 
   private final QdrantAudiobookRepository repository;
   private final EmbeddingIndexer embeddingIndexer;
+  private final AudiobookRetrievalPlanner retrievalPlanner;
 
   /** Uses the Qdrant repository and the shared normalized request-embedding pipeline. */
   public QdrantCandidateRetriever(
-      QdrantAudiobookRepository repository, EmbeddingIndexer embeddingIndexer) {
+      QdrantAudiobookRepository repository,
+      EmbeddingIndexer embeddingIndexer,
+      AudiobookRetrievalPlanner retrievalPlanner) {
     this.repository = repository;
     this.embeddingIndexer = embeddingIndexer;
+    this.retrievalPlanner = retrievalPlanner;
   }
 
   /** Embeds the supplied text and retrieves the nearest audiobook candidates. */
@@ -42,11 +48,22 @@ public class QdrantCandidateRetriever implements CandidateRetriever {
   public List<AudiobookCandidate> getCandidates(
       String query, int limit, SessionRequest request) {
     try {
-      float[] queryVector = embeddingIndexer.embedRequest(request);
-      if (queryVector.length == 0) {
-        return getCandidates(query, limit);
-      }
-      return repository.searchCandidates(query, limit, queryVector);
+      AudiobookRetrievalPlan plan = retrievalPlanner.plan(query, limit, request);
+      return switch (plan.mode()) {
+        case SEMANTIC ->
+            repository.searchSemantic(
+                embeddingIndexer.embedRequest(request), plan.filters(), plan.limit());
+        case KEYWORD ->
+            repository.searchKeyword(plan.keywordText(), plan.filters(), plan.limit());
+        case HYBRID ->
+            repository.searchHybrid(
+                embeddingIndexer.embedRequest(request),
+                plan.keywordText(),
+                plan.filters(),
+                plan.limit());
+        case FILTER_ONLY -> repository.searchByFilters(plan.filters(), plan.limit());
+        case NONE -> List.of();
+      };
     } catch (IOException exception) {
       throw new IllegalStateException("Failed to retrieve candidates from Qdrant", exception);
     }

@@ -51,12 +51,13 @@ class RecommendationEngineTest {
   void setUp() {
     NewRecommendationHandler newRecommendationHandler =
         new NewRecommendationHandler(
-            candidateRetriever,
-            new RankingService(
-                new RelevanceRankingStrategy(),
-                new PreferenceRankingStrategy(),
-                new HybridRankingStrategy()),
-            new RecommendationQueryBuilder());
+            new AudiobookRecommendationWorkflow(
+                candidateRetriever,
+                new RankingService(
+                    new RelevanceRankingStrategy(),
+                    new PreferenceRankingStrategy(),
+                    new HybridRankingStrategy()),
+                new RecommendationQueryBuilder()));
 
     recommendationEngine =
         new RecommendationEngine(

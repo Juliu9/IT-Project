@@ -1,9 +1,11 @@
 package com.gen3.recommenderagent.storage.audiobook.solr;
 
 import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookMetadataEnricher;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookRepository;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookSearchPage;
+import com.gen3.recommenderagent.storage.audiobook.FakeAudiobookMetadataEnricher;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
@@ -33,17 +35,31 @@ public class SolrAudiobookRepository implements AudiobookRepository {
   private final String collection;
   private final String vectorField;
   private final int vectorDimension;
+  private final AudiobookMetadataEnricher metadataEnricher;
 
   @Autowired
   public SolrAudiobookRepository(
       SolrClient solrClient,
       @Value("${solr.collection}") String collection,
       @Value("${solr.vector-field:embedding}") String vectorField,
-      @Value("${solr.embedding-dimension:1536}") int vectorDimension) {
+      @Value("${solr.embedding-dimension:1536}") int vectorDimension,
+      AudiobookMetadataEnricher metadataEnricher) {
     this.solrClient = solrClient;
     this.collection = collection;
     this.vectorField = vectorField;
     this.vectorDimension = vectorDimension;
+    this.metadataEnricher = metadataEnricher;
+  }
+
+  /** Convenience constructor used by focused tests and standalone adapters. */
+  public SolrAudiobookRepository(
+      SolrClient solrClient, String collection, String vectorField, int vectorDimension) {
+    this(
+        solrClient,
+        collection,
+        vectorField,
+        vectorDimension,
+        new FakeAudiobookMetadataEnricher());
   }
 
   public SolrAudiobookRepository(SolrClient solrClient, String collection) {
@@ -59,7 +75,16 @@ public class SolrAudiobookRepository implements AudiobookRepository {
     solrQuery.set("defType", "edismax");
     solrQuery.set("qf", "title rt_title authors rt_authors all");
     solrQuery.setRows(limit);
-    solrQuery.setFields("id", "source", "title", "authors", "description", "score");
+    solrQuery.setFields(
+        "id",
+        "source",
+        "title",
+        "authors",
+        "description",
+        "narrators",
+        "language",
+        "durationMinutes",
+        "score");
 
     return solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
   }
@@ -159,7 +184,15 @@ public class SolrAudiobookRepository implements AudiobookRepository {
     solrQuery.setStart(Math.max(offset, 0));
     solrQuery.setRows(Math.max(limit, 1));
     solrQuery.setSort("id", SolrQuery.ORDER.asc);
-    solrQuery.setFields("id", "source", "title", "authors", "description");
+    solrQuery.setFields(
+        "id",
+        "source",
+        "title",
+        "authors",
+        "description",
+        "narrators",
+        "language",
+        "durationMinutes");
     try {
       QueryResponse response = solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
       return response.getResults().stream().map(this::toRecord).toList();
@@ -174,7 +207,16 @@ public class SolrAudiobookRepository implements AudiobookRepository {
     solrQuery.setQuery(
         "{!knn f=" + vectorField + " topK=" + limit + "}" + vectorLiteral(queryVector));
     solrQuery.setRows(limit);
-    solrQuery.setFields("id", "source", "title", "authors", "description", "score");
+    solrQuery.setFields(
+        "id",
+        "source",
+        "title",
+        "authors",
+        "description",
+        "narrators",
+        "language",
+        "durationMinutes",
+        "score");
     return solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
   }
 
@@ -294,17 +336,36 @@ public class SolrAudiobookRepository implements AudiobookRepository {
 
   /** Maps one Solr document to the fields used by the application. */
   private AudiobookRecord toRecord(SolrDocument document) {
-    Object authorValue = document.getFieldValue("authors");
-    List<String> authors =
-        authorValue instanceof Collection<?> values
-            ? values.stream().filter(value -> value != null).map(Object::toString).toList()
-            : authorValue == null ? List.of() : List.of(authorValue.toString());
-    return new AudiobookRecord(
-        field(document, "id"),
-        field(document, "source"),
-        field(document, "title"),
-        authors,
-        field(document, "description"));
+    AudiobookRecord record =
+        new AudiobookRecord(
+            field(document, "id"),
+            field(document, "source"),
+            field(document, "title"),
+            stringList(document.getFieldValue("authors")),
+            field(document, "description"),
+            stringList(document.getFieldValue("narrators")),
+            field(document, "language"),
+            integer(document.getFieldValue("durationMinutes")));
+    return metadataEnricher.enrich(record);
+  }
+
+  /** Converts a scalar or multivalued Solr field into a stable string list. */
+  private List<String> stringList(Object value) {
+    return value instanceof Collection<?> values
+        ? values.stream().filter(item -> item != null).map(Object::toString).toList()
+        : value == null ? List.of() : List.of(value.toString());
+  }
+
+  /** Converts an optional numeric Solr field into minutes. */
+  private Integer integer(Object value) {
+    if (value instanceof Number number) {
+      return number.intValue();
+    }
+    try {
+      return value == null ? null : Integer.valueOf(value.toString());
+    } catch (NumberFormatException exception) {
+      return null;
+    }
   }
 
   /** Converts an absent Solr value to null, as expected by the result record. */

@@ -54,6 +54,13 @@ public class BookSearchController {
 
   private BookSearchResult toResult(AudiobookRecord record) {
     return new BookSearchResult(
-        record.id(), record.source(), record.title(), record.authors(), record.description());
+        record.id(),
+        record.source(),
+        record.title(),
+        record.authors(),
+        record.description(),
+        record.narrators(),
+        record.language(),
+        record.durationMinutes());
   }
 }

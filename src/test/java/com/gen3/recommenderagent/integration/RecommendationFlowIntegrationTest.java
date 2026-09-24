@@ -17,6 +17,7 @@ import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.engine.RecommendationEngine;
+import com.gen3.recommenderagent.engine.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.engine.handlers.IntentHandlerFactory;
 import com.gen3.recommenderagent.engine.handlers.NewRecommendationHandler;
 import com.gen3.recommenderagent.inputparser.InputParser;
@@ -89,7 +90,8 @@ class RecommendationFlowIntegrationTest {
             new HybridRankingStrategy());
     NewRecommendationHandler newRecommendationHandler =
         new NewRecommendationHandler(
-            candidateRetriever, rankingService, new RecommendationQueryBuilder());
+            new AudiobookRecommendationWorkflow(
+                candidateRetriever, rankingService, new RecommendationQueryBuilder()));
     RecommendationFlowTestSupport.InMemorySessionRepository sessionRepository =
         new RecommendationFlowTestSupport.InMemorySessionRepository();
 

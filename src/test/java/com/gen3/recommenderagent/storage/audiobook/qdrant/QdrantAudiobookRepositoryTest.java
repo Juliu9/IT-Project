@@ -18,7 +18,8 @@ import io.qdrant.client.grpc.Points.DenseVector;
 import io.qdrant.client.grpc.Points.PointStruct;
 import io.qdrant.client.grpc.Points.RetrievedPoint;
 import io.qdrant.client.grpc.Points.ScoredPoint;
-import io.qdrant.client.grpc.Points.SearchPoints;
+import io.qdrant.client.grpc.Points.NamedVectorsOutput;
+import io.qdrant.client.grpc.Points.QueryPoints;
 import io.qdrant.client.grpc.Points.VectorOutput;
 import io.qdrant.client.grpc.Points.VectorsOutput;
 import java.util.List;
@@ -33,7 +34,8 @@ class QdrantAudiobookRepositoryTest {
   @Test
   void returnsDatabaseIndependentCandidateWithQdrantScore() throws Exception {
     QdrantClient client = mock(QdrantClient.class);
-    QdrantPointMapper mapper = new QdrantPointMapper();
+    SparseTextEncoder sparseEncoder = new Bm25SparseTextEncoder();
+    QdrantPointMapper mapper = new QdrantPointMapper(sparseEncoder);
     AudiobookRecord book =
         new AudiobookRecord("book-1", "catalogue", "Title", List.of("Author"), "Summary");
     PointStruct point = mapper.toPoint(new AudiobookEmbedding(book, new float[] {0.6f, 0.8f}));
@@ -45,11 +47,11 @@ class QdrantAudiobookRepositoryTest {
             .build();
     when(client.collectionExistsAsync("audiobooks"))
         .thenReturn(Futures.immediateFuture(true));
-    when(client.searchAsync(any(SearchPoints.class)))
+    when(client.queryAsync(any(QueryPoints.class)))
         .thenReturn(Futures.immediateFuture(List.of(result)));
     QdrantAudiobookRepository repository =
         new QdrantAudiobookRepository(
-            client, mapper, mock(EmbeddingModel.class), "audiobooks", 2);
+            client, mapper, sparseEncoder, mock(EmbeddingModel.class), "audiobooks", 2);
 
     List<AudiobookCandidate> candidates =
         repository.searchCandidates("fantasy", 5, new float[] {0.6f, 0.8f});
@@ -63,16 +65,21 @@ class QdrantAudiobookRepositoryTest {
   @Test
   void findsEmbeddingByCatalogueBookId() throws Exception {
     QdrantClient client = mock(QdrantClient.class);
-    QdrantPointMapper mapper = new QdrantPointMapper();
+    SparseTextEncoder sparseEncoder = new Bm25SparseTextEncoder();
+    QdrantPointMapper mapper = new QdrantPointMapper(sparseEncoder);
     RetrievedPoint result =
         RetrievedPoint.newBuilder()
             .setId(mapper.pointId("book-9"))
             .setVectors(
                 VectorsOutput.newBuilder()
-                    .setVector(
-                        VectorOutput.newBuilder()
-                            .setDense(
-                                DenseVector.newBuilder().addData(0.6f).addData(0.8f))))
+                    .setVectors(
+                        NamedVectorsOutput.newBuilder()
+                            .putVectors(
+                                QdrantPointMapper.DENSE_VECTOR,
+                                VectorOutput.newBuilder()
+                                    .setDense(
+                                        DenseVector.newBuilder().addData(0.6f).addData(0.8f))
+                                    .build())))
             .build();
     when(client.collectionExistsAsync("audiobooks"))
         .thenReturn(Futures.immediateFuture(true));
@@ -81,7 +88,7 @@ class QdrantAudiobookRepositoryTest {
         .thenReturn(Futures.immediateFuture(List.of(result)));
     QdrantAudiobookRepository repository =
         new QdrantAudiobookRepository(
-            client, mapper, mock(EmbeddingModel.class), "audiobooks", 2);
+            client, mapper, sparseEncoder, mock(EmbeddingModel.class), "audiobooks", 2);
 
     Optional<float[]> vector = repository.findEmbeddingByBookId("book-9");
 

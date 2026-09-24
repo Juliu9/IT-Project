@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 /** Verifies the stable point ID and payload contract used by Qdrant. */
 class QdrantPointMapperTest {
 
-  private final QdrantPointMapper mapper = new QdrantPointMapper();
+  private final QdrantPointMapper mapper = new QdrantPointMapper(new Bm25SparseTextEncoder());
 
   /** Ensures migration reruns overwrite the same point and preserve catalogue fields. */
   @Test
@@ -26,7 +26,14 @@ class QdrantPointMapperTest {
 
     assertThat(first.getId()).isEqualTo(second.getId());
     assertThat(first.getPayloadMap().get("bookId").getStringValue()).isEqualTo("book-7");
-    assertThat(first.getVectors().getVector().getDense().getDataList())
+    assertThat(
+            first
+                .getVectors()
+                .getVectors()
+                .getVectorsMap()
+                .get(QdrantPointMapper.DENSE_VECTOR)
+                .getDense()
+                .getDataList())
         .containsExactly(0.6f, 0.8f);
   }
 

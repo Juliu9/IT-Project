@@ -3,7 +3,8 @@ package com.gen3.recommenderagent.storage.audiobook.qdrant;
 import static io.qdrant.client.PointIdFactory.id;
 import static io.qdrant.client.ValueFactory.list;
 import static io.qdrant.client.ValueFactory.value;
-import static io.qdrant.client.VectorsFactory.vectors;
+import static io.qdrant.client.VectorFactory.vector;
+import static io.qdrant.client.VectorsFactory.namedVectors;
 
 import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookRepository.AudiobookEmbedding;
@@ -21,12 +22,29 @@ import org.springframework.stereotype.Component;
 @Component
 public class QdrantPointMapper {
 
+  public static final String DENSE_VECTOR = "dense";
+  public static final String KEYWORD_VECTOR = "keywords";
+
+  private final SparseTextEncoder sparseEncoder;
+
+  /** Uses the same sparse encoder for catalogue indexing and request retrieval. */
+  public QdrantPointMapper(SparseTextEncoder sparseEncoder) {
+    this.sparseEncoder = sparseEncoder;
+  }
+
   /** Creates an idempotent Qdrant point containing the normalized vector and catalogue payload. */
   public PointStruct toPoint(AudiobookEmbedding embedding) {
     AudiobookRecord record = embedding.record();
+    SparseVectorData sparse = sparseEncoder.encode(searchableText(record));
     return PointStruct.newBuilder()
         .setId(pointId(record.id()))
-        .setVectors(vectors(embedding.vector()))
+        .setVectors(
+            namedVectors(
+                Map.of(
+                    DENSE_VECTOR,
+                    vector(embedding.vector()),
+                    KEYWORD_VECTOR,
+                    vector(sparse.values(), sparse.indices()))))
         .putAllPayload(payload(record))
         .build();
   }
@@ -39,7 +57,10 @@ public class QdrantPointMapper {
         stringValue(payload, "source"),
         stringValue(payload, "title"),
         listValue(payload.get("authors")),
-        stringValue(payload, "description"));
+        stringValue(payload, "description"),
+        listValue(payload.get("narrators")),
+        stringValue(payload, "language"),
+        integerValue(payload.get("durationMinutes")));
   }
 
   /** Generates the same legal Qdrant UUID every time a catalogue book ID is supplied. */
@@ -59,6 +80,10 @@ public class QdrantPointMapper {
     put(payload, "source", record.source());
     put(payload, "title", record.title());
     put(payload, "description", record.description());
+    put(payload, "language", record.language());
+    if (record.durationMinutes() != null) {
+      payload.put("durationMinutes", value(record.durationMinutes().longValue()));
+    }
     List<Value> authors =
         record.authors() == null
             ? List.of()
@@ -67,7 +92,35 @@ public class QdrantPointMapper {
                 .map(QdrantPointMapper::textValue)
                 .toList();
     payload.put("authors", list(authors));
+    List<Value> narrators =
+        record.narrators() == null
+            ? List.of()
+            : record.narrators().stream()
+                .filter(narrator -> narrator != null)
+                .map(QdrantPointMapper::textValue)
+                .toList();
+    payload.put("narrators", list(narrators));
     return payload;
+  }
+
+  /** Builds the lexical document used by the sparse keyword vector. */
+  private String searchableText(AudiobookRecord record) {
+    return String.join(
+        " ",
+        text(record.title()),
+        text(record.authors()),
+        text(record.narrators()),
+        text(record.description()));
+  }
+
+  /** Converts an optional scalar into searchable text. */
+  private String text(String value) {
+    return value == null ? "" : value;
+  }
+
+  /** Converts an optional list into searchable text. */
+  private String text(List<String> values) {
+    return values == null ? "" : String.join(" ", values);
   }
 
   /** Adds a payload string only when a value is available. */
@@ -94,5 +147,10 @@ public class QdrantPointMapper {
       return List.of();
     }
     return field.getListValue().getValuesList().stream().map(Value::getStringValue).toList();
+  }
+
+  /** Reads an optional integer payload field. */
+  private Integer integerValue(Value field) {
+    return field == null ? null : Math.toIntExact(field.getIntegerValue());
   }
 }

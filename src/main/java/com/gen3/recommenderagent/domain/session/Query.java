@@ -7,6 +7,7 @@ public class Query {
   private List<String> topics;
   private List<String> genres;
   private List<String> authors;
+  private List<String> narrators;
   private List<String> keywords;
 
   public Query() {}
@@ -33,6 +34,16 @@ public class Query {
 
   public void setAuthors(List<String> authors) {
     this.authors = authors;
+  }
+
+  /** Returns narrator names that should become exact catalogue filters. */
+  public List<String> getNarrators() {
+    return narrators;
+  }
+
+  /** Stores narrator names extracted from the user's request. */
+  public void setNarrators(List<String> narrators) {
+    this.narrators = narrators;
   }
 
   public List<String> getKeywords() {

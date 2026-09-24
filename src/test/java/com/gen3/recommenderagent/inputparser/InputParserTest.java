@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.Constraints;
 import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.util.List;
@@ -32,6 +33,9 @@ class InputParserTest {
     ParsedRequest parsedRequest = new ParsedRequest();
     parsedRequest.setIntent(Intent.NEW_RECOMMENDATION);
     parsedRequest.setQuery(query);
+    Constraints constraints = new Constraints();
+    constraints.setLanguage("English");
+    parsedRequest.setConstraints(constraints);
 
     ChatClient chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(chatClient
@@ -51,6 +55,7 @@ class InputParserTest {
     assertEquals(rawText, result.getRawText());
     assertEquals(Intent.NEW_RECOMMENDATION, result.getIntent());
     assertSame(query, result.getQuery());
+    assertSame(constraints, result.getConstraints());
 
     UUID requestId = UUID.fromString(result.getRequestId());
     assertEquals(7, requestId.version());
