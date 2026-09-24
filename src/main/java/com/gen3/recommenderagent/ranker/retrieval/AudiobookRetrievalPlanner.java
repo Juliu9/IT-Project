@@ -3,6 +3,7 @@ package com.gen3.recommenderagent.ranker.retrieval;
 import com.gen3.recommenderagent.domain.session.Constraints;
 import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookFilters;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -37,7 +38,6 @@ public class AudiobookRetrievalPlanner {
             durationMinutes(constraints == null ? null : constraints.getDuration()));
     return new AudiobookRetrievalPlan(
         policy.modeFor(request == null ? null : request.getIntent()),
-        semanticText,
         keywordText,
         filters,
         Math.max(limit, 1));

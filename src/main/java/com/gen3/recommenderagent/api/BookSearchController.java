@@ -1,7 +1,7 @@
 package com.gen3.recommenderagent.api;
 
 import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookRepository;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookCatalogueRepository;
 import java.io.IOException;
 import java.util.List;
 import org.apache.solr.client.solrj.util.ClientUtils;
@@ -19,10 +19,10 @@ public class BookSearchController {
 
   private static final int MAX_LIMIT = 20;
 
-  private final AudiobookRepository audiobookRepository;
+  private final AudiobookCatalogueRepository audiobookRepository;
 
   public BookSearchController(
-      @Qualifier("solrAudiobookRepository") AudiobookRepository audiobookRepository) {
+      @Qualifier("solrAudiobookRepository") AudiobookCatalogueRepository audiobookRepository) {
     this.audiobookRepository = audiobookRepository;
   }
 

@@ -1,15 +1,16 @@
 package com.gen3.recommenderagent.storage.audiobook.migration;
 
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookCatalogueRepository;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookRepository.AudiobookEmbedding;
-import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookVectorIndexer;
 import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -22,15 +23,15 @@ public class SolrToQdrantMigrator implements ApplicationRunner {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SolrToQdrantMigrator.class);
 
-  private final SolrAudiobookRepository source;
-  private final QdrantAudiobookRepository destination;
+  private final AudiobookCatalogueRepository source;
+  private final AudiobookVectorIndexer destination;
   private final EmbeddingIndexer embeddingIndexer;
   private final int batchSize;
 
   /** Creates an opt-in, paginated migration from the retained Solr adapter to Qdrant. */
   public SolrToQdrantMigrator(
-      SolrAudiobookRepository source,
-      QdrantAudiobookRepository destination,
+      @Qualifier("solrAudiobookRepository") AudiobookCatalogueRepository source,
+      @Qualifier("qdrantAudiobookRepository") AudiobookVectorIndexer destination,
       EmbeddingIndexer embeddingIndexer,
       @Value("${audiobook.qdrant.migration.batch-size:100}") int batchSize) {
     this.source = source;
@@ -42,7 +43,7 @@ public class SolrToQdrantMigrator implements ApplicationRunner {
   /** Reads every Solr page and idempotently upserts each book into Qdrant. */
   @Override
   public void run(ApplicationArguments arguments) throws Exception {
-    destination.ensureCollection();
+    destination.initialize();
     int offset = 0;
     int migrated = 0;
     while (true) {

@@ -3,7 +3,7 @@ package com.gen3.recommenderagent.storage.audiobook.qdrant;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookRepository.AudiobookEmbedding;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookEmbedding;
 import io.qdrant.client.grpc.Points.PointStruct;
 import io.qdrant.client.grpc.Points.ScoredPoint;
 import java.util.List;

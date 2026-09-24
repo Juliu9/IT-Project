@@ -2,8 +2,9 @@ package com.gen3.recommenderagent.ranker;
 
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookRepository;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidateSearch;
 import java.io.IOException;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -19,13 +20,13 @@ import org.springframework.stereotype.Service;
     havingValue = "solr")
 public class BaseSolrCandidateRetriever implements CandidateRetriever {
 
-  private final AudiobookRepository audiobookRepository;
+  private final AudiobookCandidateSearch candidateSearch;
   private final EmbeddingIndexer embeddingIndexer;
 
   public BaseSolrCandidateRetriever(
-      @Qualifier("solrAudiobookRepository") AudiobookRepository audiobookRepository,
+      @Qualifier("solrAudiobookRepository") AudiobookCandidateSearch candidateSearch,
       EmbeddingIndexer embeddingIndexer) {
-    this.audiobookRepository = audiobookRepository;
+    this.candidateSearch = candidateSearch;
     this.embeddingIndexer = embeddingIndexer;
   }
 
@@ -34,7 +35,7 @@ public class BaseSolrCandidateRetriever implements CandidateRetriever {
   public List<AudiobookCandidate> getCandidates(String query, int limit) {
 
     try {
-      return audiobookRepository.searchCandidates(query, limit);
+      return candidateSearch.searchKeyword(query, AudiobookFilters.empty(), limit);
 
     } catch (IOException e) {
       throw new RuntimeException("Failed to retrieve candidates from Solr", e);
@@ -51,7 +52,8 @@ public class BaseSolrCandidateRetriever implements CandidateRetriever {
         return getCandidates(query, limit);
       }
 
-      return audiobookRepository.searchCandidates(query, limit, queryVector);
+      return candidateSearch.searchHybrid(
+          queryVector, query, AudiobookFilters.empty(), limit);
     } catch (IOException exception) {
       throw new RuntimeException("Failed to retrieve semantic candidates from Solr", exception);
     }

@@ -1,8 +1,8 @@
-package com.gen3.recommenderagent.ranker.retrieval;
+package com.gen3.recommenderagent.storage.audiobook;
 
 import java.util.List;
 
-/** Structured constraints applied independently from semantic or lexical scoring. */
+/** Structured catalogue constraints shared by retrieval policies and database adapters. */
 public record AudiobookFilters(
     List<String> authors,
     List<String> narrators,

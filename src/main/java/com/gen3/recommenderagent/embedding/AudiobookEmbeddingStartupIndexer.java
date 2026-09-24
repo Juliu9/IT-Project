@@ -1,7 +1,9 @@
 package com.gen3.recommenderagent.embedding;
 
 import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookRepository;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookCatalogueRepository;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookEmbedding;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookVectorIndexer;
 import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
@@ -20,17 +22,20 @@ public class AudiobookEmbeddingStartupIndexer implements ApplicationRunner {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AudiobookEmbeddingStartupIndexer.class);
 
-    private final AudiobookRepository audiobookRepository;
+    private final AudiobookCatalogueRepository catalogueRepository;
+    private final AudiobookVectorIndexer vectorIndexer;
     private final EmbeddingIndexer embeddingIndexer;
     private final int pageSize;
     private final boolean enabled;
 
     public AudiobookEmbeddingStartupIndexer(
-            @Qualifier("solrAudiobookRepository") AudiobookRepository audiobookRepository,
+            @Qualifier("solrAudiobookRepository") AudiobookCatalogueRepository catalogueRepository,
+            @Qualifier("solrAudiobookRepository") AudiobookVectorIndexer vectorIndexer,
             EmbeddingIndexer embeddingIndexer,
             @Value("${solr.embedding-index-page-size:100}") int pageSize,
             @Value("${solr.embedding-index-on-startup:true}") boolean enabled) {
-        this.audiobookRepository = audiobookRepository;
+        this.catalogueRepository = catalogueRepository;
+        this.vectorIndexer = vectorIndexer;
         this.embeddingIndexer = embeddingIndexer;
         this.pageSize = Math.max(pageSize, 1);
         this.enabled = enabled;
@@ -46,19 +51,19 @@ public class AudiobookEmbeddingStartupIndexer implements ApplicationRunner {
         int offset = 0;
         int indexed = 0;
         while (true) {
-            List<AudiobookRecord> page = audiobookRepository.findAllBooks(offset, pageSize);
+            List<AudiobookRecord> page = catalogueRepository.findAllBooks(offset, pageSize);
             if (page.isEmpty()) {
                 break;
             }
 
-            List<AudiobookRepository.AudiobookEmbedding> batch = new ArrayList<>();
+            List<AudiobookEmbedding> batch = new ArrayList<>();
             for (AudiobookRecord book : page) {
                 float[] vector = embeddingIndexer.ensureAudiobookEmbedding(book);
                 if (vector.length > 0) {
-                    batch.add(new AudiobookRepository.AudiobookEmbedding(book, vector));
+                    batch.add(new AudiobookEmbedding(book, vector));
                 }
             }
-            audiobookRepository.indexEmbeddings(batch);
+            vectorIndexer.indexEmbeddings(batch);
             indexed += batch.size();
             offset += page.size();
             LOGGER.info("Indexed {} audiobook embeddings", indexed);

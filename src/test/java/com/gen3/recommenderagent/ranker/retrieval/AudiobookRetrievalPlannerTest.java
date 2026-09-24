@@ -32,7 +32,6 @@ class AudiobookRetrievalPlannerTest {
         new AudiobookRetrievalPlanner(new IntentRetrievalPolicy()).plan("fallback", 50, request);
 
     assertThat(plan.mode()).isEqualTo(RetrievalMode.HYBRID);
-    assertThat(plan.semanticText()).contains("fantasy", "deserts", "Stephen Fry");
     assertThat(plan.keywordText()).isEqualTo("deserts fantasy");
     assertThat(plan.filters().narrators()).containsExactly("Stephen Fry");
     assertThat(plan.filters().language()).isEqualTo("English");

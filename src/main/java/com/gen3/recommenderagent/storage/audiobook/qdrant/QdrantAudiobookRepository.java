@@ -5,12 +5,12 @@ import static io.qdrant.client.ConditionFactory.matchKeyword;
 import static io.qdrant.client.ConditionFactory.matchKeywords;
 import static io.qdrant.client.ConditionFactory.range;
 
-import com.gen3.recommenderagent.embedding.VectorMath;
-import com.gen3.recommenderagent.ranker.retrieval.AudiobookFilters;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidateSearch;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookRepository;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookSearchPage;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookVectorRepository;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Common.Filter;
 import io.qdrant.client.grpc.Common.Range;
@@ -31,109 +31,78 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
-import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
 
 /** Stores and searches normalized audiobook vectors in a Qdrant collection. */
 @Repository
-public class QdrantAudiobookRepository implements AudiobookRepository {
+public class QdrantAudiobookRepository
+    implements AudiobookCandidateSearch, AudiobookVectorRepository {
 
   private final QdrantClient client;
   private final QdrantPointMapper mapper;
   private final SparseTextEncoder sparseEncoder;
-  private final EmbeddingModel embeddingModel;
   private final String collection;
   private final int vectorDimension;
+  private final Object initializationLock = new Object();
+  private volatile boolean initialized;
 
   /** Creates a repository for the configured Qdrant collection and embedding size. */
   public QdrantAudiobookRepository(
       QdrantClient client,
       QdrantPointMapper mapper,
       SparseTextEncoder sparseEncoder,
-      EmbeddingModel embeddingModel,
       @Value("${qdrant.collection:audiobooks_hybrid}") String collection,
       @Value("${qdrant.embedding-dimension:1536}") int vectorDimension) {
     this.client = client;
     this.mapper = mapper;
     this.sparseEncoder = sparseEncoder;
-    this.embeddingModel = embeddingModel;
     this.collection = collection;
     this.vectorDimension = vectorDimension;
   }
 
-  /** Embeds plain query text and performs nearest-neighbour retrieval. */
-  @Override
-  public AudiobookSearchPage searchBooks(String query, int limit) throws IOException {
-    if (query == null || query.isBlank() || limit <= 0) {
-      return new AudiobookSearchPage(0, List.of());
-    }
-    return searchBooks(query, limit, VectorMath.normalize(embeddingModel.embed(query)));
-  }
-
-  /** Searches Qdrant with a normalized request vector and returns results in score order. */
-  @Override
-  public AudiobookSearchPage searchBooks(String query, int limit, float[] queryVector)
-      throws IOException {
-    List<AudiobookRecord> records =
-        searchCandidates(query, limit, queryVector).stream()
-            .map(AudiobookCandidate::audiobook)
-            .toList();
-    return new AudiobookSearchPage(records.size(), records);
-  }
-
-  /** Embeds plain query text and returns scored, database-independent candidates. */
-  @Override
-  public List<AudiobookCandidate> searchCandidates(String query, int limit) throws IOException {
-    if (query == null || query.isBlank() || limit <= 0) {
-      return List.of();
-    }
-    return searchCandidates(query, limit, VectorMath.normalize(embeddingModel.embed(query)));
-  }
-
-  /** Searches Qdrant and keeps its dot-product score alongside each audiobook. */
-  @Override
-  public List<AudiobookCandidate> searchCandidates(
-      String query, int limit, float[] queryVector) throws IOException {
-    return searchSemantic(queryVector, AudiobookFilters.empty(), limit);
-  }
-
   /** Searches the named dense vector while applying structured payload filters. */
+  @Override
   public List<AudiobookCandidate> searchSemantic(
       float[] queryVector, AudiobookFilters filters, int limit) throws IOException {
     if (queryVector == null || queryVector.length == 0 || limit <= 0) {
       return List.of();
     }
     validateDimension(queryVector);
-    ensureCollection();
+    initialize();
     QueryPoints.Builder request = baseQuery(filters, limit);
     request.setUsing(QdrantPointMapper.DENSE_VECTOR).setQuery(denseQuery(queryVector));
     return query(request.build());
   }
 
   /** Searches the named sparse vector using BM25-style lexical term weights. */
+  @Override
   public List<AudiobookCandidate> searchKeyword(
       String text, AudiobookFilters filters, int limit) throws IOException {
     SparseVectorData sparse = sparseEncoder.encode(text);
     if (sparse.isEmpty() || limit <= 0) {
       return List.of();
     }
-    ensureCollection();
+    initialize();
     QueryPoints.Builder request = baseQuery(filters, limit);
     request.setUsing(QdrantPointMapper.KEYWORD_VECTOR).setQuery(sparseQuery(sparse));
     return query(request.build());
   }
 
   /** Fuses dense semantic and sparse lexical rankings with reciprocal rank fusion. */
+  @Override
   public List<AudiobookCandidate> searchHybrid(
       float[] queryVector, String text, AudiobookFilters filters, int limit) throws IOException {
+    if (queryVector == null || queryVector.length == 0 || limit <= 0) {
+      return List.of();
+    }
     validateDimension(queryVector);
     SparseVectorData sparse = sparseEncoder.encode(text);
     if (sparse.isEmpty()) {
       return searchSemantic(queryVector, filters, limit);
     }
-    ensureCollection();
-    int prefetchLimit = Math.max(limit * 4, limit);
+    initialize();
+    int prefetchLimit = limit * 4;
     Filter filter = filter(filters);
     PrefetchQuery.Builder dense =
         PrefetchQuery.newBuilder()
@@ -162,12 +131,13 @@ public class QdrantAudiobookRepository implements AudiobookRepository {
   }
 
   /** Returns payload-filtered audiobooks without vector similarity scoring. */
+  @Override
   public List<AudiobookCandidate> searchByFilters(AudiobookFilters filters, int limit)
       throws IOException {
     if (filters == null || !filters.hasConditions() || limit <= 0) {
       return List.of();
     }
-    ensureCollection();
+    initialize();
     return query(baseQuery(filters, limit).build());
   }
 
@@ -192,7 +162,7 @@ public class QdrantAudiobookRepository implements AudiobookRepository {
       return;
     }
     valid.forEach(item -> validateDimension(item.vector()));
-    ensureCollection();
+    initialize();
     await(
         client.upsertAsync(collection, valid.stream().map(mapper::toPoint).toList()),
         "write audiobook vectors to Qdrant");
@@ -204,7 +174,7 @@ public class QdrantAudiobookRepository implements AudiobookRepository {
     if (bookId == null || bookId.isBlank()) {
       return Optional.empty();
     }
-    ensureCollection();
+    initialize();
     List<RetrievedPoint> points =
         await(
             client.retrieveAsync(
@@ -227,11 +197,25 @@ public class QdrantAudiobookRepository implements AudiobookRepository {
   }
 
   /** Creates named dense and sparse vectors plus indexes used by payload filters. */
-  public void ensureCollection() throws IOException {
-    boolean exists = await(client.collectionExistsAsync(collection), "check Qdrant collection");
-    if (exists) {
+  @Override
+  public void initialize() throws IOException {
+    if (initialized) {
       return;
     }
+    synchronized (initializationLock) {
+      if (initialized) {
+        return;
+      }
+      boolean exists = await(client.collectionExistsAsync(collection), "check Qdrant collection");
+      if (!exists) {
+        createCollection();
+      }
+      initialized = true;
+    }
+  }
+
+  /** Creates the named dense and sparse vectors plus their filterable payload indexes. */
+  private void createCollection() throws IOException {
     Collections.VectorParams denseParams =
         Collections.VectorParams.newBuilder()
             .setSize(vectorDimension)

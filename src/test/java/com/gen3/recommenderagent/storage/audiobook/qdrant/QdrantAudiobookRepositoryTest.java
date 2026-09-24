@@ -7,12 +7,15 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.common.util.concurrent.Futures;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookRepository.AudiobookEmbedding;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookFilters;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookEmbedding;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Points.DenseVector;
 import io.qdrant.client.grpc.Points.PointStruct;
@@ -25,7 +28,6 @@ import io.qdrant.client.grpc.Points.VectorsOutput;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.embedding.EmbeddingModel;
 
 /** Covers Qdrant repository behavior that does not require a running database. */
 class QdrantAudiobookRepositoryTest {
@@ -50,15 +52,17 @@ class QdrantAudiobookRepositoryTest {
     when(client.queryAsync(any(QueryPoints.class)))
         .thenReturn(Futures.immediateFuture(List.of(result)));
     QdrantAudiobookRepository repository =
-        new QdrantAudiobookRepository(
-            client, mapper, sparseEncoder, mock(EmbeddingModel.class), "audiobooks", 2);
+        new QdrantAudiobookRepository(client, mapper, sparseEncoder, "audiobooks", 2);
 
     List<AudiobookCandidate> candidates =
-        repository.searchCandidates("fantasy", 5, new float[] {0.6f, 0.8f});
+        repository.searchSemantic(
+            new float[] {0.6f, 0.8f}, AudiobookFilters.empty(), 5);
+    repository.searchSemantic(new float[] {0.6f, 0.8f}, AudiobookFilters.empty(), 5);
 
     assertThat(candidates).hasSize(1);
     assertThat(candidates.getFirst().audiobook()).isEqualTo(book);
     assertThat(candidates.getFirst().score()).isEqualTo(0.92, within(0.0001));
+    verify(client, times(1)).collectionExistsAsync("audiobooks");
   }
 
   /** Verifies a favourite book ID resolves to the unnamed dense vector stored in Qdrant. */
@@ -87,8 +91,7 @@ class QdrantAudiobookRepositoryTest {
             eq("audiobooks"), anyList(), eq(false), eq(true), isNull()))
         .thenReturn(Futures.immediateFuture(List.of(result)));
     QdrantAudiobookRepository repository =
-        new QdrantAudiobookRepository(
-            client, mapper, sparseEncoder, mock(EmbeddingModel.class), "audiobooks", 2);
+        new QdrantAudiobookRepository(client, mapper, sparseEncoder, "audiobooks", 2);
 
     Optional<float[]> vector = repository.findEmbeddingByBookId("book-9");
 

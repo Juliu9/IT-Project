@@ -10,7 +10,7 @@ import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
-import com.gen3.recommenderagent.ranker.retrieval.AudiobookFilters;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookFilters;
 import com.gen3.recommenderagent.ranker.retrieval.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.ranker.retrieval.IntentRetrievalPolicy;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;

@@ -10,14 +10,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookRepository;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookCatalogueRepository;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookSearchPage;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class BookSearchControllerTest {
 
-  private final AudiobookRepository repository = mock(AudiobookRepository.class);
+  private final AudiobookCatalogueRepository repository =
+      mock(AudiobookCatalogueRepository.class);
   private final BookSearchController controller = new BookSearchController(repository);
 
   @Test

@@ -33,7 +33,7 @@ class SolrToQdrantMigratorTest {
 
     new SolrToQdrantMigrator(solr, qdrant, embeddings, 2).run(null);
 
-    verify(qdrant).ensureCollection();
+    verify(qdrant).initialize();
     verify(qdrant, times(2)).indexEmbeddings(anyList());
     verify(solr).findAllBooks(0, 2);
     verify(solr).findAllBooks(2, 2);

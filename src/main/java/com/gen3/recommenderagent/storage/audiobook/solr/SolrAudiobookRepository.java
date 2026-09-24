@@ -1,11 +1,15 @@
 package com.gen3.recommenderagent.storage.audiobook.solr;
 
 import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidateSearch;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookCatalogueRepository;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookMetadataEnricher;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookRepository;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookSearchPage;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookVectorIndexer;
 import com.gen3.recommenderagent.storage.audiobook.FakeAudiobookMetadataEnricher;
+import com.gen3.recommenderagent.storage.audiobook.AudiobookFilters;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
@@ -17,6 +21,7 @@ import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.response.QueryResponse;
+import org.apache.solr.client.solrj.util.ClientUtils;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrInputDocument;
@@ -26,7 +31,8 @@ import org.springframework.stereotype.Repository;
 
 /** Implements audiobook keyword, vector, catalogue, and indexing operations with Solr. */
 @Repository
-public class SolrAudiobookRepository implements AudiobookRepository {
+public class SolrAudiobookRepository
+    implements AudiobookCatalogueRepository, AudiobookCandidateSearch, AudiobookVectorIndexer {
 
   private static final double KEYWORD_WEIGHT = 0.4;
   private static final double VECTOR_WEIGHT = 0.6;
@@ -68,6 +74,12 @@ public class SolrAudiobookRepository implements AudiobookRepository {
 
   /** Queries Solr using its native response type for the Solr adapter and its tests. */
   public QueryResponse search(String query, int limit) throws SolrServerException, IOException {
+    return search(query, AudiobookFilters.empty(), limit);
+  }
+
+  /** Queries Solr lexically and adds any structured catalogue filters. */
+  private QueryResponse search(String query, AudiobookFilters filters, int limit)
+      throws SolrServerException, IOException {
 
     SolrQuery solrQuery = new SolrQuery();
 
@@ -85,36 +97,61 @@ public class SolrAudiobookRepository implements AudiobookRepository {
         "language",
         "durationMinutes",
         "score");
+    addFilters(solrQuery, filters);
 
     return solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
   }
 
-  /** Runs lexical edismax and Solr kNN retrieval, then blends their normalized scores. */
-  @Override
-  public AudiobookSearchPage searchBooks(String query, int limit, float[] queryVector)
-      throws IOException {
-    List<AudiobookRecord> records =
-        searchCandidates(query, limit, queryVector).stream()
-            .map(AudiobookCandidate::audiobook)
-            .toList();
-    return new AudiobookSearchPage(records.size(), records);
+  /** Adds exact metadata and maximum-duration constraints to a Solr query. */
+  private void addFilters(SolrQuery query, AudiobookFilters filters) {
+    if (filters == null || !filters.hasConditions()) {
+      return;
+    }
+    addAnyValueFilter(query, "authors", filters.authors());
+    addAnyValueFilter(query, "narrators", filters.narrators());
+    if (filters.language() != null && !filters.language().isBlank()) {
+      query.addFilterQuery("language:\"" + ClientUtils.escapeQueryChars(filters.language()) + "\"");
+    }
+    if (filters.maximumDurationMinutes() != null) {
+      query.addFilterQuery("durationMinutes:[* TO " + filters.maximumDurationMinutes() + "]");
+    }
+  }
+
+  /** Adds one OR-based exact filter for a multivalued Solr field. */
+  private void addAnyValueFilter(SolrQuery query, String field, List<String> values) {
+    if (values == null || values.isEmpty()) {
+      return;
+    }
+    String alternatives =
+        values.stream()
+            .filter(value -> value != null && !value.isBlank())
+            .map(ClientUtils::escapeQueryChars)
+            .map(value -> "\"" + value + "\"")
+            .reduce((left, right) -> left + " OR " + right)
+            .orElse("");
+    if (!alternatives.isBlank()) {
+      query.addFilterQuery(field + ":(" + alternatives + ")");
+    }
   }
 
   /** Runs lexical and vector retrieval while preserving the blended Solr score. */
   @Override
-  public List<AudiobookCandidate> searchCandidates(
-      String query, int limit, float[] queryVector) throws IOException {
+  public List<AudiobookCandidate> searchHybrid(
+      float[] queryVector, String query, AudiobookFilters filters, int limit) throws IOException {
+    if (limit <= 0) {
+      return List.of();
+    }
     if (queryVector == null || queryVector.length == 0) {
-      return searchCandidates(query, limit);
+      return searchKeyword(query, filters, limit);
     }
     validateDimension(queryVector);
 
     try {
-      int candidateLimit = Math.max(limit * 2, limit);
-      QueryResponse keywordResponse = search(query, candidateLimit);
+      int candidateLimit = limit * 2;
+      QueryResponse keywordResponse = search(query, filters, candidateLimit);
       QueryResponse vectorResponse;
       try {
-        vectorResponse = searchVector(queryVector, candidateLimit);
+        vectorResponse = searchVector(queryVector, filters, candidateLimit);
       } catch (SolrServerException exception) {
         return keywordResponse.getResults().stream()
             .limit(limit)
@@ -137,13 +174,12 @@ public class SolrAudiobookRepository implements AudiobookRepository {
     }
     validateDimension(vector);
 
-    indexEmbeddings(List.of(new AudiobookRepository.AudiobookEmbedding(record, vector)));
+    indexEmbeddings(List.of(new AudiobookEmbedding(record, vector)));
   }
 
   /** Writes a batch of vector field updates and commits once. */
   @Override
-  public void indexEmbeddings(List<AudiobookRepository.AudiobookEmbedding> embeddings)
-      throws IOException {
+  public void indexEmbeddings(List<AudiobookEmbedding> embeddings) throws IOException {
     if (embeddings == null || embeddings.isEmpty()) {
       return;
     }
@@ -201,7 +237,8 @@ public class SolrAudiobookRepository implements AudiobookRepository {
     }
   }
 
-  private QueryResponse searchVector(float[] queryVector, int limit)
+  private QueryResponse searchVector(
+      float[] queryVector, AudiobookFilters filters, int limit)
       throws SolrServerException, IOException {
     SolrQuery solrQuery = new SolrQuery();
     solrQuery.setQuery(
@@ -217,6 +254,7 @@ public class SolrAudiobookRepository implements AudiobookRepository {
         "language",
         "durationMinutes",
         "score");
+    addFilters(solrQuery, filters);
     return solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
   }
 
@@ -316,15 +354,45 @@ public class SolrAudiobookRepository implements AudiobookRepository {
     }
   }
 
+  /** Runs a dense Solr search and retains each result's similarity score. */
+  @Override
+  public List<AudiobookCandidate> searchSemantic(
+      float[] queryVector, AudiobookFilters filters, int limit) throws IOException {
+    if (queryVector == null || queryVector.length == 0 || limit <= 0) {
+      return List.of();
+    }
+    validateDimension(queryVector);
+    try {
+      QueryResponse response = searchVector(queryVector, filters, limit);
+      return response.getResults().stream().map(this::toCandidate).toList();
+    } catch (SolrServerException exception) {
+      throw new IOException("Solr semantic audiobook search failed", exception);
+    }
+  }
+
   /** Runs a lexical Solr search and retains each result's relevance score. */
   @Override
-  public List<AudiobookCandidate> searchCandidates(String query, int limit) throws IOException {
+  public List<AudiobookCandidate> searchKeyword(
+      String query, AudiobookFilters filters, int limit) throws IOException {
+    if (query == null || query.isBlank() || limit <= 0) {
+      return List.of();
+    }
     try {
-      QueryResponse response = search(query, limit);
+      QueryResponse response = search(query, filters, limit);
       return response.getResults().stream().map(this::toCandidate).toList();
     } catch (SolrServerException exception) {
       throw new IOException("Solr audiobook search failed", exception);
     }
+  }
+
+  /** Runs a match-all Solr query constrained only by structured catalogue filters. */
+  @Override
+  public List<AudiobookCandidate> searchByFilters(AudiobookFilters filters, int limit)
+      throws IOException {
+    if (filters == null || !filters.hasConditions() || limit <= 0) {
+      return List.of();
+    }
+    return searchKeyword("*:*", filters, limit);
   }
 
   /** Converts a Solr result into the shared candidate type without adding score to the book. */
