@@ -1,6 +1,5 @@
 package com.gen3.recommenderagent.integration;
 
-import static com.gen3.recommenderagent.integration.RecommendationFlowTestSupport.sessionPublisher;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -11,15 +10,20 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.gen3.recommenderagent.api.RequestGateway;
+import com.gen3.recommenderagent.application.ActionRegistry;
+import com.gen3.recommenderagent.application.DefaultSessionService;
+import com.gen3.recommenderagent.application.RequestApplicationService;
+import com.gen3.recommenderagent.application.action.ClearHistoryAction;
+import com.gen3.recommenderagent.application.action.HelpAction;
+import com.gen3.recommenderagent.application.action.RecommendationAction;
+import com.gen3.recommenderagent.application.action.UnsupportedIntentAction;
+import com.gen3.recommenderagent.application.action.UpdatePreferencesAction;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Constraints;
 import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
-import com.gen3.recommenderagent.engine.RecommendationEngine;
 import com.gen3.recommenderagent.engine.AudiobookRecommendationWorkflow;
-import com.gen3.recommenderagent.engine.handlers.IntentHandlerFactory;
-import com.gen3.recommenderagent.engine.handlers.NewRecommendationHandler;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.ranker.BaseSolrCandidateRetriever;
 import com.gen3.recommenderagent.ranker.CandidateRetriever;
@@ -88,21 +92,26 @@ class RecommendationFlowIntegrationTest {
             new RelevanceRankingStrategy(),
             new PreferenceRankingStrategy(),
             new HybridRankingStrategy());
-    NewRecommendationHandler newRecommendationHandler =
-        new NewRecommendationHandler(
+    RecommendationAction recommendationAction =
+        new RecommendationAction(
             new AudiobookRecommendationWorkflow(
                 candidateRetriever, rankingService, new RecommendationQueryBuilder()));
     RecommendationFlowTestSupport.InMemorySessionRepository sessionRepository =
         new RecommendationFlowTestSupport.InMemorySessionRepository();
 
-    RecommendationEngine engine =
-        new RecommendationEngine(
-            sessionRepository,
-            sessionPublisher(sessionRepository),
-            new IntentHandlerFactory(List.of(newRecommendationHandler)));
+    ActionRegistry registry =
+        new ActionRegistry(
+            recommendationAction,
+            new UpdatePreferencesAction(),
+            new ClearHistoryAction(),
+            new HelpAction(),
+            new UnsupportedIntentAction());
+    RequestApplicationService applicationService =
+        new RequestApplicationService(new DefaultSessionService(sessionRepository), registry);
 
     RequestGateway gateway =
-        new RequestGateway(inputParser, engine, new AiResponseGenerator(null), embeddingIndexer);
+        new RequestGateway(
+            inputParser, applicationService, new AiResponseGenerator(null), embeddingIndexer);
 
     MockMvc mockMvc = MockMvcBuilders.standaloneSetup(gateway).build();
 

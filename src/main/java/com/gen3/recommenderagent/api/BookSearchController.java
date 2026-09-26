@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.util.List;
 import org.apache.solr.client.solrj.util.ClientUtils;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,6 +16,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/v1/books")
+@ConditionalOnExpression(
+    "'${audiobook.candidate-retriever:qdrant}' == 'solr' || '${audiobook.qdrant.migration.enabled:false}' == 'true'")
 public class BookSearchController {
 
   private static final int MAX_LIMIT = 20;

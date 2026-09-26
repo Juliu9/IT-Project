@@ -3,10 +3,13 @@ package com.gen3.recommenderagent.config;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.impl.HttpJdkSolrClient;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
+@ConditionalOnExpression(
+    "'${audiobook.candidate-retriever:qdrant}' == 'solr' || '${audiobook.qdrant.migration.enabled:false}' == 'true'")
 public class SolrConfig {
 
   @Bean

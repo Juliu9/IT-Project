@@ -18,6 +18,7 @@ public class SessionRequest {
   private Preferences preferences;
   private Constraints constraints;
   private List<Recommendation> recommendations;
+  private String responseMessage;
 
   public SessionRequest() {}
 
@@ -75,6 +76,14 @@ public class SessionRequest {
 
   public void setRecommendations(List<Recommendation> recommendations) {
     this.recommendations = recommendations;
+  }
+
+  public String getResponseMessage() {
+    return responseMessage;
+  }
+
+  public void setResponseMessage(String responseMessage) {
+    this.responseMessage = responseMessage;
   }
 
   public Instant getCreatedAt() {

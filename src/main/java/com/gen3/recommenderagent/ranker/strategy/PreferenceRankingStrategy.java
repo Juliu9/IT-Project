@@ -28,7 +28,7 @@ public class PreferenceRankingStrategy implements RankingStrategy {
     }
 
     // TODO: bias ranking using UserProfile preferences once that data
-    // is wired into this path (see commented-out block in RecommendationEngine).
+    // is wired into the request application path.
     // Falling back to relevance-order baseline until then.
 
     int limit = Math.min(Math.max(requestedLimit, 1), MAX_RESULTS);

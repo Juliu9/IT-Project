@@ -13,6 +13,7 @@ public class Session {
   private Instant updatedAt;
   private Instant expiresAt;
   private List<Recommendation> shownBooks;
+  private Preferences preferences;
 
   private List<SessionRequest> requests = new ArrayList<>();
 
@@ -24,6 +25,14 @@ public class Session {
 
   public void setShownBooks(List<Recommendation> shownBooks) {
     this.shownBooks = shownBooks;
+  }
+
+  public Preferences getPreferences() {
+    return preferences;
+  }
+
+  public void setPreferences(Preferences preferences) {
+    this.preferences = preferences;
   }
 
   public String getSessionId() {
@@ -84,5 +93,13 @@ public class Session {
       this.shownBooks = new ArrayList<>();
     }
     this.shownBooks.addAll(books);
+  }
+
+  public void clearHistory() {
+    this.requests.clear();
+    if (this.shownBooks != null) {
+      this.shownBooks.clear();
+    }
+    this.updatedAt = Instant.now();
   }
 }

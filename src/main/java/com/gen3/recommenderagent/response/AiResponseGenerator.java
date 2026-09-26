@@ -40,6 +40,12 @@ public class AiResponseGenerator implements ResponseGenerator {
     }
 
     if (currentRequest != null
+        && currentRequest.getResponseMessage() != null
+        && !currentRequest.getResponseMessage().isBlank()) {
+      return currentRequest.getResponseMessage();
+    }
+
+    if (currentRequest != null
         && currentRequest.getConstraints() != null
         && currentRequest.getConstraints().getCount() != null
         && currentRequest.getConstraints().getCount() > 5) {

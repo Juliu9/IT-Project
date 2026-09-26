@@ -1,6 +1,7 @@
 package com.gen3.recommenderagent.engine;
 
 import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.session.SessionContext;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.ranker.CandidateRetriever;
 import com.gen3.recommenderagent.ranker.Ranker;
@@ -10,7 +11,7 @@ import org.springframework.stereotype.Service;
 
 /** Runs the candidate retrieval and ranking steps shared by recommendation-producing intents. */
 @Service
-public class AudiobookRecommendationWorkflow {
+public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
 
   private static final int CANDIDATE_LIMIT = 50;
   private static final int DEFAULT_RESULT_LIMIT = 5;
@@ -31,7 +32,8 @@ public class AudiobookRecommendationWorkflow {
   }
 
   /** Builds retrieval text, lets the retriever select its mode, and ranks the candidates. */
-  public List<Recommendation> recommend(SessionRequest request) {
+  @Override
+  public List<Recommendation> recommend(SessionRequest request, SessionContext context) {
     String query = queryBuilder.build(request);
     var candidates = candidateRetriever.getCandidates(query, CANDIDATE_LIMIT, request);
     return ranker.rank(candidates, resolveResultLimit(request), request.isPersonalised());

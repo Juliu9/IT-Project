@@ -27,10 +27,13 @@ import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrInputDocument;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Repository;
 
 /** Implements audiobook keyword, vector, catalogue, and indexing operations with Solr. */
 @Repository
+@ConditionalOnExpression(
+    "'${audiobook.candidate-retriever:qdrant}' == 'solr' || '${audiobook.qdrant.migration.enabled:false}' == 'true'")
 public class SolrAudiobookRepository
     implements AudiobookCatalogueRepository, AudiobookCandidateSearch, AudiobookVectorIndexer {
 

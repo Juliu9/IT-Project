@@ -12,12 +12,14 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
  * Creates the Solr vector catalogue before the application accepts searches.
  */
 @Component
+@ConditionalOnProperty(name = "audiobook.candidate-retriever", havingValue = "solr")
 public class AudiobookEmbeddingStartupIndexer implements ApplicationRunner {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AudiobookEmbeddingStartupIndexer.class);
@@ -33,7 +35,7 @@ public class AudiobookEmbeddingStartupIndexer implements ApplicationRunner {
             @Qualifier("solrAudiobookRepository") AudiobookVectorIndexer vectorIndexer,
             EmbeddingIndexer embeddingIndexer,
             @Value("${solr.embedding-index-page-size:100}") int pageSize,
-            @Value("${solr.embedding-index-on-startup:true}") boolean enabled) {
+            @Value("${solr.embedding-index-on-startup:false}") boolean enabled) {
         this.catalogueRepository = catalogueRepository;
         this.vectorIndexer = vectorIndexer;
         this.embeddingIndexer = embeddingIndexer;
