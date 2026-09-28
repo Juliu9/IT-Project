@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.Constraints;
+import com.gen3.recommenderagent.domain.session.Filter;
 import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
@@ -25,9 +25,9 @@ class ResponseGeneratorTest {
     query.setGenres(List.of("action", "sci-fi"));
     request.setQuery(query);
 
-    Constraints constraints = new Constraints();
-    constraints.setCount(3);
-    request.setConstraints(constraints);
+    Filter filter = new Filter();
+    filter.setCount(3);
+    request.setFilter(filter);
 
     List<Recommendation> recommendations =
         List.of(
@@ -50,9 +50,9 @@ class ResponseGeneratorTest {
     request.setIntent(Intent.NEW_RECOMMENDATION);
     request.setRawText("Give me 10 recommendations");
 
-    Constraints constraints = new Constraints();
-    constraints.setCount(10);
-    request.setConstraints(constraints);
+    Filter filter = new Filter();
+    filter.setCount(10);
+    request.setFilter(filter);
 
     List<Recommendation> recommendations =
         List.of(

@@ -9,6 +9,8 @@ public class Query {
   private List<String> authors;
   private List<String> narrators;
   private List<String> keywords;
+  private List<String> positive;
+  private List<String> negative;
 
   public Query() {}
 
@@ -52,5 +54,23 @@ public class Query {
 
   public void setKeywords(List<String> keywords) {
     this.keywords = keywords;
+  }
+
+  /** Returns concepts that should move semantic retrieval closer. */
+  public List<String> getPositive() {
+    return positive;
+  }
+
+  public void setPositive(List<String> positive) {
+    this.positive = positive;
+  }
+
+  /** Returns concepts that should move semantic retrieval away. */
+  public List<String> getNegative() {
+    return negative;
+  }
+
+  public void setNegative(List<String> negative) {
+    this.negative = negative;
   }
 }

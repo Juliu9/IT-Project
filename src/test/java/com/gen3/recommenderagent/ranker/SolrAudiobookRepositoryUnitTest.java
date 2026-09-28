@@ -6,10 +6,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookSearchPage;
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookFilters;
+import com.gen3.recommenderagent.legacy.solr.SolrAudiobookRepository;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookSearchPage;
 import java.util.List;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
@@ -107,8 +107,7 @@ class SolrAudiobookRepositoryUnitTest {
 
     List<AudiobookCandidate> candidates =
         new SolrAudiobookRepository(client, "combinedbooks", "embedding", 2)
-            .searchHybrid(
-                new float[] {0.6f, 0.8f}, "mystery", AudiobookFilters.empty(), 2);
+            .searchHybrid(new float[] {0.6f, 0.8f}, "mystery", AudiobookFilters.empty(), 2);
 
     assertEquals(
         List.of("book-2", "book-1"),

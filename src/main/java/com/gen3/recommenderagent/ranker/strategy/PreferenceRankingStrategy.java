@@ -3,7 +3,7 @@ package com.gen3.recommenderagent.ranker.strategy;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.embedding.VectorMath;
 import com.gen3.recommenderagent.ranker.PreferenceSignals;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import java.util.Comparator;
 import java.util.List;
 import org.springframework.stereotype.Component;
@@ -31,10 +31,10 @@ public class PreferenceRankingStrategy implements RankingStrategy {
     int limit = Math.min(Math.max(requestedLimit, 1), MAX_RESULTS);
     List<AudiobookCandidate> ranked =
         candidates.stream()
-        .filter(this::validCandidate)
-        .sorted(Comparator.comparingDouble(candidate -> -adjustment(candidate, signals)))
-        .limit(limit)
-        .toList();
+            .filter(this::validCandidate)
+            .sorted(Comparator.comparingDouble(candidate -> -adjustment(candidate, signals)))
+            .limit(limit)
+            .toList();
     java.util.ArrayList<Recommendation> recommendations = new java.util.ArrayList<>(ranked.size());
     for (int index = 0; index < ranked.size(); index++) {
       AudiobookCandidate candidate = ranked.get(index);

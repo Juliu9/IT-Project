@@ -2,6 +2,7 @@ package com.gen3.recommenderagent.storage.audiobook;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 

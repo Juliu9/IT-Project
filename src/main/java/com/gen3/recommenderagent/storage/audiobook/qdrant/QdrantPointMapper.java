@@ -6,8 +6,8 @@ import static io.qdrant.client.ValueFactory.value;
 import static io.qdrant.client.VectorFactory.vector;
 import static io.qdrant.client.VectorsFactory.namedVectors;
 
-import com.gen3.recommenderagent.storage.audiobook.AudiobookEmbedding;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import io.qdrant.client.grpc.JsonWithInt.Value;
 import io.qdrant.client.grpc.Points.PointStruct;
 import io.qdrant.client.grpc.Points.ScoredPoint;
@@ -69,8 +69,7 @@ public class QdrantPointMapper {
       return null;
     }
     var namedVectors = point.getVectors().getVectors().getVectorsMap();
-    if (!namedVectors.containsKey(DENSE_VECTOR)
-        || !namedVectors.get(DENSE_VECTOR).hasDense()) {
+    if (!namedVectors.containsKey(DENSE_VECTOR) || !namedVectors.get(DENSE_VECTOR).hasDense()) {
       return null;
     }
     List<Float> values = namedVectors.get(DENSE_VECTOR).getDense().getDataList();
@@ -89,8 +88,7 @@ public class QdrantPointMapper {
     if (bookId == null || bookId.isBlank()) {
       throw new IllegalArgumentException("Audiobook ID must not be blank");
     }
-    UUID uuid =
-        UUID.nameUUIDFromBytes(("audiobook:" + bookId).getBytes(StandardCharsets.UTF_8));
+    UUID uuid = UUID.nameUUIDFromBytes(("audiobook:" + bookId).getBytes(StandardCharsets.UTF_8));
     return id(uuid);
   }
 

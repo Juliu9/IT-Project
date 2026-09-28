@@ -1,8 +1,8 @@
 package com.gen3.recommenderagent.ranker.strategy;
 
 import com.gen3.recommenderagent.domain.session.Recommendation;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;

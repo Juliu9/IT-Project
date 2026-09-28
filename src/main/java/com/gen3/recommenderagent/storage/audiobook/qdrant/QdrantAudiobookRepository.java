@@ -1,20 +1,20 @@
 package com.gen3.recommenderagent.storage.audiobook.qdrant;
 
-import static io.qdrant.client.WithPayloadSelectorFactory.enable;
 import static io.qdrant.client.ConditionFactory.matchKeyword;
 import static io.qdrant.client.ConditionFactory.matchKeywords;
 import static io.qdrant.client.ConditionFactory.range;
+import static io.qdrant.client.WithPayloadSelectorFactory.enable;
 
-import com.gen3.recommenderagent.storage.audiobook.AudiobookFilters;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidateSearch;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookEmbedding;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookVectorRepository;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
+import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorRepository;
 import io.qdrant.client.QdrantClient;
+import io.qdrant.client.grpc.Collections;
 import io.qdrant.client.grpc.Common.Filter;
 import io.qdrant.client.grpc.Common.Range;
-import io.qdrant.client.grpc.Collections;
 import io.qdrant.client.grpc.Points.CreateFieldIndexCollection;
 import io.qdrant.client.grpc.Points.DenseVector;
 import io.qdrant.client.grpc.Points.FieldType;
@@ -77,8 +77,8 @@ public class QdrantAudiobookRepository
 
   /** Searches the named sparse vector using BM25-style lexical term weights. */
   @Override
-  public List<AudiobookCandidate> searchKeyword(
-      String text, AudiobookFilters filters, int limit) throws IOException {
+  public List<AudiobookCandidate> searchKeyword(String text, AudiobookFilters filters, int limit)
+      throws IOException {
     SparseVectorData sparse = sparseEncoder.encode(text);
     if (sparse.isEmpty() || limit <= 0) {
       return List.of();
@@ -178,8 +178,7 @@ public class QdrantAudiobookRepository
     initialize();
     List<RetrievedPoint> points =
         await(
-            client.retrieveAsync(
-                collection, List.of(mapper.pointId(bookId)), false, true, null),
+            client.retrieveAsync(collection, List.of(mapper.pointId(bookId)), false, true, null),
             "retrieve an audiobook vector from Qdrant");
     if (points.isEmpty() || !points.getFirst().hasVectors()) {
       return Optional.empty();
@@ -188,8 +187,7 @@ public class QdrantAudiobookRepository
     if (!namedVectors.containsKey(QdrantPointMapper.DENSE_VECTOR)) {
       return Optional.empty();
     }
-    List<Float> values =
-        namedVectors.get(QdrantPointMapper.DENSE_VECTOR).getDense().getDataList();
+    List<Float> values = namedVectors.get(QdrantPointMapper.DENSE_VECTOR).getDense().getDataList();
     float[] vector = new float[values.size()];
     for (int index = 0; index < values.size(); index++) {
       vector[index] = values.get(index);
@@ -229,9 +227,7 @@ public class QdrantAudiobookRepository
                     .putMap(QdrantPointMapper.DENSE_VECTOR, denseParams))
             .build();
     Collections.SparseVectorParams sparseParams =
-        Collections.SparseVectorParams.newBuilder()
-            .setModifier(Collections.Modifier.Idf)
-            .build();
+        Collections.SparseVectorParams.newBuilder().setModifier(Collections.Modifier.Idf).build();
     Collections.SparseVectorConfig sparseVectors =
         Collections.SparseVectorConfig.newBuilder()
             .putMap(QdrantPointMapper.KEYWORD_VECTOR, sparseParams)
@@ -256,9 +252,7 @@ public class QdrantAudiobookRepository
         .map(
             point ->
                 new AudiobookCandidate(
-                    mapper.toRecord(point),
-                    (double) point.getScore(),
-                    mapper.toDenseVector(point)))
+                    mapper.toRecord(point), (double) point.getScore(), mapper.toDenseVector(point)))
         .toList();
   }
 

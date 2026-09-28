@@ -2,8 +2,9 @@ package com.gen3.recommenderagent.embedding;
 
 import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookEmbedding;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
+import com.gen3.recommenderagent.ranker.PreferenceSignals;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -43,7 +44,7 @@ public class EmbeddingIndexer {
         .collect(Collectors.joining("\n"));
   }
 
-  /** Returns the normalized vector used for Solr indexing and query retrieval. */
+  /** Returns the normalized vector used for indexing and semantic retrieval. */
   public float[] embedAudiobook(AudiobookRecord book) {
     String text = buildAudiobookText(book);
     return text.isBlank() ? new float[0] : VectorMath.normalize(model.embed(text));
@@ -82,7 +83,8 @@ public class EmbeddingIndexer {
     List<String> storageIds =
         validBooks.stream().map(book -> "audiobook:" + book.id().trim()).toList();
     Map<String, float[]> vectorsById = new HashMap<>();
-    store.findAllById(storageIds)
+    store
+        .findAllById(storageIds)
         .forEach(stored -> vectorsById.put(stored.getId(), readVector(stored)));
 
     List<AudiobookRecord> missingBooks = new ArrayList<>();
@@ -141,17 +143,26 @@ public class EmbeddingIndexer {
     return text.isBlank() ? new float[0] : VectorMath.normalize(model.embed(text));
   }
 
+  /** Combines the request, positive concepts, and negative concepts into one search direction. */
+  public float[] embedRequest(SessionRequest request, PreferenceSignals signals) {
+    List<float[]> positive = new ArrayList<>();
+    String text = buildRetrievalText(request);
+    if (!text.isBlank()) {
+      positive.add(VectorMath.normalize(model.embed(text)));
+    }
+    if (signals != null) {
+      positive.addAll(signals.positive());
+    }
+    return VectorMath.directionalAverage(
+        positive, signals == null ? List.of() : signals.negative());
+  }
+
   /** Embeds independent preference terms without mixing positive and negative instructions. */
   public List<float[]> embedPreferenceTerms(List<String> terms) {
     if (terms == null || terms.isEmpty()) {
       return List.of();
     }
-    List<String> texts =
-        terms.stream()
-            .filter(this::hasText)
-            .map(String::trim)
-            .distinct()
-            .toList();
+    List<String> texts = terms.stream().filter(this::hasText).map(String::trim).distinct().toList();
     if (texts.isEmpty()) {
       return List.of();
     }
@@ -181,6 +192,8 @@ public class EmbeddingIndexer {
                 part("Authors", query == null ? null : query.getAuthors()),
                 part("Narrators", query == null ? null : query.getNarrators()),
                 part("Keywords", query == null ? null : query.getKeywords()),
+                part("Positive", query == null ? null : query.getPositive()),
+                part("Negative", query == null ? null : query.getNegative()),
                 part(
                     "Included preferences",
                     request.getPreferences() == null
@@ -193,14 +206,10 @@ public class EmbeddingIndexer {
                         : request.getPreferences().getExclude()),
                 part(
                     "Duration",
-                    request.getConstraints() == null
-                        ? null
-                        : request.getConstraints().getDuration()),
+                    request.getFilter() == null ? null : request.getFilter().getDuration()),
                 part(
                     "Language",
-                    request.getConstraints() == null
-                        ? null
-                        : request.getConstraints().getLanguage()))
+                    request.getFilter() == null ? null : request.getFilter().getLanguage()))
             .stream()
             .filter(value -> !value.isBlank())
             .collect(Collectors.joining("\n"));
@@ -212,24 +221,20 @@ public class EmbeddingIndexer {
     Query query = request.getQuery();
     String structuredText =
         List.of(
-            part("Topics", query == null ? null : query.getTopics()),
-            part("Genres", query == null ? null : query.getGenres()),
-            part("Authors", query == null ? null : query.getAuthors()),
-            part("Narrators", query == null ? null : query.getNarrators()),
-            part("Keywords", query == null ? null : query.getKeywords()),
-            part(
-                "Duration",
-                request.getConstraints() == null
-                    ? null
-                    : request.getConstraints().getDuration()),
-            part(
-                "Language",
-                request.getConstraints() == null
-                    ? null
-                    : request.getConstraints().getLanguage()))
-        .stream()
-        .filter(value -> !value.isBlank())
-        .collect(Collectors.joining("\n"));
+                part("Topics", query == null ? null : query.getTopics()),
+                part("Genres", query == null ? null : query.getGenres()),
+                part("Authors", query == null ? null : query.getAuthors()),
+                part("Narrators", query == null ? null : query.getNarrators()),
+                part("Keywords", query == null ? null : query.getKeywords()),
+                part(
+                    "Duration",
+                    request.getFilter() == null ? null : request.getFilter().getDuration()),
+                part(
+                    "Language",
+                    request.getFilter() == null ? null : request.getFilter().getLanguage()))
+            .stream()
+            .filter(value -> !value.isBlank())
+            .collect(Collectors.joining("\n"));
     return structuredText.isBlank() ? part("Request", request.getRawText()) : structuredText;
   }
 

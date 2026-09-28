@@ -1,9 +1,8 @@
 package com.gen3.recommenderagent.application;
 
 import com.gen3.recommenderagent.application.action.ClearHistoryAction;
-import com.gen3.recommenderagent.application.action.HelpAction;
+import com.gen3.recommenderagent.application.action.NoOpAction;
 import com.gen3.recommenderagent.application.action.RecommendationAction;
-import com.gen3.recommenderagent.application.action.UnsupportedIntentAction;
 import com.gen3.recommenderagent.application.action.UpdatePreferencesAction;
 import com.gen3.recommenderagent.domain.Intent;
 import java.util.EnumMap;
@@ -20,17 +19,16 @@ public class ActionRegistry {
       RecommendationAction recommendationAction,
       UpdatePreferencesAction updatePreferencesAction,
       ClearHistoryAction clearHistoryAction,
-      HelpAction helpAction,
-      UnsupportedIntentAction unsupportedIntentAction) {
+      NoOpAction noOpAction) {
     EnumMap<Intent, IntentAction> registry = new EnumMap<>(Intent.class);
 
     registerRecommendations(registry, recommendationAction);
     registry.put(Intent.UPDATE_PREFERENCES, updatePreferencesAction);
     registry.put(Intent.CLEAR_HISTORY, clearHistoryAction);
-    registry.put(Intent.HELP, helpAction);
+    registry.put(Intent.HELP, noOpAction);
 
     for (Intent intent : Intent.values()) {
-      registry.putIfAbsent(intent, unsupportedIntentAction);
+      registry.putIfAbsent(intent, noOpAction);
     }
     this.actions = Map.copyOf(registry);
   }

@@ -1,6 +1,7 @@
 package com.gen3.recommenderagent.ranker;
 
 import com.gen3.recommenderagent.domain.session.Preferences;
+import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
 import java.util.LinkedHashSet;
@@ -24,10 +25,19 @@ public class PreferenceVectorService {
     }
     Set<String> positive = new LinkedHashSet<>();
     Set<String> negative = new LinkedHashSet<>();
+    add(request.getQuery(), positive, negative);
     add(request.getPreferences(), positive, negative);
     return new PreferenceSignals(
         embeddingIndexer.embedPreferenceTerms(positive.stream().toList()),
         embeddingIndexer.embedPreferenceTerms(negative.stream().toList()));
+  }
+
+  private void add(Query query, Set<String> positive, Set<String> negative) {
+    if (query == null) {
+      return;
+    }
+    addAll(query.getPositive(), positive);
+    addAll(query.getNegative(), negative);
   }
 
   private void add(Preferences preferences, Set<String> positive, Set<String> negative) {
@@ -50,5 +60,11 @@ public class PreferenceVectorService {
 
   private boolean hasText(String value) {
     return value != null && !value.isBlank();
+  }
+
+  private void addAll(java.util.List<String> values, Set<String> destination) {
+    if (values != null) {
+      values.stream().filter(this::hasText).map(String::trim).forEach(destination::add);
+    }
   }
 }

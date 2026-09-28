@@ -10,10 +10,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.Preferences;
+import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
+import com.gen3.recommenderagent.ranker.PreferenceSignals;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -96,10 +97,8 @@ class EmbeddingIndexerTest {
         new AudiobookRecord("book-1", "source", "First", List.of("Author"), "Description");
     AudiobookRecord second =
         new AudiobookRecord("book-2", "source", "Second", List.of("Author"), "Description");
-    when(store.findAllById(List.of("audiobook:book-1", "audiobook:book-2")))
-        .thenReturn(List.of());
-    when(model.embed(anyList()))
-        .thenReturn(List.of(new float[] {3, 4}, new float[] {0, 2}));
+    when(store.findAllById(List.of("audiobook:book-1", "audiobook:book-2"))).thenReturn(List.of());
+    when(model.embed(anyList())).thenReturn(List.of(new float[] {3, 4}, new float[] {0, 2}));
 
     var embeddings = indexer.ensureAudiobookEmbeddings(List.of(first, second));
 
@@ -153,5 +152,23 @@ class EmbeddingIndexerTest {
     ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
     verify(model).embed(text.capture());
     assertEquals("Genres: science fiction", text.getValue());
+  }
+
+  /** Positive evidence attracts retrieval while negative evidence reverses its direction. */
+  @Test
+  void combinesPositiveAndNegativeVectorsForSemanticRetrieval() {
+    SessionRequest request = new SessionRequest();
+    Query query = new Query();
+    query.setGenres(List.of("science fiction"));
+    request.setQuery(query);
+    when(model.embed("Genres: science fiction")).thenReturn(new float[] {1, 0});
+
+    float[] vector =
+        indexer.embedRequest(
+            request,
+            new PreferenceSignals(List.of(new float[] {0, 1}), List.of(new float[] {-1, 0})));
+
+    assertEquals(0.948683, vector[0], 0.000001);
+    assertEquals(0.316228, vector[1], 0.000001);
   }
 }

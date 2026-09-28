@@ -10,11 +10,12 @@ import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookFilters;
-import com.gen3.recommenderagent.ranker.retrieval.AudiobookRetrievalPlanner;
-import com.gen3.recommenderagent.ranker.retrieval.IntentRetrievalPolicy;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
+import com.gen3.recommenderagent.ranker.candidate.QdrantCandidateRetriever;
+import com.gen3.recommenderagent.ranker.candidate.retrieval.AudiobookRetrievalPlanner;
+import com.gen3.recommenderagent.ranker.candidate.retrieval.IntentRetrievalPolicy;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -35,16 +36,16 @@ class QdrantCandidateRetrieverTest {
     query.setTopics(List.of("desert"));
     request.setQuery(query);
     float[] vector = {0.6f, 0.8f};
-    when(embeddingIndexer.embedRequest(request)).thenReturn(vector);
+    PreferenceSignals signals = PreferenceSignals.empty();
+    when(embeddingIndexer.embedRequest(request, signals)).thenReturn(vector);
 
     new QdrantCandidateRetriever(
             repository,
             embeddingIndexer,
             new AudiobookRetrievalPlanner(new IntentRetrievalPolicy()))
-        .getCandidates("fallback", 5, request);
+        .getCandidates(request, signals, 5);
 
-    verify(repository)
-        .searchHybrid(vector, "desert fantasy", AudiobookFilters.empty(), 5);
+    verify(repository).searchHybrid(vector, "desert fantasy", AudiobookFilters.empty(), 5);
   }
 
   /** Confirms action-only intents avoid unnecessary embedding and database calls. */
@@ -60,10 +61,10 @@ class QdrantCandidateRetrieverTest {
                 repository,
                 embeddingIndexer,
                 new AudiobookRetrievalPlanner(new IntentRetrievalPolicy()))
-            .getCandidates("help", 5, request);
+            .getCandidates(request, PreferenceSignals.empty(), 5);
 
     assertThat(result).isEmpty();
-    verify(embeddingIndexer, never()).embedRequest(request);
+    verify(embeddingIndexer, never()).embedRequest(request, PreferenceSignals.empty());
   }
 
   /** Confirms the request vector is generated once and supplied to Qdrant. */
@@ -75,7 +76,8 @@ class QdrantCandidateRetrieverTest {
     float[] vector = {0.6f, 0.8f};
     AudiobookRecord book =
         new AudiobookRecord("42", "catalogue", "Book", List.of("Writer"), "Description");
-    when(embeddingIndexer.embedRequest(request)).thenReturn(vector);
+    PreferenceSignals signals = PreferenceSignals.empty();
+    when(embeddingIndexer.embedRequest(request, signals)).thenReturn(vector);
     when(repository.searchSemantic(vector, AudiobookFilters.empty(), 5))
         .thenReturn(List.of(new AudiobookCandidate(book, 0.91)));
 
@@ -84,7 +86,7 @@ class QdrantCandidateRetrieverTest {
                 repository,
                 embeddingIndexer,
                 new AudiobookRetrievalPlanner(new IntentRetrievalPolicy()))
-            .getCandidates("mystery", 5, request);
+            .getCandidates(request, signals, 5);
 
     assertThat(candidates).hasSize(1);
     assertThat(candidates.getFirst().audiobook().id()).isEqualTo("42");

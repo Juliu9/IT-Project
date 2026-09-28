@@ -3,9 +3,10 @@ package com.gen3.recommenderagent.engine;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SessionContext;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
-import com.gen3.recommenderagent.ranker.CandidateRetriever;
+import com.gen3.recommenderagent.ranker.PreferenceSignals;
+import com.gen3.recommenderagent.ranker.PreferenceVectorService;
 import com.gen3.recommenderagent.ranker.Ranker;
-import com.gen3.recommenderagent.ranker.RecommendationQueryBuilder;
+import com.gen3.recommenderagent.ranker.candidate.CandidateRetriever;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
@@ -19,31 +20,31 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
 
   private final CandidateRetriever candidateRetriever;
   private final Ranker ranker;
-  private final RecommendationQueryBuilder queryBuilder;
+  private final PreferenceVectorService preferenceVectorService;
 
-  /** Receives database-independent ports so handlers do not depend directly on Qdrant or Solr. */
+  /** Receives database-independent ports so handlers do not depend on storage adapters. */
   public AudiobookRecommendationWorkflow(
       CandidateRetriever candidateRetriever,
       Ranker ranker,
-      RecommendationQueryBuilder queryBuilder) {
+      PreferenceVectorService preferenceVectorService) {
     this.candidateRetriever = candidateRetriever;
     this.ranker = ranker;
-    this.queryBuilder = queryBuilder;
+    this.preferenceVectorService = preferenceVectorService;
   }
 
   /** Builds retrieval text, lets the retriever select its mode, and ranks the candidates. */
   @Override
   public List<Recommendation> recommend(SessionRequest request, SessionContext context) {
-    String query = queryBuilder.build(request);
-    var candidates = candidateRetriever.getCandidates(query, CANDIDATE_LIMIT, request);
-    return ranker.rank(candidates, resolveResultLimit(request), request);
+    PreferenceSignals signals = preferenceVectorService.create(request);
+    var candidates = candidateRetriever.getCandidates(request, signals, CANDIDATE_LIMIT);
+    return ranker.rank(candidates, resolveResultLimit(request), signals);
   }
 
   /** Applies the API's default and maximum result limits. */
   private int resolveResultLimit(SessionRequest request) {
-    if (request.getConstraints() == null || request.getConstraints().getCount() == null) {
+    if (request.getFilter() == null || request.getFilter().getCount() == null) {
       return DEFAULT_RESULT_LIMIT;
     }
-    return Math.clamp(request.getConstraints().getCount(), 1, MAX_RESULT_LIMIT);
+    return Math.clamp(request.getFilter().getCount(), 1, MAX_RESULT_LIMIT);
   }
 }

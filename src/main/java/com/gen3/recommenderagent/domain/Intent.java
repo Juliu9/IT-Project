@@ -1,6 +1,6 @@
 package com.gen3.recommenderagent.domain;
 
-import com.gen3.recommenderagent.ranker.retrieval.RetrievalMode;
+import com.gen3.recommenderagent.ranker.candidate.retrieval.RetrievalMode;
 
 public enum Intent {
   // ==========================================

@@ -10,8 +10,8 @@ import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
 import com.gen3.recommenderagent.ranker.strategy.HybridRankingStrategy;
 import com.gen3.recommenderagent.ranker.strategy.PreferenceRankingStrategy;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -41,8 +41,7 @@ class PreferenceRankingTest {
     EmbeddingIndexer indexer = mock(EmbeddingIndexer.class);
     when(indexer.embedPreferenceTerms(List.of("space opera")))
         .thenReturn(List.of(new float[] {1, 0}));
-    when(indexer.embedPreferenceTerms(List.of("gore")))
-        .thenReturn(List.of(new float[] {0, 1}));
+    when(indexer.embedPreferenceTerms(List.of("gore"))).thenReturn(List.of(new float[] {0, 1}));
     PreferenceVectorService service = new PreferenceVectorService(indexer);
 
     SessionRequest request = new SessionRequest();
@@ -64,8 +63,7 @@ class PreferenceRankingTest {
   }
 
   private AudiobookCandidate candidate(String id, double score, float[] embedding) {
-    AudiobookRecord book =
-        new AudiobookRecord(id, "catalogue", "Title " + id, List.of(), null);
+    AudiobookRecord book = new AudiobookRecord(id, "catalogue", "Title " + id, List.of(), null);
     return new AudiobookCandidate(book, score, embedding);
   }
 }

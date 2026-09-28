@@ -2,7 +2,7 @@ package com.gen3.recommenderagent.ranker.strategy;
 
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.ranker.PreferenceSignals;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -76,11 +76,11 @@ public class HybridRankingStrategy implements RankingStrategy {
 
   private double maximumScore(List<AudiobookCandidate> candidates) {
     return candidates.stream()
-            .map(AudiobookCandidate::score)
-            .filter(java.util.Objects::nonNull)
-            .mapToDouble(Double::doubleValue)
-            .max()
-            .orElse(0.0);
+        .map(AudiobookCandidate::score)
+        .filter(java.util.Objects::nonNull)
+        .mapToDouble(Double::doubleValue)
+        .max()
+        .orElse(0.0);
   }
 
   private double normalizedRelevance(Double score, double maximumScore) {

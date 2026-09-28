@@ -11,18 +11,18 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.google.common.util.concurrent.Futures;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookFilters;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookEmbedding;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Points.DenseVector;
+import io.qdrant.client.grpc.Points.NamedVectorsOutput;
 import io.qdrant.client.grpc.Points.PointStruct;
+import io.qdrant.client.grpc.Points.QueryPoints;
 import io.qdrant.client.grpc.Points.RetrievedPoint;
 import io.qdrant.client.grpc.Points.ScoredPoint;
-import io.qdrant.client.grpc.Points.NamedVectorsOutput;
-import io.qdrant.client.grpc.Points.QueryPoints;
 import io.qdrant.client.grpc.Points.VectorOutput;
 import io.qdrant.client.grpc.Points.VectorsOutput;
 import java.util.List;
@@ -52,21 +52,18 @@ class QdrantAudiobookRepositoryTest {
                             .putVectors(
                                 QdrantPointMapper.DENSE_VECTOR,
                                 VectorOutput.newBuilder()
-                                    .setDense(
-                                        DenseVector.newBuilder().addData(0.6f).addData(0.8f))
+                                    .setDense(DenseVector.newBuilder().addData(0.6f).addData(0.8f))
                                     .build())))
             .putAllPayload(point.getPayloadMap())
             .build();
-    when(client.collectionExistsAsync("audiobooks"))
-        .thenReturn(Futures.immediateFuture(true));
+    when(client.collectionExistsAsync("audiobooks")).thenReturn(Futures.immediateFuture(true));
     when(client.queryAsync(any(QueryPoints.class)))
         .thenReturn(Futures.immediateFuture(List.of(result)));
     QdrantAudiobookRepository repository =
         new QdrantAudiobookRepository(client, mapper, sparseEncoder, "audiobooks", 2);
 
     List<AudiobookCandidate> candidates =
-        repository.searchSemantic(
-            new float[] {0.6f, 0.8f}, AudiobookFilters.empty(), 5);
+        repository.searchSemantic(new float[] {0.6f, 0.8f}, AudiobookFilters.empty(), 5);
     repository.searchSemantic(new float[] {0.6f, 0.8f}, AudiobookFilters.empty(), 5);
 
     assertThat(candidates).hasSize(1);
@@ -92,14 +89,11 @@ class QdrantAudiobookRepositoryTest {
                             .putVectors(
                                 QdrantPointMapper.DENSE_VECTOR,
                                 VectorOutput.newBuilder()
-                                    .setDense(
-                                        DenseVector.newBuilder().addData(0.6f).addData(0.8f))
+                                    .setDense(DenseVector.newBuilder().addData(0.6f).addData(0.8f))
                                     .build())))
             .build();
-    when(client.collectionExistsAsync("audiobooks"))
-        .thenReturn(Futures.immediateFuture(true));
-    when(client.retrieveAsync(
-            eq("audiobooks"), anyList(), eq(false), eq(true), isNull()))
+    when(client.collectionExistsAsync("audiobooks")).thenReturn(Futures.immediateFuture(true));
+    when(client.retrieveAsync(eq("audiobooks"), anyList(), eq(false), eq(true), isNull()))
         .thenReturn(Futures.immediateFuture(List.of(result)));
     QdrantAudiobookRepository repository =
         new QdrantAudiobookRepository(client, mapper, sparseEncoder, "audiobooks", 2);

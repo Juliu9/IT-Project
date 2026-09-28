@@ -1,5 +1,7 @@
 package com.gen3.recommenderagent.storage.audiobook;
 
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.port.AudiobookMetadataEnricher;
 import java.util.List;
 import org.springframework.stereotype.Component;
 

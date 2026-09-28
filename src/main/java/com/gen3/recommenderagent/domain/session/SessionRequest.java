@@ -1,5 +1,6 @@
 package com.gen3.recommenderagent.domain.session;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.gen3.recommenderagent.domain.Intent;
 import java.time.Instant;
 import java.util.List;
@@ -15,9 +16,11 @@ public class SessionRequest {
 
   private Query query;
   private Preferences preferences;
-  private Constraints constraints;
+
+  @JsonAlias("constraints")
+  private Filter filter;
+
   private List<Recommendation> recommendations;
-  private String responseMessage;
 
   public SessionRequest() {}
 
@@ -61,12 +64,12 @@ public class SessionRequest {
     this.preferences = preferences;
   }
 
-  public Constraints getConstraints() {
-    return constraints;
+  public Filter getFilter() {
+    return filter;
   }
 
-  public void setConstraints(Constraints constraints) {
-    this.constraints = constraints;
+  public void setFilter(Filter filter) {
+    this.filter = filter;
   }
 
   public List<Recommendation> getRecommendations() {
@@ -77,14 +80,6 @@ public class SessionRequest {
     this.recommendations = recommendations;
   }
 
-  public String getResponseMessage() {
-    return responseMessage;
-  }
-
-  public void setResponseMessage(String responseMessage) {
-    this.responseMessage = responseMessage;
-  }
-
   public Instant getCreatedAt() {
     return createdAt;
   }
@@ -92,5 +87,4 @@ public class SessionRequest {
   public void setCreatedAt(Instant createdAt) {
     this.createdAt = createdAt;
   }
-
 }

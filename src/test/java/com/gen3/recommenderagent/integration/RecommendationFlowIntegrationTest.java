@@ -11,26 +11,26 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.gen3.recommenderagent.api.RequestGateway;
 import com.gen3.recommenderagent.application.ActionRegistry;
-import com.gen3.recommenderagent.application.DefaultSessionService;
 import com.gen3.recommenderagent.application.RequestApplicationService;
 import com.gen3.recommenderagent.application.action.ClearHistoryAction;
-import com.gen3.recommenderagent.application.action.HelpAction;
+import com.gen3.recommenderagent.application.action.NoOpAction;
 import com.gen3.recommenderagent.application.action.RecommendationAction;
-import com.gen3.recommenderagent.application.action.UnsupportedIntentAction;
 import com.gen3.recommenderagent.application.action.UpdatePreferencesAction;
+import com.gen3.recommenderagent.application.session.DefaultSessionService;
 import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.Constraints;
+import com.gen3.recommenderagent.domain.session.Filter;
 import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.engine.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.inputparser.InputParser;
-import com.gen3.recommenderagent.ranker.BaseSolrCandidateRetriever;
-import com.gen3.recommenderagent.ranker.CandidateRetriever;
-import com.gen3.recommenderagent.ranker.RankingService;
+import com.gen3.recommenderagent.legacy.solr.BaseSolrCandidateRetriever;
+import com.gen3.recommenderagent.legacy.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.ranker.PreferenceVectorService;
-import com.gen3.recommenderagent.ranker.RecommendationQueryBuilder;
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
+import com.gen3.recommenderagent.ranker.RankingService;
+import com.gen3.recommenderagent.ranker.candidate.CandidateRetriever;
+import com.gen3.recommenderagent.ranker.candidate.retrieval.AudiobookRetrievalPlanner;
+import com.gen3.recommenderagent.ranker.candidate.retrieval.IntentRetrievalPolicy;
 import com.gen3.recommenderagent.ranker.strategy.HybridRankingStrategy;
 import com.gen3.recommenderagent.ranker.strategy.PreferenceRankingStrategy;
 import com.gen3.recommenderagent.ranker.strategy.RelevanceRankingStrategy;
@@ -87,16 +87,18 @@ class RecommendationFlowIntegrationTest {
     com.gen3.recommenderagent.embedding.EmbeddingIndexer embeddingIndexer =
         mock(com.gen3.recommenderagent.embedding.EmbeddingIndexer.class);
     CandidateRetriever candidateRetriever =
-        new BaseSolrCandidateRetriever(repository, embeddingIndexer);
+        new BaseSolrCandidateRetriever(
+            repository,
+            embeddingIndexer,
+            new AudiobookRetrievalPlanner(new IntentRetrievalPolicy()));
     RankingService rankingService =
         new RankingService(
             new RelevanceRankingStrategy(),
-            new HybridRankingStrategy(new PreferenceRankingStrategy()),
-            new PreferenceVectorService(embeddingIndexer));
+            new HybridRankingStrategy(new PreferenceRankingStrategy()));
     RecommendationAction recommendationAction =
         new RecommendationAction(
             new AudiobookRecommendationWorkflow(
-                candidateRetriever, rankingService, new RecommendationQueryBuilder()));
+                candidateRetriever, rankingService, new PreferenceVectorService(embeddingIndexer)));
     RecommendationFlowTestSupport.InMemorySessionRepository sessionRepository =
         new RecommendationFlowTestSupport.InMemorySessionRepository();
 
@@ -105,8 +107,7 @@ class RecommendationFlowIntegrationTest {
             recommendationAction,
             new UpdatePreferencesAction(),
             new ClearHistoryAction(),
-            new HelpAction(),
-            new UnsupportedIntentAction());
+            new NoOpAction());
     RequestApplicationService applicationService =
         new RequestApplicationService(new DefaultSessionService(sessionRepository), registry);
 
@@ -153,14 +154,14 @@ class RecommendationFlowIntegrationTest {
     Query query = new Query();
     query.setGenres(List.of("science fiction"));
 
-    Constraints constraints = new Constraints();
-    constraints.setCount(3);
+    Filter filter = new Filter();
+    filter.setCount(3);
 
     SessionRequest request = new SessionRequest();
     request.setRawText(rawText);
     request.setIntent(Intent.NEW_RECOMMENDATION);
     request.setQuery(query);
-    request.setConstraints(constraints);
+    request.setFilter(filter);
     return request;
   }
 }

@@ -11,7 +11,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.Constraints;
+import com.gen3.recommenderagent.domain.session.Filter;
 import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.util.List;
@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ResponseEntity;
 import org.springframework.ai.chat.model.ChatResponse;
+import tools.jackson.databind.ObjectMapper;
 
 class InputParserTest {
 
@@ -33,9 +34,9 @@ class InputParserTest {
     ParsedRequest parsedRequest = new ParsedRequest();
     parsedRequest.setIntent(Intent.NEW_RECOMMENDATION);
     parsedRequest.setQuery(query);
-    Constraints constraints = new Constraints();
-    constraints.setLanguage("English");
-    parsedRequest.setConstraints(constraints);
+    Filter filter = new Filter();
+    filter.setLanguage("English");
+    parsedRequest.setFilter(filter);
 
     ChatClient chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(chatClient
@@ -55,7 +56,7 @@ class InputParserTest {
     assertEquals(rawText, result.getRawText());
     assertEquals(Intent.NEW_RECOMMENDATION, result.getIntent());
     assertSame(query, result.getQuery());
-    assertSame(constraints, result.getConstraints());
+    assertSame(filter, result.getFilter());
 
     UUID requestId = UUID.fromString(result.getRequestId());
     assertEquals(7, requestId.version());
@@ -97,5 +98,17 @@ class InputParserTest {
         assertThrows(IllegalStateException.class, () -> new AiInputParser(builder).parse(rawText));
 
     assertEquals("AI did not return a ParsedRequest", exception.getMessage());
+  }
+
+  @Test
+  void shouldReadLegacyConstraintsAsFilter() throws Exception {
+    SessionRequest request =
+        new ObjectMapper()
+            .readValue(
+                "{\"constraints\":{\"count\":3,\"language\":\"English\"}}", SessionRequest.class);
+
+    assertNotNull(request.getFilter());
+    assertEquals(3, request.getFilter().getCount());
+    assertEquals("English", request.getFilter().getLanguage());
   }
 }

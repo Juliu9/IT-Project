@@ -14,7 +14,6 @@ public class ClearHistoryAction implements IntentAction {
   public SessionRequest execute(SessionRequest request, SessionContext context) {
     context.clearHistory();
     request.setRecommendations(List.of());
-    request.setResponseMessage("Your recommendation history has been cleared.");
     return request;
   }
 }

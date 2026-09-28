@@ -14,7 +14,6 @@ public class UpdatePreferencesAction implements IntentAction {
   public SessionRequest execute(SessionRequest request, SessionContext context) {
     context.updatePreferences(request.getPreferences());
     request.setRecommendations(List.of());
-    request.setResponseMessage("Your audiobook preferences have been updated.");
     return request;
   }
 }

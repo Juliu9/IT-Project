@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-import com.gen3.recommenderagent.domain.session.Constraints;
+import com.gen3.recommenderagent.domain.session.Filter;
 import com.gen3.recommenderagent.domain.session.Preferences;
 import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.Recommendation;
@@ -186,25 +186,25 @@ class RedisSessionRepositoryTest {
   }
 
   // ============================================================
-  // CONSTRAINTS
+  // FILTERS
   // ============================================================
 
   @Test
-  void shouldSaveAndRetrieveConstraints() {
+  void shouldSaveAndRetrieveFilters() {
 
     Session session = new Session();
 
     session.setSessionId("constraints-test");
 
-    Constraints constraints = new Constraints();
+    Filter filter = new Filter();
 
-    constraints.setCount(5);
-    constraints.setDuration("under 10 hours");
-    constraints.setLanguage("English");
+    filter.setCount(5);
+    filter.setDuration("under 10 hours");
+    filter.setLanguage("English");
 
     SessionRequest request = new SessionRequest();
 
-    request.setConstraints(constraints);
+    request.setFilter(filter);
 
     session.setRequests(List.of(request));
 
@@ -212,15 +212,15 @@ class RedisSessionRepositoryTest {
 
     Session retrieved = redisSessionCache.getSession("constraints-test");
 
-    Constraints retrievedConstraints = retrieved.getRequests().get(0).getConstraints();
+    Filter retrievedFilter = retrieved.getRequests().get(0).getFilter();
 
-    assertNotNull(retrievedConstraints);
+    assertNotNull(retrievedFilter);
 
-    assertEquals(5, retrievedConstraints.getCount());
+    assertEquals(5, retrievedFilter.getCount());
 
-    assertEquals("under 10 hours", retrievedConstraints.getDuration());
+    assertEquals("under 10 hours", retrievedFilter.getDuration());
 
-    assertEquals("English", retrievedConstraints.getLanguage());
+    assertEquals("English", retrievedFilter.getLanguage());
   }
 
   // ============================================================
@@ -290,7 +290,7 @@ class RedisSessionRepositoryTest {
 
     assertNull(retrievedRequest.getPreferences());
 
-    assertNull(retrievedRequest.getConstraints());
+    assertNull(retrievedRequest.getFilter());
   }
 
   // ============================================================

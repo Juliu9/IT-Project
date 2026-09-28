@@ -1,7 +1,7 @@
 package com.gen3.recommenderagent.inputparser;
 
 import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.Constraints;
+import com.gen3.recommenderagent.domain.session.Filter;
 import com.gen3.recommenderagent.domain.session.Preferences;
 import com.gen3.recommenderagent.domain.session.Query;
 
@@ -11,7 +11,7 @@ public class ParsedRequest {
   private Intent intent;
   private Query query;
   private Preferences preferences;
-  private Constraints constraints;
+  private Filter filter;
 
   public ParsedRequest() {}
 
@@ -42,12 +42,12 @@ public class ParsedRequest {
   }
 
   /** Returns exact language, duration, and count constraints from the parser. */
-  public Constraints getConstraints() {
-    return constraints;
+  public Filter getFilter() {
+    return filter;
   }
 
   /** Stores parsed constraints so retrieval can build Qdrant payload filters. */
-  public void setConstraints(Constraints constraints) {
-    this.constraints = constraints;
+  public void setFilter(Filter filter) {
+    this.filter = filter;
   }
 }

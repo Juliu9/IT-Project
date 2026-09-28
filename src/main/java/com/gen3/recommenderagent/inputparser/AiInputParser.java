@@ -32,9 +32,10 @@ public class AiInputParser implements InputParser {
                         Extract the user's audiobook search request.
 
                         Use only information explicitly provided by the user.
-                        Choose the intent and populate the query, preferences, and constraints fields.
-                        Put narrator names in query.narrators. Put language, duration, and count
-                        restrictions in constraints.
+                        Choose the intent and populate the query, preferences, and filter fields.
+                        Put desired semantic concepts in query.positive and concepts to avoid in
+                        query.negative. Put narrator names in query.narrators. Put language,
+                        duration, and count restrictions in filter.
                         """)
             .user(rawText)
             .call()
@@ -50,7 +51,7 @@ public class AiInputParser implements InputParser {
     request.setIntent(parsed.getIntent());
     request.setQuery(parsed.getQuery());
     request.setPreferences(parsed.getPreferences());
-    request.setConstraints(parsed.getConstraints());
+    request.setFilter(parsed.getFilter());
     request.setRequestId(createUuidV7().toString());
     request.setRawText(rawText);
 

@@ -1,6 +1,5 @@
 package com.gen3.recommenderagent.application.action;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -52,8 +51,6 @@ class IntentActionsTest {
     assertTrue(session.getRequests().isEmpty());
 
     SessionRequest helpRequest = new SessionRequest();
-    new HelpAction().execute(helpRequest, context);
-    assertEquals(0, helpRequest.getRecommendations().size());
-    assertTrue(helpRequest.getResponseMessage().contains("recommend audiobooks"));
+    assertSame(helpRequest, new NoOpAction().execute(helpRequest, context));
   }
 }

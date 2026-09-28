@@ -3,8 +3,8 @@ package com.gen3.recommenderagent.integration;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookFilters;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.Bm25SparseTextEncoder;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantConfiguration;
@@ -33,8 +33,7 @@ class FinalLiveIntegrationTest {
 
     QdrantClient client =
         new QdrantConfiguration()
-            .qdrantClient(
-                environment("QDRANT_URL", ""), grpcPort, environment("QDRANT_API", ""));
+            .qdrantClient(environment("QDRANT_URL", ""), grpcPort, environment("QDRANT_API", ""));
     try {
       boolean collectionExists =
           client
