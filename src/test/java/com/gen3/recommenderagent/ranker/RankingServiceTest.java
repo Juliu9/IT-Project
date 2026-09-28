@@ -11,14 +11,17 @@ import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import static org.mockito.Mockito.mock;
 
 class RankingServiceTest {
 
+  private final PreferenceRankingStrategy preferenceRankingStrategy =
+      new PreferenceRankingStrategy();
   private final RankingService rankingService =
       new RankingService(
           new RelevanceRankingStrategy(),
-          new PreferenceRankingStrategy(),
-          new HybridRankingStrategy());
+          new HybridRankingStrategy(preferenceRankingStrategy),
+          mock(PreferenceVectorService.class));
 
   @Test
   void shouldPreserveCandidateOrderRemoveDuplicatesAndLimitResults() {

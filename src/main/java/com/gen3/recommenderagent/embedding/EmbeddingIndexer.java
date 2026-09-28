@@ -137,8 +137,25 @@ public class EmbeddingIndexer {
 
   /** Returns a normalized vector for the raw request and its parsed search constraints. */
   public float[] embedRequest(SessionRequest request) {
-    String text = buildRequestText(request);
+    String text = buildRetrievalText(request);
     return text.isBlank() ? new float[0] : VectorMath.normalize(model.embed(text));
+  }
+
+  /** Embeds independent preference terms without mixing positive and negative instructions. */
+  public List<float[]> embedPreferenceTerms(List<String> terms) {
+    if (terms == null || terms.isEmpty()) {
+      return List.of();
+    }
+    List<String> texts =
+        terms.stream()
+            .filter(this::hasText)
+            .map(String::trim)
+            .distinct()
+            .toList();
+    if (texts.isEmpty()) {
+      return List.of();
+    }
+    return model.embed(texts).stream().map(VectorMath::normalize).toList();
   }
 
   /** Indexes the original request together with its parsed search terms under its request ID. */
@@ -188,6 +205,32 @@ public class EmbeddingIndexer {
             .filter(value -> !value.isBlank())
             .collect(Collectors.joining("\n"));
     return text;
+  }
+
+  /** Builds retrieval text without preference polarity, which is scored separately. */
+  public String buildRetrievalText(SessionRequest request) {
+    Query query = request.getQuery();
+    String structuredText =
+        List.of(
+            part("Topics", query == null ? null : query.getTopics()),
+            part("Genres", query == null ? null : query.getGenres()),
+            part("Authors", query == null ? null : query.getAuthors()),
+            part("Narrators", query == null ? null : query.getNarrators()),
+            part("Keywords", query == null ? null : query.getKeywords()),
+            part(
+                "Duration",
+                request.getConstraints() == null
+                    ? null
+                    : request.getConstraints().getDuration()),
+            part(
+                "Language",
+                request.getConstraints() == null
+                    ? null
+                    : request.getConstraints().getLanguage()))
+        .stream()
+        .filter(value -> !value.isBlank())
+        .collect(Collectors.joining("\n"));
+    return structuredText.isBlank() ? part("Request", request.getRawText()) : structuredText;
   }
 
   /** Embeds and normalizes before the vector is serialized and saved. */

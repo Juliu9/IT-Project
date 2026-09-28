@@ -1,58 +1,94 @@
 package com.gen3.recommenderagent.ranker.strategy;
 
 import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.ranker.PreferenceSignals;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import org.springframework.stereotype.Component;
 
-/**
- * Stub for hybrid (relevance + preference blend) ranking (MAPA-49 scaffolding).
- *
- * <p>Falls back to the relevance baseline until preference weighting exists to blend against.
- */
+/** Blends normalized database relevance with positive and negative preference similarity. */
 @Component
 public class HybridRankingStrategy implements RankingStrategy {
 
+  private static final double RELEVANCE_WEIGHT = 0.70;
   private static final int MAX_RESULTS = 5;
+  private final PreferenceRankingStrategy preferenceRankingStrategy;
 
+  public HybridRankingStrategy(PreferenceRankingStrategy preferenceRankingStrategy) {
+    this.preferenceRankingStrategy = preferenceRankingStrategy;
+  }
+
+  /** Preserves the legacy strategy entry point when no preference evidence is available. */
   @Override
   public List<Recommendation> rank(List<AudiobookCandidate> candidates, int requestedLimit) {
-
-    if (candidates == null || candidates.isEmpty()) {
-      return new ArrayList<>();
-    }
-
-    // TODO: blend relevance score with preference weighting once
-    // PreferenceRankingStrategy has real logic to blend against.
-    // Falling back to relevance-order baseline until then.
-
-    int limit = Math.min(Math.max(requestedLimit, 1), MAX_RESULTS);
-
-    List<Recommendation> ranked = new ArrayList<>();
-    Set<String> seenBookIds = new HashSet<>();
-
-    for (AudiobookCandidate candidate : candidates) {
-      if (candidate == null || candidate.audiobook() == null) {
-        continue;
-      }
-
-      AudiobookRecord audiobook = candidate.audiobook();
-      String bookId = audiobook.id();
-      if (bookId == null || bookId.isBlank() || !seenBookIds.add(bookId)) {
-        continue;
-      }
-
-      int rank = ranked.size() + 1;
-      ranked.add(new Recommendation(bookId, rank, candidate.score(), audiobook.title()));
-      if (ranked.size() == limit) {
-        break;
-      }
-    }
-
-    return ranked;
+    return rank(candidates, requestedLimit, PreferenceSignals.empty());
   }
+
+  /** Reranks unique candidates using relevance plus positive reward and negative penalty. */
+  public List<Recommendation> rank(
+      List<AudiobookCandidate> candidates, int requestedLimit, PreferenceSignals signals) {
+    if (candidates == null || candidates.isEmpty()) {
+      return List.of();
+    }
+    int limit = Math.min(Math.max(requestedLimit, 1), MAX_RESULTS);
+    List<AudiobookCandidate> unique = uniqueCandidates(candidates);
+    double maximumScore = maximumScore(unique);
+    List<ScoredCandidate> scored =
+        unique.stream()
+            .map(
+                candidate ->
+                    new ScoredCandidate(
+                        candidate,
+                        RELEVANCE_WEIGHT * normalizedRelevance(candidate.score(), maximumScore)
+                            + preferenceRankingStrategy.adjustment(candidate, signals)))
+            .sorted(Comparator.comparingDouble(ScoredCandidate::score).reversed())
+            .limit(limit)
+            .toList();
+
+    List<Recommendation> recommendations = new ArrayList<>(scored.size());
+    for (int index = 0; index < scored.size(); index++) {
+      ScoredCandidate item = scored.get(index);
+      recommendations.add(
+          new Recommendation(
+              item.candidate().audiobook().id(),
+              index + 1,
+              item.score(),
+              item.candidate().audiobook().title()));
+    }
+    return recommendations;
+  }
+
+  private List<AudiobookCandidate> uniqueCandidates(List<AudiobookCandidate> candidates) {
+    Set<String> seen = new HashSet<>();
+    return candidates.stream()
+        .filter(candidate -> candidate != null && candidate.audiobook() != null)
+        .filter(
+            candidate ->
+                candidate.audiobook().id() != null
+                    && !candidate.audiobook().id().isBlank()
+                    && seen.add(candidate.audiobook().id()))
+        .toList();
+  }
+
+  private double maximumScore(List<AudiobookCandidate> candidates) {
+    return candidates.stream()
+            .map(AudiobookCandidate::score)
+            .filter(java.util.Objects::nonNull)
+            .mapToDouble(Double::doubleValue)
+            .max()
+            .orElse(0.0);
+  }
+
+  private double normalizedRelevance(Double score, double maximumScore) {
+    if (score == null || maximumScore <= 0.0) {
+      return 0.0;
+    }
+    return Math.clamp(score / maximumScore, 0.0, 1.0);
+  }
+
+  private record ScoredCandidate(AudiobookCandidate candidate, double score) {}
 }

@@ -35,7 +35,6 @@ public class AiInputParser implements InputParser {
                         Choose the intent and populate the query, preferences, and constraints fields.
                         Put narrator names in query.narrators. Put language, duration, and count
                         restrictions in constraints.
-                        Set personalised only when the user asks for personalised results.
                         """)
             .user(rawText)
             .call()
@@ -48,7 +47,6 @@ public class AiInputParser implements InputParser {
     ParsedRequest parsed = aiResponse.entity();
 
     SessionRequest request = new SessionRequest();
-    request.setPersonalised(parsed.isPersonalised());
     request.setIntent(parsed.getIntent());
     request.setQuery(parsed.getQuery());
     request.setPreferences(parsed.getPreferences());

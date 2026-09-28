@@ -126,6 +126,7 @@ public class QdrantAudiobookRepository
             .setQuery(Query.newBuilder().setFusion(io.qdrant.client.grpc.Points.Fusion.RRF))
             .setLimit(limit)
             .setWithPayload(enable(true))
+            .setWithVectors(io.qdrant.client.WithVectorsSelectorFactory.enable(true))
             .build();
     return query(request);
   }
@@ -252,7 +253,12 @@ public class QdrantAudiobookRepository
   private List<AudiobookCandidate> query(QueryPoints request) throws IOException {
     List<ScoredPoint> matches = await(client.queryAsync(request), "query Qdrant");
     return matches.stream()
-        .map(point -> new AudiobookCandidate(mapper.toRecord(point), (double) point.getScore()))
+        .map(
+            point ->
+                new AudiobookCandidate(
+                    mapper.toRecord(point),
+                    (double) point.getScore(),
+                    mapper.toDenseVector(point)))
         .toList();
   }
 
@@ -262,7 +268,8 @@ public class QdrantAudiobookRepository
         QueryPoints.newBuilder()
             .setCollectionName(collection)
             .setLimit(limit)
-            .setWithPayload(enable(true));
+            .setWithPayload(enable(true))
+            .setWithVectors(io.qdrant.client.WithVectorsSelectorFactory.enable(true));
     Filter filter = filter(filters);
     return filter == null ? request : request.setFilter(filter);
   }

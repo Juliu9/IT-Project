@@ -36,7 +36,7 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
   public List<Recommendation> recommend(SessionRequest request, SessionContext context) {
     String query = queryBuilder.build(request);
     var candidates = candidateRetriever.getCandidates(query, CANDIDATE_LIMIT, request);
-    return ranker.rank(candidates, resolveResultLimit(request), request.isPersonalised());
+    return ranker.rank(candidates, resolveResultLimit(request), request);
   }
 
   /** Applies the API's default and maximum result limits. */

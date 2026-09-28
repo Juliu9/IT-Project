@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.domain.session.Query;
+import com.gen3.recommenderagent.domain.session.Preferences;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
 import java.util.List;
@@ -131,5 +132,26 @@ class EmbeddingIndexerTest {
     assertThrows(IllegalArgumentException.class, () -> VectorMath.normalize(new float[] {0, 0}));
     assertEquals(
         1.0, VectorMath.dotProduct(new float[] {0.6f, 0.8f}, new float[] {0.6f, 0.8f}), 0.000001);
+  }
+
+  /** Retrieval embedding excludes polarity terms because ranking handles them independently. */
+  @Test
+  void excludesPreferencesFromRetrievalEmbedding() {
+    SessionRequest request = new SessionRequest();
+    request.setRawText("Find a space adventure without horror");
+    Query query = new Query();
+    query.setGenres(List.of("science fiction"));
+    request.setQuery(query);
+    Preferences preferences = new Preferences();
+    preferences.setInclude(List.of("space opera"));
+    preferences.setExclude(List.of("horror"));
+    request.setPreferences(preferences);
+    when(model.embed(any(String.class))).thenReturn(new float[] {1, 0});
+
+    indexer.embedRequest(request);
+
+    ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
+    verify(model).embed(text.capture());
+    assertEquals("Genres: science fiction", text.getValue());
   }
 }

@@ -63,6 +63,27 @@ public class QdrantPointMapper {
         integerValue(payload.get("durationMinutes")));
   }
 
+  /** Extracts the normalized dense vector included in a similarity-search result. */
+  public float[] toDenseVector(ScoredPoint point) {
+    if (point == null || !point.hasVectors()) {
+      return null;
+    }
+    var namedVectors = point.getVectors().getVectors().getVectorsMap();
+    if (!namedVectors.containsKey(DENSE_VECTOR)
+        || !namedVectors.get(DENSE_VECTOR).hasDense()) {
+      return null;
+    }
+    List<Float> values = namedVectors.get(DENSE_VECTOR).getDense().getDataList();
+    if (values.isEmpty()) {
+      return null;
+    }
+    float[] vector = new float[values.size()];
+    for (int index = 0; index < values.size(); index++) {
+      vector[index] = values.get(index);
+    }
+    return vector;
+  }
+
   /** Generates the same legal Qdrant UUID every time a catalogue book ID is supplied. */
   public io.qdrant.client.grpc.Common.PointId pointId(String bookId) {
     if (bookId == null || bookId.isBlank()) {

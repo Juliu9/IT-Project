@@ -45,6 +45,16 @@ class QdrantAudiobookRepositoryTest {
         ScoredPoint.newBuilder()
             .setId(point.getId())
             .setScore(0.92f)
+            .setVectors(
+                VectorsOutput.newBuilder()
+                    .setVectors(
+                        NamedVectorsOutput.newBuilder()
+                            .putVectors(
+                                QdrantPointMapper.DENSE_VECTOR,
+                                VectorOutput.newBuilder()
+                                    .setDense(
+                                        DenseVector.newBuilder().addData(0.6f).addData(0.8f))
+                                    .build())))
             .putAllPayload(point.getPayloadMap())
             .build();
     when(client.collectionExistsAsync("audiobooks"))
@@ -62,6 +72,7 @@ class QdrantAudiobookRepositoryTest {
     assertThat(candidates).hasSize(1);
     assertThat(candidates.getFirst().audiobook()).isEqualTo(book);
     assertThat(candidates.getFirst().score()).isEqualTo(0.92, within(0.0001));
+    assertThat(candidates.getFirst().embedding()).containsExactly(0.6f, 0.8f);
     verify(client, times(1)).collectionExistsAsync("audiobooks");
   }
 

@@ -28,6 +28,7 @@ import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.ranker.BaseSolrCandidateRetriever;
 import com.gen3.recommenderagent.ranker.CandidateRetriever;
 import com.gen3.recommenderagent.ranker.RankingService;
+import com.gen3.recommenderagent.ranker.PreferenceVectorService;
 import com.gen3.recommenderagent.ranker.RecommendationQueryBuilder;
 import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.ranker.strategy.HybridRankingStrategy;
@@ -90,8 +91,8 @@ class RecommendationFlowIntegrationTest {
     RankingService rankingService =
         new RankingService(
             new RelevanceRankingStrategy(),
-            new PreferenceRankingStrategy(),
-            new HybridRankingStrategy());
+            new HybridRankingStrategy(new PreferenceRankingStrategy()),
+            new PreferenceVectorService(embeddingIndexer));
     RecommendationAction recommendationAction =
         new RecommendationAction(
             new AudiobookRecommendationWorkflow(

@@ -9,7 +9,6 @@ public class SessionRequest {
   private String requestId;
   private String rawText;
   private Instant createdAt;
-  private boolean personalised;
 
   // IMPORTANT !!
   private Intent intent;
@@ -94,11 +93,4 @@ public class SessionRequest {
     this.createdAt = createdAt;
   }
 
-  public boolean isPersonalised() {
-    return personalised;
-  }
-
-  public void setPersonalised(boolean personalised) {
-    this.personalised = personalised;
-  }
 }
