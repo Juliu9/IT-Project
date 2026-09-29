@@ -1,5 +1,7 @@
 package com.gen3.recommenderagent.ranker.strategy;
 
+import static com.gen3.recommenderagent.common.BookCountPolicy.clamp;
+
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
@@ -15,7 +17,6 @@ import org.springframework.stereotype.Component;
 public class HybridRankingStrategy implements RankingStrategy {
 
   private static final double RELEVANCE_WEIGHT = 0.70;
-  private static final int MAX_RESULTS = 5;
   private final SemanticQueryRankingStrategy semanticQueryRankingStrategy;
 
   public HybridRankingStrategy(SemanticQueryRankingStrategy semanticQueryRankingStrategy) {
@@ -34,7 +35,7 @@ public class HybridRankingStrategy implements RankingStrategy {
     if (candidates == null || candidates.isEmpty()) {
       return List.of();
     }
-    int limit = Math.min(Math.max(requestedLimit, 1), MAX_RESULTS);
+    int limit = clamp(requestedLimit);
     List<AudiobookCandidate> unique = uniqueCandidates(candidates);
     double maximumScore = maximumScore(unique);
     List<ScoredCandidate> scored =

@@ -22,15 +22,14 @@ class SemanticQueryVectorServiceTest {
     SessionRequest request = new SessionRequest();
     request.setPositiveSemanticQuery(positive);
     request.setNegativeSemanticQuery(negative);
-    when(indexer.embedSemanticQuery(positive)).thenReturn(new float[] {1, 0});
-    when(indexer.embedSemanticQuery(negative)).thenReturn(new float[] {0, 1});
+    when(indexer.embedSemanticQueries(List.of(positive, negative)))
+        .thenReturn(List.of(new float[] {1, 0}, new float[] {0, 1}));
 
     SemanticQueryVectors vectors = new SemanticQueryVectorService(indexer).create(request);
 
     assertArrayEquals(new float[] {1, 0}, vectors.positive().getFirst());
     assertArrayEquals(new float[] {0, 1}, vectors.negative().getFirst());
-    verify(indexer).embedSemanticQuery(positive);
-    verify(indexer).embedSemanticQuery(negative);
+    verify(indexer).embedSemanticQueries(List.of(positive, negative));
   }
 
   @Test

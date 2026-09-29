@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -20,6 +21,7 @@ import com.gen3.recommenderagent.application.action.RecommendationAction;
 import com.gen3.recommenderagent.application.action.RefineAction;
 import com.gen3.recommenderagent.application.action.UpdatePreferencesAction;
 import com.gen3.recommenderagent.application.sessionservice.DefaultSessionService;
+import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalExecutor;
 import com.gen3.recommenderagent.candidateretriever.CandidateRetriever;
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectorService;
 import com.gen3.recommenderagent.candidateretriever.SolrCandidateRetriever;
@@ -87,8 +89,12 @@ class RecommendationFlowIntegrationTest {
         new SolrAudiobookRepository(solrClient, SolrContainerTestSupport.COLLECTION);
     com.gen3.recommenderagent.embedding.EmbeddingIndexer embeddingIndexer =
         mock(com.gen3.recommenderagent.embedding.EmbeddingIndexer.class);
+    when(embeddingIndexer.embedSemanticQueries(anyList()))
+        .thenReturn(List.of(new float[0], new float[0]));
     CandidateRetriever candidateRetriever =
-        new SolrCandidateRetriever(repository, embeddingIndexer, new AudiobookRetrievalPlanner());
+        new SolrCandidateRetriever(
+            repository,
+            new CandidateRetrievalExecutor(embeddingIndexer, new AudiobookRetrievalPlanner()));
     RankingService rankingService =
         new RankingService(
             new RelevanceRankingStrategy(),

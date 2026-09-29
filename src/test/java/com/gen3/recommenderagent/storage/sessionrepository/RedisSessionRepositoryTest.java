@@ -106,6 +106,18 @@ class RedisSessionRepositoryTest {
     assertEquals(1, retrieved.getRequests().size());
   }
 
+  @Test
+  void shouldStoreShownBooksAsIdsOnly() {
+    Session session = new Session();
+    session.setSessionId("shown-book-ids-test");
+    session.addRecommendationIds(List.of("book-1", "book-2"));
+
+    redisSessionCache.updateSession(session);
+
+    Session retrieved = redisSessionCache.getSession("shown-book-ids-test");
+    assertEquals(List.of("book-1", "book-2"), retrieved.getShownBooks());
+  }
+
   // ============================================================
   // QUERY
   // ============================================================

@@ -1,6 +1,7 @@
 package com.gen3.recommenderagent.engine;
 
-import static com.gen3.recommenderagent.common.ApplicationConstants.MAX_BOOK_COUNT;
+import static com.gen3.recommenderagent.common.BookCountPolicy.clamp;
+import static com.gen3.recommenderagent.common.BookCountPolicy.clampOrDefault;
 
 import com.gen3.recommenderagent.candidateretriever.CandidateRetriever;
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectorService;
@@ -17,8 +18,6 @@ import org.springframework.stereotype.Service;
 public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
 
   private static final int CANDIDATE_LIMIT = 50;
-  private static final int DEFAULT_RESULT_LIMIT = MAX_BOOK_COUNT;
-
   private final CandidateRetriever candidateRetriever;
   private final Ranker ranker;
   private final SemanticQueryVectorService semanticQueryVectorService;
@@ -45,11 +44,9 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
   private int resolveResultLimit(SessionRequest request, Session session) {
     Integer requestedCount = request == null ? null : request.getBookCount();
     if (requestedCount != null) {
-      return Math.clamp(requestedCount, 1, MAX_BOOK_COUNT);
+      return clamp(requestedCount);
     }
     Integer sessionCount = session == null ? null : session.getBookCount();
-    return sessionCount == null
-        ? DEFAULT_RESULT_LIMIT
-        : Math.clamp(sessionCount, 1, MAX_BOOK_COUNT);
+    return clampOrDefault(sessionCount);
   }
 }

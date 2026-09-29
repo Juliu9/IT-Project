@@ -181,12 +181,14 @@ public class AiResponseGenerator implements ResponseGenerator {
     if (currentRequest != null
         && currentRequest.getRawText() != null
         && !currentRequest.getRawText().isBlank()) {
-      return "I can only give a maximum of 5 recommendations at a time, so I can't fulfil that request for "
+      return "I can only give a maximum of "
+          + MAX_BOOK_COUNT
+          + " recommendations at a time, so I can't fulfil that request for "
           + currentRequest.getRawText()
           + ".";
     }
 
-    return "I can only give a maximum of 5 recommendations at a time.";
+    return "I can only give a maximum of " + MAX_BOOK_COUNT + " recommendations at a time.";
   }
 
   private List<Recommendation> getTopRecommendations(List<Recommendation> recommendations) {
@@ -194,11 +196,11 @@ public class AiResponseGenerator implements ResponseGenerator {
       return List.of();
     }
 
-    if (recommendations.size() <= 5) {
+    if (recommendations.size() <= MAX_BOOK_COUNT) {
       return recommendations;
     }
 
-    return recommendations.subList(0, 5);
+    return recommendations.subList(0, MAX_BOOK_COUNT);
   }
 
   // Safe node output

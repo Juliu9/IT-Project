@@ -1,5 +1,7 @@
 package com.gen3.recommenderagent.ranker.strategy;
 
+import static com.gen3.recommenderagent.common.BookCountPolicy.clamp;
+
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
@@ -11,8 +13,6 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class RelevanceRankingStrategy implements RankingStrategy {
-
-  private static final int MAX_RESULTS = 5;
 
   /**
    * Baseline ranking used until the ML ranking model is introduced.
@@ -27,7 +27,7 @@ public class RelevanceRankingStrategy implements RankingStrategy {
       return new ArrayList<>();
     }
 
-    int limit = Math.min(Math.max(requestedLimit, 1), MAX_RESULTS);
+    int limit = clamp(requestedLimit);
 
     List<Recommendation> ranked = new ArrayList<>();
     Set<String> seenBookIds = new HashSet<>();

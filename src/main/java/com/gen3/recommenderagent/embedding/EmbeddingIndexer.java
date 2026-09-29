@@ -92,8 +92,36 @@ public class EmbeddingIndexer {
 
   /** Encodes one complete semantic query as a normalized vector. */
   public float[] embedSemanticQuery(SemanticQuery query) {
-    String text = buildSemanticQueryText(query);
-    return text.isBlank() ? new float[0] : VectorMath.normalize(model.embed(text));
+    return query == null ? new float[0] : embedSemanticQueries(List.of(query)).getFirst();
+  }
+
+  /** Encodes all nonempty semantic queries in one embedding-model request. */
+  public List<float[]> embedSemanticQueries(List<SemanticQuery> queries) {
+    if (queries == null || queries.isEmpty()) {
+      return List.of();
+    }
+    List<float[]> results = new ArrayList<>(queries.size());
+    List<Integer> resultIndexes = new ArrayList<>();
+    List<String> texts = new ArrayList<>();
+    for (int index = 0; index < queries.size(); index++) {
+      results.add(new float[0]);
+      String text = buildSemanticQueryText(queries.get(index));
+      if (!text.isBlank()) {
+        resultIndexes.add(index);
+        texts.add(text);
+      }
+    }
+    if (texts.isEmpty()) {
+      return List.copyOf(results);
+    }
+    List<float[]> generated = model.embed(texts);
+    if (generated.size() != texts.size()) {
+      throw new IllegalStateException("Embedding model returned an unexpected batch size");
+    }
+    for (int index = 0; index < generated.size(); index++) {
+      results.set(resultIndexes.get(index), VectorMath.normalize(generated.get(index)));
+    }
+    return List.copyOf(results);
   }
 
   /** Adds the positive vector and the inverse negative vector for candidate retrieval. */

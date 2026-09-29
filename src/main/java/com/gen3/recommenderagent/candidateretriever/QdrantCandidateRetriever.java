@@ -1,9 +1,6 @@
 package com.gen3.recommenderagent.candidateretriever;
 
-import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlan;
-import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
-import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
 import java.io.IOException;
@@ -21,17 +18,14 @@ import org.springframework.stereotype.Service;
 public class QdrantCandidateRetriever implements CandidateRetriever {
 
   private final AudiobookCandidateSearch candidateSearch;
-  private final EmbeddingIndexer embeddingIndexer;
-  private final AudiobookRetrievalPlanner retrievalPlanner;
+  private final CandidateRetrievalExecutor retrievalExecutor;
 
   /** Uses the Qdrant repository and the shared normalized request-embedding pipeline. */
   public QdrantCandidateRetriever(
       @Qualifier("qdrantAudiobookRepository") AudiobookCandidateSearch candidateSearch,
-      EmbeddingIndexer embeddingIndexer,
-      AudiobookRetrievalPlanner retrievalPlanner) {
+      CandidateRetrievalExecutor retrievalExecutor) {
     this.candidateSearch = candidateSearch;
-    this.embeddingIndexer = embeddingIndexer;
-    this.retrievalPlanner = retrievalPlanner;
+    this.retrievalExecutor = retrievalExecutor;
   }
 
   /** Embeds the combined raw and processed user request once, then searches Qdrant. */
@@ -39,29 +33,9 @@ public class QdrantCandidateRetriever implements CandidateRetriever {
   public List<AudiobookCandidate> getCandidates(
       SessionRequest request, SemanticQueryVectors vectors, int limit) {
     try {
-      AudiobookRetrievalPlan plan = retrievalPlanner.plan(limit, request);
-      return switch (plan.mode()) {
-        case SEMANTIC ->
-            candidateSearch.searchSemantic(
-                embeddingIndexer.combineSemanticQueries(vectors), plan.filters(), plan.limit());
-        case KEYWORD ->
-            candidateSearch.searchKeyword(plan.keywordText(), plan.filters(), plan.limit());
-        case HYBRID -> retrieveHybrid(plan, vectors);
-        case FILTER_ONLY -> candidateSearch.searchByFilters(plan.filters(), plan.limit());
-        case NONE -> List.of();
-      };
+      return retrievalExecutor.execute(candidateSearch, request, vectors, limit);
     } catch (IOException exception) {
       throw new IllegalStateException("Failed to retrieve candidates from Qdrant", exception);
     }
-  }
-
-  private List<AudiobookCandidate> retrieveHybrid(
-      AudiobookRetrievalPlan plan, SemanticQueryVectors vectors) throws IOException {
-    float[] queryVector = embeddingIndexer.combineSemanticQueries(vectors);
-    if (plan.keywordText() == null || plan.keywordText().isBlank()) {
-      return candidateSearch.searchSemantic(queryVector, plan.filters(), plan.limit());
-    }
-    return candidateSearch.searchHybrid(
-        queryVector, plan.keywordText(), plan.filters(), plan.limit());
   }
 }

@@ -62,10 +62,29 @@ class EmbeddingIndexerTest {
     query.setGenres(List.of("science fiction"));
     query.setKeywords(List.of("survival"));
     String text = indexer.buildSemanticQueryText(query);
-    when(model.embed(text)).thenReturn(new float[] {0, 5});
+    when(model.embed(List.of(text))).thenReturn(List.of(new float[] {0, 5}));
 
     assertArrayEquals(new float[] {0, 1}, indexer.embedSemanticQuery(query), 0.0001f);
-    verify(model).embed(text);
+    verify(model).embed(List.of(text));
+  }
+
+  @Test
+  void embedsPositiveAndNegativeSemanticQueriesInOneBatch() {
+    EmbeddingModel model = mock(EmbeddingModel.class);
+    EmbeddingIndexer indexer = new EmbeddingIndexer(model);
+    SemanticQuery positive = new SemanticQuery();
+    positive.setTopics(List.of("space"));
+    SemanticQuery negative = new SemanticQuery();
+    negative.setKeywords(List.of("gore"));
+    List<String> texts =
+        List.of(indexer.buildSemanticQueryText(positive), indexer.buildSemanticQueryText(negative));
+    when(model.embed(texts)).thenReturn(List.of(new float[] {3, 4}, new float[] {0, 2}));
+
+    List<float[]> vectors = indexer.embedSemanticQueries(List.of(positive, negative));
+
+    assertArrayEquals(new float[] {0.6f, 0.8f}, vectors.get(0), 0.0001f);
+    assertArrayEquals(new float[] {0, 1}, vectors.get(1), 0.0001f);
+    verify(model).embed(texts);
   }
 
   @Test

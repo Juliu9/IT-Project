@@ -46,7 +46,6 @@ public class DefaultSessionService implements SessionService {
       result.setRecommendations(List.of());
     }
 
-    session.addShownBooks(result.getRecommendations());
     session.addRequest(result);
     sessionRepository.updateSession(session);
   }

@@ -33,7 +33,9 @@ class QdrantCandidateRetrieverTest {
     SemanticQueryVectors vectors = new SemanticQueryVectors(List.of(vector), List.of());
     when(embeddingIndexer.combineSemanticQueries(vectors)).thenReturn(vector);
 
-    new QdrantCandidateRetriever(repository, embeddingIndexer, new AudiobookRetrievalPlanner())
+    new QdrantCandidateRetriever(
+            repository,
+            new CandidateRetrievalExecutor(embeddingIndexer, new AudiobookRetrievalPlanner()))
         .getCandidates(request, vectors, 5);
 
     verify(repository)
@@ -53,7 +55,9 @@ class QdrantCandidateRetrieverTest {
     SemanticQueryVectors vectors = SemanticQueryVectors.empty();
 
     List<AudiobookCandidate> result =
-        new QdrantCandidateRetriever(repository, embeddingIndexer, new AudiobookRetrievalPlanner())
+        new QdrantCandidateRetriever(
+                repository,
+                new CandidateRetrievalExecutor(embeddingIndexer, new AudiobookRetrievalPlanner()))
             .getCandidates(new SessionRequest(), vectors, 5);
 
     assertThat(result).isEmpty();
@@ -74,7 +78,9 @@ class QdrantCandidateRetrieverTest {
         .thenReturn(List.of(new AudiobookCandidate(book, 0.91)));
 
     List<AudiobookCandidate> candidates =
-        new QdrantCandidateRetriever(repository, embeddingIndexer, new AudiobookRetrievalPlanner())
+        new QdrantCandidateRetriever(
+                repository,
+                new CandidateRetrievalExecutor(embeddingIndexer, new AudiobookRetrievalPlanner()))
             .getCandidates(request, vectors, 5);
 
     assertThat(candidates).hasSize(1);

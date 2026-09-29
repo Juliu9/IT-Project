@@ -1,5 +1,7 @@
 package com.gen3.recommenderagent.ranker.strategy;
 
+import static com.gen3.recommenderagent.common.BookCountPolicy.clamp;
+
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.embedding.VectorMath;
@@ -14,7 +16,6 @@ public class SemanticQueryRankingStrategy implements RankingStrategy {
 
   static final double POSITIVE_WEIGHT = 0.25;
   static final double NEGATIVE_WEIGHT = 0.35;
-  private static final int MAX_RESULTS = 5;
 
   /** Preserves the legacy strategy entry point when no preference evidence is available. */
   @Override
@@ -28,21 +29,23 @@ public class SemanticQueryRankingStrategy implements RankingStrategy {
     if (candidates == null || candidates.isEmpty()) {
       return List.of();
     }
-    int limit = Math.min(Math.max(requestedLimit, 1), MAX_RESULTS);
-    List<AudiobookCandidate> ranked =
+    int limit = clamp(requestedLimit);
+    List<ScoredCandidate> ranked =
         candidates.stream()
             .filter(this::validCandidate)
-            .sorted(Comparator.comparingDouble(candidate -> -adjustment(candidate, vectors)))
+            .map(candidate -> new ScoredCandidate(candidate, adjustment(candidate, vectors)))
+            .sorted(Comparator.comparingDouble(ScoredCandidate::score).reversed())
             .limit(limit)
             .toList();
     java.util.ArrayList<Recommendation> recommendations = new java.util.ArrayList<>(ranked.size());
     for (int index = 0; index < ranked.size(); index++) {
-      AudiobookCandidate candidate = ranked.get(index);
+      ScoredCandidate scoredCandidate = ranked.get(index);
+      AudiobookCandidate candidate = scoredCandidate.candidate();
       recommendations.add(
           new Recommendation(
               candidate.audiobook().id(),
               index + 1,
-              adjustment(candidate, vectors),
+              scoredCandidate.score(),
               candidate.audiobook().title()));
     }
     return recommendations;
@@ -76,4 +79,6 @@ public class SemanticQueryRankingStrategy implements RankingStrategy {
         && candidate.audiobook().id() != null
         && !candidate.audiobook().id().isBlank();
   }
+
+  private record ScoredCandidate(AudiobookCandidate candidate, double score) {}
 }

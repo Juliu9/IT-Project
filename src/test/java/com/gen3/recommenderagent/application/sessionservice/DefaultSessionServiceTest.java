@@ -34,7 +34,7 @@ class DefaultSessionServiceTest {
     assertNotNull(request.getRequestId());
     assertNotNull(request.getCreatedAt());
     assertSame(request, session.getRequests().getFirst());
-    assertSame(recommendation, session.getShownBooks().getFirst());
+    assertEquals(List.of(), session.getShownBooks() == null ? List.of() : session.getShownBooks());
     verify(repository).updateSession(session);
   }
 

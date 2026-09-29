@@ -1,8 +1,8 @@
 package com.gen3.recommenderagent.candidateretriever;
 
-import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
+import java.util.Arrays;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
@@ -21,12 +21,16 @@ public class SemanticQueryVectorService {
     if (request == null) {
       return SemanticQueryVectors.empty();
     }
-    return new SemanticQueryVectors(
-        vectorOf(request.getPositiveSemanticQuery()), vectorOf(request.getNegativeSemanticQuery()));
+    List<float[]> embedded =
+        embeddingIndexer.embedSemanticQueries(
+            Arrays.asList(request.getPositiveSemanticQuery(), request.getNegativeSemanticQuery()));
+    if (embedded.size() != 2) {
+      throw new IllegalStateException("Embedding indexer returned an unexpected query batch size");
+    }
+    return new SemanticQueryVectors(vectorOf(embedded.get(0)), vectorOf(embedded.get(1)));
   }
 
-  private List<float[]> vectorOf(SemanticQuery query) {
-    float[] vector = embeddingIndexer.embedSemanticQuery(query);
+  private List<float[]> vectorOf(float[] vector) {
     return vector == null || vector.length == 0 ? List.of() : List.of(vector);
   }
 }

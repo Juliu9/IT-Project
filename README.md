@@ -15,7 +15,8 @@ history in Redis, and returns a natural-language response.
    normalized direction `positive - negative`, while ranking reuses the two vectors separately.
 5. Qdrant retrieves candidates by semantic similarity, exact filters, or hybrid search.
 6. `RankingService` removes duplicates, applies semantic-query adjustments, and limits results.
-7. `SessionService` appends the completed request directly to the Redis-backed `Session`.
+7. `RequestApplicationService` records the shown book IDs, and `SessionService` appends the
+   completed request to the Redis-backed `Session`.
 
 Retrieval is deliberately independent of intent:
 
@@ -68,7 +69,8 @@ BM25-style sparse vector (`keywords`), and filterable audiobook metadata. Author
 language, duration, and source can be required or excluded. Hybrid retrieval combines dense and
 sparse results using reciprocal-rank fusion.
 
-Redis stores session history. There is no PostgreSQL or user-profile dependency.
+Redis stores session history. `shownBooks` contains only unique audiobook IDs rather than duplicate
+recommendation objects. There is no PostgreSQL or user-profile dependency.
 
 The Solr implementation is retained as an isolated compatibility adapter under
 `storage/audiobook/solr`. Normal recommendation functionality does not depend on Solr. Set
