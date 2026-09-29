@@ -35,7 +35,11 @@ public class AiInputParser implements InputParser {
                         Choose one of these intents: RECOMMENDATION, REFINE, MORE_RESULTS,
                         CHANGE_COUNT, UPDATE_PREFERENCES, CLEAR_HISTORY, HELP, or UNKNOWN.
                         Put desired concepts in positiveSemanticQuery and concepts to avoid in
-                        negativeSemanticQuery. Put language, duration, and count restrictions in filter.
+                        negativeSemanticQuery. Put exact author, narrator, language, duration, and
+                        source requirements in mustInclude. Put exact values that must be excluded in
+                        mustNotInclude. For example, "only English" belongs in mustInclude.language,
+                        while "not English" belongs in mustNotInclude.language. Put the requested
+                        number of results in bookCount. Do not invent values or report contradictions.
                         Use RECOMMENDATION for every new audiobook search, including searches by
                         theme, author, narrator, language, or duration. Do not select a retrieval mode.
                         """)
@@ -53,7 +57,9 @@ public class AiInputParser implements InputParser {
     request.setIntent(parsed.getIntent());
     request.setPositiveSemanticQuery(parsed.getPositiveSemanticQuery());
     request.setNegativeSemanticQuery(parsed.getNegativeSemanticQuery());
-    request.setFilter(parsed.getFilter());
+    request.setMustInclude(parsed.getMustInclude());
+    request.setMustNotInclude(parsed.getMustNotInclude());
+    request.setBookCount(parsed.getBookCount());
     request.setRequestId(createUuidV7().toString());
     request.setRawText(rawText);
 

@@ -1,21 +1,18 @@
 package com.gen3.recommenderagent.storage.audiobook.model;
 
-import java.util.List;
-
 /** Structured catalogue constraints shared by retrieval policies and database adapters. */
 public record AudiobookFilters(
-    List<String> authors, List<String> narrators, String language, Integer maximumDurationMinutes) {
+    AudiobookFilterConditions mustInclude, AudiobookFilterConditions mustNotInclude) {
 
   /** Returns an empty filter object so callers do not need null checks. */
   public static AudiobookFilters empty() {
-    return new AudiobookFilters(List.of(), List.of(), null, null);
+    return new AudiobookFilters(
+        AudiobookFilterConditions.empty(), AudiobookFilterConditions.empty());
   }
 
   /** Reports whether at least one payload condition must be applied. */
   public boolean hasConditions() {
-    return (authors != null && !authors.isEmpty())
-        || (narrators != null && !narrators.isEmpty())
-        || (language != null && !language.isBlank())
-        || maximumDurationMinutes != null;
+    return (mustInclude != null && mustInclude.hasConditions())
+        || (mustNotInclude != null && mustNotInclude.hasConditions());
   }
 }

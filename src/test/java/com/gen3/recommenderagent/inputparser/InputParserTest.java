@@ -11,7 +11,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.Filter;
+import com.gen3.recommenderagent.domain.session.MustInclude;
+import com.gen3.recommenderagent.domain.session.MustNotInclude;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.util.List;
@@ -37,9 +38,14 @@ class InputParserTest {
     parsedRequest.setIntent(Intent.RECOMMENDATION);
     parsedRequest.setPositiveSemanticQuery(semanticQuery);
     parsedRequest.setNegativeSemanticQuery(negativeSemanticQuery);
-    Filter filter = new Filter();
-    filter.setLanguage("English");
-    parsedRequest.setFilter(filter);
+    MustInclude mustInclude = new MustInclude();
+    mustInclude.setLanguage("English");
+    mustInclude.setSource("NLS");
+    MustNotInclude mustNotInclude = new MustNotInclude();
+    mustNotInclude.setLanguage("French");
+    parsedRequest.setMustInclude(mustInclude);
+    parsedRequest.setMustNotInclude(mustNotInclude);
+    parsedRequest.setBookCount(3);
 
     ChatClient chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(chatClient
@@ -60,7 +66,9 @@ class InputParserTest {
     assertEquals(Intent.RECOMMENDATION, result.getIntent());
     assertSame(semanticQuery, result.getPositiveSemanticQuery());
     assertSame(negativeSemanticQuery, result.getNegativeSemanticQuery());
-    assertSame(filter, result.getFilter());
+    assertSame(mustInclude, result.getMustInclude());
+    assertSame(mustNotInclude, result.getMustNotInclude());
+    assertEquals(3, result.getBookCount());
 
     UUID requestId = UUID.fromString(result.getRequestId());
     assertEquals(7, requestId.version());
@@ -105,14 +113,18 @@ class InputParserTest {
   }
 
   @Test
-  void shouldReadLegacyConstraintsAsFilter() throws Exception {
+  void shouldReadIncludeAndExcludeFilters() throws Exception {
     SessionRequest request =
         new ObjectMapper()
             .readValue(
-                "{\"constraints\":{\"count\":3,\"language\":\"English\"}}", SessionRequest.class);
+                "{\"bookCount\":3,\"mustInclude\":{\"language\":\"English\",\"source\":\"NLS\"},"
+                    + "\"mustNotInclude\":{\"language\":\"French\",\"source\":\"Legacy\"}}",
+                SessionRequest.class);
 
-    assertNotNull(request.getFilter());
-    assertEquals(3, request.getFilter().getCount());
-    assertEquals("English", request.getFilter().getLanguage());
+    assertEquals(3, request.getBookCount());
+    assertEquals("English", request.getMustInclude().getLanguage());
+    assertEquals("NLS", request.getMustInclude().getSource());
+    assertEquals("French", request.getMustNotInclude().getLanguage());
+    assertEquals("Legacy", request.getMustNotInclude().getSource());
   }
 }

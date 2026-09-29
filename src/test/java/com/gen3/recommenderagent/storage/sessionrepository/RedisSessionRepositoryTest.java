@@ -4,7 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-import com.gen3.recommenderagent.domain.session.Filter;
+import com.gen3.recommenderagent.domain.session.MustInclude;
+import com.gen3.recommenderagent.domain.session.MustNotInclude;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
@@ -181,25 +182,29 @@ class RedisSessionRepositoryTest {
   }
 
   // ============================================================
-  // FILTERS
+  // INCLUDE AND EXCLUDE FILTERS
   // ============================================================
 
   @Test
-  void shouldSaveAndRetrieveFilters() {
+  void shouldSaveAndRetrieveIncludeAndExcludeFilters() {
 
     Session session = new Session();
 
     session.setSessionId("constraints-test");
 
-    Filter filter = new Filter();
-
-    filter.setCount(5);
-    filter.setDuration("under 10 hours");
-    filter.setLanguage("English");
+    MustInclude mustInclude = new MustInclude();
+    mustInclude.setDuration("under 10 hours");
+    mustInclude.setLanguage("English");
+    mustInclude.setSource("NLS");
+    MustNotInclude mustNotInclude = new MustNotInclude();
+    mustNotInclude.setLanguage("French");
+    mustNotInclude.setSource("Legacy");
 
     SessionRequest request = new SessionRequest();
 
-    request.setFilter(filter);
+    request.setBookCount(5);
+    request.setMustInclude(mustInclude);
+    request.setMustNotInclude(mustNotInclude);
 
     session.setRequests(List.of(request));
 
@@ -207,15 +212,13 @@ class RedisSessionRepositoryTest {
 
     Session retrieved = redisSessionCache.getSession("constraints-test");
 
-    Filter retrievedFilter = retrieved.getRequests().get(0).getFilter();
-
-    assertNotNull(retrievedFilter);
-
-    assertEquals(5, retrievedFilter.getCount());
-
-    assertEquals("under 10 hours", retrievedFilter.getDuration());
-
-    assertEquals("English", retrievedFilter.getLanguage());
+    SessionRequest retrievedRequest = retrieved.getRequests().get(0);
+    assertEquals(5, retrievedRequest.getBookCount());
+    assertEquals("under 10 hours", retrievedRequest.getMustInclude().getDuration());
+    assertEquals("English", retrievedRequest.getMustInclude().getLanguage());
+    assertEquals("NLS", retrievedRequest.getMustInclude().getSource());
+    assertEquals("French", retrievedRequest.getMustNotInclude().getLanguage());
+    assertEquals("Legacy", retrievedRequest.getMustNotInclude().getSource());
   }
 
   // ============================================================
@@ -284,7 +287,8 @@ class RedisSessionRepositoryTest {
     assertNull(retrievedRequest.getPositiveSemanticQuery());
     assertNull(retrievedRequest.getNegativeSemanticQuery());
 
-    assertNull(retrievedRequest.getFilter());
+    assertNull(retrievedRequest.getMustInclude());
+    assertNull(retrievedRequest.getMustNotInclude());
   }
 
   // ============================================================

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookSearchPage;
 import java.util.List;
@@ -121,6 +122,39 @@ class SolrAudiobookRepositoryUnitTest {
             org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST));
     assertEquals(
         "{!knn f=embedding topK=4}[0.6,0.8]", queryCaptor.getAllValues().get(1).getQuery());
+  }
+
+  @Test
+  void shouldApplyIncludeAndExcludeSourceFilters() throws Exception {
+    SolrClient client = mock(SolrClient.class);
+    QueryResponse response = mock(QueryResponse.class);
+    when(response.getResults()).thenReturn(new SolrDocumentList());
+    when(client.query(
+            org.mockito.ArgumentMatchers.eq("combinedbooks"),
+            org.mockito.ArgumentMatchers.any(SolrQuery.class),
+            org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST)))
+        .thenReturn(response);
+    AudiobookFilters filters =
+        new AudiobookFilters(
+            new AudiobookFilterConditions(List.of(), List.of(), "English", "NLS", null, 600),
+            new AudiobookFilterConditions(List.of(), List.of(), "French", "Legacy", null, null));
+
+    new SolrAudiobookRepository(client, "combinedbooks").searchKeyword("mystery", filters, 5);
+
+    ArgumentCaptor<SolrQuery> queryCaptor = ArgumentCaptor.forClass(SolrQuery.class);
+    verify(client)
+        .query(
+            org.mockito.ArgumentMatchers.eq("combinedbooks"),
+            queryCaptor.capture(),
+            org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST));
+    assertEquals(
+        List.of(
+            "language:\"English\"",
+            "source:\"NLS\"",
+            "durationMinutes:[* TO 600]",
+            "-language:\"French\"",
+            "-source:\"Legacy\""),
+        List.of(queryCaptor.getValue().getFilterQueries()));
   }
 
   private SolrDocument document(String id, double score, String title) {

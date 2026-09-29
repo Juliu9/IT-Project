@@ -38,14 +38,18 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
   public List<Recommendation> recommend(SessionRequest request, Session session) {
     SemanticQueryVectors vectors = semanticQueryVectorService.create(request);
     var candidates = candidateRetriever.getCandidates(request, vectors, CANDIDATE_LIMIT);
-    return ranker.rank(candidates, resolveResultLimit(request), vectors);
+    return ranker.rank(candidates, resolveResultLimit(request, session), vectors);
   }
 
   /** Applies the API's default and maximum result limits. */
-  private int resolveResultLimit(SessionRequest request) {
-    if (request.getFilter() == null || request.getFilter().getCount() == null) {
-      return DEFAULT_RESULT_LIMIT;
+  private int resolveResultLimit(SessionRequest request, Session session) {
+    Integer requestedCount = request == null ? null : request.getBookCount();
+    if (requestedCount != null) {
+      return Math.clamp(requestedCount, 1, MAX_BOOK_COUNT);
     }
-    return Math.clamp(request.getFilter().getCount(), 1, MAX_BOOK_COUNT);
+    Integer sessionCount = session == null ? null : session.getBookCount();
+    return sessionCount == null
+        ? DEFAULT_RESULT_LIMIT
+        : Math.clamp(sessionCount, 1, MAX_BOOK_COUNT);
   }
 }

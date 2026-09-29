@@ -3,6 +3,7 @@ package com.gen3.recommenderagent.storage.audiobook.solr;
 import com.gen3.recommenderagent.storage.audiobook.FakeAudiobookMetadataEnricher;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookSearchPage;
@@ -100,23 +101,42 @@ public class SolrAudiobookRepository
     return solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
   }
 
-  /** Adds exact metadata and maximum-duration constraints to a Solr query. */
+  /** Adds required and excluded exact metadata constraints to a Solr query. */
   private void addFilters(SolrQuery query, AudiobookFilters filters) {
     if (filters == null || !filters.hasConditions()) {
       return;
     }
-    addAnyValueFilter(query, "authors", filters.authors());
-    addAnyValueFilter(query, "narrators", filters.narrators());
-    if (filters.language() != null && !filters.language().isBlank()) {
-      query.addFilterQuery("language:\"" + ClientUtils.escapeQueryChars(filters.language()) + "\"");
+    addConditions(query, filters.mustInclude(), false);
+    addConditions(query, filters.mustNotInclude(), true);
+  }
+
+  private void addConditions(
+      SolrQuery query, AudiobookFilterConditions conditions, boolean excluded) {
+    if (conditions == null || !conditions.hasConditions()) {
+      return;
     }
-    if (filters.maximumDurationMinutes() != null) {
-      query.addFilterQuery("durationMinutes:[* TO " + filters.maximumDurationMinutes() + "]");
+    addAnyValueFilter(query, "authors", conditions.authors(), excluded);
+    addAnyValueFilter(query, "narrators", conditions.narrators(), excluded);
+    addExactFilter(query, "language", conditions.language(), excluded);
+    addExactFilter(query, "source", conditions.source(), excluded);
+    if (conditions.minimumDurationMinutes() != null
+        || conditions.maximumDurationMinutes() != null) {
+      String minimum =
+          conditions.minimumDurationMinutes() == null
+              ? "*"
+              : conditions.minimumDurationMinutes().toString();
+      String maximum =
+          conditions.maximumDurationMinutes() == null
+              ? "*"
+              : conditions.maximumDurationMinutes().toString();
+      query.addFilterQuery(
+          (excluded ? "-" : "") + "durationMinutes:[" + minimum + " TO " + maximum + "]");
     }
   }
 
   /** Adds one OR-based exact filter for a multivalued Solr field. */
-  private void addAnyValueFilter(SolrQuery query, String field, List<String> values) {
+  private void addAnyValueFilter(
+      SolrQuery query, String field, List<String> values, boolean excluded) {
     if (values == null || values.isEmpty()) {
       return;
     }
@@ -128,7 +148,14 @@ public class SolrAudiobookRepository
             .reduce((left, right) -> left + " OR " + right)
             .orElse("");
     if (!alternatives.isBlank()) {
-      query.addFilterQuery(field + ":(" + alternatives + ")");
+      query.addFilterQuery((excluded ? "-" : "") + field + ":(" + alternatives + ")");
+    }
+  }
+
+  private void addExactFilter(SolrQuery query, String field, String value, boolean excluded) {
+    if (value != null && !value.isBlank()) {
+      query.addFilterQuery(
+          (excluded ? "-" : "") + field + ":\"" + ClientUtils.escapeQueryChars(value) + "\"");
     }
   }
 

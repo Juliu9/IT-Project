@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.google.common.util.concurrent.Futures;
@@ -28,6 +29,7 @@ import io.qdrant.client.grpc.Points.VectorsOutput;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 /** Covers Qdrant repository behavior that does not require a running database. */
 class QdrantAudiobookRepositoryTest {
@@ -102,5 +104,29 @@ class QdrantAudiobookRepositoryTest {
 
     assertThat(vector).isPresent();
     assertThat(vector.orElseThrow()).containsExactly(0.6f, 0.8f);
+  }
+
+  @Test
+  void mapsSourceAndLanguageToQdrantMustAndMustNotConditions() throws Exception {
+    QdrantClient client = mock(QdrantClient.class);
+    SparseTextEncoder sparseEncoder = new Bm25SparseTextEncoder();
+    when(client.collectionExistsAsync("audiobooks")).thenReturn(Futures.immediateFuture(true));
+    when(client.queryAsync(any(QueryPoints.class))).thenReturn(Futures.immediateFuture(List.of()));
+    QdrantAudiobookRepository repository =
+        new QdrantAudiobookRepository(
+            client, new QdrantPointMapper(sparseEncoder), sparseEncoder, "audiobooks", 2);
+    AudiobookFilters filters =
+        new AudiobookFilters(
+            new AudiobookFilterConditions(List.of(), List.of(), "English", "NLS", null, null),
+            new AudiobookFilterConditions(List.of(), List.of(), "French", "Legacy", null, null));
+
+    repository.searchByFilters(filters, 5);
+
+    ArgumentCaptor<QueryPoints> request = ArgumentCaptor.forClass(QueryPoints.class);
+    verify(client).queryAsync(request.capture());
+    assertThat(request.getValue().getFilter().getMustCount()).isEqualTo(2);
+    assertThat(request.getValue().getFilter().getMustNotCount()).isEqualTo(2);
+    assertThat(request.getValue().getFilter().toString())
+        .contains("language", "English", "source", "NLS", "French", "Legacy");
   }
 }

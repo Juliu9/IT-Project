@@ -1,8 +1,10 @@
 package com.gen3.recommenderagent.candidateretriever.retrievalplan;
 
-import com.gen3.recommenderagent.domain.session.Filter;
+import com.gen3.recommenderagent.domain.session.MustInclude;
+import com.gen3.recommenderagent.domain.session.MustNotInclude;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import java.util.ArrayList;
 import java.util.List;
@@ -21,14 +23,11 @@ public class AudiobookRetrievalPlanner {
   public AudiobookRetrievalPlan plan(int limit, SessionRequest request) {
     SemanticQuery positive = request == null ? null : request.getPositiveSemanticQuery();
     SemanticQuery negative = request == null ? null : request.getNegativeSemanticQuery();
-    Filter filter = request == null ? null : request.getFilter();
     String keywordText = lexicalText(positive, "");
     AudiobookFilters filters =
         new AudiobookFilters(
-            copy(positive == null ? null : positive.getAuthors()),
-            copy(positive == null ? null : positive.getNarrators()),
-            filter == null ? null : filter.getLanguage(),
-            durationMinutes(filter == null ? null : filter.getDuration()));
+            includeConditions(request == null ? null : request.getMustInclude()),
+            excludeConditions(request == null ? null : request.getMustNotInclude()));
     return new AudiobookRetrievalPlan(
         modeFor(positive, negative, filters), keywordText, filters, Math.max(limit, 1));
   }
@@ -62,17 +61,52 @@ public class AudiobookRetrievalPlanner {
     return terms.isEmpty() ? fallback : String.join(" ", terms);
   }
 
-  /** Parses simple values such as "under 10 hours" or "480 minutes" into minutes. */
-  private Integer durationMinutes(String duration) {
+  private AudiobookFilterConditions includeConditions(MustInclude filter) {
+    if (filter == null) {
+      return AudiobookFilterConditions.empty();
+    }
+    DurationBounds bounds = durationBounds(filter.getDuration());
+    return new AudiobookFilterConditions(
+        copy(filter.getAuthors()),
+        copy(filter.getNarrators()),
+        filter.getLanguage(),
+        filter.getSource(),
+        bounds.minimum(),
+        bounds.maximum());
+  }
+
+  private AudiobookFilterConditions excludeConditions(MustNotInclude filter) {
+    if (filter == null) {
+      return AudiobookFilterConditions.empty();
+    }
+    DurationBounds bounds = durationBounds(filter.getDuration());
+    return new AudiobookFilterConditions(
+        copy(filter.getAuthors()),
+        copy(filter.getNarrators()),
+        filter.getLanguage(),
+        filter.getSource(),
+        bounds.minimum(),
+        bounds.maximum());
+  }
+
+  /** Parses values such as "under 10 hours" and "more than 480 minutes". */
+  private DurationBounds durationBounds(String duration) {
     if (!hasText(duration)) {
-      return null;
+      return DurationBounds.empty();
     }
     Matcher matcher = FIRST_NUMBER.matcher(duration);
     if (!matcher.find()) {
-      return null;
+      return DurationBounds.empty();
     }
     int value = Integer.parseInt(matcher.group(1));
-    return duration.toLowerCase(Locale.ROOT).contains("hour") ? value * 60 : value;
+    String normalized = duration.toLowerCase(Locale.ROOT);
+    int minutes = normalized.contains("hour") ? value * 60 : value;
+    boolean lowerBound =
+        normalized.contains("over")
+            || normalized.contains("more than")
+            || normalized.contains("at least")
+            || normalized.contains("minimum");
+    return lowerBound ? new DurationBounds(minutes, null) : new DurationBounds(null, minutes);
   }
 
   /** Adds nonblank parsed terms to the lexical query. */
@@ -106,5 +140,11 @@ public class AudiobookRetrievalPlanner {
   /** Reports whether text contains at least one non-whitespace character. */
   private boolean hasText(String value) {
     return value != null && !value.isBlank();
+  }
+
+  private record DurationBounds(Integer minimum, Integer maximum) {
+    private static DurationBounds empty() {
+      return new DurationBounds(null, null);
+    }
   }
 }

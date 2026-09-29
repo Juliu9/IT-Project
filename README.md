@@ -26,9 +26,11 @@ Retrieval is deliberately independent of intent:
 | Filters only | `FILTER_ONLY` |
 | Neither | `NONE` |
 
-Authors and narrators in the positive query are converted into exact filters. Topics, genres, and
-keywords provide semantic and lexical search content. Negative query fields contribute only to the
-negative embedding direction; they are not exclusion filters.
+Topics, genres, and keywords provide semantic and lexical search content. Exact catalogue
+requirements are represented separately as `mustInclude` and `mustNotInclude`, so a request such as
+"only English, but not from source NLS" becomes a Qdrant `must` language condition and a `must_not`
+source condition. Both groups support author, narrator, language, duration, and source. Positive and
+negative semantic queries continue to control vector direction rather than exact exclusions.
 
 ## Request model and intents
 
@@ -36,7 +38,9 @@ negative embedding direction; they are not exclusion filters.
 
 - `positiveSemanticQuery`
 - `negativeSemanticQuery`
-- `filter` (the legacy JSON property `constraints` is still accepted)
+- `mustInclude`
+- `mustNotInclude`
+- `bookCount`
 - intent, raw text, request metadata, and recommendations
 
 The supported intents are:
@@ -60,8 +64,9 @@ values above that maximum are capped by `Session.setBookCount`.
 ## Storage and retrieval adapters
 
 Qdrant is the default candidate source. It stores a normalized named dense vector (`dense`), a
-BM25-style sparse vector (`keywords`), and filterable audiobook metadata. Hybrid retrieval combines
-dense and sparse results using reciprocal-rank fusion.
+BM25-style sparse vector (`keywords`), and filterable audiobook metadata. Authors, narrators,
+language, duration, and source can be required or excluded. Hybrid retrieval combines dense and
+sparse results using reciprocal-rank fusion.
 
 Redis stores session history. There is no PostgreSQL or user-profile dependency.
 

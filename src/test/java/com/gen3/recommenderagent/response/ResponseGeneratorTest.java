@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.Filter;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
@@ -25,9 +24,7 @@ class ResponseGeneratorTest {
     semanticQuery.setGenres(List.of("action", "sci-fi"));
     request.setPositiveSemanticQuery(semanticQuery);
 
-    Filter filter = new Filter();
-    filter.setCount(3);
-    request.setFilter(filter);
+    request.setBookCount(3);
 
     List<Recommendation> recommendations =
         List.of(
@@ -50,9 +47,7 @@ class ResponseGeneratorTest {
     request.setIntent(Intent.RECOMMENDATION);
     request.setRawText("Give me 10 recommendations");
 
-    Filter filter = new Filter();
-    filter.setCount(10);
-    request.setFilter(filter);
+    request.setBookCount(10);
 
     List<Recommendation> recommendations =
         List.of(

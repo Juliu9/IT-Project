@@ -25,7 +25,6 @@ import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectorService;
 import com.gen3.recommenderagent.candidateretriever.SolrCandidateRetriever;
 import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.Filter;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
@@ -157,14 +156,11 @@ class RecommendationFlowIntegrationTest {
     SemanticQuery semanticQuery = new SemanticQuery();
     semanticQuery.setGenres(List.of("science fiction"));
 
-    Filter filter = new Filter();
-    filter.setCount(3);
-
     SessionRequest request = new SessionRequest();
     request.setRawText(rawText);
     request.setIntent(Intent.RECOMMENDATION);
     request.setPositiveSemanticQuery(semanticQuery);
-    request.setFilter(filter);
+    request.setBookCount(3);
     return request;
   }
 }

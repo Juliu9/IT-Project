@@ -7,12 +7,14 @@ import static io.qdrant.client.WithPayloadSelectorFactory.enable;
 
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorRepository;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Collections;
+import io.qdrant.client.grpc.Common.Condition;
 import io.qdrant.client.grpc.Common.Filter;
 import io.qdrant.client.grpc.Common.Range;
 import io.qdrant.client.grpc.Points.CreateFieldIndexCollection;
@@ -242,6 +244,7 @@ public class QdrantAudiobookRepository
     createPayloadIndex("authors", FieldType.FieldTypeKeyword);
     createPayloadIndex("narrators", FieldType.FieldTypeKeyword);
     createPayloadIndex("language", FieldType.FieldTypeKeyword);
+    createPayloadIndex("source", FieldType.FieldTypeKeyword);
     createPayloadIndex("durationMinutes", FieldType.FieldTypeInteger);
   }
 
@@ -295,22 +298,47 @@ public class QdrantAudiobookRepository
       return null;
     }
     Filter.Builder builder = Filter.newBuilder();
-    if (filters.authors() != null && !filters.authors().isEmpty()) {
-      builder.addMust(matchKeywords("authors", filters.authors()));
-    }
-    if (filters.narrators() != null && !filters.narrators().isEmpty()) {
-      builder.addMust(matchKeywords("narrators", filters.narrators()));
-    }
-    if (filters.language() != null && !filters.language().isBlank()) {
-      builder.addMust(matchKeyword("language", filters.language()));
-    }
-    if (filters.maximumDurationMinutes() != null) {
-      builder.addMust(
-          range(
-              "durationMinutes",
-              Range.newBuilder().setLte(filters.maximumDurationMinutes()).build()));
-    }
+    addConditions(builder, filters.mustInclude(), false);
+    addConditions(builder, filters.mustNotInclude(), true);
     return builder.build();
+  }
+
+  private void addConditions(
+      Filter.Builder builder, AudiobookFilterConditions conditions, boolean excluded) {
+    if (conditions == null || !conditions.hasConditions()) {
+      return;
+    }
+    if (conditions.authors() != null && !conditions.authors().isEmpty()) {
+      addCondition(builder, matchKeywords("authors", conditions.authors()), excluded);
+    }
+    if (conditions.narrators() != null && !conditions.narrators().isEmpty()) {
+      addCondition(builder, matchKeywords("narrators", conditions.narrators()), excluded);
+    }
+    if (conditions.language() != null && !conditions.language().isBlank()) {
+      addCondition(builder, matchKeyword("language", conditions.language()), excluded);
+    }
+    if (conditions.source() != null && !conditions.source().isBlank()) {
+      addCondition(builder, matchKeyword("source", conditions.source()), excluded);
+    }
+    if (conditions.minimumDurationMinutes() != null
+        || conditions.maximumDurationMinutes() != null) {
+      Range.Builder duration = Range.newBuilder();
+      if (conditions.minimumDurationMinutes() != null) {
+        duration.setGte(conditions.minimumDurationMinutes());
+      }
+      if (conditions.maximumDurationMinutes() != null) {
+        duration.setLte(conditions.maximumDurationMinutes());
+      }
+      addCondition(builder, range("durationMinutes", duration.build()), excluded);
+    }
+  }
+
+  private void addCondition(Filter.Builder builder, Condition condition, boolean excluded) {
+    if (excluded) {
+      builder.addMustNot(condition);
+    } else {
+      builder.addMust(condition);
+    }
   }
 
   /** Adds a payload index required by Qdrant Cloud strict mode. */

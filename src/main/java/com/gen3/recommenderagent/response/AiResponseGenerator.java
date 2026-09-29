@@ -1,5 +1,7 @@
 package com.gen3.recommenderagent.response;
 
+import static com.gen3.recommenderagent.common.ApplicationConstants.MAX_BOOK_COUNT;
+
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.openai.errors.OpenAIException;
@@ -40,9 +42,8 @@ public class AiResponseGenerator implements ResponseGenerator {
     }
 
     if (currentRequest != null
-        && currentRequest.getFilter() != null
-        && currentRequest.getFilter().getCount() != null
-        && currentRequest.getFilter().getCount() > 5) {
+        && currentRequest.getBookCount() != null
+        && currentRequest.getBookCount() > MAX_BOOK_COUNT) {
       return buildRecommendationLimitResponse(currentRequest);
     }
 

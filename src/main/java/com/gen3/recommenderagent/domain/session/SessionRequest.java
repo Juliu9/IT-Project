@@ -1,6 +1,5 @@
 package com.gen3.recommenderagent.domain.session;
 
-import com.fasterxml.jackson.annotation.JsonAlias;
 import com.gen3.recommenderagent.domain.Intent;
 import java.time.Instant;
 import java.util.List;
@@ -16,8 +15,9 @@ public class SessionRequest {
   private SemanticQuery positiveSemanticQuery;
   private SemanticQuery negativeSemanticQuery;
 
-  @JsonAlias("constraints")
-  private Filter filter;
+  private MustInclude mustInclude;
+  private MustNotInclude mustNotInclude;
+  private Integer bookCount;
 
   private List<Recommendation> recommendations;
 
@@ -63,12 +63,28 @@ public class SessionRequest {
     this.negativeSemanticQuery = negativeSemanticQuery;
   }
 
-  public Filter getFilter() {
-    return filter;
+  public MustInclude getMustInclude() {
+    return mustInclude;
   }
 
-  public void setFilter(Filter filter) {
-    this.filter = filter;
+  public void setMustInclude(MustInclude mustInclude) {
+    this.mustInclude = mustInclude;
+  }
+
+  public MustNotInclude getMustNotInclude() {
+    return mustNotInclude;
+  }
+
+  public void setMustNotInclude(MustNotInclude mustNotInclude) {
+    this.mustNotInclude = mustNotInclude;
+  }
+
+  public Integer getBookCount() {
+    return bookCount;
+  }
+
+  public void setBookCount(Integer bookCount) {
+    this.bookCount = bookCount;
   }
 
   public List<Recommendation> getRecommendations() {

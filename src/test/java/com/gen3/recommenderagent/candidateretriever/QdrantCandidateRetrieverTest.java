@@ -7,11 +7,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlanner;
-import com.gen3.recommenderagent.domain.session.Filter;
+import com.gen3.recommenderagent.domain.session.MustInclude;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
@@ -25,9 +26,9 @@ class QdrantCandidateRetrieverTest {
     QdrantAudiobookRepository repository = mock(QdrantAudiobookRepository.class);
     EmbeddingIndexer embeddingIndexer = mock(EmbeddingIndexer.class);
     SessionRequest request = requestWithTopic("desert");
-    Filter filter = new Filter();
+    MustInclude filter = new MustInclude();
     filter.setLanguage("English");
-    request.setFilter(filter);
+    request.setMustInclude(filter);
     float[] vector = {0.6f, 0.8f};
     SemanticQueryVectors vectors = new SemanticQueryVectors(List.of(vector), List.of());
     when(embeddingIndexer.combineSemanticQueries(vectors)).thenReturn(vector);
@@ -37,7 +38,12 @@ class QdrantCandidateRetrieverTest {
 
     verify(repository)
         .searchHybrid(
-            vector, "desert", new AudiobookFilters(List.of(), List.of(), "English", null), 5);
+            vector,
+            "desert",
+            new AudiobookFilters(
+                new AudiobookFilterConditions(List.of(), List.of(), "English", null, null, null),
+                AudiobookFilterConditions.empty()),
+            5);
   }
 
   @Test
