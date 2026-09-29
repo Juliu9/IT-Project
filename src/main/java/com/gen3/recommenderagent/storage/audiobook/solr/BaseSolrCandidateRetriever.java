@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.legacy.solr;
+package com.gen3.recommenderagent.storage.audiobook.solr;
 
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;

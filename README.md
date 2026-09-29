@@ -54,7 +54,7 @@ The architecture is highly decoupled, utilizing Spring's `ApplicationEventPublis
 To run and develop this project, you will need:
 
 * **Java 21:** Required by Spring Boot 4.1.0.
-* **Docker & Docker Compose:** For local PostgreSQL and Redis instances.
+* **Docker & Docker Compose:** For local Qdrant and Redis instances.
 * **Apache Solr 9.x:** Must be hosted or run separately (not included in the Docker Compose file).
 * **Maven:** A Maven wrapper (`mvnw`) is included in the repository.
 
@@ -94,11 +94,11 @@ The application will fail to start if these are not provided, as they do not hav
 The repository includes a `compose.yaml` file that provisions the required local databases.
 
 #### Services Included
-* **postgres:** PostgreSQL 16 (Exposed on port `5432`)
+* **Qdrant:** Qdrant (Exposed on port `6333`)
 * **redis:** Redis 7 (Exposed on port `6379`)
 
 #### Commands
-Start Redis and Postgres background services:
+Start Redis and Qdrant background services:
 ```bash
 docker compose up -d
 ```

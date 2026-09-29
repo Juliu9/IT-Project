@@ -1,6 +1,7 @@
-package com.gen3.recommenderagent.storage.sessionrepository;
+package com.gen3.recommenderagent.storage.sessionrepository.redis;
 
 import com.gen3.recommenderagent.domain.session.Session;
+import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Repository;
 

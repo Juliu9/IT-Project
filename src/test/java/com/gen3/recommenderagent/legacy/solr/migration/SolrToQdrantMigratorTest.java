@@ -7,11 +7,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
-import com.gen3.recommenderagent.legacy.solr.SolrAudiobookRepository;
+import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
 import java.util.List;
+
+import com.gen3.recommenderagent.storage.audiobook.solr.migration.SolrToQdrantMigrator;
 import org.junit.jupiter.api.Test;
 
 /** Verifies that migration pages through Solr and writes normalized vectors in batches. */

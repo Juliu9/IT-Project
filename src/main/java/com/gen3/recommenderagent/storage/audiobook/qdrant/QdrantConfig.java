@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Configuration;
 
 /** Builds the native Qdrant client from environment-backed application properties. */
 @Configuration
-public class QdrantConfiguration {
+public class QdrantConfig {
 
   /**
    * Creates the gRPC client used by the repository and Spring AI vector-store integration.

@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.legacy.solr;
+package com.gen3.recommenderagent.storage.audiobook.solr;
 
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.impl.HttpJdkSolrClient;

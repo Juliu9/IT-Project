@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.legacy.solr.migration;
+package com.gen3.recommenderagent.storage.audiobook.solr.migration;
 
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;

@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.config;
+package com.gen3.recommenderagent.storage.sessionrepository.redis;
 
 import com.gen3.recommenderagent.domain.session.Session;
 import org.springframework.context.annotation.Bean;

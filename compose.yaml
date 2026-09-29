@@ -5,17 +5,6 @@ services:
     ports:
       - "6379:6379"
 
-  postgres:
-    image: postgres:16-alpine
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_DB: recommender
-      POSTGRES_USER: recommender
-      POSTGRES_PASSWORD: recommender
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
   qdrant:
     image: qdrant/qdrant:v1.15.4
     ports:

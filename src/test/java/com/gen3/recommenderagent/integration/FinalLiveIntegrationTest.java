@@ -7,7 +7,7 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.Bm25SparseTextEncoder;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
-import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantConfiguration;
+import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantConfig;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantPointMapper;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.SparseTextEncoder;
 import io.qdrant.client.QdrantClient;
@@ -32,7 +32,7 @@ class FinalLiveIntegrationTest {
     int dimension = Integer.parseInt(environment("QDRANT_EMBEDDING_DIMENSION", "1536"));
 
     QdrantClient client =
-        new QdrantConfiguration()
+        new QdrantConfig()
             .qdrantClient(environment("QDRANT_URL", ""), grpcPort, environment("QDRANT_API", ""));
     try {
       boolean collectionExists =

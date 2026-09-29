@@ -11,6 +11,8 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCatalogueRepository;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorIndexer;
 import java.util.List;
+
+import com.gen3.recommenderagent.storage.audiobook.solr.AudiobookEmbeddingStartupIndexer;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.DefaultApplicationArguments;
 

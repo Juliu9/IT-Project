@@ -9,13 +9,14 @@ public enum Intent {
   NEW_RECOMMENDATION(RetrievalMode.HYBRID), // "Recommend me a sci-fi book"
   SIMILAR_TO_BOOK(RetrievalMode.SEMANTIC), // "Find me something like Project Hail Mary"
   SIMILAR_TO_AUTHOR(RetrievalMode.HYBRID), // "I want books by Brandon Sanderson"
-  SIMILAR_TO_NARRATOR(RetrievalMode.FILTER_ONLY), // "Show me audiobooks read by Ray Porter"
   // ==========================================
   // Refinement & Filtering
   // ==========================================
   REFINE_RECOMMENDATION(RetrievalMode.HYBRID), // "Make it darker/scarier"
+
   FILTER_BY_LENGTH(RetrievalMode.FILTER_ONLY), // "Something under 10 hours"
-  FILTER_BY_NARRATOR(RetrievalMode.FILTER_ONLY), // "Must be a full cast recording"
+  FILTER_BY_AUTHOR(RetrievalMode.FILTER_ONLY), // "I want books by Brandon Sanderson"
+  FILTER_BY_NARRATOR(RetrievalMode.FILTER_ONLY), // "Show me audiobooks read by Ray Porter"
   // ==========================================
   // Pagination & Quantity
   // ==========================================

@@ -16,10 +16,6 @@ import org.testcontainers.utility.DockerImageName;
 class RecommenderAgentApplicationTests {
 
   @Container @ServiceConnection
-  static PostgreSQLContainer postgres =
-      new PostgreSQLContainer(DockerImageName.parse("postgres:16-alpine"));
-
-  @Container @ServiceConnection
   static GenericContainer<?> redis =
       new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
 

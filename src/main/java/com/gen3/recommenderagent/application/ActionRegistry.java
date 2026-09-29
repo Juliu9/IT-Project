@@ -42,9 +42,9 @@ public class ActionRegistry {
     registry.put(Intent.NEW_RECOMMENDATION, recommendationAction);
     registry.put(Intent.SIMILAR_TO_BOOK, recommendationAction);
     registry.put(Intent.SIMILAR_TO_AUTHOR, recommendationAction);
-    registry.put(Intent.SIMILAR_TO_NARRATOR, recommendationAction);
     registry.put(Intent.REFINE_RECOMMENDATION, recommendationAction);
     registry.put(Intent.FILTER_BY_LENGTH, recommendationAction);
+    registry.put(Intent.FILTER_BY_AUTHOR, recommendationAction);
     registry.put(Intent.FILTER_BY_NARRATOR, recommendationAction);
     registry.put(Intent.BOOK_DETAILS, recommendationAction);
   }

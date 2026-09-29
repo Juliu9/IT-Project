@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.legacy.solr;
+package com.gen3.recommenderagent.storage.audiobook.solr;
 
 import com.gen3.recommenderagent.storage.audiobook.FakeAudiobookMetadataEnricher;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
