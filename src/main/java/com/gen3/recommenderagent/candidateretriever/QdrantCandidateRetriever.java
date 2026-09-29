@@ -1,9 +1,9 @@
 package com.gen3.recommenderagent.candidateretriever;
 
-import com.gen3.recommenderagent.domain.session.SessionRequest;
-import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
 import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlan;
 import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlanner;
+import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
 import java.io.IOException;

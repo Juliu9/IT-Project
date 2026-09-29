@@ -1,7 +1,6 @@
 package com.gen3.recommenderagent.application.sessionservice;
 
 import com.gen3.recommenderagent.domain.session.Session;
-import com.gen3.recommenderagent.domain.session.SessionContext;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
 import java.time.Instant;
@@ -20,7 +19,7 @@ public class DefaultSessionService implements SessionService {
   }
 
   @Override
-  public SessionContext load(String sessionId, String userId) {
+  public Session load(String sessionId, String userId) {
     Session session = sessionRepository.getSession(sessionId);
     if (session == null) {
       session = new Session();
@@ -28,12 +27,11 @@ public class DefaultSessionService implements SessionService {
       session.setUserId(userId);
       session.setCreatedAt(Instant.now());
     }
-    return new SessionContext(session);
+    return session;
   }
 
   @Override
-  public void update(
-      SessionContext context, SessionRequest originalRequest, SessionRequest actionResult) {
+  public void update(Session session, SessionRequest originalRequest, SessionRequest actionResult) {
     SessionRequest result = actionResult == null ? originalRequest : actionResult;
     if (result.getRawText() == null && originalRequest != null) {
       result.setRawText(originalRequest.getRawText());
@@ -48,7 +46,6 @@ public class DefaultSessionService implements SessionService {
       result.setRecommendations(List.of());
     }
 
-    Session session = context.getSession();
     session.addShownBooks(result.getRecommendations());
     session.addRequest(result);
     sessionRepository.updateSession(session);

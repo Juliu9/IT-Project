@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.ranker;
+package com.gen3.recommenderagent.candidateretriever;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -10,9 +10,6 @@ import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
 import java.util.List;
-
-import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectorService;
-import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors;
 import org.junit.jupiter.api.Test;
 
 class SemanticQueryVectorServiceTest {

@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.ranker;
+package com.gen3.recommenderagent.storage.audiobook.solr;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookSearchPage;
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
 import java.util.List;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;

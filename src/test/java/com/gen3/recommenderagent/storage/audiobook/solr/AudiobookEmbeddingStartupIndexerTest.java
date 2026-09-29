@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.legacy.solr;
+package com.gen3.recommenderagent.storage.audiobook.solr;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -11,7 +11,6 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCatalogueRepository;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorIndexer;
-import com.gen3.recommenderagent.storage.audiobook.solr.AudiobookEmbeddingStartupIndexer;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.DefaultApplicationArguments;

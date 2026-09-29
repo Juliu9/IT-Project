@@ -1,5 +1,7 @@
 package com.gen3.recommenderagent.domain.session;
 
+import static com.gen3.recommenderagent.common.ApplicationConstants.MAX_BOOK_COUNT;
+
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -12,7 +14,7 @@ public class Session {
   private Instant createdAt;
   private Instant updatedAt;
   private Instant expiresAt;
-  private Integer bookCount; // default and maximum 5
+  private Integer bookCount = MAX_BOOK_COUNT;
   private List<Recommendation> shownBooks;
   private List<SessionRequest> requests = new ArrayList<>();
 
@@ -67,14 +69,14 @@ public class Session {
   }
 
   public Integer getBookCount() {
-      return bookCount;
+    return bookCount;
   }
 
   public void setBookCount(Integer bookCount) {
-      this.bookCount = bookCount;
+    this.bookCount = bookCount == null ? MAX_BOOK_COUNT : Math.min(bookCount, MAX_BOOK_COUNT);
   }
 
-    public List<SessionRequest> getRequests() {
+  public List<SessionRequest> getRequests() {
     return requests;
   }
 

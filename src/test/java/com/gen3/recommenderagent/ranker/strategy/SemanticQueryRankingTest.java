@@ -1,10 +1,8 @@
-package com.gen3.recommenderagent.ranker;
+package com.gen3.recommenderagent.ranker.strategy;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors;
-import com.gen3.recommenderagent.ranker.strategy.HybridRankingStrategy;
-import com.gen3.recommenderagent.ranker.strategy.SemanticQueryRankingStrategy;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import java.util.List;

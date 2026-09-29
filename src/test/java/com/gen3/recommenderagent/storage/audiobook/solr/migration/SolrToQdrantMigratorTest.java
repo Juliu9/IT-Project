@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.legacy.solr.migration;
+package com.gen3.recommenderagent.storage.audiobook.solr.migration;
 
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
@@ -11,7 +11,6 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
 import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
-import com.gen3.recommenderagent.storage.audiobook.solr.migration.SolrToQdrantMigrator;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 

@@ -1,7 +1,7 @@
 package com.gen3.recommenderagent.application.action;
 
 import com.gen3.recommenderagent.application.IntentAction;
-import com.gen3.recommenderagent.domain.session.SessionContext;
+import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import org.springframework.stereotype.Component;
 
@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 public class UpdatePreferencesAction implements IntentAction {
 
   @Override
-  public SessionRequest execute(SessionRequest request, SessionContext context) {
+  public SessionRequest execute(SessionRequest request, Session session) {
     return request;
   }
 }

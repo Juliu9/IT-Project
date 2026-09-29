@@ -15,7 +15,7 @@ history in Redis, and returns a natural-language response.
    normalized direction `positive - negative`, while ranking reuses the two vectors separately.
 5. Qdrant retrieves candidates by semantic similarity, exact filters, or hybrid search.
 6. `RankingService` removes duplicates, applies semantic-query adjustments, and limits results.
-7. The completed request is appended to the Redis-backed session.
+7. `SessionService` appends the completed request directly to the Redis-backed `Session`.
 
 Retrieval is deliberately independent of intent:
 
@@ -53,6 +53,9 @@ The supported intents are:
 `REFINE`, `MORE_RESULTS`, `CHANGE_COUNT`, and `UPDATE_PREFERENCES` currently have boilerplate
 actions and do not mutate the session. Persistent user/session preferences are intentionally not
 implemented yet.
+
+Each session has a `bookCount` limit. It defaults to the shared `MAX_BOOK_COUNT` value of five, and
+values above that maximum are capped by `Session.setBookCount`.
 
 ## Storage and retrieval adapters
 
@@ -143,16 +146,21 @@ skipped automatically if Docker is unavailable.
 
 ```text
 src/main/java/com/gen3/recommenderagent/
-├── api/          # REST entry point
-├── application/  # Use cases, intent actions, and session service
-├── config/       # Redis and application configuration
-├── domain/       # Intents and session-domain models
-├── embedding/    # Text construction and vector operations
-├── engine/       # Recommendation workflow
-├── inputparser/  # Natural-language request parsing
-├── ranker/       # Retrieval planning, candidate retrieval, and ranking
-├── response/     # Natural-language response generation
-└── storage/      # Redis, Qdrant, and isolated Solr adapters
+├── api/                 # REST entry point
+├── application/         # Use cases, intent actions, and session service
+├── candidateretriever/  # Candidate adapters, query vectors, and retrieval plans
+├── common/              # Constants shared across layers
+├── config/              # Redis and application configuration
+├── domain/              # Intents and session-domain models
+├── embedding/           # Text construction and vector operations
+├── engine/              # Recommendation workflow
+├── inputparser/         # Natural-language request parsing
+├── ranker/              # Candidate scoring and final ranking
+├── response/            # Natural-language response generation
+└── storage/             # Redis, Qdrant, and isolated Solr repositories
 ```
+
+The test source tree mirrors these application packages; integration-only support remains under
+`integration/` and `testsupport/`.
 
 Never commit API keys or `.env` files.

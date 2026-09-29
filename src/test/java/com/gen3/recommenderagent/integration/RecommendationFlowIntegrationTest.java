@@ -20,6 +20,10 @@ import com.gen3.recommenderagent.application.action.RecommendationAction;
 import com.gen3.recommenderagent.application.action.RefineAction;
 import com.gen3.recommenderagent.application.action.UpdatePreferencesAction;
 import com.gen3.recommenderagent.application.sessionservice.DefaultSessionService;
+import com.gen3.recommenderagent.candidateretriever.CandidateRetriever;
+import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectorService;
+import com.gen3.recommenderagent.candidateretriever.SolrCandidateRetriever;
+import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Filter;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
@@ -28,14 +32,10 @@ import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.engine.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.ranker.RankingService;
-import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectorService;
-import com.gen3.recommenderagent.candidateretriever.CandidateRetriever;
-import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.ranker.strategy.HybridRankingStrategy;
 import com.gen3.recommenderagent.ranker.strategy.RelevanceRankingStrategy;
 import com.gen3.recommenderagent.ranker.strategy.SemanticQueryRankingStrategy;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
-import com.gen3.recommenderagent.candidateretriever.SolrCandidateRetriever;
 import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.testsupport.SolrContainerTestSupport;
 import java.util.List;
@@ -89,8 +89,7 @@ class RecommendationFlowIntegrationTest {
     com.gen3.recommenderagent.embedding.EmbeddingIndexer embeddingIndexer =
         mock(com.gen3.recommenderagent.embedding.EmbeddingIndexer.class);
     CandidateRetriever candidateRetriever =
-        new SolrCandidateRetriever(
-            repository, embeddingIndexer, new AudiobookRetrievalPlanner());
+        new SolrCandidateRetriever(repository, embeddingIndexer, new AudiobookRetrievalPlanner());
     RankingService rankingService =
         new RankingService(
             new RelevanceRankingStrategy(),

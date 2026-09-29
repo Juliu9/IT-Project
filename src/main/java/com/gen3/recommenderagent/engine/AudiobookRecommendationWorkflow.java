@@ -1,12 +1,14 @@
 package com.gen3.recommenderagent.engine;
 
-import com.gen3.recommenderagent.domain.session.Recommendation;
-import com.gen3.recommenderagent.domain.session.SessionContext;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
-import com.gen3.recommenderagent.ranker.Ranker;
+import static com.gen3.recommenderagent.common.ApplicationConstants.MAX_BOOK_COUNT;
+
+import com.gen3.recommenderagent.candidateretriever.CandidateRetriever;
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectorService;
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors;
-import com.gen3.recommenderagent.candidateretriever.CandidateRetriever;
+import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.session.Session;
+import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.ranker.Ranker;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
@@ -15,8 +17,7 @@ import org.springframework.stereotype.Service;
 public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
 
   private static final int CANDIDATE_LIMIT = 50;
-  private static final int DEFAULT_RESULT_LIMIT = 5;
-  private static final int MAX_RESULT_LIMIT = 5;
+  private static final int DEFAULT_RESULT_LIMIT = MAX_BOOK_COUNT;
 
   private final CandidateRetriever candidateRetriever;
   private final Ranker ranker;
@@ -34,7 +35,7 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
 
   /** Builds retrieval text, lets the retriever select its mode, and ranks the candidates. */
   @Override
-  public List<Recommendation> recommend(SessionRequest request, SessionContext context) {
+  public List<Recommendation> recommend(SessionRequest request, Session session) {
     SemanticQueryVectors vectors = semanticQueryVectorService.create(request);
     var candidates = candidateRetriever.getCandidates(request, vectors, CANDIDATE_LIMIT);
     return ranker.rank(candidates, resolveResultLimit(request), vectors);
@@ -45,6 +46,6 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
     if (request.getFilter() == null || request.getFilter().getCount() == null) {
       return DEFAULT_RESULT_LIMIT;
     }
-    return Math.clamp(request.getFilter().getCount(), 1, MAX_RESULT_LIMIT);
+    return Math.clamp(request.getFilter().getCount(), 1, MAX_BOOK_COUNT);
   }
 }

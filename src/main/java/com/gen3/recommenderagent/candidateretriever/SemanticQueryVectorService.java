@@ -4,7 +4,6 @@ import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
 import java.util.List;
-
 import org.springframework.stereotype.Service;
 
 /** Encodes the request's positive and negative semantic queries exactly once. */
