@@ -97,9 +97,9 @@ public class AiResponseGenerator implements ResponseGenerator {
     // Pulls genres from the parsed request
     String genresSummary =
         (currentRequest != null
-                && currentRequest.getQuery() != null
-                && currentRequest.getQuery().getGenres() != null)
-            ? String.join(", ", currentRequest.getQuery().getGenres())
+                && currentRequest.getPositiveSemanticQuery() != null
+                && currentRequest.getPositiveSemanticQuery().getGenres() != null)
+            ? String.join(", ", currentRequest.getPositiveSemanticQuery().getGenres())
             : "not specified";
 
     // Converts only the top five reccomendation objects into a plain text summary
@@ -143,10 +143,12 @@ public class AiResponseGenerator implements ResponseGenerator {
     }
 
     if (currentRequest != null
-        && currentRequest.getQuery() != null
-        && currentRequest.getQuery().getGenres() != null
-        && !currentRequest.getQuery().getGenres().isEmpty()) {
-      response.append(" in ").append(String.join(", ", currentRequest.getQuery().getGenres()));
+        && currentRequest.getPositiveSemanticQuery() != null
+        && currentRequest.getPositiveSemanticQuery().getGenres() != null
+        && !currentRequest.getPositiveSemanticQuery().getGenres().isEmpty()) {
+      response
+          .append(" in ")
+          .append(String.join(", ", currentRequest.getPositiveSemanticQuery().getGenres()));
     }
 
     response.append(":\n");

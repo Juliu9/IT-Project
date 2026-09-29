@@ -32,8 +32,11 @@ class InputParserTest {
     semanticQuery.setGenres(List.of("science fiction"));
 
     ParsedRequest parsedRequest = new ParsedRequest();
-    parsedRequest.setIntent(Intent.NEW_RECOMMENDATION);
-    parsedRequest.setQuery(semanticQuery);
+    SemanticQuery negativeSemanticQuery = new SemanticQuery();
+    negativeSemanticQuery.setKeywords(List.of("romance"));
+    parsedRequest.setIntent(Intent.RECOMMENDATION);
+    parsedRequest.setPositiveSemanticQuery(semanticQuery);
+    parsedRequest.setNegativeSemanticQuery(negativeSemanticQuery);
     Filter filter = new Filter();
     filter.setLanguage("English");
     parsedRequest.setFilter(filter);
@@ -54,8 +57,9 @@ class InputParserTest {
 
     assertNotNull(result);
     assertEquals(rawText, result.getRawText());
-    assertEquals(Intent.NEW_RECOMMENDATION, result.getIntent());
-    assertSame(semanticQuery, result.getQuery());
+    assertEquals(Intent.RECOMMENDATION, result.getIntent());
+    assertSame(semanticQuery, result.getPositiveSemanticQuery());
+    assertSame(negativeSemanticQuery, result.getNegativeSemanticQuery());
     assertSame(filter, result.getFilter());
 
     UUID requestId = UUID.fromString(result.getRequestId());

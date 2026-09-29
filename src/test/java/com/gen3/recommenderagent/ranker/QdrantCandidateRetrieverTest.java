@@ -6,13 +6,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.Filter;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
 import com.gen3.recommenderagent.ranker.candidate.QdrantCandidateRetriever;
 import com.gen3.recommenderagent.ranker.candidate.retrieval.AudiobookRetrievalPlanner;
-import com.gen3.recommenderagent.ranker.candidate.retrieval.IntentRetrievalPolicy;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
@@ -20,77 +19,71 @@ import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookReposit
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-/** Verifies that Qdrant retrieval returns the shared candidate type with its score. */
 class QdrantCandidateRetrieverTest {
 
-  /** Confirms a hybrid intent executes dense and sparse retrieval together. */
   @Test
-  void routesNewRecommendationToHybridSearch() throws Exception {
+  void routesSemanticAndFilterContentToHybridSearch() throws Exception {
     QdrantAudiobookRepository repository = mock(QdrantAudiobookRepository.class);
     EmbeddingIndexer embeddingIndexer = mock(EmbeddingIndexer.class);
-    SessionRequest request = new SessionRequest();
-    request.setIntent(Intent.NEW_RECOMMENDATION);
-    request.setRawText("fantasy in a desert");
-    SemanticQuery semanticQuery = new SemanticQuery();
-    semanticQuery.setGenres(List.of("fantasy"));
-    semanticQuery.setTopics(List.of("desert"));
-    request.setQuery(semanticQuery);
+    SessionRequest request = requestWithTopic("desert");
+    Filter filter = new Filter();
+    filter.setLanguage("English");
+    request.setFilter(filter);
     float[] vector = {0.6f, 0.8f};
-    PreferenceSignals signals = PreferenceSignals.empty();
-    when(embeddingIndexer.embedRequest(request, signals)).thenReturn(vector);
+    SemanticQueryVectors vectors = new SemanticQueryVectors(List.of(vector), List.of());
+    when(embeddingIndexer.combineSemanticQueries(vectors)).thenReturn(vector);
 
-    new QdrantCandidateRetriever(
-            repository,
-            embeddingIndexer,
-            new AudiobookRetrievalPlanner(new IntentRetrievalPolicy()))
-        .getCandidates(request, signals, 5);
+    new QdrantCandidateRetriever(repository, embeddingIndexer, new AudiobookRetrievalPlanner())
+        .getCandidates(request, vectors, 5);
 
-    verify(repository).searchHybrid(vector, "desert fantasy", AudiobookFilters.empty(), 5);
+    verify(repository)
+        .searchHybrid(
+            vector, "desert", new AudiobookFilters(List.of(), List.of(), "English", null), 5);
   }
 
-  /** Confirms action-only intents avoid unnecessary embedding and database calls. */
   @Test
-  void skipsRetrievalForNoneMode() throws Exception {
+  void skipsRetrievalWhenRequestHasNoSearchContent() throws Exception {
     QdrantAudiobookRepository repository = mock(QdrantAudiobookRepository.class);
     EmbeddingIndexer embeddingIndexer = mock(EmbeddingIndexer.class);
-    SessionRequest request = new SessionRequest();
-    request.setIntent(Intent.HELP);
+    SemanticQueryVectors vectors = SemanticQueryVectors.empty();
 
     List<AudiobookCandidate> result =
-        new QdrantCandidateRetriever(
-                repository,
-                embeddingIndexer,
-                new AudiobookRetrievalPlanner(new IntentRetrievalPolicy()))
-            .getCandidates(request, PreferenceSignals.empty(), 5);
+        new QdrantCandidateRetriever(repository, embeddingIndexer, new AudiobookRetrievalPlanner())
+            .getCandidates(new SessionRequest(), vectors, 5);
 
     assertThat(result).isEmpty();
-    verify(embeddingIndexer, never()).embedRequest(request, PreferenceSignals.empty());
+    verify(embeddingIndexer, never()).combineSemanticQueries(vectors);
   }
 
-  /** Confirms the request vector is generated once and supplied to Qdrant. */
   @Test
-  void retrievesCandidatesWithProcessedRequestVector() throws Exception {
+  void combinesSemanticVectorsOnceAndSuppliesResultToQdrant() throws Exception {
     QdrantAudiobookRepository repository = mock(QdrantAudiobookRepository.class);
     EmbeddingIndexer embeddingIndexer = mock(EmbeddingIndexer.class);
-    SessionRequest request = new SessionRequest();
+    SessionRequest request = requestWithTopic("space");
     float[] vector = {0.6f, 0.8f};
+    SemanticQueryVectors vectors = new SemanticQueryVectors(List.of(vector), List.of());
     AudiobookRecord book =
         new AudiobookRecord("42", "catalogue", "Book", List.of("Writer"), "Description");
-    PreferenceSignals signals = PreferenceSignals.empty();
-    when(embeddingIndexer.embedRequest(request, signals)).thenReturn(vector);
+    when(embeddingIndexer.combineSemanticQueries(vectors)).thenReturn(vector);
     when(repository.searchSemantic(vector, AudiobookFilters.empty(), 5))
         .thenReturn(List.of(new AudiobookCandidate(book, 0.91)));
 
     List<AudiobookCandidate> candidates =
-        new QdrantCandidateRetriever(
-                repository,
-                embeddingIndexer,
-                new AudiobookRetrievalPlanner(new IntentRetrievalPolicy()))
-            .getCandidates(request, signals, 5);
+        new QdrantCandidateRetriever(repository, embeddingIndexer, new AudiobookRetrievalPlanner())
+            .getCandidates(request, vectors, 5);
 
     assertThat(candidates).hasSize(1);
     assertThat(candidates.getFirst().audiobook().id()).isEqualTo("42");
     assertThat(candidates.getFirst().score()).isEqualTo(0.91);
+    verify(embeddingIndexer).combineSemanticQueries(vectors);
     verify(repository).searchSemantic(vector, AudiobookFilters.empty(), 5);
+  }
+
+  private SessionRequest requestWithTopic(String topic) {
+    SemanticQuery query = new SemanticQuery();
+    query.setTopics(List.of(topic));
+    SessionRequest request = new SessionRequest();
+    request.setPositiveSemanticQuery(query);
+    return request;
   }
 }

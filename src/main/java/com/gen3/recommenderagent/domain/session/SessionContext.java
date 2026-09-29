@@ -18,8 +18,4 @@ public final class SessionContext {
   public void clearHistory() {
     session.clearHistory();
   }
-
-  public void updatePreferences(Preferences preferences) {
-    session.setPreferences(preferences);
-  }
 }

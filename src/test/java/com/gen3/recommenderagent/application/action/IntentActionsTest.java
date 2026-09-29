@@ -1,11 +1,11 @@
 package com.gen3.recommenderagent.application.action;
 
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-import com.gen3.recommenderagent.domain.session.Preferences;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionContext;
@@ -33,24 +33,20 @@ class IntentActionsTest {
   }
 
   @Test
-  void lightweightActionsUpdateContextWithoutARecommendationWorkflow() {
+  void lightweightActionsDoNotInvokeARecommendationWorkflow() {
     Session session = new Session();
     session.addRequest(new SessionRequest());
     SessionContext context = new SessionContext(session);
-    Preferences preferences = new Preferences();
-    preferences.setInclude(List.of("science fiction"));
-
-    SessionRequest preferenceRequest = new SessionRequest();
-    preferenceRequest.setPreferences(preferences);
-    new UpdatePreferencesAction().execute(preferenceRequest, context);
-    assertSame(preferences, session.getPreferences());
-    assertTrue(preferenceRequest.getRecommendations().isEmpty());
+    SessionRequest request = new SessionRequest();
+    assertSame(request, new RefineAction().execute(request, context));
+    assertSame(request, new MoreResultsAction().execute(request, context));
+    assertSame(request, new ChangeCountAction().execute(request, context));
+    assertSame(request, new UpdatePreferencesAction().execute(request, context));
+    assertSame(request, new NoOpAction().execute(request, context));
+    assertNull(request.getRecommendations());
 
     SessionRequest clearRequest = new SessionRequest();
     new ClearHistoryAction().execute(clearRequest, context);
     assertTrue(session.getRequests().isEmpty());
-
-    SessionRequest helpRequest = new SessionRequest();
-    assertSame(helpRequest, new NoOpAction().execute(helpRequest, context));
   }
 }

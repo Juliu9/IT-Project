@@ -9,5 +9,5 @@ public interface Ranker {
   List<Recommendation> rank(List<AudiobookCandidate> candidates, int requestedLimit);
 
   List<Recommendation> rank(
-      List<AudiobookCandidate> candidates, int requestedLimit, PreferenceSignals signals);
+      List<AudiobookCandidate> candidates, int requestedLimit, SemanticQueryVectors vectors);
 }

@@ -59,7 +59,7 @@ public class SolrToQdrantMigrator implements ApplicationRunner {
         break;
       }
 
-      List<AudiobookEmbedding> batch = embeddingIndexer.ensureAudiobookEmbeddings(books);
+      List<AudiobookEmbedding> batch = embeddingIndexer.embedAudiobooks(books);
       destination.indexEmbeddings(batch);
       migrated += batch.size();
       offset += books.size();

@@ -1,7 +1,7 @@
 package com.gen3.recommenderagent.ranker.strategy;
 
 import com.gen3.recommenderagent.domain.session.Recommendation;
-import com.gen3.recommenderagent.ranker.PreferenceSignals;
+import com.gen3.recommenderagent.ranker.SemanticQueryVectors;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -16,21 +16,21 @@ public class HybridRankingStrategy implements RankingStrategy {
 
   private static final double RELEVANCE_WEIGHT = 0.70;
   private static final int MAX_RESULTS = 5;
-  private final PreferenceRankingStrategy preferenceRankingStrategy;
+  private final SemanticQueryRankingStrategy semanticQueryRankingStrategy;
 
-  public HybridRankingStrategy(PreferenceRankingStrategy preferenceRankingStrategy) {
-    this.preferenceRankingStrategy = preferenceRankingStrategy;
+  public HybridRankingStrategy(SemanticQueryRankingStrategy semanticQueryRankingStrategy) {
+    this.semanticQueryRankingStrategy = semanticQueryRankingStrategy;
   }
 
   /** Preserves the legacy strategy entry point when no preference evidence is available. */
   @Override
   public List<Recommendation> rank(List<AudiobookCandidate> candidates, int requestedLimit) {
-    return rank(candidates, requestedLimit, PreferenceSignals.empty());
+    return rank(candidates, requestedLimit, SemanticQueryVectors.empty());
   }
 
   /** Reranks unique candidates using relevance plus positive reward and negative penalty. */
   public List<Recommendation> rank(
-      List<AudiobookCandidate> candidates, int requestedLimit, PreferenceSignals signals) {
+      List<AudiobookCandidate> candidates, int requestedLimit, SemanticQueryVectors vectors) {
     if (candidates == null || candidates.isEmpty()) {
       return List.of();
     }
@@ -44,7 +44,7 @@ public class HybridRankingStrategy implements RankingStrategy {
                     new ScoredCandidate(
                         candidate,
                         RELEVANCE_WEIGHT * normalizedRelevance(candidate.score(), maximumScore)
-                            + preferenceRankingStrategy.adjustment(candidate, signals)))
+                            + semanticQueryRankingStrategy.adjustment(candidate, vectors)))
             .sorted(Comparator.comparingDouble(ScoredCandidate::score).reversed())
             .limit(limit)
             .toList();

@@ -32,10 +32,12 @@ public class AiInputParser implements InputParser {
                         Extract the user's audiobook search request.
 
                         Use only information explicitly provided by the user.
-                        Choose the intent and populate the semanticQuery, preferences, and filter fields.
-                        Put desired semantic concepts in semanticQuery.positive and concepts to avoid in
-                        semanticQuery.negative. Put narrator names in semanticQuery.narrators. Put language,
-                        duration, and count restrictions in filter.
+                        Choose one of these intents: RECOMMENDATION, REFINE, MORE_RESULTS,
+                        CHANGE_COUNT, UPDATE_PREFERENCES, CLEAR_HISTORY, HELP, or UNKNOWN.
+                        Put desired concepts in positiveSemanticQuery and concepts to avoid in
+                        negativeSemanticQuery. Put language, duration, and count restrictions in filter.
+                        Use RECOMMENDATION for every new audiobook search, including searches by
+                        theme, author, narrator, language, or duration. Do not select a retrieval mode.
                         """)
             .user(rawText)
             .call()
@@ -49,8 +51,8 @@ public class AiInputParser implements InputParser {
 
     SessionRequest request = new SessionRequest();
     request.setIntent(parsed.getIntent());
-    request.setQuery(parsed.getQuery());
-    request.setPreferences(parsed.getPreferences());
+    request.setPositiveSemanticQuery(parsed.getPositiveSemanticQuery());
+    request.setNegativeSemanticQuery(parsed.getNegativeSemanticQuery());
     request.setFilter(parsed.getFilter());
     request.setRequestId(createUuidV7().toString());
     request.setRawText(rawText);

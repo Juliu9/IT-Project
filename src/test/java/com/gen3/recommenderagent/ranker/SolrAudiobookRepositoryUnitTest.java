@@ -6,10 +6,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookSearchPage;
+import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
 import java.util.List;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;

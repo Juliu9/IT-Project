@@ -1,8 +1,7 @@
 package com.gen3.recommenderagent.embedding;
 
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
-import com.gen3.recommenderagent.ranker.PreferenceSignals;
+import com.gen3.recommenderagent.ranker.SemanticQueryVectors;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import java.util.ArrayList;
@@ -20,235 +19,129 @@ import org.springframework.stereotype.Service;
 @Service
 public class EmbeddingIndexer {
 
-    private final EmbeddingModel model;
+  private final EmbeddingModel model;
 
-    /** Uses the configured Spring AI embedding model. */
-    public EmbeddingIndexer(EmbeddingModel model) {
-        this.model = model;
+  /** Uses the configured Spring AI embedding model. */
+  public EmbeddingIndexer(EmbeddingModel model) {
+    this.model = model;
+  }
+
+  /** Builds the stable, human-readable catalogue representation sent to the model. */
+  public String buildAudiobookText(AudiobookRecord book) {
+    return List.of(
+            part("title", book.title()),
+            part("authors", book.authors()),
+            part("narrators", book.narrators()),
+            part("language", book.language()),
+            part("description", book.description()))
+        .stream()
+        .filter(value -> !value.isBlank())
+        .collect(Collectors.joining("\n"));
+  }
+
+  /** Returns the normalized vector used for indexing and semantic retrieval. */
+  public float[] embedAudiobook(AudiobookRecord book) {
+    String text = buildAudiobookText(book);
+
+    return text.isBlank() ? new float[0] : VectorMath.normalize(model.embed(text));
+  }
+
+  /**
+   * Embeds a batch of audiobook records.
+   *
+   * <p>The returned embeddings retain the same order as the supplied valid books.
+   */
+  public List<AudiobookEmbedding> embedAudiobooks(List<AudiobookRecord> books) {
+    if (books == null || books.isEmpty()) {
+      return List.of();
     }
 
-    /** Builds the stable, human-readable catalogue representation sent to the model. */
-    public String buildAudiobookText(AudiobookRecord book) {
-        return List.of(
-                        part("title", book.title()),
-                        part("authors", book.authors()),
-                        part("narrators", book.narrators()),
-                        part("language", book.language()),
-                        part("description", book.description()))
-                .stream()
-                .filter(value -> !value.isBlank())
-                .collect(Collectors.joining("\n"));
+    List<AudiobookRecord> validBooks =
+        books.stream().filter(book -> book != null && hasText(book.id())).toList();
+
+    if (validBooks.isEmpty()) {
+      return List.of();
     }
 
-    /** Returns the normalized vector used for indexing and semantic retrieval. */
-    public float[] embedAudiobook(AudiobookRecord book) {
-        String text = buildAudiobookText(book);
+    List<AudiobookRecord> embeddableBooks =
+        validBooks.stream().filter(book -> !buildAudiobookText(book).isBlank()).toList();
 
-        return text.isBlank()
-                ? new float[0]
-                : VectorMath.normalize(model.embed(text));
+    if (embeddableBooks.isEmpty()) {
+      return List.of();
     }
 
-    /**
-     * Embeds a batch of audiobook records.
-     *
-     * <p>The returned embeddings retain the same order as the supplied valid books.
-     */
-    public List<AudiobookEmbedding> embedAudiobooks(List<AudiobookRecord> books) {
-        if (books == null || books.isEmpty()) {
-            return List.of();
-        }
+    List<String> texts = embeddableBooks.stream().map(this::buildAudiobookText).toList();
 
-        List<AudiobookRecord> validBooks =
-                books.stream()
-                        .filter(book -> book != null && hasText(book.id()))
-                        .toList();
+    List<float[]> generated = model.embed(texts);
 
-        if (validBooks.isEmpty()) {
-            return List.of();
-        }
-
-        List<AudiobookRecord> embeddableBooks =
-                validBooks.stream()
-                        .filter(book -> !buildAudiobookText(book).isBlank())
-                        .toList();
-
-        if (embeddableBooks.isEmpty()) {
-            return List.of();
-        }
-
-        List<String> texts =
-                embeddableBooks.stream()
-                        .map(this::buildAudiobookText)
-                        .toList();
-
-        List<float[]> generated = model.embed(texts);
-
-        if (generated.size() != embeddableBooks.size()) {
-            throw new IllegalStateException(
-                    "Embedding model returned an unexpected batch size");
-        }
-
-        List<AudiobookEmbedding> embeddings = new ArrayList<>(generated.size());
-
-        for (int index = 0; index < generated.size(); index++) {
-            AudiobookRecord book = embeddableBooks.get(index);
-            float[] normalized = VectorMath.normalize(generated.get(index));
-
-            embeddings.add(new AudiobookEmbedding(book, normalized));
-        }
-
-        return embeddings;
+    if (generated.size() != embeddableBooks.size()) {
+      throw new IllegalStateException("Embedding model returned an unexpected batch size");
     }
 
-    /** Returns a normalized vector for the raw request and its parsed search constraints. */
-    public float[] embedRequest(SessionRequest request) {
-        String text = buildRetrievalText(request);
+    List<AudiobookEmbedding> embeddings = new ArrayList<>(generated.size());
 
-        return text.isBlank()
-                ? new float[0]
-                : VectorMath.normalize(model.embed(text));
+    for (int index = 0; index < generated.size(); index++) {
+      AudiobookRecord book = embeddableBooks.get(index);
+      float[] normalized = VectorMath.normalize(generated.get(index));
+
+      embeddings.add(new AudiobookEmbedding(book, normalized));
     }
 
-    /** Combines the request, positive concepts, and negative concepts into one search direction. */
-    public float[] embedRequest(SessionRequest request, PreferenceSignals signals) {
-        List<float[]> positive = new ArrayList<>();
+    return embeddings;
+  }
 
-        String text = buildRetrievalText(request);
+  /** Encodes one complete semantic query as a normalized vector. */
+  public float[] embedSemanticQuery(SemanticQuery query) {
+    String text = buildSemanticQueryText(query);
+    return text.isBlank() ? new float[0] : VectorMath.normalize(model.embed(text));
+  }
 
-        if (!text.isBlank()) {
-            positive.add(VectorMath.normalize(model.embed(text)));
-        }
+  /** Adds the positive vector and the inverse negative vector for candidate retrieval. */
+  public float[] combineSemanticQueries(SemanticQueryVectors vectors) {
+    if (vectors == null || vectors.isEmpty()) {
+      return new float[0];
+    }
+    return VectorMath.directionalAverage(vectors.positive(), vectors.negative());
+  }
 
-        if (signals != null) {
-            positive.addAll(signals.positive());
-        }
+  /** Builds the stable structured representation sent to the embedding model. */
+  public String buildSemanticQueryText(SemanticQuery query) {
+    if (query == null) {
+      return "";
+    }
+    return List.of(
+            part("Topics", query.getTopics()),
+            part("Genres", query.getGenres()),
+            part("Authors", query.getAuthors()),
+            part("Narrators", query.getNarrators()),
+            part("Keywords", query.getKeywords()))
+        .stream()
+        .filter(value -> !value.isBlank())
+        .collect(Collectors.joining("\n"));
+  }
 
-        return VectorMath.directionalAverage(
-                positive,
-                signals == null ? List.of() : signals.negative());
+  /** Adds a label only when a scalar value contains text. */
+  private String part(String label, String value) {
+    return value == null || value.isBlank() ? "" : label + ": " + value.trim();
+  }
+
+  /** Reports whether a value contains usable text. */
+  private boolean hasText(String value) {
+    return value != null && !value.isBlank();
+  }
+
+  /** Adds a label only when a parsed list contains text. */
+  private String part(String label, List<String> values) {
+    if (values == null) {
+      return "";
     }
 
-    /** Embeds independent preference terms without mixing positive and negative instructions. */
-    public List<float[]> embedPreferenceTerms(List<String> terms) {
-        if (terms == null || terms.isEmpty()) {
-            return List.of();
-        }
+    String joined =
+        values.stream()
+            .filter(value -> value != null && !value.isBlank())
+            .map(String::trim)
+            .collect(Collectors.joining(", "));
 
-        List<String> texts =
-                terms.stream()
-                        .filter(this::hasText)
-                        .map(String::trim)
-                        .distinct()
-                        .toList();
-
-        if (texts.isEmpty()) {
-            return List.of();
-        }
-
-        return model.embed(texts)
-                .stream()
-                .map(VectorMath::normalize)
-                .toList();
-    }
-
-    /** Builds canonical request text without serializing the Java object or response text. */
-    public String buildRequestText(SessionRequest request) {
-        SemanticQuery semanticQuery = request.getQuery();
-
-        return List.of(
-                        part("Request", request.getRawText()),
-                        part(
-                                "Intent",
-                                request.getIntent() == null
-                                        ? null
-                                        : request.getIntent().name()),
-                        part("Topics", semanticQuery == null ? null : semanticQuery.getTopics()),
-                        part("Genres", semanticQuery == null ? null : semanticQuery.getGenres()),
-                        part("Authors", semanticQuery == null ? null : semanticQuery.getAuthors()),
-                        part("Narrators", semanticQuery == null ? null : semanticQuery.getNarrators()),
-                        part("Keywords", semanticQuery == null ? null : semanticQuery.getKeywords()),
-                        part("Positive", semanticQuery == null ? null : semanticQuery.getPositive()),
-                        part("Negative", semanticQuery == null ? null : semanticQuery.getNegative()),
-                        part(
-                                "Included preferences",
-                                request.getPreferences() == null
-                                        ? null
-                                        : request.getPreferences().getInclude()),
-                        part(
-                                "Excluded preferences",
-                                request.getPreferences() == null
-                                        ? null
-                                        : request.getPreferences().getExclude()),
-                        part(
-                                "Duration",
-                                request.getFilter() == null
-                                        ? null
-                                        : request.getFilter().getDuration()),
-                        part(
-                                "Language",
-                                request.getFilter() == null
-                                        ? null
-                                        : request.getFilter().getLanguage()))
-                .stream()
-                .filter(value -> !value.isBlank())
-                .collect(Collectors.joining("\n"));
-    }
-
-    /** Builds retrieval text without preference polarity, which is scored separately. */
-    public String buildRetrievalText(SessionRequest request) {
-        SemanticQuery semanticQuery = request.getQuery();
-
-        String structuredText =
-                List.of(
-                                part("Topics", semanticQuery == null ? null : semanticQuery.getTopics()),
-                                part("Genres", semanticQuery == null ? null : semanticQuery.getGenres()),
-                                part("Authors", semanticQuery == null ? null : semanticQuery.getAuthors()),
-                                part("Narrators", semanticQuery == null ? null : semanticQuery.getNarrators()),
-                                part("Keywords", semanticQuery == null ? null : semanticQuery.getKeywords()),
-                                part(
-                                        "Duration",
-                                        request.getFilter() == null
-                                                ? null
-                                                : request.getFilter().getDuration()),
-                                part(
-                                        "Language",
-                                        request.getFilter() == null
-                                                ? null
-                                                : request.getFilter().getLanguage()))
-                        .stream()
-                        .filter(value -> !value.isBlank())
-                        .collect(Collectors.joining("\n"));
-
-        return structuredText.isBlank()
-                ? part("Request", request.getRawText())
-                : structuredText;
-    }
-
-    /** Adds a label only when a scalar value contains text. */
-    private String part(String label, String value) {
-        return value == null || value.isBlank()
-                ? ""
-                : label + ": " + value.trim();
-    }
-
-    /** Reports whether a value contains usable text. */
-    private boolean hasText(String value) {
-        return value != null && !value.isBlank();
-    }
-
-    /** Adds a label only when a parsed list contains text. */
-    private String part(String label, List<String> values) {
-        if (values == null) {
-            return "";
-        }
-
-        String joined =
-                values.stream()
-                        .filter(value -> value != null && !value.isBlank())
-                        .map(String::trim)
-                        .collect(Collectors.joining(", "));
-
-        return part(label, joined);
-    }
+    return part(label, joined);
+  }
 }

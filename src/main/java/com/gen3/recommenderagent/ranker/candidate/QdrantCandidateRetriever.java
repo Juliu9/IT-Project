@@ -2,7 +2,7 @@ package com.gen3.recommenderagent.ranker.candidate;
 
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
-import com.gen3.recommenderagent.ranker.PreferenceSignals;
+import com.gen3.recommenderagent.ranker.SemanticQueryVectors;
 import com.gen3.recommenderagent.ranker.candidate.retrieval.AudiobookRetrievalPlan;
 import com.gen3.recommenderagent.ranker.candidate.retrieval.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
@@ -38,26 +38,31 @@ public class QdrantCandidateRetriever implements CandidateRetriever {
   /** Embeds the combined raw and processed user request once, then searches Qdrant. */
   @Override
   public List<AudiobookCandidate> getCandidates(
-      SessionRequest request, PreferenceSignals signals, int limit) {
+      SessionRequest request, SemanticQueryVectors vectors, int limit) {
     try {
       AudiobookRetrievalPlan plan = retrievalPlanner.plan(limit, request);
       return switch (plan.mode()) {
         case SEMANTIC ->
             candidateSearch.searchSemantic(
-                embeddingIndexer.embedRequest(request, signals), plan.filters(), plan.limit());
+                embeddingIndexer.combineSemanticQueries(vectors), plan.filters(), plan.limit());
         case KEYWORD ->
             candidateSearch.searchKeyword(plan.keywordText(), plan.filters(), plan.limit());
-        case HYBRID ->
-            candidateSearch.searchHybrid(
-                embeddingIndexer.embedRequest(request, signals),
-                plan.keywordText(),
-                plan.filters(),
-                plan.limit());
+        case HYBRID -> retrieveHybrid(plan, vectors);
         case FILTER_ONLY -> candidateSearch.searchByFilters(plan.filters(), plan.limit());
         case NONE -> List.of();
       };
     } catch (IOException exception) {
       throw new IllegalStateException("Failed to retrieve candidates from Qdrant", exception);
     }
+  }
+
+  private List<AudiobookCandidate> retrieveHybrid(
+      AudiobookRetrievalPlan plan, SemanticQueryVectors vectors) throws IOException {
+    float[] queryVector = embeddingIndexer.combineSemanticQueries(vectors);
+    if (plan.keywordText() == null || plan.keywordText().isBlank()) {
+      return candidateSearch.searchSemantic(queryVector, plan.filters(), plan.limit());
+    }
+    return candidateSearch.searchHybrid(
+        queryVector, plan.keywordText(), plan.filters(), plan.limit());
   }
 }

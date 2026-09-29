@@ -5,14 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.gen3.recommenderagent.domain.session.Filter;
-import com.gen3.recommenderagent.domain.session.Preferences;
-import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
-import java.util.List;
-
 import com.gen3.recommenderagent.storage.sessionrepository.redis.RedisSessionRepository;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
@@ -130,7 +128,7 @@ class RedisSessionRepositoryTest {
 
     SessionRequest request = new SessionRequest();
 
-    request.setQuery(semanticQuery);
+    request.setPositiveSemanticQuery(semanticQuery);
 
     session.setRequests(List.of(request));
 
@@ -138,7 +136,8 @@ class RedisSessionRepositoryTest {
 
     Session retrieved = redisSessionCache.getSession("semanticQuery-test");
 
-    SemanticQuery retrievedSemanticQuery = retrieved.getRequests().get(0).getQuery();
+    SemanticQuery retrievedSemanticQuery =
+        retrieved.getRequests().get(0).getPositiveSemanticQuery();
 
     assertNotNull(retrievedSemanticQuery);
 
@@ -152,39 +151,33 @@ class RedisSessionRepositoryTest {
   }
 
   // ============================================================
-  // PREFERENCES
+  // NEGATIVE SEMANTIC QUERY
   // ============================================================
 
   @Test
-  void shouldSaveAndRetrievePreferences() {
+  void shouldSaveAndRetrieveNegativeSemanticQuery() {
 
     Session session = new Session();
 
-    session.setSessionId("preferences-test");
+    session.setSessionId("negative-query-test");
 
-    Preferences preferences = new Preferences();
-
-    preferences.setInclude(List.of("non-fiction", "history"));
-
-    preferences.setExclude(List.of("romance"));
+    SemanticQuery negativeQuery = new SemanticQuery();
+    negativeQuery.setGenres(List.of("romance"));
 
     SessionRequest request = new SessionRequest();
 
-    request.setPreferences(preferences);
+    request.setNegativeSemanticQuery(negativeQuery);
 
     session.setRequests(List.of(request));
 
     redisSessionCache.updateSession(session);
 
-    Session retrieved = redisSessionCache.getSession("preferences-test");
+    Session retrieved = redisSessionCache.getSession("negative-query-test");
 
-    Preferences retrievedPreferences = retrieved.getRequests().get(0).getPreferences();
+    SemanticQuery retrievedQuery = retrieved.getRequests().get(0).getNegativeSemanticQuery();
 
-    assertNotNull(retrievedPreferences);
-
-    assertEquals(List.of("non-fiction", "history"), retrievedPreferences.getInclude());
-
-    assertEquals(List.of("romance"), retrievedPreferences.getExclude());
+    assertNotNull(retrievedQuery);
+    assertEquals(List.of("romance"), retrievedQuery.getGenres());
   }
 
   // ============================================================
@@ -288,9 +281,8 @@ class RedisSessionRepositoryTest {
 
     SessionRequest retrievedRequest = retrieved.getRequests().get(0);
 
-    assertNull(retrievedRequest.getQuery());
-
-    assertNull(retrievedRequest.getPreferences());
+    assertNull(retrievedRequest.getPositiveSemanticQuery());
+    assertNull(retrievedRequest.getNegativeSemanticQuery());
 
     assertNull(retrievedRequest.getFilter());
   }
@@ -314,7 +306,7 @@ class RedisSessionRepositoryTest {
 
     SessionRequest request = new SessionRequest();
 
-    request.setQuery(semanticQuery);
+    request.setPositiveSemanticQuery(semanticQuery);
 
     session.setRequests(List.of(request));
 
@@ -333,6 +325,7 @@ class RedisSessionRepositoryTest {
     assertNotNull(retrieved);
 
     assertEquals(
-        List.of("WWI", "Vietnam War"), retrieved.getRequests().get(0).getQuery().getTopics());
+        List.of("WWI", "Vietnam War"),
+        retrieved.getRequests().get(0).getPositiveSemanticQuery().getTopics());
   }
 }

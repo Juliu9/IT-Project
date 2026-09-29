@@ -16,31 +16,38 @@ import org.springframework.stereotype.Component;
 public class AudiobookRetrievalPlanner {
 
   private static final Pattern FIRST_NUMBER = Pattern.compile("(\\d+)");
-  private final IntentRetrievalPolicy policy;
-
-  /** Uses the centralized intent policy when constructing plans. */
-  public AudiobookRetrievalPlanner(IntentRetrievalPolicy policy) {
-    this.policy = policy;
-  }
 
   /** Separates semantic text, lexical terms, and exact payload constraints. */
   public AudiobookRetrievalPlan plan(int limit, SessionRequest request) {
-    SemanticQuery semanticQuery = request == null ? null : request.getQuery();
+    SemanticQuery positive = request == null ? null : request.getPositiveSemanticQuery();
+    SemanticQuery negative = request == null ? null : request.getNegativeSemanticQuery();
     Filter filter = request == null ? null : request.getFilter();
-    String rawText = request == null ? null : request.getRawText();
-    String semanticText = hasText(rawText) ? rawText.trim() : "";
-    String keywordText = lexicalText(semanticQuery, semanticText);
+    String keywordText = lexicalText(positive, "");
     AudiobookFilters filters =
         new AudiobookFilters(
-            copy(semanticQuery == null ? null : semanticQuery.getAuthors()),
-            copy(semanticQuery == null ? null : semanticQuery.getNarrators()),
+            copy(positive == null ? null : positive.getAuthors()),
+            copy(positive == null ? null : positive.getNarrators()),
             filter == null ? null : filter.getLanguage(),
             durationMinutes(filter == null ? null : filter.getDuration()));
     return new AudiobookRetrievalPlan(
-        policy.modeFor(request == null ? null : request.getIntent()),
-        keywordText,
-        filters,
-        Math.max(limit, 1));
+        modeFor(positive, negative, filters), keywordText, filters, Math.max(limit, 1));
+  }
+
+  /** Derives retrieval solely from searchable request content. */
+  RetrievalMode modeFor(SemanticQuery positive, SemanticQuery negative, AudiobookFilters filters) {
+    boolean hasSemantic =
+        hasPositiveSemanticContent(positive) || hasNegativeSemanticContent(negative);
+    boolean hasFilters = filters != null && filters.hasConditions();
+    if (hasSemantic && hasFilters) {
+      return RetrievalMode.HYBRID;
+    }
+    if (hasSemantic) {
+      return RetrievalMode.SEMANTIC;
+    }
+    if (hasFilters) {
+      return RetrievalMode.FILTER_ONLY;
+    }
+    return RetrievalMode.NONE;
   }
 
   /** Builds sparse-search input from fields intended to influence textual relevance. */
@@ -73,6 +80,22 @@ public class AudiobookRetrievalPlanner {
     if (values != null) {
       values.stream().filter(this::hasText).map(String::trim).forEach(destination::add);
     }
+  }
+
+  private boolean hasPositiveSemanticContent(SemanticQuery query) {
+    return query != null
+        && (hasValues(query.getTopics())
+            || hasValues(query.getGenres())
+            || hasValues(query.getKeywords()));
+  }
+
+  private boolean hasNegativeSemanticContent(SemanticQuery query) {
+    return hasPositiveSemanticContent(query)
+        || (query != null && (hasValues(query.getAuthors()) || hasValues(query.getNarrators())));
+  }
+
+  private boolean hasValues(List<String> values) {
+    return values != null && values.stream().anyMatch(this::hasText);
   }
 
   /** Creates an immutable, null-safe filter list. */

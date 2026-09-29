@@ -5,7 +5,6 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCatalogueRepository;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorIndexer;
-import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,13 +57,7 @@ public class AudiobookEmbeddingStartupIndexer implements ApplicationRunner {
         break;
       }
 
-      List<AudiobookEmbedding> batch = new ArrayList<>();
-      for (AudiobookRecord book : page) {
-        float[] vector = embeddingIndexer.ensureAudiobookEmbedding(book);
-        if (vector.length > 0) {
-          batch.add(new AudiobookEmbedding(book, vector));
-        }
-      }
+      List<AudiobookEmbedding> batch = embeddingIndexer.embedAudiobooks(page);
       vectorIndexer.indexEmbeddings(batch);
       indexed += batch.size();
       offset += page.size();

@@ -21,8 +21,8 @@ public class Bm25SparseTextEncoder implements SparseTextEncoder {
   private static final Pattern NON_ALPHANUMERIC = Pattern.compile("[^\\p{L}\\p{N}]+");
   private static final Set<String> STOP_WORDS =
       Set.of(
-          "a", "an", "and", "are", "by", "for", "from", "in", "is", "me", "of", "on",
-          "the", "to", "with");
+          "a", "an", "and", "are", "by", "for", "from", "in", "is", "me", "of", "on", "the", "to",
+          "with");
   private static final float K1 = 1.2f;
 
   /** Tokenizes text, removes common filler words, and weights repeated terms with saturation. */

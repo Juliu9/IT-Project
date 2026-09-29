@@ -22,12 +22,12 @@ class RequestApplicationServiceTest {
     ActionRegistry actionRegistry = mock(ActionRegistry.class);
     IntentAction action = mock(IntentAction.class);
     SessionRequest request = new SessionRequest();
-    request.setIntent(Intent.NEW_RECOMMENDATION);
+    request.setIntent(Intent.RECOMMENDATION);
     SessionRequest result = new SessionRequest();
     SessionContext context = new SessionContext(new Session());
 
     when(sessionService.load("session-1", "user-1")).thenReturn(context);
-    when(actionRegistry.get(Intent.NEW_RECOMMENDATION)).thenReturn(action);
+    when(actionRegistry.get(Intent.RECOMMENDATION)).thenReturn(action);
     when(action.execute(request, context)).thenReturn(result);
 
     RequestApplicationService service =
@@ -37,7 +37,7 @@ class RequestApplicationServiceTest {
 
     InOrder order = inOrder(sessionService, actionRegistry, action);
     order.verify(sessionService).load("session-1", "user-1");
-    order.verify(actionRegistry).get(Intent.NEW_RECOMMENDATION);
+    order.verify(actionRegistry).get(Intent.RECOMMENDATION);
     order.verify(action).execute(request, context);
     order.verify(sessionService).update(context, request, result);
   }

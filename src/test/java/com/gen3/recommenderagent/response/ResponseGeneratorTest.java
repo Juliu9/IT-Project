@@ -5,8 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Filter;
-import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -18,12 +18,12 @@ class ResponseGeneratorTest {
     AiResponseGenerator generator = new AiResponseGenerator(null);
 
     SessionRequest request = new SessionRequest();
-    request.setIntent(Intent.NEW_RECOMMENDATION);
+    request.setIntent(Intent.RECOMMENDATION);
     request.setRawText("Recommend me an action audiobook");
 
     SemanticQuery semanticQuery = new SemanticQuery();
     semanticQuery.setGenres(List.of("action", "sci-fi"));
-    request.setQuery(semanticQuery);
+    request.setPositiveSemanticQuery(semanticQuery);
 
     Filter filter = new Filter();
     filter.setCount(3);
@@ -47,7 +47,7 @@ class ResponseGeneratorTest {
     AiResponseGenerator generator = new AiResponseGenerator(null);
 
     SessionRequest request = new SessionRequest();
-    request.setIntent(Intent.NEW_RECOMMENDATION);
+    request.setIntent(Intent.RECOMMENDATION);
     request.setRawText("Give me 10 recommendations");
 
     Filter filter = new Filter();

@@ -26,8 +26,7 @@ public class QdrantConfig {
       @Value("${qdrant.api-key:}") String apiKey) {
     URI uri = parseUrl(qdrantUrl);
     boolean useTls = "https".equalsIgnoreCase(uri.getScheme());
-    QdrantGrpcClient.Builder builder =
-        QdrantGrpcClient.newBuilder(uri.getHost(), grpcPort, useTls);
+    QdrantGrpcClient.Builder builder = QdrantGrpcClient.newBuilder(uri.getHost(), grpcPort, useTls);
     if (apiKey != null && !apiKey.isBlank()) {
       builder.withApiKey(apiKey.trim());
     }

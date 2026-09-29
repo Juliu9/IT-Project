@@ -3,9 +3,9 @@ package com.gen3.recommenderagent.engine;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SessionContext;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
-import com.gen3.recommenderagent.ranker.PreferenceSignals;
-import com.gen3.recommenderagent.ranker.PreferenceVectorService;
 import com.gen3.recommenderagent.ranker.Ranker;
+import com.gen3.recommenderagent.ranker.SemanticQueryVectorService;
+import com.gen3.recommenderagent.ranker.SemanticQueryVectors;
 import com.gen3.recommenderagent.ranker.candidate.CandidateRetriever;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -20,24 +20,24 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
 
   private final CandidateRetriever candidateRetriever;
   private final Ranker ranker;
-  private final PreferenceVectorService preferenceVectorService;
+  private final SemanticQueryVectorService semanticQueryVectorService;
 
   /** Receives database-independent ports so handlers do not depend on storage adapters. */
   public AudiobookRecommendationWorkflow(
       CandidateRetriever candidateRetriever,
       Ranker ranker,
-      PreferenceVectorService preferenceVectorService) {
+      SemanticQueryVectorService semanticQueryVectorService) {
     this.candidateRetriever = candidateRetriever;
     this.ranker = ranker;
-    this.preferenceVectorService = preferenceVectorService;
+    this.semanticQueryVectorService = semanticQueryVectorService;
   }
 
   /** Builds retrieval text, lets the retriever select its mode, and ranks the candidates. */
   @Override
   public List<Recommendation> recommend(SessionRequest request, SessionContext context) {
-    PreferenceSignals signals = preferenceVectorService.create(request);
-    var candidates = candidateRetriever.getCandidates(request, signals, CANDIDATE_LIMIT);
-    return ranker.rank(candidates, resolveResultLimit(request), signals);
+    SemanticQueryVectors vectors = semanticQueryVectorService.create(request);
+    var candidates = candidateRetriever.getCandidates(request, vectors, CANDIDATE_LIMIT);
+    return ranker.rank(candidates, resolveResultLimit(request), vectors);
   }
 
   /** Applies the API's default and maximum result limits. */

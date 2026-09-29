@@ -7,12 +7,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCatalogueRepository;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorIndexer;
-import java.util.List;
-
 import com.gen3.recommenderagent.storage.audiobook.solr.AudiobookEmbeddingStartupIndexer;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.DefaultApplicationArguments;
 
@@ -29,8 +29,13 @@ class AudiobookEmbeddingStartupIndexerTest {
 
     when(catalogue.findAllBooks(0, 2)).thenReturn(List.of(first, second));
     when(catalogue.findAllBooks(2, 2)).thenReturn(List.of(third));
-    when(embeddingIndexer.ensureAudiobookEmbedding(any(AudiobookRecord.class)))
-        .thenReturn(new float[] {1.0f, 0.0f});
+    when(embeddingIndexer.embedAudiobooks(List.of(first, second)))
+        .thenReturn(
+            List.of(
+                new AudiobookEmbedding(first, new float[] {1.0f, 0.0f}),
+                new AudiobookEmbedding(second, new float[] {1.0f, 0.0f})));
+    when(embeddingIndexer.embedAudiobooks(List.of(third)))
+        .thenReturn(List.of(new AudiobookEmbedding(third, new float[] {1.0f, 0.0f})));
 
     AudiobookEmbeddingStartupIndexer indexer =
         new AudiobookEmbeddingStartupIndexer(catalogue, vectors, embeddingIndexer, 2, true);

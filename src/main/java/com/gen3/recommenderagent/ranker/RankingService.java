@@ -29,12 +29,12 @@ public class RankingService implements Ranker {
     return relevanceRankingStrategy.rank(candidates, requestedLimit);
   }
 
-  /** Builds separate preference vectors and only reranks when at least one signal exists. */
+  /** Uses semantic-query vectors for polarity-aware reranking when available. */
   @Override
   public List<Recommendation> rank(
-      List<AudiobookCandidate> candidates, int requestedLimit, PreferenceSignals signals) {
-    return signals.isEmpty()
+      List<AudiobookCandidate> candidates, int requestedLimit, SemanticQueryVectors vectors) {
+    return vectors.isEmpty()
         ? relevanceRankingStrategy.rank(candidates, requestedLimit)
-        : hybridRankingStrategy.rank(candidates, requestedLimit, signals);
+        : hybridRankingStrategy.rank(candidates, requestedLimit, vectors);
   }
 }

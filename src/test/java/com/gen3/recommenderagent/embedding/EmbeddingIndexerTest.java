@@ -1,174 +1,95 @@
 package com.gen3.recommenderagent.embedding;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.domain.session.Preferences;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
-import com.gen3.recommenderagent.ranker.PreferenceSignals;
+import com.gen3.recommenderagent.ranker.SemanticQueryVectors;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 import org.springframework.ai.embedding.EmbeddingModel;
-import tools.jackson.databind.ObjectMapper;
 
-/** Verifies source composition and normalization at the persistence boundary. */
 class EmbeddingIndexerTest {
 
-  private final EmbeddingModel model = mock(EmbeddingModel.class);
-  private final EmbeddingStore store = mock(EmbeddingStore.class);
-  private final EmbeddingIndexer indexer = new EmbeddingIndexer(model, store, new ObjectMapper());
-
-  /** Audiobook fields are combined and the saved vector has unit length. */
   @Test
-  void indexesAudiobook() throws Exception {
+  void embedsAndNormalizesAudiobookText() {
+    EmbeddingModel model = mock(EmbeddingModel.class);
+    EmbeddingIndexer indexer = new EmbeddingIndexer(model);
     AudiobookRecord book =
         new AudiobookRecord(
-            "book-1", "source", "A Space Journey", List.of("A. Writer"), "A trip through space");
-    when(model.embed(any(String.class))).thenReturn(new float[] {3, 4});
+            "book-1",
+            "catalogue",
+            "Dune",
+            List.of("Frank Herbert"),
+            "Desert science fiction",
+            List.of("Simon Vance"),
+            "English",
+            1200);
+    String text = indexer.buildAudiobookText(book);
+    when(model.embed(text)).thenReturn(new float[] {3, 4});
 
-    float[] indexed = indexer.ensureAudiobookEmbedding(book);
-
-    ArgumentCaptor<StoredEmbedding> saved = ArgumentCaptor.forClass(StoredEmbedding.class);
-    verify(store).save(saved.capture());
-    assertEquals("audiobook:book-1", saved.getValue().getId());
-    assertEquals(
-        "title: A Space Journey\nauthors: A. Writer\ndescription: A trip through space",
-        saved.getValue().getSourceText());
-    float[] vector = new ObjectMapper().readValue(saved.getValue().getVectorJson(), float[].class);
-    assertEquals(0.6, vector[0], 0.000001);
-    assertEquals(0.8, vector[1], 0.000001);
-    assertEquals(0.6, indexed[0], 0.000001);
-    assertEquals(0.8, indexed[1], 0.000001);
+    assertArrayEquals(new float[] {0.6f, 0.8f}, indexer.embedAudiobook(book), 0.0001f);
+    assertThat(text).contains("title: Dune", "authors: Frank Herbert", "narrators: Simon Vance");
   }
 
-  /** Raw and parsed request text share one embedding and the final request ID. */
   @Test
-  void indexesCombinedRequest() {
-    SessionRequest request = new SessionRequest();
-    request.setRequestId("request-1");
-    request.setRawText("I want a space mystery");
-    SemanticQuery semanticQuery = new SemanticQuery();
-    semanticQuery.setGenres(List.of("science fiction", "mystery"));
-    request.setQuery(semanticQuery);
-    when(model.embed(any(String.class))).thenReturn(new float[] {0, 2});
+  void embedsAValidBatchAndPreservesRecordOrder() {
+    EmbeddingModel model = mock(EmbeddingModel.class);
+    EmbeddingIndexer indexer = new EmbeddingIndexer(model);
+    AudiobookRecord first = book("1", "First");
+    AudiobookRecord second = book("2", "Second");
+    List<String> texts =
+        List.of(indexer.buildAudiobookText(first), indexer.buildAudiobookText(second));
+    when(model.embed(texts)).thenReturn(List.of(new float[] {1, 0}, new float[] {0, 2}));
 
-    indexer.indexRequest(request);
+    var embeddings = indexer.embedAudiobooks(List.of(first, second));
 
-    ArgumentCaptor<StoredEmbedding> saved = ArgumentCaptor.forClass(StoredEmbedding.class);
-    verify(store).save(saved.capture());
-    assertEquals("request:request-1", saved.getValue().getId());
-    assertEquals(
-        "Request: I want a space mystery\nGenres: science fiction, mystery",
-        saved.getValue().getSourceText());
-    assertEquals("[0.0,1.0]", saved.getValue().getVectorJson());
+    assertThat(embeddings).extracting(value -> value.record().id()).containsExactly("1", "2");
+    assertArrayEquals(new float[] {0, 1}, embeddings.get(1).vector(), 0.0001f);
   }
 
-  /** Existing audiobook vectors are reused to avoid repeated embedding calls. */
   @Test
-  void reusesExistingAudiobook() {
-    AudiobookRecord book = new AudiobookRecord("book-1", "source", null, List.of(), null);
-    when(store.findById("audiobook:book-1"))
-        .thenReturn(
-            java.util.Optional.of(
-                new StoredEmbedding("audiobook:book-1", "stored text", "[0.0,1.0]")));
+  void embedsOneCompleteSemanticQuery() {
+    EmbeddingModel model = mock(EmbeddingModel.class);
+    EmbeddingIndexer indexer = new EmbeddingIndexer(model);
+    SemanticQuery query = new SemanticQuery();
+    query.setTopics(List.of("desert planets"));
+    query.setGenres(List.of("science fiction"));
+    query.setKeywords(List.of("survival"));
+    String text = indexer.buildSemanticQueryText(query);
+    when(model.embed(text)).thenReturn(new float[] {0, 5});
 
-    float[] vector = indexer.ensureAudiobookEmbedding(book);
-
-    verify(model, never()).embed(any(String.class));
-    verify(store, never()).save(any(StoredEmbedding.class));
-    assertEquals(0.0, vector[0], 0.000001);
-    assertEquals(1.0, vector[1], 0.000001);
+    assertArrayEquals(new float[] {0, 1}, indexer.embedSemanticQuery(query), 0.0001f);
+    verify(model).embed(text);
   }
 
-  /** Migration pages generate all cache misses with one embedding-model batch call. */
   @Test
-  void embedsMigrationPageInOneBatch() {
-    AudiobookRecord first =
-        new AudiobookRecord("book-1", "source", "First", List.of("Author"), "Description");
-    AudiobookRecord second =
-        new AudiobookRecord("book-2", "source", "Second", List.of("Author"), "Description");
-    when(store.findAllById(List.of("audiobook:book-1", "audiobook:book-2"))).thenReturn(List.of());
-    when(model.embed(anyList())).thenReturn(List.of(new float[] {3, 4}, new float[] {0, 2}));
+  void skipsTheModelForAnEmptySemanticQuery() {
+    EmbeddingModel model = mock(EmbeddingModel.class);
 
-    var embeddings = indexer.ensureAudiobookEmbeddings(List.of(first, second));
-
-    assertEquals(2, embeddings.size());
-    assertEquals(0.6, embeddings.getFirst().vector()[0], 0.000001);
-    assertEquals(1.0, embeddings.getLast().vector()[1], 0.000001);
-    verify(model).embed(anyList());
-    verify(store).saveAll(anyList());
+    assertThat(new EmbeddingIndexer(model).embedSemanticQuery(null)).isEmpty();
+    verifyNoInteractions(model);
   }
 
-  /** A favourite book ID retrieves its stored normalized vector without calling the model. */
   @Test
-  void findsAudiobookEmbeddingByBookId() {
-    when(store.findById("audiobook:book-1"))
-        .thenReturn(
-            java.util.Optional.of(
-                new StoredEmbedding("audiobook:book-1", "stored text", "[0.6,0.8]")));
+  void combinesPositiveAndNegativeDirectionsForRetrieval() {
+    EmbeddingIndexer indexer = new EmbeddingIndexer(mock(EmbeddingModel.class));
+    SemanticQueryVectors vectors =
+        new SemanticQueryVectors(List.of(new float[] {1, 0}), List.of(new float[] {0, 1}));
 
-    var result = indexer.findAudiobookEmbedding("book-1");
-
-    assertTrue(result.isPresent());
-    assertEquals(0.6, result.get()[0], 0.000001);
-    assertEquals(0.8, result.get()[1], 0.000001);
-    verify(model, never()).embed(any(String.class));
+    float inverseRootTwo = (float) (1 / Math.sqrt(2));
+    assertArrayEquals(
+        new float[] {inverseRootTwo, -inverseRootTwo},
+        indexer.combineSemanticQueries(vectors),
+        0.0001f);
   }
 
-  /** Zero vectors cannot be stored because their dot product has no cosine meaning. */
-  @Test
-  void rejectsZeroVector() {
-    assertThrows(IllegalArgumentException.class, () -> VectorMath.normalize(new float[] {0, 0}));
-    assertEquals(
-        1.0, VectorMath.dotProduct(new float[] {0.6f, 0.8f}, new float[] {0.6f, 0.8f}), 0.000001);
-  }
-
-  /** Retrieval embedding excludes polarity terms because ranking handles them independently. */
-  @Test
-  void excludesPreferencesFromRetrievalEmbedding() {
-    SessionRequest request = new SessionRequest();
-    request.setRawText("Find a space adventure without horror");
-    SemanticQuery semanticQuery = new SemanticQuery();
-    semanticQuery.setGenres(List.of("science fiction"));
-    request.setQuery(semanticQuery);
-    Preferences preferences = new Preferences();
-    preferences.setInclude(List.of("space opera"));
-    preferences.setExclude(List.of("horror"));
-    request.setPreferences(preferences);
-    when(model.embed(any(String.class))).thenReturn(new float[] {1, 0});
-
-    indexer.embedRequest(request);
-
-    ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
-    verify(model).embed(text.capture());
-    assertEquals("Genres: science fiction", text.getValue());
-  }
-
-  /** Positive evidence attracts retrieval while negative evidence reverses its direction. */
-  @Test
-  void combinesPositiveAndNegativeVectorsForSemanticRetrieval() {
-    SessionRequest request = new SessionRequest();
-    SemanticQuery semanticQuery = new SemanticQuery();
-    semanticQuery.setGenres(List.of("science fiction"));
-    request.setQuery(semanticQuery);
-    when(model.embed("Genres: science fiction")).thenReturn(new float[] {1, 0});
-
-    float[] vector =
-        indexer.embedRequest(
-            request,
-            new PreferenceSignals(List.of(new float[] {0, 1}), List.of(new float[] {-1, 0})));
-
-    assertEquals(0.948683, vector[0], 0.000001);
-    assertEquals(0.316228, vector[1], 0.000001);
+  private AudiobookRecord book(String id, String title) {
+    return new AudiobookRecord(id, "catalogue", title, List.of("Author"), "Description");
   }
 }

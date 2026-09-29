@@ -2,7 +2,7 @@ package com.gen3.recommenderagent.storage.audiobook.solr;
 
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
-import com.gen3.recommenderagent.ranker.PreferenceSignals;
+import com.gen3.recommenderagent.ranker.SemanticQueryVectors;
 import com.gen3.recommenderagent.ranker.candidate.CandidateRetriever;
 import com.gen3.recommenderagent.ranker.candidate.retrieval.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
@@ -37,13 +37,12 @@ public class BaseSolrCandidateRetriever implements CandidateRetriever {
   /** Retrieves lexical and semantic candidates using the same embedding model as indexing. */
   @Override
   public List<AudiobookCandidate> getCandidates(
-      SessionRequest request, PreferenceSignals signals, int limit) {
+      SessionRequest request, SemanticQueryVectors vectors, int limit) {
     try {
       String query =
           retrievalPlanner.lexicalText(
-              request == null ? null : request.getQuery(),
-              request == null ? "" : request.getRawText());
-      float[] queryVector = embeddingIndexer.embedRequest(request, signals);
+              request == null ? null : request.getPositiveSemanticQuery(), "");
+      float[] queryVector = embeddingIndexer.combineSemanticQueries(vectors);
       if (queryVector == null || queryVector.length == 0) {
         return candidateSearch.searchKeyword(query, AudiobookFilters.empty(), limit);
       }

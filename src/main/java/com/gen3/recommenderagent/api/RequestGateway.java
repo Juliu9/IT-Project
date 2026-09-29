@@ -2,7 +2,6 @@ package com.gen3.recommenderagent.api;
 
 import com.gen3.recommenderagent.application.RequestApplicationService;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
-import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.response.ResponseGenerator;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,17 +17,14 @@ public class RequestGateway {
   private final InputParser inputParser;
   private final RequestApplicationService requestApplicationService;
   private final ResponseGenerator responseGenerator;
-  private final EmbeddingIndexer embeddingIndexer;
 
   public RequestGateway(
       InputParser inputParser,
       RequestApplicationService requestApplicationService,
-      ResponseGenerator responseGenerator,
-      EmbeddingIndexer embeddingIndexer) {
+      ResponseGenerator responseGenerator) {
     this.inputParser = inputParser;
     this.requestApplicationService = requestApplicationService;
     this.responseGenerator = responseGenerator;
-    this.embeddingIndexer = embeddingIndexer;
   }
 
   /**
@@ -48,11 +44,7 @@ public class RequestGateway {
     SessionRequest currentRequest = inputParser.parse(rawText).entity();
 
     // 2. Application service resolves the action and updates session state.
-    SessionRequest result =
-        requestApplicationService.process(sessionId, userId, currentRequest);
-
-    // The application service assigns the final request ID before request-vector persistence.
-    embeddingIndexer.indexRequest(result);
+    SessionRequest result = requestApplicationService.process(sessionId, userId, currentRequest);
 
     // 3. Generate natural language response
     return responseGenerator.generate(result.getRecommendations(), result);

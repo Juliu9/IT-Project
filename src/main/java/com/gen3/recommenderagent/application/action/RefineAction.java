@@ -5,9 +5,9 @@ import com.gen3.recommenderagent.domain.session.SessionContext;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import org.springframework.stereotype.Component;
 
-/** Placeholder until session preference behaviour is defined. */
+/** Placeholder until refinement behaviour is defined. */
 @Component
-public class UpdatePreferencesAction implements IntentAction {
+public class RefineAction implements IntentAction {
 
   @Override
   public SessionRequest execute(SessionRequest request, SessionContext context) {
