@@ -1,7 +1,7 @@
 package com.gen3.recommenderagent.ranker;
 
 import com.gen3.recommenderagent.domain.session.Preferences;
-import com.gen3.recommenderagent.domain.session.Query;
+import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
 import java.util.LinkedHashSet;
@@ -32,12 +32,12 @@ public class PreferenceVectorService {
         embeddingIndexer.embedPreferenceTerms(negative.stream().toList()));
   }
 
-  private void add(Query query, Set<String> positive, Set<String> negative) {
-    if (query == null) {
+  private void add(SemanticQuery semanticQuery, Set<String> positive, Set<String> negative) {
+    if (semanticQuery == null) {
       return;
     }
-    addAll(query.getPositive(), positive);
-    addAll(query.getNegative(), negative);
+    addAll(semanticQuery.getPositive(), positive);
+    addAll(semanticQuery.getNegative(), negative);
   }
 
   private void add(Preferences preferences, Set<String> positive, Set<String> negative) {

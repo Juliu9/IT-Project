@@ -7,7 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.Query;
+import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
 import com.gen3.recommenderagent.ranker.candidate.QdrantCandidateRetriever;
@@ -31,10 +31,10 @@ class QdrantCandidateRetrieverTest {
     SessionRequest request = new SessionRequest();
     request.setIntent(Intent.NEW_RECOMMENDATION);
     request.setRawText("fantasy in a desert");
-    Query query = new Query();
-    query.setGenres(List.of("fantasy"));
-    query.setTopics(List.of("desert"));
-    request.setQuery(query);
+    SemanticQuery semanticQuery = new SemanticQuery();
+    semanticQuery.setGenres(List.of("fantasy"));
+    semanticQuery.setTopics(List.of("desert"));
+    request.setQuery(semanticQuery);
     float[] vector = {0.6f, 0.8f};
     PreferenceSignals signals = PreferenceSignals.empty();
     when(embeddingIndexer.embedRequest(request, signals)).thenReturn(vector);

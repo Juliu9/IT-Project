@@ -1,7 +1,7 @@
 package com.gen3.recommenderagent.ranker.candidate.retrieval;
 
 import com.gen3.recommenderagent.domain.session.Filter;
-import com.gen3.recommenderagent.domain.session.Query;
+import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import java.util.ArrayList;
@@ -25,15 +25,15 @@ public class AudiobookRetrievalPlanner {
 
   /** Separates semantic text, lexical terms, and exact payload constraints. */
   public AudiobookRetrievalPlan plan(int limit, SessionRequest request) {
-    Query query = request == null ? null : request.getQuery();
+    SemanticQuery semanticQuery = request == null ? null : request.getQuery();
     Filter filter = request == null ? null : request.getFilter();
     String rawText = request == null ? null : request.getRawText();
     String semanticText = hasText(rawText) ? rawText.trim() : "";
-    String keywordText = lexicalText(query, semanticText);
+    String keywordText = lexicalText(semanticQuery, semanticText);
     AudiobookFilters filters =
         new AudiobookFilters(
-            copy(query == null ? null : query.getAuthors()),
-            copy(query == null ? null : query.getNarrators()),
+            copy(semanticQuery == null ? null : semanticQuery.getAuthors()),
+            copy(semanticQuery == null ? null : semanticQuery.getNarrators()),
             filter == null ? null : filter.getLanguage(),
             durationMinutes(filter == null ? null : filter.getDuration()));
     return new AudiobookRetrievalPlan(
@@ -44,14 +44,14 @@ public class AudiobookRetrievalPlanner {
   }
 
   /** Builds sparse-search input from fields intended to influence textual relevance. */
-  public String lexicalText(Query query, String fallback) {
-    if (query == null) {
+  public String lexicalText(SemanticQuery semanticQuery, String fallback) {
+    if (semanticQuery == null) {
       return fallback;
     }
     List<String> terms = new ArrayList<>();
-    add(terms, query.getTopics());
-    add(terms, query.getGenres());
-    add(terms, query.getKeywords());
+    add(terms, semanticQuery.getTopics());
+    add(terms, semanticQuery.getGenres());
+    add(terms, semanticQuery.getKeywords());
     return terms.isEmpty() ? fallback : String.join(" ", terms);
   }
 

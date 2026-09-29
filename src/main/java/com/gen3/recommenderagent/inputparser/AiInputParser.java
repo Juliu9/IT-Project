@@ -32,9 +32,9 @@ public class AiInputParser implements InputParser {
                         Extract the user's audiobook search request.
 
                         Use only information explicitly provided by the user.
-                        Choose the intent and populate the query, preferences, and filter fields.
-                        Put desired semantic concepts in query.positive and concepts to avoid in
-                        query.negative. Put narrator names in query.narrators. Put language,
+                        Choose the intent and populate the semanticQuery, preferences, and filter fields.
+                        Put desired semantic concepts in semanticQuery.positive and concepts to avoid in
+                        semanticQuery.negative. Put narrator names in semanticQuery.narrators. Put language,
                         duration, and count restrictions in filter.
                         """)
             .user(rawText)

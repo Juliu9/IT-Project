@@ -11,7 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.domain.session.Preferences;
-import com.gen3.recommenderagent.domain.session.Query;
+import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.ranker.PreferenceSignals;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
@@ -57,9 +57,9 @@ class EmbeddingIndexerTest {
     SessionRequest request = new SessionRequest();
     request.setRequestId("request-1");
     request.setRawText("I want a space mystery");
-    Query query = new Query();
-    query.setGenres(List.of("science fiction", "mystery"));
-    request.setQuery(query);
+    SemanticQuery semanticQuery = new SemanticQuery();
+    semanticQuery.setGenres(List.of("science fiction", "mystery"));
+    request.setQuery(semanticQuery);
     when(model.embed(any(String.class))).thenReturn(new float[] {0, 2});
 
     indexer.indexRequest(request);
@@ -138,9 +138,9 @@ class EmbeddingIndexerTest {
   void excludesPreferencesFromRetrievalEmbedding() {
     SessionRequest request = new SessionRequest();
     request.setRawText("Find a space adventure without horror");
-    Query query = new Query();
-    query.setGenres(List.of("science fiction"));
-    request.setQuery(query);
+    SemanticQuery semanticQuery = new SemanticQuery();
+    semanticQuery.setGenres(List.of("science fiction"));
+    request.setQuery(semanticQuery);
     Preferences preferences = new Preferences();
     preferences.setInclude(List.of("space opera"));
     preferences.setExclude(List.of("horror"));
@@ -158,9 +158,9 @@ class EmbeddingIndexerTest {
   @Test
   void combinesPositiveAndNegativeVectorsForSemanticRetrieval() {
     SessionRequest request = new SessionRequest();
-    Query query = new Query();
-    query.setGenres(List.of("science fiction"));
-    request.setQuery(query);
+    SemanticQuery semanticQuery = new SemanticQuery();
+    semanticQuery.setGenres(List.of("science fiction"));
+    request.setQuery(semanticQuery);
     when(model.embed("Genres: science fiction")).thenReturn(new float[] {1, 0});
 
     float[] vector =

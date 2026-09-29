@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.gen3.recommenderagent.domain.session.Filter;
 import com.gen3.recommenderagent.domain.session.Preferences;
-import com.gen3.recommenderagent.domain.session.Query;
+import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
@@ -116,39 +116,39 @@ class RedisSessionRepositoryTest {
 
     Session session = new Session();
 
-    session.setSessionId("query-test");
+    session.setSessionId("semanticQuery-test");
 
-    Query query = new Query();
+    SemanticQuery semanticQuery = new SemanticQuery();
 
-    query.setTopics(List.of("WWI", "history"));
+    semanticQuery.setTopics(List.of("WWI", "history"));
 
-    query.setGenres(List.of("historical"));
+    semanticQuery.setGenres(List.of("historical"));
 
-    query.setAuthors(List.of("Author One"));
+    semanticQuery.setAuthors(List.of("Author One"));
 
-    query.setKeywords(List.of("war", "Europe"));
+    semanticQuery.setKeywords(List.of("war", "Europe"));
 
     SessionRequest request = new SessionRequest();
 
-    request.setQuery(query);
+    request.setQuery(semanticQuery);
 
     session.setRequests(List.of(request));
 
     redisSessionCache.updateSession(session);
 
-    Session retrieved = redisSessionCache.getSession("query-test");
+    Session retrieved = redisSessionCache.getSession("semanticQuery-test");
 
-    Query retrievedQuery = retrieved.getRequests().get(0).getQuery();
+    SemanticQuery retrievedSemanticQuery = retrieved.getRequests().get(0).getQuery();
 
-    assertNotNull(retrievedQuery);
+    assertNotNull(retrievedSemanticQuery);
 
-    assertEquals(List.of("WWI", "history"), retrievedQuery.getTopics());
+    assertEquals(List.of("WWI", "history"), retrievedSemanticQuery.getTopics());
 
-    assertEquals(List.of("historical"), retrievedQuery.getGenres());
+    assertEquals(List.of("historical"), retrievedSemanticQuery.getGenres());
 
-    assertEquals(List.of("Author One"), retrievedQuery.getAuthors());
+    assertEquals(List.of("Author One"), retrievedSemanticQuery.getAuthors());
 
-    assertEquals(List.of("war", "Europe"), retrievedQuery.getKeywords());
+    assertEquals(List.of("war", "Europe"), retrievedSemanticQuery.getKeywords());
   }
 
   // ============================================================
@@ -308,13 +308,13 @@ class RedisSessionRepositoryTest {
 
     session.setSessionId(sessionId);
 
-    Query query = new Query();
+    SemanticQuery semanticQuery = new SemanticQuery();
 
-    query.setTopics(List.of("WWI"));
+    semanticQuery.setTopics(List.of("WWI"));
 
     SessionRequest request = new SessionRequest();
 
-    request.setQuery(query);
+    request.setQuery(semanticQuery);
 
     session.setRequests(List.of(request));
 
@@ -322,7 +322,7 @@ class RedisSessionRepositoryTest {
     redisSessionCache.updateSession(session);
 
     // Modify session
-    query.setTopics(List.of("WWI", "Vietnam War"));
+    semanticQuery.setTopics(List.of("WWI", "Vietnam War"));
 
     // Second write
     redisSessionCache.updateSession(session);

@@ -5,7 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.domain.session.Preferences;
-import com.gen3.recommenderagent.domain.session.Query;
+import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
 import java.util.List;
@@ -16,14 +16,14 @@ class PreferenceVectorServiceTest {
   @Test
   void combinesNewQueryPolarityWithLegacyPreferenceFields() {
     EmbeddingIndexer indexer = mock(EmbeddingIndexer.class);
-    Query query = new Query();
-    query.setPositive(List.of("space opera"));
-    query.setNegative(List.of("horror"));
+    SemanticQuery semanticQuery = new SemanticQuery();
+    semanticQuery.setPositive(List.of("space opera"));
+    semanticQuery.setNegative(List.of("horror"));
     Preferences preferences = new Preferences();
     preferences.setInclude(List.of("found family", "space opera"));
     preferences.setExclude(List.of("gore"));
     SessionRequest request = new SessionRequest();
-    request.setQuery(query);
+    request.setQuery(semanticQuery);
     request.setPreferences(preferences);
     when(indexer.embedPreferenceTerms(List.of("space opera", "found family")))
         .thenReturn(List.of(new float[] {1, 0}, new float[] {0, 1}));

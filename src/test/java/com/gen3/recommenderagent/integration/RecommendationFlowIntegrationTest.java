@@ -19,7 +19,7 @@ import com.gen3.recommenderagent.application.action.UpdatePreferencesAction;
 import com.gen3.recommenderagent.application.session.DefaultSessionService;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Filter;
-import com.gen3.recommenderagent.domain.session.Query;
+import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.engine.AudiobookRecommendationWorkflow;
@@ -151,8 +151,8 @@ class RecommendationFlowIntegrationTest {
   }
 
   private SessionRequest parsedRequest(String rawText) {
-    Query query = new Query();
-    query.setGenres(List.of("science fiction"));
+    SemanticQuery semanticQuery = new SemanticQuery();
+    semanticQuery.setGenres(List.of("science fiction"));
 
     Filter filter = new Filter();
     filter.setCount(3);
@@ -160,7 +160,7 @@ class RecommendationFlowIntegrationTest {
     SessionRequest request = new SessionRequest();
     request.setRawText(rawText);
     request.setIntent(Intent.NEW_RECOMMENDATION);
-    request.setQuery(query);
+    request.setQuery(semanticQuery);
     request.setFilter(filter);
     return request;
   }

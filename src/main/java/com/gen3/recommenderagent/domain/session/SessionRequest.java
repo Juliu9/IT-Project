@@ -11,11 +11,10 @@ public class SessionRequest {
   private String rawText;
   private Instant createdAt;
 
-  // IMPORTANT !!
   private Intent intent;
 
-  private Query query;
-  private Preferences preferences;
+  private SemanticQuery PositiveSemanticQuery;
+  private SemanticQuery NegativeSemanticQuery;
 
   @JsonAlias("constraints")
   private Filter filter;
@@ -48,23 +47,23 @@ public class SessionRequest {
     this.intent = intent;
   }
 
-  public Query getQuery() {
-    return query;
-  }
+    public SemanticQuery getPositiveSemanticQuery() {
+        return PositiveSemanticQuery;
+    }
 
-  public void setQuery(Query query) {
-    this.query = query;
-  }
+    public void setPositiveSemanticQuery(SemanticQuery positiveSemanticQuery) {
+        PositiveSemanticQuery = positiveSemanticQuery;
+    }
 
-  public Preferences getPreferences() {
-    return preferences;
-  }
+    public SemanticQuery getNegativeSemanticQuery() {
+        return NegativeSemanticQuery;
+    }
 
-  public void setPreferences(Preferences preferences) {
-    this.preferences = preferences;
-  }
+    public void setNegativeSemanticQuery(SemanticQuery negativeSemanticQuery) {
+        NegativeSemanticQuery = negativeSemanticQuery;
+    }
 
-  public Filter getFilter() {
+    public Filter getFilter() {
     return filter;
   }
 

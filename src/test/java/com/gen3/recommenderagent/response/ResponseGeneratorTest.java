@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Filter;
-import com.gen3.recommenderagent.domain.session.Query;
+import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.util.List;
@@ -21,9 +21,9 @@ class ResponseGeneratorTest {
     request.setIntent(Intent.NEW_RECOMMENDATION);
     request.setRawText("Recommend me an action audiobook");
 
-    Query query = new Query();
-    query.setGenres(List.of("action", "sci-fi"));
-    request.setQuery(query);
+    SemanticQuery semanticQuery = new SemanticQuery();
+    semanticQuery.setGenres(List.of("action", "sci-fi"));
+    request.setQuery(semanticQuery);
 
     Filter filter = new Filter();
     filter.setCount(3);

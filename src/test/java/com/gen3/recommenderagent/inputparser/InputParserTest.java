@@ -12,7 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Filter;
-import com.gen3.recommenderagent.domain.session.Query;
+import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.util.List;
 import java.util.UUID;
@@ -28,12 +28,12 @@ class InputParserTest {
   void shouldMapAiResultWithoutCallingARealAiService() {
     String rawText = "Recommend science fiction audiobooks.";
 
-    Query query = new Query();
-    query.setGenres(List.of("science fiction"));
+    SemanticQuery semanticQuery = new SemanticQuery();
+    semanticQuery.setGenres(List.of("science fiction"));
 
     ParsedRequest parsedRequest = new ParsedRequest();
     parsedRequest.setIntent(Intent.NEW_RECOMMENDATION);
-    parsedRequest.setQuery(query);
+    parsedRequest.setQuery(semanticQuery);
     Filter filter = new Filter();
     filter.setLanguage("English");
     parsedRequest.setFilter(filter);
@@ -55,7 +55,7 @@ class InputParserTest {
     assertNotNull(result);
     assertEquals(rawText, result.getRawText());
     assertEquals(Intent.NEW_RECOMMENDATION, result.getIntent());
-    assertSame(query, result.getQuery());
+    assertSame(semanticQuery, result.getQuery());
     assertSame(filter, result.getFilter());
 
     UUID requestId = UUID.fromString(result.getRequestId());

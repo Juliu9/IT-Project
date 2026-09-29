@@ -2,17 +2,15 @@ package com.gen3.recommenderagent.domain.session;
 
 import java.util.List;
 
-public class Query {
+public class SemanticQuery {
 
   private List<String> topics;
   private List<String> genres;
   private List<String> authors;
   private List<String> narrators;
   private List<String> keywords;
-  private List<String> positive;
-  private List<String> negative;
 
-  public Query() {}
+  public SemanticQuery() {}
 
   public List<String> getTopics() {
     return topics;
@@ -56,21 +54,4 @@ public class Query {
     this.keywords = keywords;
   }
 
-  /** Returns concepts that should move semantic retrieval closer. */
-  public List<String> getPositive() {
-    return positive;
-  }
-
-  public void setPositive(List<String> positive) {
-    this.positive = positive;
-  }
-
-  /** Returns concepts that should move semantic retrieval away. */
-  public List<String> getNegative() {
-    return negative;
-  }
-
-  public void setNegative(List<String> negative) {
-    this.negative = negative;
-  }
 }

@@ -1,6 +1,6 @@
 package com.gen3.recommenderagent.embedding;
 
-import com.gen3.recommenderagent.domain.session.Query;
+import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.ranker.PreferenceSignals;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
@@ -154,7 +154,7 @@ public class EmbeddingIndexer {
 
     /** Builds canonical request text without serializing the Java object or response text. */
     public String buildRequestText(SessionRequest request) {
-        Query query = request.getQuery();
+        SemanticQuery semanticQuery = request.getQuery();
 
         return List.of(
                         part("Request", request.getRawText()),
@@ -163,13 +163,13 @@ public class EmbeddingIndexer {
                                 request.getIntent() == null
                                         ? null
                                         : request.getIntent().name()),
-                        part("Topics", query == null ? null : query.getTopics()),
-                        part("Genres", query == null ? null : query.getGenres()),
-                        part("Authors", query == null ? null : query.getAuthors()),
-                        part("Narrators", query == null ? null : query.getNarrators()),
-                        part("Keywords", query == null ? null : query.getKeywords()),
-                        part("Positive", query == null ? null : query.getPositive()),
-                        part("Negative", query == null ? null : query.getNegative()),
+                        part("Topics", semanticQuery == null ? null : semanticQuery.getTopics()),
+                        part("Genres", semanticQuery == null ? null : semanticQuery.getGenres()),
+                        part("Authors", semanticQuery == null ? null : semanticQuery.getAuthors()),
+                        part("Narrators", semanticQuery == null ? null : semanticQuery.getNarrators()),
+                        part("Keywords", semanticQuery == null ? null : semanticQuery.getKeywords()),
+                        part("Positive", semanticQuery == null ? null : semanticQuery.getPositive()),
+                        part("Negative", semanticQuery == null ? null : semanticQuery.getNegative()),
                         part(
                                 "Included preferences",
                                 request.getPreferences() == null
@@ -197,15 +197,15 @@ public class EmbeddingIndexer {
 
     /** Builds retrieval text without preference polarity, which is scored separately. */
     public String buildRetrievalText(SessionRequest request) {
-        Query query = request.getQuery();
+        SemanticQuery semanticQuery = request.getQuery();
 
         String structuredText =
                 List.of(
-                                part("Topics", query == null ? null : query.getTopics()),
-                                part("Genres", query == null ? null : query.getGenres()),
-                                part("Authors", query == null ? null : query.getAuthors()),
-                                part("Narrators", query == null ? null : query.getNarrators()),
-                                part("Keywords", query == null ? null : query.getKeywords()),
+                                part("Topics", semanticQuery == null ? null : semanticQuery.getTopics()),
+                                part("Genres", semanticQuery == null ? null : semanticQuery.getGenres()),
+                                part("Authors", semanticQuery == null ? null : semanticQuery.getAuthors()),
+                                part("Narrators", semanticQuery == null ? null : semanticQuery.getNarrators()),
+                                part("Keywords", semanticQuery == null ? null : semanticQuery.getKeywords()),
                                 part(
                                         "Duration",
                                         request.getFilter() == null
