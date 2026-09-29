@@ -1,10 +1,10 @@
 package com.gen3.recommenderagent.ranker;
 
+import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.ranker.strategy.HybridRankingStrategy;
-import com.gen3.recommenderagent.ranker.strategy.PreferenceRankingStrategy;
 import com.gen3.recommenderagent.ranker.strategy.RelevanceRankingStrategy;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
@@ -15,15 +15,12 @@ import org.springframework.stereotype.Service;
 public class RankingService implements Ranker {
 
   private final RelevanceRankingStrategy relevanceRankingStrategy;
-  private final PreferenceRankingStrategy preferenceRankingStrategy;
   private final HybridRankingStrategy hybridRankingStrategy;
 
   public RankingService(
       RelevanceRankingStrategy relevanceRankingStrategy,
-      PreferenceRankingStrategy preferenceRankingStrategy,
       HybridRankingStrategy hybridRankingStrategy) {
     this.relevanceRankingStrategy = relevanceRankingStrategy;
-    this.preferenceRankingStrategy = preferenceRankingStrategy;
     this.hybridRankingStrategy = hybridRankingStrategy;
   }
 
@@ -33,11 +30,12 @@ public class RankingService implements Ranker {
     return relevanceRankingStrategy.rank(candidates, requestedLimit);
   }
 
+  /** Uses semantic-query vectors for polarity-aware reranking when available. */
   @Override
   public List<Recommendation> rank(
-      List<AudiobookCandidate> candidates, int requestedLimit, boolean personalised) {
-    return personalised
-        ? hybridRankingStrategy.rank(candidates, requestedLimit)
-        : relevanceRankingStrategy.rank(candidates, requestedLimit);
+      List<AudiobookCandidate> candidates, int requestedLimit, SemanticQueryVectors vectors) {
+    return vectors.isEmpty()
+        ? relevanceRankingStrategy.rank(candidates, requestedLimit)
+        : hybridRankingStrategy.rank(candidates, requestedLimit, vectors);
   }
 }

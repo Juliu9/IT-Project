@@ -32,10 +32,16 @@ public class AiInputParser implements InputParser {
                         Extract the user's audiobook search request.
 
                         Use only information explicitly provided by the user.
-                        Choose the intent and populate the query, preferences, and constraints fields.
-                        Put narrator names in query.narrators. Put language, duration, and count
-                        restrictions in constraints.
-                        Set personalised only when the user asks for personalised results.
+                        Choose one of these intents: RECOMMENDATION, REFINE, MORE_RESULTS,
+                        CHANGE_COUNT, UPDATE_PREFERENCES, CLEAR_HISTORY, HELP, or UNKNOWN.
+                        Put desired concepts in positiveSemanticQuery and concepts to avoid in
+                        negativeSemanticQuery. Put exact author, narrator, language, duration, and
+                        source requirements in mustInclude. Put exact values that must be excluded in
+                        mustNotInclude. For example, "only English" belongs in mustInclude.language,
+                        while "not English" belongs in mustNotInclude.language. Put the requested
+                        number of results in bookCount. Do not invent values or report contradictions.
+                        Use RECOMMENDATION for every new audiobook search, including searches by
+                        theme, author, narrator, language, or duration. Do not select a retrieval mode.
                         """)
             .user(rawText)
             .call()
@@ -48,11 +54,12 @@ public class AiInputParser implements InputParser {
     ParsedRequest parsed = aiResponse.entity();
 
     SessionRequest request = new SessionRequest();
-    request.setPersonalised(parsed.isPersonalised());
     request.setIntent(parsed.getIntent());
-    request.setQuery(parsed.getQuery());
-    request.setPreferences(parsed.getPreferences());
-    request.setConstraints(parsed.getConstraints());
+    request.setPositiveSemanticQuery(parsed.getPositiveSemanticQuery());
+    request.setNegativeSemanticQuery(parsed.getNegativeSemanticQuery());
+    request.setMustInclude(parsed.getMustInclude());
+    request.setMustNotInclude(parsed.getMustNotInclude());
+    request.setBookCount(parsed.getBookCount());
     request.setRequestId(createUuidV7().toString());
     request.setRawText(rawText);
 

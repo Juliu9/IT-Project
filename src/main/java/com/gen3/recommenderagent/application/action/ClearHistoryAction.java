@@ -1,0 +1,19 @@
+package com.gen3.recommenderagent.application.action;
+
+import com.gen3.recommenderagent.application.IntentAction;
+import com.gen3.recommenderagent.domain.session.Session;
+import com.gen3.recommenderagent.domain.session.SessionRequest;
+import java.util.List;
+import org.springframework.stereotype.Component;
+
+/** Clears previous conversational history without retrieving candidates. */
+@Component
+public class ClearHistoryAction implements IntentAction {
+
+  @Override
+  public SessionRequest execute(SessionRequest request, Session session) {
+    session.clearHistory();
+    request.setRecommendations(List.of());
+    return request;
+  }
+}

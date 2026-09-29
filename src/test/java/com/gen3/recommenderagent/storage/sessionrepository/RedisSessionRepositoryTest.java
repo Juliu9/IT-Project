@@ -4,12 +4,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-import com.gen3.recommenderagent.domain.session.Constraints;
-import com.gen3.recommenderagent.domain.session.Preferences;
-import com.gen3.recommenderagent.domain.session.Query;
+import com.gen3.recommenderagent.domain.session.MustInclude;
+import com.gen3.recommenderagent.domain.session.MustNotInclude;
 import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.storage.sessionrepository.redis.RedisSessionRepository;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -105,6 +106,18 @@ class RedisSessionRepositoryTest {
     assertEquals(1, retrieved.getRequests().size());
   }
 
+  @Test
+  void shouldStoreShownBooksAsIdsOnly() {
+    Session session = new Session();
+    session.setSessionId("shown-book-ids-test");
+    session.addRecommendationIds(List.of("book-1", "book-2"));
+
+    redisSessionCache.updateSession(session);
+
+    Session retrieved = redisSessionCache.getSession("shown-book-ids-test");
+    assertEquals(List.of("book-1", "book-2"), retrieved.getShownBooks());
+  }
+
   // ============================================================
   // QUERY
   // ============================================================
@@ -114,97 +127,96 @@ class RedisSessionRepositoryTest {
 
     Session session = new Session();
 
-    session.setSessionId("query-test");
+    session.setSessionId("semanticQuery-test");
 
-    Query query = new Query();
+    SemanticQuery semanticQuery = new SemanticQuery();
 
-    query.setTopics(List.of("WWI", "history"));
+    semanticQuery.setTopics(List.of("WWI", "history"));
 
-    query.setGenres(List.of("historical"));
+    semanticQuery.setGenres(List.of("historical"));
 
-    query.setAuthors(List.of("Author One"));
+    semanticQuery.setAuthors(List.of("Author One"));
 
-    query.setKeywords(List.of("war", "Europe"));
+    semanticQuery.setKeywords(List.of("war", "Europe"));
 
     SessionRequest request = new SessionRequest();
 
-    request.setQuery(query);
+    request.setPositiveSemanticQuery(semanticQuery);
 
     session.setRequests(List.of(request));
 
     redisSessionCache.updateSession(session);
 
-    Session retrieved = redisSessionCache.getSession("query-test");
+    Session retrieved = redisSessionCache.getSession("semanticQuery-test");
 
-    Query retrievedQuery = retrieved.getRequests().get(0).getQuery();
+    SemanticQuery retrievedSemanticQuery =
+        retrieved.getRequests().get(0).getPositiveSemanticQuery();
 
-    assertNotNull(retrievedQuery);
+    assertNotNull(retrievedSemanticQuery);
 
-    assertEquals(List.of("WWI", "history"), retrievedQuery.getTopics());
+    assertEquals(List.of("WWI", "history"), retrievedSemanticQuery.getTopics());
 
-    assertEquals(List.of("historical"), retrievedQuery.getGenres());
+    assertEquals(List.of("historical"), retrievedSemanticQuery.getGenres());
 
-    assertEquals(List.of("Author One"), retrievedQuery.getAuthors());
+    assertEquals(List.of("Author One"), retrievedSemanticQuery.getAuthors());
 
-    assertEquals(List.of("war", "Europe"), retrievedQuery.getKeywords());
+    assertEquals(List.of("war", "Europe"), retrievedSemanticQuery.getKeywords());
   }
 
   // ============================================================
-  // PREFERENCES
+  // NEGATIVE SEMANTIC QUERY
   // ============================================================
 
   @Test
-  void shouldSaveAndRetrievePreferences() {
+  void shouldSaveAndRetrieveNegativeSemanticQuery() {
 
     Session session = new Session();
 
-    session.setSessionId("preferences-test");
+    session.setSessionId("negative-query-test");
 
-    Preferences preferences = new Preferences();
-
-    preferences.setInclude(List.of("non-fiction", "history"));
-
-    preferences.setExclude(List.of("romance"));
+    SemanticQuery negativeQuery = new SemanticQuery();
+    negativeQuery.setGenres(List.of("romance"));
 
     SessionRequest request = new SessionRequest();
 
-    request.setPreferences(preferences);
+    request.setNegativeSemanticQuery(negativeQuery);
 
     session.setRequests(List.of(request));
 
     redisSessionCache.updateSession(session);
 
-    Session retrieved = redisSessionCache.getSession("preferences-test");
+    Session retrieved = redisSessionCache.getSession("negative-query-test");
 
-    Preferences retrievedPreferences = retrieved.getRequests().get(0).getPreferences();
+    SemanticQuery retrievedQuery = retrieved.getRequests().get(0).getNegativeSemanticQuery();
 
-    assertNotNull(retrievedPreferences);
-
-    assertEquals(List.of("non-fiction", "history"), retrievedPreferences.getInclude());
-
-    assertEquals(List.of("romance"), retrievedPreferences.getExclude());
+    assertNotNull(retrievedQuery);
+    assertEquals(List.of("romance"), retrievedQuery.getGenres());
   }
 
   // ============================================================
-  // CONSTRAINTS
+  // INCLUDE AND EXCLUDE FILTERS
   // ============================================================
 
   @Test
-  void shouldSaveAndRetrieveConstraints() {
+  void shouldSaveAndRetrieveIncludeAndExcludeFilters() {
 
     Session session = new Session();
 
     session.setSessionId("constraints-test");
 
-    Constraints constraints = new Constraints();
-
-    constraints.setCount(5);
-    constraints.setDuration("under 10 hours");
-    constraints.setLanguage("English");
+    MustInclude mustInclude = new MustInclude();
+    mustInclude.setDuration("under 10 hours");
+    mustInclude.setLanguage("English");
+    mustInclude.setSource("NLS");
+    MustNotInclude mustNotInclude = new MustNotInclude();
+    mustNotInclude.setLanguage("French");
+    mustNotInclude.setSource("Legacy");
 
     SessionRequest request = new SessionRequest();
 
-    request.setConstraints(constraints);
+    request.setBookCount(5);
+    request.setMustInclude(mustInclude);
+    request.setMustNotInclude(mustNotInclude);
 
     session.setRequests(List.of(request));
 
@@ -212,15 +224,13 @@ class RedisSessionRepositoryTest {
 
     Session retrieved = redisSessionCache.getSession("constraints-test");
 
-    Constraints retrievedConstraints = retrieved.getRequests().get(0).getConstraints();
-
-    assertNotNull(retrievedConstraints);
-
-    assertEquals(5, retrievedConstraints.getCount());
-
-    assertEquals("under 10 hours", retrievedConstraints.getDuration());
-
-    assertEquals("English", retrievedConstraints.getLanguage());
+    SessionRequest retrievedRequest = retrieved.getRequests().get(0);
+    assertEquals(5, retrievedRequest.getBookCount());
+    assertEquals("under 10 hours", retrievedRequest.getMustInclude().getDuration());
+    assertEquals("English", retrievedRequest.getMustInclude().getLanguage());
+    assertEquals("NLS", retrievedRequest.getMustInclude().getSource());
+    assertEquals("French", retrievedRequest.getMustNotInclude().getLanguage());
+    assertEquals("Legacy", retrievedRequest.getMustNotInclude().getSource());
   }
 
   // ============================================================
@@ -286,11 +296,11 @@ class RedisSessionRepositoryTest {
 
     SessionRequest retrievedRequest = retrieved.getRequests().get(0);
 
-    assertNull(retrievedRequest.getQuery());
+    assertNull(retrievedRequest.getPositiveSemanticQuery());
+    assertNull(retrievedRequest.getNegativeSemanticQuery());
 
-    assertNull(retrievedRequest.getPreferences());
-
-    assertNull(retrievedRequest.getConstraints());
+    assertNull(retrievedRequest.getMustInclude());
+    assertNull(retrievedRequest.getMustNotInclude());
   }
 
   // ============================================================
@@ -306,13 +316,13 @@ class RedisSessionRepositoryTest {
 
     session.setSessionId(sessionId);
 
-    Query query = new Query();
+    SemanticQuery semanticQuery = new SemanticQuery();
 
-    query.setTopics(List.of("WWI"));
+    semanticQuery.setTopics(List.of("WWI"));
 
     SessionRequest request = new SessionRequest();
 
-    request.setQuery(query);
+    request.setPositiveSemanticQuery(semanticQuery);
 
     session.setRequests(List.of(request));
 
@@ -320,7 +330,7 @@ class RedisSessionRepositoryTest {
     redisSessionCache.updateSession(session);
 
     // Modify session
-    query.setTopics(List.of("WWI", "Vietnam War"));
+    semanticQuery.setTopics(List.of("WWI", "Vietnam War"));
 
     // Second write
     redisSessionCache.updateSession(session);
@@ -331,6 +341,7 @@ class RedisSessionRepositoryTest {
     assertNotNull(retrieved);
 
     assertEquals(
-        List.of("WWI", "Vietnam War"), retrieved.getRequests().get(0).getQuery().getTopics());
+        List.of("WWI", "Vietnam War"),
+        retrieved.getRequests().get(0).getPositiveSemanticQuery().getTopics());
   }
 }

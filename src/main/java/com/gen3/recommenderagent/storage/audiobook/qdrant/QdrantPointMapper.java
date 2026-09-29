@@ -6,8 +6,8 @@ import static io.qdrant.client.ValueFactory.value;
 import static io.qdrant.client.VectorFactory.vector;
 import static io.qdrant.client.VectorsFactory.namedVectors;
 
-import com.gen3.recommenderagent.storage.audiobook.AudiobookEmbedding;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import io.qdrant.client.grpc.JsonWithInt.Value;
 import io.qdrant.client.grpc.Points.PointStruct;
 import io.qdrant.client.grpc.Points.ScoredPoint;
@@ -63,13 +63,32 @@ public class QdrantPointMapper {
         integerValue(payload.get("durationMinutes")));
   }
 
+  /** Extracts the normalized dense vector included in a similarity-search result. */
+  public float[] toDenseVector(ScoredPoint point) {
+    if (point == null || !point.hasVectors()) {
+      return null;
+    }
+    var namedVectors = point.getVectors().getVectors().getVectorsMap();
+    if (!namedVectors.containsKey(DENSE_VECTOR) || !namedVectors.get(DENSE_VECTOR).hasDense()) {
+      return null;
+    }
+    List<Float> values = namedVectors.get(DENSE_VECTOR).getDense().getDataList();
+    if (values.isEmpty()) {
+      return null;
+    }
+    float[] vector = new float[values.size()];
+    for (int index = 0; index < values.size(); index++) {
+      vector[index] = values.get(index);
+    }
+    return vector;
+  }
+
   /** Generates the same legal Qdrant UUID every time a catalogue book ID is supplied. */
   public io.qdrant.client.grpc.Common.PointId pointId(String bookId) {
     if (bookId == null || bookId.isBlank()) {
       throw new IllegalArgumentException("Audiobook ID must not be blank");
     }
-    UUID uuid =
-        UUID.nameUUIDFromBytes(("audiobook:" + bookId).getBytes(StandardCharsets.UTF_8));
+    UUID uuid = UUID.nameUUIDFromBytes(("audiobook:" + bookId).getBytes(StandardCharsets.UTF_8));
     return id(uuid);
   }
 

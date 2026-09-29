@@ -9,14 +9,16 @@ public class SessionRequest {
   private String requestId;
   private String rawText;
   private Instant createdAt;
-  private boolean personalised;
 
-  // IMPORTANT !!
   private Intent intent;
 
-  private Query query;
-  private Preferences preferences;
-  private Constraints constraints;
+  private SemanticQuery positiveSemanticQuery;
+  private SemanticQuery negativeSemanticQuery;
+
+  private MustInclude mustInclude;
+  private MustNotInclude mustNotInclude;
+  private Integer bookCount;
+
   private List<Recommendation> recommendations;
 
   public SessionRequest() {}
@@ -45,28 +47,44 @@ public class SessionRequest {
     this.intent = intent;
   }
 
-  public Query getQuery() {
-    return query;
+  public SemanticQuery getPositiveSemanticQuery() {
+    return positiveSemanticQuery;
   }
 
-  public void setQuery(Query query) {
-    this.query = query;
+  public void setPositiveSemanticQuery(SemanticQuery positiveSemanticQuery) {
+    this.positiveSemanticQuery = positiveSemanticQuery;
   }
 
-  public Preferences getPreferences() {
-    return preferences;
+  public SemanticQuery getNegativeSemanticQuery() {
+    return negativeSemanticQuery;
   }
 
-  public void setPreferences(Preferences preferences) {
-    this.preferences = preferences;
+  public void setNegativeSemanticQuery(SemanticQuery negativeSemanticQuery) {
+    this.negativeSemanticQuery = negativeSemanticQuery;
   }
 
-  public Constraints getConstraints() {
-    return constraints;
+  public MustInclude getMustInclude() {
+    return mustInclude;
   }
 
-  public void setConstraints(Constraints constraints) {
-    this.constraints = constraints;
+  public void setMustInclude(MustInclude mustInclude) {
+    this.mustInclude = mustInclude;
+  }
+
+  public MustNotInclude getMustNotInclude() {
+    return mustNotInclude;
+  }
+
+  public void setMustNotInclude(MustNotInclude mustNotInclude) {
+    this.mustNotInclude = mustNotInclude;
+  }
+
+  public Integer getBookCount() {
+    return bookCount;
+  }
+
+  public void setBookCount(Integer bookCount) {
+    this.bookCount = bookCount;
   }
 
   public List<Recommendation> getRecommendations() {
@@ -83,13 +101,5 @@ public class SessionRequest {
 
   public void setCreatedAt(Instant createdAt) {
     this.createdAt = createdAt;
-  }
-
-  public boolean isPersonalised() {
-    return personalised;
-  }
-
-  public void setPersonalised(boolean personalised) {
-    this.personalised = personalised;
   }
 }

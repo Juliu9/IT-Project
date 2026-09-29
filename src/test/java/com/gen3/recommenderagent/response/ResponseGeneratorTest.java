@@ -4,9 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.Constraints;
-import com.gen3.recommenderagent.domain.session.Query;
 import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -18,16 +17,14 @@ class ResponseGeneratorTest {
     AiResponseGenerator generator = new AiResponseGenerator(null);
 
     SessionRequest request = new SessionRequest();
-    request.setIntent(Intent.NEW_RECOMMENDATION);
+    request.setIntent(Intent.RECOMMENDATION);
     request.setRawText("Recommend me an action audiobook");
 
-    Query query = new Query();
-    query.setGenres(List.of("action", "sci-fi"));
-    request.setQuery(query);
+    SemanticQuery semanticQuery = new SemanticQuery();
+    semanticQuery.setGenres(List.of("action", "sci-fi"));
+    request.setPositiveSemanticQuery(semanticQuery);
 
-    Constraints constraints = new Constraints();
-    constraints.setCount(3);
-    request.setConstraints(constraints);
+    request.setBookCount(3);
 
     List<Recommendation> recommendations =
         List.of(
@@ -47,12 +44,10 @@ class ResponseGeneratorTest {
     AiResponseGenerator generator = new AiResponseGenerator(null);
 
     SessionRequest request = new SessionRequest();
-    request.setIntent(Intent.NEW_RECOMMENDATION);
+    request.setIntent(Intent.RECOMMENDATION);
     request.setRawText("Give me 10 recommendations");
 
-    Constraints constraints = new Constraints();
-    constraints.setCount(10);
-    request.setConstraints(constraints);
+    request.setBookCount(10);
 
     List<Recommendation> recommendations =
         List.of(

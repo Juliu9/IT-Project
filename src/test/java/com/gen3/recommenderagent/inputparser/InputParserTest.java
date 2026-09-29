@@ -11,8 +11,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.Constraints;
-import com.gen3.recommenderagent.domain.session.Query;
+import com.gen3.recommenderagent.domain.session.MustInclude;
+import com.gen3.recommenderagent.domain.session.MustNotInclude;
+import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.util.List;
 import java.util.UUID;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ResponseEntity;
 import org.springframework.ai.chat.model.ChatResponse;
+import tools.jackson.databind.ObjectMapper;
 
 class InputParserTest {
 
@@ -27,15 +29,23 @@ class InputParserTest {
   void shouldMapAiResultWithoutCallingARealAiService() {
     String rawText = "Recommend science fiction audiobooks.";
 
-    Query query = new Query();
-    query.setGenres(List.of("science fiction"));
+    SemanticQuery semanticQuery = new SemanticQuery();
+    semanticQuery.setGenres(List.of("science fiction"));
 
     ParsedRequest parsedRequest = new ParsedRequest();
-    parsedRequest.setIntent(Intent.NEW_RECOMMENDATION);
-    parsedRequest.setQuery(query);
-    Constraints constraints = new Constraints();
-    constraints.setLanguage("English");
-    parsedRequest.setConstraints(constraints);
+    SemanticQuery negativeSemanticQuery = new SemanticQuery();
+    negativeSemanticQuery.setKeywords(List.of("romance"));
+    parsedRequest.setIntent(Intent.RECOMMENDATION);
+    parsedRequest.setPositiveSemanticQuery(semanticQuery);
+    parsedRequest.setNegativeSemanticQuery(negativeSemanticQuery);
+    MustInclude mustInclude = new MustInclude();
+    mustInclude.setLanguage("English");
+    mustInclude.setSource("NLS");
+    MustNotInclude mustNotInclude = new MustNotInclude();
+    mustNotInclude.setLanguage("French");
+    parsedRequest.setMustInclude(mustInclude);
+    parsedRequest.setMustNotInclude(mustNotInclude);
+    parsedRequest.setBookCount(3);
 
     ChatClient chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(chatClient
@@ -53,9 +63,12 @@ class InputParserTest {
 
     assertNotNull(result);
     assertEquals(rawText, result.getRawText());
-    assertEquals(Intent.NEW_RECOMMENDATION, result.getIntent());
-    assertSame(query, result.getQuery());
-    assertSame(constraints, result.getConstraints());
+    assertEquals(Intent.RECOMMENDATION, result.getIntent());
+    assertSame(semanticQuery, result.getPositiveSemanticQuery());
+    assertSame(negativeSemanticQuery, result.getNegativeSemanticQuery());
+    assertSame(mustInclude, result.getMustInclude());
+    assertSame(mustNotInclude, result.getMustNotInclude());
+    assertEquals(3, result.getBookCount());
 
     UUID requestId = UUID.fromString(result.getRequestId());
     assertEquals(7, requestId.version());
@@ -97,5 +110,21 @@ class InputParserTest {
         assertThrows(IllegalStateException.class, () -> new AiInputParser(builder).parse(rawText));
 
     assertEquals("AI did not return a ParsedRequest", exception.getMessage());
+  }
+
+  @Test
+  void shouldReadIncludeAndExcludeFilters() throws Exception {
+    SessionRequest request =
+        new ObjectMapper()
+            .readValue(
+                "{\"bookCount\":3,\"mustInclude\":{\"language\":\"English\",\"source\":\"NLS\"},"
+                    + "\"mustNotInclude\":{\"language\":\"French\",\"source\":\"Legacy\"}}",
+                SessionRequest.class);
+
+    assertEquals(3, request.getBookCount());
+    assertEquals("English", request.getMustInclude().getLanguage());
+    assertEquals("NLS", request.getMustInclude().getSource());
+    assertEquals("French", request.getMustNotInclude().getLanguage());
+    assertEquals("Legacy", request.getMustNotInclude().getSource());
   }
 }

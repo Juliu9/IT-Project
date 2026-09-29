@@ -1,5 +1,8 @@
 package com.gen3.recommenderagent.domain.session;
 
+import static com.gen3.recommenderagent.common.ApplicationConstants.MAX_BOOK_COUNT;
+import static com.gen3.recommenderagent.common.BookCountPolicy.clampOrDefault;
+
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -12,17 +15,17 @@ public class Session {
   private Instant createdAt;
   private Instant updatedAt;
   private Instant expiresAt;
-  private List<Recommendation> shownBooks;
-
+  private Integer bookCount = MAX_BOOK_COUNT;
+  private List<String> shownBooks;
   private List<SessionRequest> requests = new ArrayList<>();
 
   public Session() {}
 
-  public List<Recommendation> getShownBooks() {
+  public List<String> getShownBooks() {
     return shownBooks;
   }
 
-  public void setShownBooks(List<Recommendation> shownBooks) {
+  public void setShownBooks(List<String> shownBooks) {
     this.shownBooks = shownBooks;
   }
 
@@ -66,6 +69,14 @@ public class Session {
     this.expiresAt = expiresAt;
   }
 
+  public Integer getBookCount() {
+    return bookCount;
+  }
+
+  public void setBookCount(Integer bookCount) {
+    this.bookCount = clampOrDefault(bookCount);
+  }
+
   public List<SessionRequest> getRequests() {
     return requests;
   }
@@ -79,10 +90,23 @@ public class Session {
     this.updatedAt = Instant.now();
   }
 
-  public void addShownBooks(List<Recommendation> books) {
+  public void addRecommendationIds(List<String> bookIds) {
     if (this.shownBooks == null) {
       this.shownBooks = new ArrayList<>();
     }
-    this.shownBooks.addAll(books);
+    if (bookIds != null) {
+      bookIds.stream()
+          .filter(bookId -> bookId != null && !bookId.isBlank())
+          .filter(bookId -> !this.shownBooks.contains(bookId))
+          .forEach(this.shownBooks::add);
+    }
+  }
+
+  public void clearHistory() {
+    this.requests.clear();
+    if (this.shownBooks != null) {
+      this.shownBooks.clear();
+    }
+    this.updatedAt = Instant.now();
   }
 }

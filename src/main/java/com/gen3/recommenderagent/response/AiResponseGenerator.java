@@ -1,5 +1,7 @@
 package com.gen3.recommenderagent.response;
 
+import static com.gen3.recommenderagent.common.ApplicationConstants.MAX_BOOK_COUNT;
+
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.openai.errors.OpenAIException;
@@ -40,9 +42,8 @@ public class AiResponseGenerator implements ResponseGenerator {
     }
 
     if (currentRequest != null
-        && currentRequest.getConstraints() != null
-        && currentRequest.getConstraints().getCount() != null
-        && currentRequest.getConstraints().getCount() > 5) {
+        && currentRequest.getBookCount() != null
+        && currentRequest.getBookCount() > MAX_BOOK_COUNT) {
       return buildRecommendationLimitResponse(currentRequest);
     }
 
@@ -97,9 +98,9 @@ public class AiResponseGenerator implements ResponseGenerator {
     // Pulls genres from the parsed request
     String genresSummary =
         (currentRequest != null
-                && currentRequest.getQuery() != null
-                && currentRequest.getQuery().getGenres() != null)
-            ? String.join(", ", currentRequest.getQuery().getGenres())
+                && currentRequest.getPositiveSemanticQuery() != null
+                && currentRequest.getPositiveSemanticQuery().getGenres() != null)
+            ? String.join(", ", currentRequest.getPositiveSemanticQuery().getGenres())
             : "not specified";
 
     // Converts only the top five reccomendation objects into a plain text summary
@@ -143,10 +144,12 @@ public class AiResponseGenerator implements ResponseGenerator {
     }
 
     if (currentRequest != null
-        && currentRequest.getQuery() != null
-        && currentRequest.getQuery().getGenres() != null
-        && !currentRequest.getQuery().getGenres().isEmpty()) {
-      response.append(" in ").append(String.join(", ", currentRequest.getQuery().getGenres()));
+        && currentRequest.getPositiveSemanticQuery() != null
+        && currentRequest.getPositiveSemanticQuery().getGenres() != null
+        && !currentRequest.getPositiveSemanticQuery().getGenres().isEmpty()) {
+      response
+          .append(" in ")
+          .append(String.join(", ", currentRequest.getPositiveSemanticQuery().getGenres()));
     }
 
     response.append(":\n");
@@ -178,12 +181,14 @@ public class AiResponseGenerator implements ResponseGenerator {
     if (currentRequest != null
         && currentRequest.getRawText() != null
         && !currentRequest.getRawText().isBlank()) {
-      return "I can only give a maximum of 5 recommendations at a time, so I can't fulfil that request for "
+      return "I can only give a maximum of "
+          + MAX_BOOK_COUNT
+          + " recommendations at a time, so I can't fulfil that request for "
           + currentRequest.getRawText()
           + ".";
     }
 
-    return "I can only give a maximum of 5 recommendations at a time.";
+    return "I can only give a maximum of " + MAX_BOOK_COUNT + " recommendations at a time.";
   }
 
   private List<Recommendation> getTopRecommendations(List<Recommendation> recommendations) {
@@ -191,11 +196,11 @@ public class AiResponseGenerator implements ResponseGenerator {
       return List.of();
     }
 
-    if (recommendations.size() <= 5) {
+    if (recommendations.size() <= MAX_BOOK_COUNT) {
       return recommendations;
     }
 
-    return recommendations.subList(0, 5);
+    return recommendations.subList(0, MAX_BOOK_COUNT);
   }
 
   // Safe node output

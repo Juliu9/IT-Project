@@ -1,20 +1,22 @@
 package com.gen3.recommenderagent.storage.audiobook.qdrant;
 
-import static io.qdrant.client.WithPayloadSelectorFactory.enable;
 import static io.qdrant.client.ConditionFactory.matchKeyword;
 import static io.qdrant.client.ConditionFactory.matchKeywords;
 import static io.qdrant.client.ConditionFactory.range;
+import static io.qdrant.client.WithPayloadSelectorFactory.enable;
 
-import com.gen3.recommenderagent.storage.audiobook.AudiobookFilters;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidate;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookCandidateSearch;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookEmbedding;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.AudiobookVectorRepository;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
+import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorRepository;
 import io.qdrant.client.QdrantClient;
+import io.qdrant.client.grpc.Collections;
+import io.qdrant.client.grpc.Common.Condition;
 import io.qdrant.client.grpc.Common.Filter;
 import io.qdrant.client.grpc.Common.Range;
-import io.qdrant.client.grpc.Collections;
 import io.qdrant.client.grpc.Points.CreateFieldIndexCollection;
 import io.qdrant.client.grpc.Points.DenseVector;
 import io.qdrant.client.grpc.Points.FieldType;
@@ -77,8 +79,8 @@ public class QdrantAudiobookRepository
 
   /** Searches the named sparse vector using BM25-style lexical term weights. */
   @Override
-  public List<AudiobookCandidate> searchKeyword(
-      String text, AudiobookFilters filters, int limit) throws IOException {
+  public List<AudiobookCandidate> searchKeyword(String text, AudiobookFilters filters, int limit)
+      throws IOException {
     SparseVectorData sparse = sparseEncoder.encode(text);
     if (sparse.isEmpty() || limit <= 0) {
       return List.of();
@@ -126,6 +128,7 @@ public class QdrantAudiobookRepository
             .setQuery(Query.newBuilder().setFusion(io.qdrant.client.grpc.Points.Fusion.RRF))
             .setLimit(limit)
             .setWithPayload(enable(true))
+            .setWithVectors(io.qdrant.client.WithVectorsSelectorFactory.enable(true))
             .build();
     return query(request);
   }
@@ -177,8 +180,7 @@ public class QdrantAudiobookRepository
     initialize();
     List<RetrievedPoint> points =
         await(
-            client.retrieveAsync(
-                collection, List.of(mapper.pointId(bookId)), false, true, null),
+            client.retrieveAsync(collection, List.of(mapper.pointId(bookId)), false, true, null),
             "retrieve an audiobook vector from Qdrant");
     if (points.isEmpty() || !points.getFirst().hasVectors()) {
       return Optional.empty();
@@ -187,8 +189,7 @@ public class QdrantAudiobookRepository
     if (!namedVectors.containsKey(QdrantPointMapper.DENSE_VECTOR)) {
       return Optional.empty();
     }
-    List<Float> values =
-        namedVectors.get(QdrantPointMapper.DENSE_VECTOR).getDense().getDataList();
+    List<Float> values = namedVectors.get(QdrantPointMapper.DENSE_VECTOR).getDense().getDataList();
     float[] vector = new float[values.size()];
     for (int index = 0; index < values.size(); index++) {
       vector[index] = values.get(index);
@@ -228,9 +229,7 @@ public class QdrantAudiobookRepository
                     .putMap(QdrantPointMapper.DENSE_VECTOR, denseParams))
             .build();
     Collections.SparseVectorParams sparseParams =
-        Collections.SparseVectorParams.newBuilder()
-            .setModifier(Collections.Modifier.Idf)
-            .build();
+        Collections.SparseVectorParams.newBuilder().setModifier(Collections.Modifier.Idf).build();
     Collections.SparseVectorConfig sparseVectors =
         Collections.SparseVectorConfig.newBuilder()
             .putMap(QdrantPointMapper.KEYWORD_VECTOR, sparseParams)
@@ -245,6 +244,7 @@ public class QdrantAudiobookRepository
     createPayloadIndex("authors", FieldType.FieldTypeKeyword);
     createPayloadIndex("narrators", FieldType.FieldTypeKeyword);
     createPayloadIndex("language", FieldType.FieldTypeKeyword);
+    createPayloadIndex("source", FieldType.FieldTypeKeyword);
     createPayloadIndex("durationMinutes", FieldType.FieldTypeInteger);
   }
 
@@ -252,7 +252,10 @@ public class QdrantAudiobookRepository
   private List<AudiobookCandidate> query(QueryPoints request) throws IOException {
     List<ScoredPoint> matches = await(client.queryAsync(request), "query Qdrant");
     return matches.stream()
-        .map(point -> new AudiobookCandidate(mapper.toRecord(point), (double) point.getScore()))
+        .map(
+            point ->
+                new AudiobookCandidate(
+                    mapper.toRecord(point), (double) point.getScore(), mapper.toDenseVector(point)))
         .toList();
   }
 
@@ -262,7 +265,8 @@ public class QdrantAudiobookRepository
         QueryPoints.newBuilder()
             .setCollectionName(collection)
             .setLimit(limit)
-            .setWithPayload(enable(true));
+            .setWithPayload(enable(true))
+            .setWithVectors(io.qdrant.client.WithVectorsSelectorFactory.enable(true));
     Filter filter = filter(filters);
     return filter == null ? request : request.setFilter(filter);
   }
@@ -294,22 +298,47 @@ public class QdrantAudiobookRepository
       return null;
     }
     Filter.Builder builder = Filter.newBuilder();
-    if (filters.authors() != null && !filters.authors().isEmpty()) {
-      builder.addMust(matchKeywords("authors", filters.authors()));
-    }
-    if (filters.narrators() != null && !filters.narrators().isEmpty()) {
-      builder.addMust(matchKeywords("narrators", filters.narrators()));
-    }
-    if (filters.language() != null && !filters.language().isBlank()) {
-      builder.addMust(matchKeyword("language", filters.language()));
-    }
-    if (filters.maximumDurationMinutes() != null) {
-      builder.addMust(
-          range(
-              "durationMinutes",
-              Range.newBuilder().setLte(filters.maximumDurationMinutes()).build()));
-    }
+    addConditions(builder, filters.mustInclude(), false);
+    addConditions(builder, filters.mustNotInclude(), true);
     return builder.build();
+  }
+
+  private void addConditions(
+      Filter.Builder builder, AudiobookFilterConditions conditions, boolean excluded) {
+    if (conditions == null || !conditions.hasConditions()) {
+      return;
+    }
+    if (conditions.authors() != null && !conditions.authors().isEmpty()) {
+      addCondition(builder, matchKeywords("authors", conditions.authors()), excluded);
+    }
+    if (conditions.narrators() != null && !conditions.narrators().isEmpty()) {
+      addCondition(builder, matchKeywords("narrators", conditions.narrators()), excluded);
+    }
+    if (conditions.language() != null && !conditions.language().isBlank()) {
+      addCondition(builder, matchKeyword("language", conditions.language()), excluded);
+    }
+    if (conditions.source() != null && !conditions.source().isBlank()) {
+      addCondition(builder, matchKeyword("source", conditions.source()), excluded);
+    }
+    if (conditions.minimumDurationMinutes() != null
+        || conditions.maximumDurationMinutes() != null) {
+      Range.Builder duration = Range.newBuilder();
+      if (conditions.minimumDurationMinutes() != null) {
+        duration.setGte(conditions.minimumDurationMinutes());
+      }
+      if (conditions.maximumDurationMinutes() != null) {
+        duration.setLte(conditions.maximumDurationMinutes());
+      }
+      addCondition(builder, range("durationMinutes", duration.build()), excluded);
+    }
+  }
+
+  private void addCondition(Filter.Builder builder, Condition condition, boolean excluded) {
+    if (excluded) {
+      builder.addMustNot(condition);
+    } else {
+      builder.addMust(condition);
+    }
   }
 
   /** Adds a payload index required by Qdrant Cloud strict mode. */
