@@ -2,6 +2,9 @@ package com.gen3.recommenderagent.ranker.candidate.retrieval;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlan;
+import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlanner;
+import com.gen3.recommenderagent.candidateretriever.retrievalplan.RetrievalMode;
 import com.gen3.recommenderagent.domain.session.Filter;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;

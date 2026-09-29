@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.ranker.candidate.retrieval;
+package com.gen3.recommenderagent.candidateretriever.retrievalplan;
 
 /** Selects which Qdrant retrieval capability should execute for an intent. */
 public enum RetrievalMode {

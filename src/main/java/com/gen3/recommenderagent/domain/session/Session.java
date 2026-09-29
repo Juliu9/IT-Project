@@ -12,6 +12,7 @@ public class Session {
   private Instant createdAt;
   private Instant updatedAt;
   private Instant expiresAt;
+  private Integer bookCount; // default and maximum 5
   private List<Recommendation> shownBooks;
   private List<SessionRequest> requests = new ArrayList<>();
 
@@ -65,7 +66,15 @@ public class Session {
     this.expiresAt = expiresAt;
   }
 
-  public List<SessionRequest> getRequests() {
+  public Integer getBookCount() {
+      return bookCount;
+  }
+
+  public void setBookCount(Integer bookCount) {
+      this.bookCount = bookCount;
+  }
+
+    public List<SessionRequest> getRequests() {
     return requests;
   }
 

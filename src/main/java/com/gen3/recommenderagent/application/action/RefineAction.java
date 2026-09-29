@@ -11,6 +11,9 @@ public class RefineAction implements IntentAction {
 
   @Override
   public SessionRequest execute(SessionRequest request, SessionContext context) {
+      // load and use the previous' sessionRequest + somehow make whatever semantic idea the user requested more powerful
+      // Prev: "I want sad", Current: "Make it sadder/less sad"
+      // somehow strengthen the vector to make it 'more/less sad'
     return request;
   }
 }

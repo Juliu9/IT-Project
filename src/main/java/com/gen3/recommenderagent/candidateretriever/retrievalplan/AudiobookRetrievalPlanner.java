@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.ranker.candidate.retrieval;
+package com.gen3.recommenderagent.candidateretriever.retrievalplan;
 
 import com.gen3.recommenderagent.domain.session.Filter;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;

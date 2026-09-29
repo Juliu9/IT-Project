@@ -1,7 +1,7 @@
 package com.gen3.recommenderagent.embedding;
 
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
-import com.gen3.recommenderagent.ranker.SemanticQueryVectors;
+import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import java.util.ArrayList;

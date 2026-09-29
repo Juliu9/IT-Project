@@ -1,7 +1,6 @@
-package com.gen3.recommenderagent.ranker.candidate;
+package com.gen3.recommenderagent.candidateretriever;
 
 import com.gen3.recommenderagent.domain.session.SessionRequest;
-import com.gen3.recommenderagent.ranker.SemanticQueryVectors;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import java.util.List;
 

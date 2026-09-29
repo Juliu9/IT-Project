@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.application.session;
+package com.gen3.recommenderagent.application.sessionservice;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;

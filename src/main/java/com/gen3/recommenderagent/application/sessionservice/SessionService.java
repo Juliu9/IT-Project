@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.application.session;
+package com.gen3.recommenderagent.application.sessionservice;
 
 import com.gen3.recommenderagent.domain.session.SessionContext;
 import com.gen3.recommenderagent.domain.session.SessionRequest;

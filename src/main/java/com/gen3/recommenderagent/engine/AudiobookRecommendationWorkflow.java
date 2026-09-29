@@ -4,9 +4,9 @@ import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SessionContext;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.ranker.Ranker;
-import com.gen3.recommenderagent.ranker.SemanticQueryVectorService;
-import com.gen3.recommenderagent.ranker.SemanticQueryVectors;
-import com.gen3.recommenderagent.ranker.candidate.CandidateRetriever;
+import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectorService;
+import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors;
+import com.gen3.recommenderagent.candidateretriever.CandidateRetriever;
 import java.util.List;
 import org.springframework.stereotype.Service;
 

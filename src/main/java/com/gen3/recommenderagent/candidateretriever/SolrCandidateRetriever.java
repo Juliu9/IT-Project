@@ -1,10 +1,8 @@
-package com.gen3.recommenderagent.storage.audiobook.solr;
+package com.gen3.recommenderagent.candidateretriever;
 
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
-import com.gen3.recommenderagent.ranker.SemanticQueryVectors;
-import com.gen3.recommenderagent.ranker.candidate.CandidateRetriever;
-import com.gen3.recommenderagent.ranker.candidate.retrieval.AudiobookRetrievalPlanner;
+import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
@@ -19,13 +17,13 @@ import org.springframework.stereotype.Service;
 */
 @Service
 @ConditionalOnProperty(name = "audiobook.candidate-retriever", havingValue = "solr")
-public class BaseSolrCandidateRetriever implements CandidateRetriever {
+public class SolrCandidateRetriever implements CandidateRetriever {
 
   private final AudiobookCandidateSearch candidateSearch;
   private final EmbeddingIndexer embeddingIndexer;
   private final AudiobookRetrievalPlanner retrievalPlanner;
 
-  public BaseSolrCandidateRetriever(
+  public SolrCandidateRetriever(
       @Qualifier("solrAudiobookRepository") AudiobookCandidateSearch candidateSearch,
       EmbeddingIndexer embeddingIndexer,
       AudiobookRetrievalPlanner retrievalPlanner) {

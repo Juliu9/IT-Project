@@ -1,6 +1,6 @@
 package com.gen3.recommenderagent.application;
 
-import com.gen3.recommenderagent.application.session.SessionService;
+import com.gen3.recommenderagent.application.sessionservice.SessionService;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.SessionContext;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
