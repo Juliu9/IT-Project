@@ -95,4 +95,41 @@ public final class VectorMath {
       }
     }
   }
+
+  /**
+   * Sums a list of vectors and normalizes the result. (Mathematically identical to averaging and
+   * then normalizing, but much faster).
+   */
+  public static float[] average(List<float[]> vectors) {
+    if (vectors == null || vectors.isEmpty()) {
+      return new float[0];
+    }
+
+    float[] combined = new float[vectors.getFirst().length];
+    for (float[] vector : vectors) {
+      for (int i = 0; i < vector.length; i++) {
+        combined[i] += vector[i]; // Just sum the values
+      }
+    }
+    return normalize(combined); // Normalization handles the scaling automatically
+  }
+
+  /** Calculates a weighted sum of vectors and normalizes the result. */
+  public static float[] weightedAverage(List<float[]> vectors, List<Double> weights) {
+    if (vectors == null || vectors.isEmpty() || vectors.size() != weights.size()) {
+      return new float[0];
+    }
+
+    float[] combined = new float[vectors.getFirst().length];
+    for (int v = 0; v < vectors.size(); v++) {
+      float[] vector = vectors.get(v);
+      // Cast to float once per vector, not inside the inner loop
+      float weight = weights.get(v).floatValue();
+
+      for (int i = 0; i < vector.length; i++) {
+        combined[i] += vector[i] * weight;
+      }
+    }
+    return normalize(combined);
+  }
 }
