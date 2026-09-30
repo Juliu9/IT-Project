@@ -4,6 +4,7 @@ import static com.gen3.recommenderagent.common.BookCountPolicy.clamp;
 
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors;
 import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.ranker.RankingContext;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -16,11 +17,15 @@ import org.springframework.stereotype.Component;
 @Component
 public class HybridRankingStrategy implements RankingStrategy {
 
-  private static final double RELEVANCE_WEIGHT = 0.70;
+  private static final double RELEVANCE_WEIGHT = 0.60;
   private final SemanticQueryRankingStrategy semanticQueryRankingStrategy;
+  private final UserPreferenceRankingStrategy userPreferenceRankingStrategy;
 
-  public HybridRankingStrategy(SemanticQueryRankingStrategy semanticQueryRankingStrategy) {
+  public HybridRankingStrategy(
+      SemanticQueryRankingStrategy semanticQueryRankingStrategy,
+      UserPreferenceRankingStrategy userPreferenceRankingStrategy) {
     this.semanticQueryRankingStrategy = semanticQueryRankingStrategy;
+    this.userPreferenceRankingStrategy = userPreferenceRankingStrategy;
   }
 
   /** Preserves the legacy strategy entry point when no preference evidence is available. */
@@ -32,6 +37,12 @@ public class HybridRankingStrategy implements RankingStrategy {
   /** Reranks unique candidates using relevance plus positive reward and negative penalty. */
   public List<Recommendation> rank(
       List<AudiobookCandidate> candidates, int requestedLimit, SemanticQueryVectors vectors) {
+    return rank(candidates, requestedLimit, new RankingContext(vectors, null, Set.of()));
+  }
+
+  /** Reranks using request semantics, persistent user vectors, and normalized relevance. */
+  public List<Recommendation> rank(
+      List<AudiobookCandidate> candidates, int requestedLimit, RankingContext context) {
     if (candidates == null || candidates.isEmpty()) {
       return List.of();
     }
@@ -45,7 +56,10 @@ public class HybridRankingStrategy implements RankingStrategy {
                     new ScoredCandidate(
                         candidate,
                         RELEVANCE_WEIGHT * normalizedRelevance(candidate.score(), maximumScore)
-                            + semanticQueryRankingStrategy.adjustment(candidate, vectors)))
+                            + semanticQueryRankingStrategy.adjustment(
+                                candidate, context.queryVectors())
+                            + userPreferenceRankingStrategy.adjustment(
+                                candidate, context.userPreferences())))
             .sorted(Comparator.comparingDouble(ScoredCandidate::score).reversed())
             .limit(limit)
             .toList();

@@ -14,7 +14,8 @@ history in Redis, and returns a natural-language response.
 4. Positive and negative semantic queries are embedded once. Candidate retrieval uses the
    normalized direction `positive - negative`, while ranking reuses the two vectors separately.
 5. Qdrant retrieves candidates by semantic similarity, exact filters, or hybrid search.
-6. `RankingService` removes duplicates, applies semantic-query adjustments, and limits results.
+6. `RankingService` removes duplicates and previously shown books, then combines repository
+   relevance, request semantics, and the user's Qdrant favourite/history vectors.
 7. `RequestApplicationService` records the shown book IDs, and `SessionService` appends the
    completed request to the Redis-backed `Session`.
 
@@ -55,9 +56,12 @@ The supported intents are:
 - `HELP`
 - `UNKNOWN`
 
-`REFINE`, `MORE_RESULTS`, `CHANGE_COUNT`, and `UPDATE_PREFERENCES` currently have boilerplate
-actions and do not mutate the session. Persistent user/session preferences are intentionally not
-implemented yet.
+`REFINE` merges new criteria into the latest search, `MORE_RESULTS` repeats that search while
+excluding books already shown in the session, and `CHANGE_COUNT` updates the bounded session result
+limit. `UPDATE_PREFERENCES` stores semantic and exact-filter defaults in the Redis-backed session;
+these defaults are merged into later searches. Imported favourite and listening-history vectors are
+stored separately in Qdrant and automatically influence personalized ranking when the request's user
+ID has a matching preference point.
 
 Each session has a `bookCount` limit. It defaults to the shared `MAX_BOOK_COUNT` value of five, and
 values above that maximum are capped by `Session.setBookCount`.
