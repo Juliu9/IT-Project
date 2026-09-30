@@ -16,10 +16,6 @@ public class AiResponseGenerator implements ResponseGenerator {
   // Holds the AI
   private final ChatClient chatClient;
 
-  public AiResponseGenerator() {
-    this(null);
-  }
-
   public AiResponseGenerator(ChatClient.Builder chatClientBuilder) {
     this.chatClient = (chatClientBuilder != null) ? chatClientBuilder.build() : null;
   }
@@ -67,10 +63,16 @@ public class AiResponseGenerator implements ResponseGenerator {
           .prompt()
           .system(
               """
-                            You are a helpful audiobook recommendation assistant.
-                            Rewrite the structured recommendation data into a short, natural-sounding response.
-                            Tone should be friendly, concise, and easy to read.
-                            Include the user's intent and mention each recommendation by its id or ranking when possible.
+                            You are a helpful audiobook recommendation assistant speaking directly to a user through a voice interface.
+                            Rewrite the structured recommendation data into a short, natural-sounding spoken response.
+                            Tone should be friendly, conversational, and concise.
+                            Include the user's intent and mention each recommendation by its title.
+                            CRITICAL INSTRUCTIONS FOR OUTPUT:
+                            - Do NOT use any markdown formatting (no asterisks, bold, or italics).
+                            - Do NOT use quotation marks around book titles. Just state the title naturally.
+                            - Clean up book titles by removing any weird catalog artifacts, symbols, or subtitle separators (for example, remove "$b" or colons).
+                            - Use simple sentences with commas and periods to create natural breathing pauses for the text-to-speech engine.
+                            - Avoid complex punctuation like em-dashes or semicolons.
                             """)
           .user(prompt)
           .call()
@@ -122,11 +124,10 @@ public class AiResponseGenerator implements ResponseGenerator {
       return "empty recommendation";
     }
 
-    // Format each recommendation into a compact line
     return String.format(
-        "rank=%s bookId=%s score=%s",
+        "rank=%s title=\"%s\" score=%s",
         recommendation.getRank() != null ? recommendation.getRank() : "n/a",
-        recommendation.getBookId() != null ? recommendation.getBookId() : "unknown",
+        recommendation.getTitle() != null ? recommendation.getTitle() : "unknown",
         recommendation.getScore() != null ? recommendation.getScore() : "n/a");
   }
 
@@ -136,12 +137,13 @@ public class AiResponseGenerator implements ResponseGenerator {
     StringBuilder response = new StringBuilder();
     response.append("Here are my recommendations");
 
-    if (currentRequest != null && currentRequest.getIntent() != null) {
-      response
-          .append(" for your ")
-          .append(currentRequest.getIntent().name().toLowerCase().replace("_", " "))
-          .append(" request");
-    }
+      if (currentRequest != null && currentRequest.getIntent() != null) {
+        String intentName = currentRequest.getIntent().name().toLowerCase().replace("_", " ");
+        // Skip saying "for your recommendation request" as it sounds redundant when spoken
+        if (!intentName.equals("recommendation")) {
+            response.append(" for your ").append(intentName).append(" request");
+        }
+      }
 
     if (currentRequest != null
         && currentRequest.getPositiveSemanticQuery() != null
@@ -149,10 +151,10 @@ public class AiResponseGenerator implements ResponseGenerator {
         && !currentRequest.getPositiveSemanticQuery().getGenres().isEmpty()) {
       response
           .append(" in ")
-          .append(String.join(", ", currentRequest.getPositiveSemanticQuery().getGenres()));
+          .append(String.join(" and ", currentRequest.getPositiveSemanticQuery().getGenres()));
     }
 
-    response.append(":\n");
+    response.append(". ");
 
     List<Recommendation> items = getTopRecommendations(recommendations);
     for (Recommendation recommendation : items) {
@@ -160,18 +162,18 @@ public class AiResponseGenerator implements ResponseGenerator {
         continue;
       }
 
-      response
-          .append("- ")
-          .append(recommendation.getRank() != null ? recommendation.getRank() : "?")
-          .append(". ")
-          .append(
-              recommendation.getBookId() != null ? recommendation.getBookId() : "Unknown title");
+        // Format as "Number 1, Title."
+        response
+                .append("Number ")
+                .append(recommendation.getRank() != null ? recommendation.getRank() : "unknown")
+                .append(", ");
 
-      if (recommendation.getScore() != null) {
-        response.append(" (match score: ").append(recommendation.getScore()).append(")");
-      }
+        String title = recommendation.getTitle() != null ? recommendation.getTitle() : "Unknown title";
 
-      response.append("\n");
+        // Strip out common catalog artifacts (like $b) so the voice doesn't read them out loud
+        title = title.replace("$b", "").trim();
+
+        response.append(title).append(". ");
     }
 
     return response.toString().trim();
