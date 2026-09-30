@@ -19,6 +19,7 @@ import com.gen3.recommenderagent.application.action.MoreResultsAction;
 import com.gen3.recommenderagent.application.action.NoOpAction;
 import com.gen3.recommenderagent.application.action.RecommendationAction;
 import com.gen3.recommenderagent.application.action.RefineAction;
+import com.gen3.recommenderagent.application.action.RequestContextMerger;
 import com.gen3.recommenderagent.application.action.UpdatePreferencesAction;
 import com.gen3.recommenderagent.application.sessionservice.DefaultSessionService;
 import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalExecutor;
@@ -36,6 +37,7 @@ import com.gen3.recommenderagent.ranker.RankingService;
 import com.gen3.recommenderagent.ranker.strategy.HybridRankingStrategy;
 import com.gen3.recommenderagent.ranker.strategy.RelevanceRankingStrategy;
 import com.gen3.recommenderagent.ranker.strategy.SemanticQueryRankingStrategy;
+import com.gen3.recommenderagent.ranker.strategy.UserPreferenceRankingStrategy;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
 import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.testsupport.SolrContainerTestSupport;
@@ -98,23 +100,41 @@ class RecommendationFlowIntegrationTest {
     RankingService rankingService =
         new RankingService(
             new RelevanceRankingStrategy(),
-            new HybridRankingStrategy(new SemanticQueryRankingStrategy()));
+            new HybridRankingStrategy(
+                new SemanticQueryRankingStrategy(), new UserPreferenceRankingStrategy()));
+    RequestContextMerger requestContextMerger = new RequestContextMerger();
+    com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository userPreferences =
+        mock(com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository.class);
     RecommendationAction recommendationAction =
         new RecommendationAction(
             new AudiobookRecommendationWorkflow(
                 candidateRetriever,
                 rankingService,
-                new SemanticQueryVectorService(embeddingIndexer)));
+                new SemanticQueryVectorService(embeddingIndexer),
+                userPreferences),
+            requestContextMerger);
     RecommendationFlowTestSupport.InMemorySessionRepository sessionRepository =
         new RecommendationFlowTestSupport.InMemorySessionRepository();
 
     ActionRegistry registry =
         new ActionRegistry(
             recommendationAction,
-            new RefineAction(),
-            new MoreResultsAction(),
+            new RefineAction(
+                new AudiobookRecommendationWorkflow(
+                    candidateRetriever,
+                    rankingService,
+                    new SemanticQueryVectorService(embeddingIndexer),
+                    userPreferences),
+                requestContextMerger),
+            new MoreResultsAction(
+                new AudiobookRecommendationWorkflow(
+                    candidateRetriever,
+                    rankingService,
+                    new SemanticQueryVectorService(embeddingIndexer),
+                    userPreferences),
+                requestContextMerger),
             new ChangeCountAction(),
-            new UpdatePreferencesAction(),
+            new UpdatePreferencesAction(requestContextMerger),
             new ClearHistoryAction(),
             new NoOpAction());
     RequestApplicationService applicationService =

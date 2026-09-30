@@ -3,29 +3,33 @@ package com.gen3.recommenderagent.ranker.strategy;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors;
+import com.gen3.recommenderagent.ranker.RankingContext;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
+import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
-class SemanticQueryRankingTest {
+class UserPreferenceRankingStrategyTest {
 
   @Test
-  void negativeVectorDemotesMatchingCandidate() {
+  void userVectorsCanPromoteARelevantPreferenceMatch() {
     HybridRankingStrategy hybrid =
         new HybridRankingStrategy(
             new SemanticQueryRankingStrategy(), new UserPreferenceRankingStrategy());
-    AudiobookCandidate unwanted = candidate("horror", 0.90, new float[] {0, 1});
-    AudiobookCandidate acceptable = candidate("adventure", 0.85, new float[] {1, 0});
+    AudiobookCandidate generic = candidate("generic", 0.90, new float[] {0, 1});
+    AudiobookCandidate preferred = candidate("preferred", 0.80, new float[] {1, 0});
+    UserPreferenceEmbedding preferences =
+        new UserPreferenceEmbedding("user-1", new float[] {1, 0}, new float[] {1, 0});
 
     var result =
         hybrid.rank(
-            List.of(unwanted, acceptable),
+            List.of(generic, preferred),
             2,
-            new SemanticQueryVectors(List.of(), List.of(new float[] {0, 1})));
+            new RankingContext(SemanticQueryVectors.empty(), preferences, Set.of()));
 
-    assertEquals("adventure", result.getFirst().getBookId());
-    assertEquals("horror", result.getLast().getBookId());
+    assertEquals("preferred", result.getFirst().getBookId());
   }
 
   private AudiobookCandidate candidate(String id, double score, float[] embedding) {

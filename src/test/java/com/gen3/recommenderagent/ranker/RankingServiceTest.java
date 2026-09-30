@@ -7,6 +7,7 @@ import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.ranker.strategy.HybridRankingStrategy;
 import com.gen3.recommenderagent.ranker.strategy.RelevanceRankingStrategy;
 import com.gen3.recommenderagent.ranker.strategy.SemanticQueryRankingStrategy;
+import com.gen3.recommenderagent.ranker.strategy.UserPreferenceRankingStrategy;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import java.util.List;
@@ -18,7 +19,9 @@ class RankingServiceTest {
       new SemanticQueryRankingStrategy();
   private final RankingService rankingService =
       new RankingService(
-          new RelevanceRankingStrategy(), new HybridRankingStrategy(semanticQueryRankingStrategy));
+          new RelevanceRankingStrategy(),
+          new HybridRankingStrategy(
+              semanticQueryRankingStrategy, new UserPreferenceRankingStrategy()));
 
   @Test
   void shouldPreserveCandidateOrderRemoveDuplicatesAndLimitResults() {
@@ -38,6 +41,22 @@ class RankingServiceTest {
     assertEquals("book-2", result.get(1).getBookId());
     assertEquals(2, result.get(1).getRank());
     assertNull(result.get(1).getScore());
+  }
+
+  @Test
+  void excludesShownBooksBeforeRanking() {
+    RankingContext context =
+        new RankingContext(
+            com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors.empty(),
+            null,
+            java.util.Set.of("book-1"));
+
+    List<Recommendation> result =
+        rankingService.rank(
+            List.of(candidate("book-1", 4.0), candidate("book-2", 3.0)), 2, context);
+
+    assertEquals(1, result.size());
+    assertEquals("book-2", result.getFirst().getBookId());
   }
 
   private AudiobookCandidate candidate(String id, Double score) {

@@ -43,7 +43,12 @@ public class AiResponseGenerator implements ResponseGenerator {
       return buildRecommendationLimitResponse(currentRequest);
     }
 
-    // If there are no reccomendations, it returns a fallback message
+    String actionResponse = generateActionResponse(currentRequest);
+    if (actionResponse != null) {
+      return actionResponse;
+    }
+
+    // If there are no recommendations, it returns a fallback message
     if (recommendations == null || recommendations.isEmpty()) {
       return generateFallbackResponse(currentRequest);
     }
@@ -203,6 +208,31 @@ public class AiResponseGenerator implements ResponseGenerator {
     }
 
     return recommendations.subList(0, MAX_BOOK_COUNT);
+  }
+
+  private String generateActionResponse(SessionRequest currentRequest) {
+    if (currentRequest == null || currentRequest.getIntent() == null) {
+      return null;
+    }
+
+    return switch (currentRequest.getIntent()) {
+      case CHANGE_COUNT ->
+          currentRequest.getBookCount() == null
+              ? "Tell me how many recommendations you would like at a time."
+              : "I'll show "
+                  + currentRequest.getBookCount()
+                  + " recommendation"
+                  + (currentRequest.getBookCount() == 1 ? "" : "s")
+                  + " at a time.";
+      case UPDATE_PREFERENCES -> "I've updated your preferences for this session.";
+      case CLEAR_HISTORY -> "I've cleared this session's recommendation history.";
+      case HELP ->
+          "I can recommend audiobooks, refine the current search, show more results, change "
+              + "the result count, update session preferences, or clear this session's history.";
+      case UNKNOWN ->
+          "I'm not sure what you want me to do. Try asking for audiobook recommendations or help.";
+      case RECOMMENDATION, REFINE, MORE_RESULTS -> null;
+    };
   }
 
   // Safe node output
