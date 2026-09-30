@@ -1,0 +1,1443 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+
+<title>Audiobook Recommendation Agent</title>
+
+<style>
+    * {
+        box-sizing: border-box;
+    }
+
+    :root {
+        --background: #f6f7fb;
+        --surface: #ffffff;
+        --surface-secondary: #f9fafb;
+        --border: #e5e7eb;
+        --text: #111827;
+        --text-secondary: #6b7280;
+        --primary: #2563eb;
+        --primary-hover: #1d4ed8;
+        --success: #16a34a;
+        --danger: #dc2626;
+        --radius: 14px;
+    }
+
+    body {
+        margin: 0;
+        background: var(--background);
+        color: var(--text);
+        font-family:
+            Inter,
+            -apple-system,
+            BlinkMacSystemFont,
+            "Segoe UI",
+            sans-serif;
+    }
+
+    /* ---------------------------------------------------------
+       HEADER
+    --------------------------------------------------------- */
+
+    header {
+        height: 72px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+
+        padding: 0 40px;
+    }
+
+    .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .brand-icon {
+        width: 38px;
+        height: 38px;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        background: var(--primary);
+        color: white;
+
+        border-radius: 9px;
+
+        font-size: 19px;
+        font-weight: 700;
+    }
+
+    .brand-name {
+        font-size: 17px;
+        font-weight: 700;
+    }
+
+    .brand-subtitle {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-top: 2px;
+    }
+
+    .status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+
+        font-size: 13px;
+        color: var(--text-secondary);
+    }
+
+    .status-dot {
+        width: 8px;
+        height: 8px;
+
+        border-radius: 50%;
+        background: var(--success);
+    }
+
+    /* ---------------------------------------------------------
+       MAIN
+    --------------------------------------------------------- */
+
+    main {
+        max-width: 1100px;
+        margin: 0 auto;
+
+        padding: 55px 24px 80px;
+    }
+
+    .hero {
+        text-align: center;
+        margin-bottom: 40px;
+    }
+
+    .hero h1 {
+        margin: 0;
+
+        font-size: 36px;
+        letter-spacing: -0.8px;
+    }
+
+    .hero p {
+        margin: 12px auto 0;
+
+        max-width: 650px;
+
+        font-size: 16px;
+        line-height: 1.6;
+
+        color: var(--text-secondary);
+    }
+
+    /* ---------------------------------------------------------
+       INPUT CARD
+    --------------------------------------------------------- */
+
+    .input-card {
+        background: var(--surface);
+
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+
+        padding: 24px;
+
+        box-shadow:
+            0 8px 30px rgba(0, 0, 0, 0.04);
+    }
+
+    .input-label {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+
+        margin-bottom: 10px;
+    }
+
+    .input-label strong {
+        font-size: 14px;
+    }
+
+    .input-label span {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+
+    textarea {
+        width: 100%;
+        min-height: 135px;
+
+        resize: vertical;
+
+        padding: 16px;
+
+        border: 1px solid var(--border);
+        border-radius: 10px;
+
+        font-family: inherit;
+        font-size: 15px;
+        line-height: 1.6;
+
+        color: var(--text);
+        background: var(--surface);
+
+        transition:
+            border-color 0.15s,
+            box-shadow 0.15s;
+    }
+
+    textarea:focus {
+        outline: none;
+
+        border-color: var(--primary);
+
+        box-shadow:
+            0 0 0 3px rgba(37, 99, 235, 0.10);
+    }
+
+    .input-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+
+        margin-top: 14px;
+    }
+
+    .examples {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .example {
+        border: 1px solid var(--border);
+        background: var(--surface-secondary);
+
+        padding: 7px 10px;
+
+        border-radius: 7px;
+
+        font-size: 12px;
+        color: var(--text-secondary);
+
+        cursor: pointer;
+
+        transition: 0.15s;
+    }
+
+    .example:hover {
+        border-color: #c7d2fe;
+        color: var(--primary);
+        background: #eff6ff;
+    }
+
+    button {
+        border: none;
+
+        background: var(--primary);
+        color: white;
+
+        padding: 12px 20px;
+
+        border-radius: 9px;
+
+        font-family: inherit;
+        font-size: 14px;
+        font-weight: 600;
+
+        cursor: pointer;
+
+        transition:
+            background 0.15s,
+            transform 0.05s;
+    }
+
+    button:hover {
+        background: var(--primary-hover);
+    }
+
+    button:active {
+        transform: translateY(1px);
+    }
+
+    button:disabled {
+        background: #9ca3af;
+        cursor: not-allowed;
+    }
+    .metric-secondary {
+      margin-top: 8px;
+
+      font-size: 12px;
+      color: var(--text-secondary);
+
+      }
+
+      .metric-cost {
+      margin-top: 5px;
+
+      font-size: 12px;
+      font-weight: 600;
+
+      color: var(--success);
+
+      }
+
+
+    /* ---------------------------------------------------------
+       LOADING
+    --------------------------------------------------------- */
+
+    .loading {
+        display: none;
+
+        margin-top: 20px;
+
+        background: var(--surface);
+
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+
+        padding: 24px;
+
+        text-align: center;
+    }
+
+    .spinner {
+        width: 24px;
+        height: 24px;
+
+        margin: 0 auto 12px;
+
+        border: 3px solid #e5e7eb;
+        border-top-color: var(--primary);
+
+        border-radius: 50%;
+
+        animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .loading-title {
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    .loading-text {
+        margin-top: 5px;
+
+        font-size: 13px;
+        color: var(--text-secondary);
+    }
+
+    /* ---------------------------------------------------------
+       RESULTS
+    --------------------------------------------------------- */
+
+    #results {
+        display: none;
+        margin-top: 30px;
+    }
+
+    .section-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+
+        margin-bottom: 12px;
+    }
+
+    .section-title h2 {
+        margin: 0;
+
+        font-size: 17px;
+    }
+
+    .section-title span {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+
+    /* ---------------------------------------------------------
+       RESPONSE
+    --------------------------------------------------------- */
+
+    .response-card {
+        background: var(--surface);
+
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+
+        padding: 25px;
+
+        box-shadow:
+            0 6px 25px rgba(0, 0, 0, 0.03);
+    }
+
+    .response-text {
+        font-size: 15px;
+        line-height: 1.7;
+
+        white-space: pre-wrap;
+    }
+
+    /* ---------------------------------------------------------
+       TIMING
+    --------------------------------------------------------- */
+
+    .timing-grid {
+        display: grid;
+
+        grid-template-columns:
+            repeat(4, 1fr);
+
+        gap: 12px;
+
+        margin-top: 25px;
+    }
+
+    .timing-card {
+        background: var(--surface);
+
+        border: 1px solid var(--border);
+        border-radius: 12px;
+
+        padding: 18px;
+    }
+
+    .timing-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+
+        margin-bottom: 8px;
+    }
+
+    .timing-value {
+        font-size: 22px;
+        font-weight: 700;
+    }
+
+    .timing-unit {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-left: 3px;
+    }
+
+    .total-card {
+        border-color: #bfdbfe;
+        background: #eff6ff;
+    }
+
+    /* ---------------------------------------------------------
+       TECHNICAL DETAILS
+    --------------------------------------------------------- */
+
+    .details {
+        margin-top: 25px;
+
+        background: var(--surface);
+
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+
+        overflow: hidden;
+    }
+
+    .details summary {
+        padding: 18px 20px;
+
+        cursor: pointer;
+
+        font-size: 14px;
+        font-weight: 600;
+
+        list-style: none;
+
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .details summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .details summary::after {
+        content: "＋";
+
+        font-size: 18px;
+        color: var(--text-secondary);
+    }
+
+    .details[open] summary::after {
+        content: "−";
+    }
+
+    .details-content {
+        border-top: 1px solid var(--border);
+
+        padding: 20px;
+    }
+
+    .metadata-grid {
+        display: grid;
+
+        grid-template-columns:
+            repeat(3, 1fr);
+
+        gap: 12px;
+
+        margin-bottom: 20px;
+    }
+
+    .metadata {
+        background: var(--surface-secondary);
+
+        border: 1px solid var(--border);
+
+        border-radius: 9px;
+
+        padding: 13px;
+    }
+
+    .metadata-label {
+        font-size: 11px;
+        color: var(--text-secondary);
+
+        margin-bottom: 5px;
+    }
+
+    .metadata-value {
+        font-size: 13px;
+        font-weight: 600;
+
+        word-break: break-word;
+    }
+
+    pre {
+        margin: 0;
+
+        max-height: 500px;
+
+        overflow: auto;
+
+        padding: 18px;
+
+        border-radius: 9px;
+
+        background: #111827;
+        color: #e5e7eb;
+
+        font-family:
+            "SFMono-Regular",
+            Consolas,
+            monospace;
+
+        font-size: 12px;
+        line-height: 1.6;
+    }
+
+    /* ---------------------------------------------------------
+       ERROR
+    --------------------------------------------------------- */
+
+    .error {
+        display: none;
+
+        margin-top: 20px;
+
+        padding: 16px 18px;
+
+        border: 1px solid #fecaca;
+        border-radius: 10px;
+
+        background: #fef2f2;
+        color: var(--danger);
+
+        font-size: 14px;
+    }
+
+    /* ---------------------------------------------------------
+       FOOTER
+    --------------------------------------------------------- */
+
+    footer {
+        text-align: center;
+
+        margin-top: 50px;
+
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+
+    /* ---------------------------------------------------------
+       RESPONSIVE
+    --------------------------------------------------------- */
+
+    @media (max-width: 800px) {
+
+        header {
+            padding: 0 20px;
+        }
+
+        main {
+            padding-top: 35px;
+        }
+
+        .hero h1 {
+            font-size: 29px;
+        }
+
+        .input-footer {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 15px;
+        }
+
+        button {
+            width: 100%;
+        }
+
+        .timing-grid {
+            grid-template-columns:
+                repeat(2, 1fr);
+        }
+
+        .metadata-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 500px) {
+
+        .status {
+            display: none;
+        }
+
+        .timing-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .examples {
+            display: none;
+        }
+    }
+</style>
+
+
+</head>
+
+<body>
+
+<header>
+
+
+<div class="brand">
+
+    <div class="brand-icon">
+        A
+    </div>
+
+    <div>
+        <div class="brand-name">
+            Audiobook Recommendation Agent
+        </div>
+
+        <div class="brand-subtitle">
+            Intelligent personalised discovery
+        </div>
+    </div>
+
+</div>
+
+<div class="status">
+    <div class="status-dot"></div>
+    Local server
+</div>
+
+
+</header>
+
+<main>
+
+
+<!-- HERO -->
+
+<section class="hero">
+
+    <h1>
+        What would you like to listen to?
+    </h1>
+
+    <p>
+        Describe what you're looking for naturally.
+        The recommendation agent will interpret your request,
+        identify relevant preferences and constraints, and
+        generate personalised recommendations.
+    </p>
+
+</section>
+
+
+<!-- INPUT -->
+
+<section class="input-card">
+
+    <div class="input-label">
+
+        <strong>
+            Your request
+        </strong>
+
+        <span>
+            Natural language
+        </span>
+
+    </div>
+
+
+    <textarea
+        id="query"
+        placeholder="e.g. I want a short mystery audiobook with a female narrator. Nothing too dark."
+    ></textarea>
+
+
+    <div class="input-footer">
+
+        <div class="examples">
+
+            <div
+                class="example"
+                onclick="setExample(
+                    'Recommend me some fantasy audiobooks with a strong female protagonist.'
+                )"
+            >
+                Fantasy
+            </div>
+
+            <div
+                class="example"
+                onclick="setExample(
+                    'I want a mystery audiobook under 10 hours that is not too dark.'
+                )"
+            >
+                Mystery
+            </div>
+
+            <div
+                class="example"
+                onclick="setExample(
+                    'Give me something similar to what I liked previously, but with more humour.'
+                )"
+            >
+                Personalised
+            </div>
+
+        </div>
+
+
+        <button
+            id="recommendButton"
+            onclick="getRecommendation()"
+        >
+            Get Recommendations
+        </button>
+
+    </div>
+
+</section>
+
+
+<!-- LOADING -->
+
+<div
+    id="loading"
+    class="loading"
+>
+
+    <div class="spinner"></div>
+
+    <div class="loading-title">
+        Processing your request
+    </div>
+
+    <div class="loading-text">
+        Understanding your preferences and finding recommendations...
+    </div>
+
+</div>
+
+
+<!-- ERROR -->
+
+<div
+    id="error"
+    class="error"
+></div>
+
+
+<!-- RESULTS -->
+
+<section id="results">
+
+    <!-- RESPONSE -->
+
+    <div class="section-title">
+
+        <h2>
+            Recommendation
+        </h2>
+
+        <span>
+            Generated response
+        </span>
+
+    </div>
+
+
+    <div class="response-card">
+
+        <div
+            id="responseText"
+            class="response-text"
+        ></div>
+
+    </div>
+
+
+  <!-- PIPELINE PERFORMANCE -->
+
+  <div class="section-title" style="margin-top: 28px;">
+
+  
+  <h2>
+      Pipeline Performance
+  </h2>
+
+  <span>
+      Processing & AI usage
+  </span>
+  
+
+  </div>
+
+  <div class="timing-grid">
+
+
+  <div class="timing-card">
+
+      <div class="timing-label">
+          Input Parser
+      </div>
+
+      <div class="timing-value">
+          <span id="parserTime">—</span>
+          <span class="timing-unit">ms</span>
+      </div>
+
+      <div class="metric-secondary">
+          <span id="parserTokens">—</span> tokens
+      </div>
+
+      <div class="metric-cost">
+          $<span id="parserCost">—</span>
+      </div>
+
+  </div>
+
+
+  <div class="timing-card">
+
+      <div class="timing-label">
+          Recommendation Engine
+      </div>
+
+      <div class="timing-value">
+          <span id="engineTime">—</span>
+          <span class="timing-unit">ms</span>
+      </div>
+
+      <div class="metric-secondary">
+          Non-AI processing
+      </div>
+
+      <div class="metric-cost">
+          $0.000000
+      </div>
+
+  </div>
+
+
+  <div class="timing-card">
+
+      <div class="timing-label">
+          Response Generator
+      </div>
+
+      <div class="timing-value">
+          <span id="generatorTime">—</span>
+          <span class="timing-unit">ms</span>
+      </div>
+
+      <div class="metric-secondary">
+          <span id="generatorTokens">—</span> tokens
+      </div>
+
+      <div class="metric-cost">
+          $<span id="generatorCost">—</span>
+      </div>
+
+  </div>
+
+
+  <div class="timing-card total-card">
+
+      <div class="timing-label">
+          Total
+      </div>
+
+      <div class="timing-value">
+          <span id="totalTime">—</span>
+          <span class="timing-unit">ms</span>
+      </div>
+
+      <div class="metric-secondary">
+          <span id="totalTokens">—</span> tokens
+      </div>
+
+      <div class="metric-cost">
+          $<span id="totalCost">—</span> USD
+      </div>
+
+  </div>
+
+
+</div>
+
+
+
+    <!-- TECHNICAL DETAILS -->
+
+    <details class="details">
+
+        <summary>
+            Agent Processing Details
+        </summary>
+
+        <div class="details-content">
+
+            <div class="metadata-grid">
+
+                <div class="metadata">
+
+                    <div class="metadata-label">
+                        Request ID
+                    </div>
+
+                    <div
+                        id="requestId"
+                        class="metadata-value"
+                    >
+                        —
+                    </div>
+
+                </div>
+
+
+                <div class="metadata">
+
+                    <div class="metadata-label">
+                        Intent
+                    </div>
+
+                    <div
+                        id="intent"
+                        class="metadata-value"
+                    >
+                        —
+                    </div>
+
+                </div>
+
+
+                <div class="metadata">
+
+                    <div class="metadata-label">
+                        Personalised
+                    </div>
+
+                    <div
+                        id="personalised"
+                        class="metadata-value"
+                    >
+                        —
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div
+                style="
+                    font-size: 13px;
+                    font-weight: 600;
+                    margin-bottom: 10px;
+                "
+            >
+                Session Request
+            </div>
+
+
+            <pre id="sessionRequest"></pre>
+
+        </div>
+
+    </details>
+
+</section>
+
+
+<footer>
+    Recommendation Agent · Local Demonstration Environment
+</footer>
+
+
+</main>
+
+<script>
+
+    /*
+     * -------------------------------------------------------------
+     * CONFIGURATION
+     * -------------------------------------------------------------
+     */
+
+    const API_URL =
+        "/api/v1/recommendations/demo";
+
+
+    /*
+     * -------------------------------------------------------------
+     * DEMO SESSION
+     * -------------------------------------------------------------
+     */
+
+    const SESSION_ID = "demo-session";
+
+    const USER_ID = "demo-user";
+
+
+    /*
+     * -------------------------------------------------------------
+     * EXAMPLE REQUEST
+     * -------------------------------------------------------------
+     */
+
+    function setExample(text) {
+
+        document.getElementById("query").value = text;
+
+        document.getElementById("query").focus();
+    }
+
+
+    /*
+     * -------------------------------------------------------------
+     * GET RECOMMENDATION
+     * -------------------------------------------------------------
+     */
+
+    async function getRecommendation() {
+
+        const query =
+            document.getElementById("query")
+                .value
+                .trim();
+
+        const button =
+            document.getElementById("recommendButton");
+
+        const loading =
+            document.getElementById("loading");
+
+        const results =
+            document.getElementById("results");
+
+        const error =
+            document.getElementById("error");
+
+
+        /*
+         * Validate input
+         */
+
+        if (!query) {
+
+            showError(
+                "Please enter a request before continuing."
+            );
+
+            return;
+        }
+
+
+        /*
+         * Reset UI
+         */
+
+        error.style.display = "none";
+
+        results.style.display = "none";
+
+        loading.style.display = "block";
+
+        button.disabled = true;
+
+        button.textContent = "Processing...";
+
+
+        try {
+
+            /*
+             * -----------------------------------------------------
+             * API REQUEST
+             * -----------------------------------------------------
+             */
+
+            const response =
+                await fetch(
+                    API_URL,
+                    {
+                        method: "POST",
+
+                        headers: {
+                            "Content-Type":
+                                "text/plain",
+
+                            "X-Session-Id":
+                                SESSION_ID,
+
+                            "X-User-Id":
+                                USER_ID
+                        },
+
+                        body: query
+                    }
+                );
+
+
+            /*
+             * HTTP error
+             */
+
+            if (!response.ok) {
+
+                throw new Error(
+                    `Server returned HTTP ${response.status}`
+                );
+            }
+
+
+            /*
+             * Parse JSON
+             */
+
+            const result =
+                await response.json();
+
+
+            /*
+             * Display response
+             */
+
+            displayResult(result);
+
+
+        } catch (err) {
+
+            console.error(err);
+
+            showError(
+                "Unable to connect to the Recommendation Agent. " +
+                "Make sure the Spring Boot server is running on port 8080."
+            );
+
+        } finally {
+
+            loading.style.display = "none";
+
+            button.disabled = false;
+
+            button.textContent =
+                "Get Recommendations";
+        }
+    }
+
+
+    /*
+     * -------------------------------------------------------------
+     * DISPLAY RESULT
+     * -------------------------------------------------------------
+     */
+
+    function displayResult(result) {
+
+        const results =
+            document.getElementById("results");
+
+        results.style.display = "block";
+
+
+        /*
+         * Response
+         */
+
+        document.getElementById(
+            "responseText"
+        ).textContent =
+            result.response ?? "No response returned.";
+
+
+        /*
+         * Timing
+         */
+
+        const metrics = result.metrics ?? {};
+
+        const parser =
+        metrics.inputParser ?? {};
+
+        const parserUsage =
+        parser.usage ?? {};
+
+        const engine =
+        metrics.recommendationEngine ?? {};
+
+        const generator =
+        metrics.responseGenerator ?? {};
+
+        const generatorUsage =
+        generator.usage ?? {};
+
+        /*
+
+        * Input Parser
+          */
+
+        document.getElementById(
+        "parserTime"
+        ).textContent =
+        parser.durationMs ?? "—";
+
+        document.getElementById(
+        "parserTokens"
+        ).textContent =
+        formatNumber(
+        parserUsage.totalTokens
+        );
+
+        document.getElementById(
+        "parserCost"
+        ).textContent =
+        formatCost(
+        parserUsage.estimatedCostUsd
+        );
+
+        /*
+
+        * Recommendation Engine
+          */
+
+        document.getElementById(
+        "engineTime"
+        ).textContent =
+        engine.durationMs ?? "—";
+
+        /*
+
+        * Response Generator
+          */
+
+        document.getElementById(
+        "generatorTime"
+        ).textContent =
+        generator.durationMs ?? "—";
+
+        document.getElementById(
+        "generatorTokens"
+        ).textContent =
+        formatNumber(
+        generatorUsage.totalTokens
+        );
+
+        document.getElementById(
+        "generatorCost"
+        ).textContent =
+        formatCost(
+        generatorUsage.estimatedCostUsd
+        );
+
+        /*
+
+        * Total
+          */
+
+        document.getElementById(
+        "totalTime"
+        ).textContent =
+        metrics.totalDurationMs ?? "—";
+
+        document.getElementById(
+        "totalTokens"
+        ).textContent =
+        formatNumber(
+        metrics.totalTokens
+        );
+
+        document.getElementById(
+        "totalCost"
+        ).textContent =
+        formatCost(
+        metrics.totalEstimatedCostUsd
+        );
+
+        function formatNumber(value) {
+
+
+        if (
+            value === null ||
+            value === undefined
+        ) {
+            return "—";
+        }
+
+        return Number(value).toLocaleString();
+
+
+        }
+
+        function formatCost(value) {
+
+
+        if (
+            value === null ||
+            value === undefined
+        ) {
+            return "—";
+        }
+
+        return Number(value).toFixed(6);
+
+
+        }
+
+
+
+        /*
+         * Session metadata
+         */
+
+        const sessionRequest =
+            result.sessionRequest ?? {};
+
+        document.getElementById(
+            "requestId"
+        ).textContent =
+            sessionRequest.requestId ?? "—";
+
+        document.getElementById(
+            "intent"
+        ).textContent =
+            sessionRequest.intent ?? "—";
+
+        document.getElementById(
+            "personalised"
+        ).textContent =
+            sessionRequest.personalised !== undefined
+                ? sessionRequest.personalised
+                : "—";
+
+
+        /*
+         * Entire SessionRequest
+         */
+
+        document.getElementById(
+            "sessionRequest"
+        ).textContent =
+            JSON.stringify(
+                sessionRequest,
+                null,
+                2
+            );
+
+
+        /*
+         * Scroll to result
+         */
+
+        results.scrollIntoView({
+            behavior: "smooth",
+            block: "start"
+        });
+    }
+
+
+    /*
+     * -------------------------------------------------------------
+     * ERROR DISPLAY
+     * -------------------------------------------------------------
+     */
+
+    function showError(message) {
+
+        const error =
+            document.getElementById("error");
+
+        error.textContent = message;
+
+        error.style.display = "block";
+    }
+
+
+    /*
+     * -------------------------------------------------------------
+     * CTRL + ENTER
+     * -------------------------------------------------------------
+     */
+
+    document
+        .getElementById("query")
+        .addEventListener(
+            "keydown",
+            function(event) {
+
+                if (
+                    event.key === "Enter" &&
+                    event.ctrlKey
+                ) {
+                    getRecommendation();
+                }
+
+            }
+        );
+
+</script>
+
+</body>
+</html>

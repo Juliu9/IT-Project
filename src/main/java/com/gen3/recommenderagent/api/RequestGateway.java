@@ -49,4 +49,49 @@ public class RequestGateway {
     // 3. Generate natural language response
     return responseGenerator.generate(result.getRecommendations(), result);
   }
+
+  /** Runs the recommendation pipeline and exposes demo-friendly timing and request details. */
+  @PostMapping("/demo")
+  public DemoRecommendationResponse handleDemoRequest(
+      @RequestHeader("X-Session-Id") String sessionId,
+      @RequestHeader("X-User-Id") String userId,
+      @RequestBody String rawText) {
+    long totalStartedAt = System.nanoTime();
+
+    long parserStartedAt = System.nanoTime();
+    var parsedRequest = inputParser.parse(rawText);
+    long parserDurationMs = elapsedMilliseconds(parserStartedAt);
+
+    long engineStartedAt = System.nanoTime();
+    SessionRequest result =
+        requestApplicationService.process(sessionId, userId, parsedRequest.entity());
+    long engineDurationMs = elapsedMilliseconds(engineStartedAt);
+
+    long generatorStartedAt = System.nanoTime();
+    String response = responseGenerator.generate(result.getRecommendations(), result);
+    long generatorDurationMs = elapsedMilliseconds(generatorStartedAt);
+
+    DemoRecommendationResponse.StageMetric parserMetric =
+        new DemoRecommendationResponse.StageMetric(
+            parserDurationMs,
+            DemoRecommendationResponse.UsageMetric.from(parsedRequest.response()));
+    DemoRecommendationResponse.StageMetric engineMetric =
+        new DemoRecommendationResponse.StageMetric(engineDurationMs, null);
+    DemoRecommendationResponse.StageMetric generatorMetric =
+        new DemoRecommendationResponse.StageMetric(generatorDurationMs, null);
+    DemoRecommendationResponse.Metrics metrics =
+        new DemoRecommendationResponse.Metrics(
+            parserMetric,
+            engineMetric,
+            generatorMetric,
+            elapsedMilliseconds(totalStartedAt),
+            null,
+            null);
+
+    return new DemoRecommendationResponse(response, metrics, result);
+  }
+
+  private long elapsedMilliseconds(long startedAt) {
+    return (System.nanoTime() - startedAt) / 1_000_000;
+  }
 }

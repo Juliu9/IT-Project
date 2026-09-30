@@ -141,6 +141,13 @@ curl -X POST http://localhost:8080/api/v1/recommendations \
   -d "Recommend a dark fantasy audiobook under ten hours, but no romance."
 ```
 
+## Browser demo
+
+The project includes a browser demo at `http://localhost:8080/`. Start Redis and Qdrant, set
+`OPENAI_API_KEY`, and run the Spring Boot application as described above. The page submits requests
+to `POST /api/v1/recommendations/demo` and displays the generated response, pipeline timings, and
+parsed session request. The original plain-text endpoint remains available for existing clients.
+
 ## Tests
 
 Run the full suite with Docker available:
