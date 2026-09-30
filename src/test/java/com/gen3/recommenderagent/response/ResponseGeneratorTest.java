@@ -1,5 +1,6 @@
 package com.gen3.recommenderagent.response;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -73,5 +74,40 @@ class ResponseGeneratorTest {
 
     assertNotNull(response);
     assertTrue(response.toLowerCase().contains("sorry"));
+  }
+
+  @Test
+  void shouldAcknowledgeChangingTheRecommendationCount() {
+    AiResponseGenerator generator = new AiResponseGenerator(null);
+    SessionRequest request = new SessionRequest();
+    request.setIntent(Intent.CHANGE_COUNT);
+    request.setBookCount(3);
+
+    assertEquals("I'll show 3 recommendations at a time.", generator.generate(List.of(), request));
+  }
+
+  @Test
+  void shouldAcknowledgeUpdatingSessionPreferences() {
+    AiResponseGenerator generator = new AiResponseGenerator(null);
+    SessionRequest request = new SessionRequest();
+    request.setIntent(Intent.UPDATE_PREFERENCES);
+
+    String response = generator.generate(List.of(), request);
+
+    assertTrue(response.toLowerCase().contains("updated your preferences"));
+    assertTrue(response.toLowerCase().contains("session"));
+  }
+
+  @Test
+  void shouldExplainSupportedActionsForHelpIntent() {
+    AiResponseGenerator generator = new AiResponseGenerator(null);
+    SessionRequest request = new SessionRequest();
+    request.setIntent(Intent.HELP);
+
+    String response = generator.generate(List.of(), request);
+
+    assertTrue(response.toLowerCase().contains("refine"));
+    assertTrue(response.toLowerCase().contains("more results"));
+    assertTrue(response.toLowerCase().contains("clear"));
   }
 }

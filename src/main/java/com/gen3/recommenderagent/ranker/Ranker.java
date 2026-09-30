@@ -11,4 +11,7 @@ public interface Ranker {
 
   List<Recommendation> rank(
       List<AudiobookCandidate> candidates, int requestedLimit, SemanticQueryVectors vectors);
+
+  List<Recommendation> rank(
+      List<AudiobookCandidate> candidates, int requestedLimit, RankingContext context);
 }

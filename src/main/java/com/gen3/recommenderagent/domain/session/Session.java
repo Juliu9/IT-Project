@@ -18,6 +18,7 @@ public class Session {
   private Integer bookCount = MAX_BOOK_COUNT;
   private List<String> shownBooks;
   private List<SessionRequest> requests = new ArrayList<>();
+  private SessionPreferences preferences;
 
   public Session() {}
 
@@ -88,6 +89,14 @@ public class Session {
   public void addRequest(SessionRequest request) {
     this.requests.add(request);
     this.updatedAt = Instant.now();
+  }
+
+  public SessionPreferences getPreferences() {
+    return preferences;
+  }
+
+  public void setPreferences(SessionPreferences preferences) {
+    this.preferences = preferences;
   }
 
   public void addRecommendationIds(List<String> bookIds) {

@@ -9,6 +9,7 @@ import com.gen3.recommenderagent.domain.session.MustNotInclude;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
+import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.storage.sessionrepository.redis.RedisSessionRepository;
 import java.util.List;
@@ -116,6 +117,30 @@ class RedisSessionRepositoryTest {
 
     Session retrieved = redisSessionCache.getSession("shown-book-ids-test");
     assertEquals(List.of("book-1", "book-2"), retrieved.getShownBooks());
+  }
+
+  @Test
+  void shouldSaveAndRetrieveSessionPreferences() {
+    Session session = new Session();
+    session.setSessionId("session-preferences-test");
+
+    SemanticQuery positiveQuery = new SemanticQuery();
+    positiveQuery.setGenres(List.of("fantasy"));
+    MustInclude mustInclude = new MustInclude();
+    mustInclude.setLanguage("English");
+
+    SessionPreferences preferences = new SessionPreferences();
+    preferences.setPositiveSemanticQuery(positiveQuery);
+    preferences.setMustInclude(mustInclude);
+    session.setPreferences(preferences);
+
+    redisSessionCache.updateSession(session);
+
+    Session retrieved = redisSessionCache.getSession("session-preferences-test");
+    assertNotNull(retrieved.getPreferences());
+    assertEquals(
+        List.of("fantasy"), retrieved.getPreferences().getPositiveSemanticQuery().getGenres());
+    assertEquals("English", retrieved.getPreferences().getMustInclude().getLanguage());
   }
 
   // ============================================================

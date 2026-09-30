@@ -11,13 +11,18 @@ import org.springframework.stereotype.Component;
 public class RecommendationAction implements IntentAction {
 
   private final RecommendationWorkflow workflow;
+  private final RequestContextMerger requestContextMerger;
 
-  public RecommendationAction(RecommendationWorkflow workflow) {
+  public RecommendationAction(
+      RecommendationWorkflow workflow, RequestContextMerger requestContextMerger) {
     this.workflow = workflow;
+    this.requestContextMerger = requestContextMerger;
   }
 
   @Override
   public SessionRequest execute(SessionRequest request, Session session) {
+    requestContextMerger.applyPreferences(request, session);
+    requestContextMerger.applyBookCount(request, session);
     request.setRecommendations(workflow.recommend(request, session));
     return request;
   }
