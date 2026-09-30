@@ -15,33 +15,35 @@ import org.springframework.stereotype.Component;
 @Component
 public class UserFavouriteCsvReader {
 
-    public List<UserFavourite> read(Path path) throws IOException {
-        List<UserFavourite> favourites = new ArrayList<>();
+  public List<UserFavourite> read(Path path) throws IOException {
+    List<UserFavourite> favourites = new ArrayList<>();
 
-        CSVFormat format = CSVFormat.DEFAULT.builder()
-                .setHeader()
-                .setSkipHeaderRecord(true)
-                .setIgnoreSurroundingSpaces(true)
-                .build();
+    CSVFormat format =
+        CSVFormat.DEFAULT
+            .builder()
+            .setHeader()
+            .setSkipHeaderRecord(true)
+            .setIgnoreSurroundingSpaces(true)
+            .build();
 
-        try (BufferedReader reader = Files.newBufferedReader(path);
-             CSVParser csvParser = new CSVParser(reader, format)) {
+    try (BufferedReader reader = Files.newBufferedReader(path);
+        CSVParser csvParser = new CSVParser(reader, format)) {
 
-            for (CSVRecord record : csvParser) {
-                String type = record.get("type");
+      for (CSVRecord record : csvParser) {
+        String type = record.get("type");
 
-                if (!"book".equalsIgnoreCase(type)) {
-                    continue;
-                }
-
-                String userId = record.get("user");
-                String item = record.get("item"); // Correctly targets index mapping now
-
-                String bookId = BookIdExtractor.extractAndNormalize(item);
-
-                favourites.add(new UserFavourite(userId, bookId));
-            }
+        if (!"book".equalsIgnoreCase(type)) {
+          continue;
         }
-        return List.copyOf(favourites);
+
+        String userId = record.get("user");
+        String item = record.get("item"); // Correctly targets index mapping now
+
+        String bookId = BookIdExtractor.extractAndNormalize(item);
+
+        favourites.add(new UserFavourite(userId, bookId));
+      }
     }
+    return List.copyOf(favourites);
+  }
 }

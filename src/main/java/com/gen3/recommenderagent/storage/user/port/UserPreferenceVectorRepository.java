@@ -6,8 +6,7 @@ import java.util.Optional;
 
 public interface UserPreferenceVectorRepository {
 
-    void save(UserPreferenceEmbedding embedding) throws IOException;
+  void save(UserPreferenceEmbedding embedding) throws IOException;
 
-    Optional<UserPreferenceEmbedding> findEmbeddingByUserId(
-            String userId) throws IOException;
+  Optional<UserPreferenceEmbedding> findEmbeddingByUserId(String userId) throws IOException;
 }

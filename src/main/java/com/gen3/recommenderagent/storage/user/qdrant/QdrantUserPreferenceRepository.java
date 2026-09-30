@@ -15,106 +15,132 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class QdrantUserPreferenceRepository implements UserPreferenceVectorRepository {
 
-    private final QdrantClient client;
-    private final QdrantUserPreferenceMapper mapper;
-    private final String collection;
-    private final int vectorDimension;
+  private final QdrantClient client;
+  private final QdrantUserPreferenceMapper mapper;
+  private final String collection;
+  private final int vectorDimension;
 
-    private final Object initializationLock = new Object();
-    private volatile boolean initialized;
+  private final Object initializationLock = new Object();
+  private volatile boolean initialized;
 
-    public QdrantUserPreferenceRepository(
-            QdrantClient client,
-            QdrantUserPreferenceMapper mapper,
-            @Value("${qdrant.user-preference-collection:user}") String collection,
-            @Value("${qdrant.embedding-dimension:1536}") int vectorDimension) {
-        this.client = client;
-        this.mapper = mapper;
-        this.collection = collection;
-        this.vectorDimension = vectorDimension;
+  public QdrantUserPreferenceRepository(
+      QdrantClient client,
+      QdrantUserPreferenceMapper mapper,
+      @Value("${qdrant.user-preference-collection:user}") String collection,
+      @Value("${qdrant.embedding-dimension:1536}") int vectorDimension) {
+    this.client = client;
+    this.mapper = mapper;
+    this.collection = collection;
+    this.vectorDimension = vectorDimension;
+  }
+
+  @Override
+  public void save(UserPreferenceEmbedding embedding) throws IOException {
+    if (embedding == null) {
+      return;
+    }
+    initialize();
+
+    if (hasVector(embedding.favouritesVector())) {
+      validateDimension(embedding.favouritesVector());
+    }
+    if (hasVector(embedding.historyVector())) {
+      validateDimension(embedding.historyVector());
     }
 
-    @Override
-    public void save(UserPreferenceEmbedding embedding) throws IOException {
-        if (embedding == null) return;
-        initialize();
+    await(
+        client.upsertAsync(collection, List.of(mapper.toPoint(embedding))),
+        "write user preference vectors to Qdrant");
+  }
 
-        if (hasVector(embedding.favouritesVector())) validateDimension(embedding.favouritesVector());
-        if (hasVector(embedding.historyVector())) validateDimension(embedding.historyVector());
+  @Override
+  public Optional<UserPreferenceEmbedding> findEmbeddingByUserId(String userId) throws IOException {
+    if (userId == null || userId.isBlank()) {
+      return Optional.empty();
+    }
+    initialize();
 
-        await(client.upsertAsync(collection, List.of(mapper.toPoint(embedding))),
-                "write user preference vectors to Qdrant");
+    List<RetrievedPoint> points =
+        await(
+            client.retrieveAsync(collection, List.of(mapper.pointId(userId)), false, true, null),
+            "retrieve a user preference vector from Qdrant");
+
+    if (points.isEmpty()) {
+      return Optional.empty();
     }
 
-    @Override
-    public Optional<UserPreferenceEmbedding> findEmbeddingByUserId(String userId) throws IOException {
-        if (userId == null || userId.isBlank()) return Optional.empty();
-        initialize();
+    RetrievedPoint point = points.getFirst();
+    float[] favs = mapper.toVector(point, QdrantUserPreferenceMapper.FAVOURITES_VECTOR);
+    float[] hist = mapper.toVector(point, QdrantUserPreferenceMapper.HISTORY_VECTOR);
 
-        List<RetrievedPoint> points = await(
-                client.retrieveAsync(collection, List.of(mapper.pointId(userId)), false, true, null),
-                "retrieve a user preference vector from Qdrant");
-
-        if (points.isEmpty()) return Optional.empty();
-
-        RetrievedPoint point = points.getFirst();
-        float[] favs = mapper.toVector(point, QdrantUserPreferenceMapper.FAVOURITES_VECTOR);
-        float[] hist = mapper.toVector(point, QdrantUserPreferenceMapper.HISTORY_VECTOR);
-
-        if (!hasVector(favs) && !hasVector(hist)) return Optional.empty();
-
-        return Optional.of(new UserPreferenceEmbedding(userId, favs, hist));
+    if (!hasVector(favs) && !hasVector(hist)) {
+      return Optional.empty();
     }
 
-    public void initialize() throws IOException {
-        if (initialized) return;
-        synchronized (initializationLock) {
-            if (initialized) return;
-            boolean exists = await(client.collectionExistsAsync(collection), "check Qdrant user preference collection");
-            if (!exists) createCollection();
-            initialized = true;
-        }
+    return Optional.of(new UserPreferenceEmbedding(userId, favs, hist));
+  }
+
+  public void initialize() throws IOException {
+    if (initialized) {
+      return;
     }
-
-    private void createCollection() throws IOException {
-        Collections.VectorParams vectorParams = Collections.VectorParams.newBuilder()
-                .setSize(vectorDimension)
-                .setDistance(Collections.Distance.Dot)
-                .build();
-
-        Collections.VectorsConfig vectorsConfig = Collections.VectorsConfig.newBuilder()
-                .setParamsMap(Collections.VectorParamsMap.newBuilder()
-                        .putMap(QdrantUserPreferenceMapper.FAVOURITES_VECTOR, vectorParams)
-                        .putMap(QdrantUserPreferenceMapper.HISTORY_VECTOR, vectorParams)
-                        .build())
-                .build();
-
-        Collections.CreateCollection request = Collections.CreateCollection.newBuilder()
-                .setCollectionName(collection)
-                .setVectorsConfig(vectorsConfig)
-                .build();
-
-        await(client.createCollectionAsync(request), "create Qdrant user preference collection");
+    synchronized (initializationLock) {
+      if (initialized) {
+        return;
+      }
+      boolean exists =
+          await(
+              client.collectionExistsAsync(collection), "check Qdrant user preference collection");
+      if (!exists) {
+        createCollection();
+      }
+      initialized = true;
     }
+  }
 
-    private void validateDimension(float[] vector) {
-        if (vector.length != vectorDimension) {
-            throw new IllegalArgumentException("Embedding dimension mismatch");
-        }
-    }
+  private void createCollection() throws IOException {
+    Collections.VectorParams vectorParams =
+        Collections.VectorParams.newBuilder()
+            .setSize(vectorDimension)
+            .setDistance(Collections.Distance.Dot)
+            .build();
 
-    private boolean hasVector(float[] vector) {
-        return vector != null && vector.length > 0;
-    }
+    Collections.VectorsConfig vectorsConfig =
+        Collections.VectorsConfig.newBuilder()
+            .setParamsMap(
+                Collections.VectorParamsMap.newBuilder()
+                    .putMap(QdrantUserPreferenceMapper.FAVOURITES_VECTOR, vectorParams)
+                    .putMap(QdrantUserPreferenceMapper.HISTORY_VECTOR, vectorParams)
+                    .build())
+            .build();
 
-    private <T> T await(java.util.concurrent.Future<T> future, String operation) throws IOException {
-        try {
-            return future.get();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Interrupted: " + operation, e);
-        } catch (ExecutionException e) {
-            throw new IOException("Failed: " + operation, e.getCause());
-        }
+    Collections.CreateCollection request =
+        Collections.CreateCollection.newBuilder()
+            .setCollectionName(collection)
+            .setVectorsConfig(vectorsConfig)
+            .build();
+
+    await(client.createCollectionAsync(request), "create Qdrant user preference collection");
+  }
+
+  private void validateDimension(float[] vector) {
+    if (vector.length != vectorDimension) {
+      throw new IllegalArgumentException("Embedding dimension mismatch");
     }
+  }
+
+  private boolean hasVector(float[] vector) {
+    return vector != null && vector.length > 0;
+  }
+
+  private <T> T await(java.util.concurrent.Future<T> future, String operation) throws IOException {
+    try {
+      return future.get();
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IOException("Interrupted: " + operation, e);
+    } catch (ExecutionException e) {
+      throw new IOException("Failed: " + operation, e.getCause());
+    }
+  }
 }
