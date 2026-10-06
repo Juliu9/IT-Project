@@ -174,8 +174,9 @@ class RecommendationFlowIntegrationTest {
         Set.of("book-101", "book-202", "book-303", "book-505", "book-606");
     assertTrue(allowedScienceFictionIds.containsAll(returnedBookIds));
     assertFalse(returnedBookIds.contains("book-404"));
-    assertFalse(response.contains("book-404"));
-    returnedBookIds.forEach(bookId -> assertTrue(response.contains(bookId)));
+    assertFalse(response.contains("The Hobbit"));
+    recommendations.forEach(
+        recommendation -> assertTrue(response.contains(recommendation.getTitle())));
   }
 
   private SessionRequest parsedRequest(String rawText) {

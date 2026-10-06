@@ -36,7 +36,7 @@ class ResponseGeneratorTest {
 
     assertNotNull(response);
     assertTrue(response.toLowerCase().contains("action"));
-    assertTrue(response.toLowerCase().contains("book-101"));
+    assertTrue(response.toLowerCase().contains("book1"));
     assertTrue(response.toLowerCase().contains("recommend"));
   }
 
