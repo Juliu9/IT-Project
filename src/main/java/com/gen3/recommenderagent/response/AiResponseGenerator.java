@@ -142,13 +142,13 @@ public class AiResponseGenerator implements ResponseGenerator {
     StringBuilder response = new StringBuilder();
     response.append("Here are my recommendations");
 
-    if (currentRequest != null && currentRequest.getIntent() != null) {
-      String intentName = currentRequest.getIntent().name().toLowerCase().replace("_", " ");
-      // Skip saying "for your recommendation request" as it sounds redundant when spoken
-      if (!intentName.equals("recommendation")) {
-        response.append(" for your ").append(intentName).append(" request");
+      if (currentRequest != null && currentRequest.getIntent() != null) {
+        String intentName = currentRequest.getIntent().name().toLowerCase().replace("_", " ");
+        // Skip saying "for your recommendation request" as it sounds redundant when spoken
+        if (!intentName.equals("recommendation")) {
+            response.append(" for your ").append(intentName).append(" request");
+        }
       }
-    }
 
     if (currentRequest != null
         && currentRequest.getPositiveSemanticQuery() != null
@@ -167,19 +167,18 @@ public class AiResponseGenerator implements ResponseGenerator {
         continue;
       }
 
-      // Format as "Number 1, Title."
-      response
-          .append("Number ")
-          .append(recommendation.getRank() != null ? recommendation.getRank() : "unknown")
-          .append(", ");
+        // Format as "Number 1, Title."
+        response
+                .append("Number ")
+                .append(recommendation.getRank() != null ? recommendation.getRank() : "unknown")
+                .append(", ");
 
-      String title =
-          recommendation.getTitle() != null ? recommendation.getTitle() : "Unknown title";
+        String title = recommendation.getTitle() != null ? recommendation.getTitle() : "Unknown title";
 
-      // Strip out common catalog artifacts (like $b) so the voice doesn't read them out loud
-      title = title.replace("$b", "").trim();
+        // Strip out common catalog artifacts (like $b) so the voice doesn't read them out loud
+        title = title.replace("$b", "").trim();
 
-      response.append(title).append(". ");
+        response.append(title).append(". ");
     }
 
     return response.toString().trim();
