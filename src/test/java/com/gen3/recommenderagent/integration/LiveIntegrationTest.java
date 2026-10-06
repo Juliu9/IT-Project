@@ -145,28 +145,43 @@ class LiveIntegrationTest {
   }
 
   private void assertBlankRequestRejected(
-      MockMvc mockMvc, String sessionId, String userId, String rawText) {
-    ServletException exception =
-        assertThrows(
-            ServletException.class,
-            () ->
-                mockMvc.perform(
-                    post("/api/v1/recommendations")
-                        .header("X-Session-Id", sessionId)
-                        .header("X-User-Id", userId)
-                        .contentType(MediaType.TEXT_PLAIN)
-                        .content(rawText)));
+      MockMvc mockMvc, String sessionId, String userId, String rawText) throws Exception {
+    String rejectionMessage;
+    if (rawText.isEmpty()) {
+      mockMvc
+          .perform(
+              post("/api/v1/recommendations")
+                  .header("X-Session-Id", sessionId)
+                  .header("X-User-Id", userId)
+                  .contentType(MediaType.TEXT_PLAIN)
+                  .content(rawText))
+          .andExpect(status().isBadRequest());
+      rejectionMessage = "Required request body is missing";
+    } else {
+      ServletException exception =
+          assertThrows(
+              ServletException.class,
+              () ->
+                  mockMvc.perform(
+                      post("/api/v1/recommendations")
+                          .header("X-Session-Id", sessionId)
+                          .header("X-User-Id", userId)
+                          .contentType(MediaType.TEXT_PLAIN)
+                          .content(rawText)));
 
-    IllegalArgumentException cause =
-        assertInstanceOf(IllegalArgumentException.class, exception.getCause());
-    assertEquals("Please enter your request", cause.getMessage());
+      IllegalArgumentException cause =
+          assertInstanceOf(IllegalArgumentException.class, exception.getCause());
+      assertEquals("Please enter your request", cause.getMessage());
+      rejectionMessage = cause.getMessage();
+    }
+
     assertNull(
         sessionRepository.getSession(sessionId),
         "A blank request must not create or update a Redis session");
 
     System.out.println("\n=== Blank input integration result ===");
     System.out.println("Raw text: <blank>");
-    System.out.println("Rejected with: " + cause.getMessage());
+    System.out.println("Rejected with: " + rejectionMessage);
     System.out.println("Session saved: false");
     System.out.println("======================================\n");
   }
