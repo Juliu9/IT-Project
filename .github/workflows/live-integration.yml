@@ -1,0 +1,77 @@
+name: Live integration test
+
+on:
+  push:
+    branches:
+      - Live-Test
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-integration-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  live-integration-test:
+    name: OpenAI and Qdrant end-to-end test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Validate live service secrets
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          QDRANT_URL: ${{ secrets.QDRANT_URL }}
+          QDRANT_API: ${{ secrets.QDRANT_API }}
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "::error::Missing GitHub Actions secret: OPENAI_API_KEY"
+            exit 1
+          fi
+          if [ -z "$QDRANT_URL" ]; then
+            echo "::error::Missing GitHub Actions secret: QDRANT_URL"
+            exit 1
+          fi
+          if [ -z "$QDRANT_API" ]; then
+            echo "::error::Missing GitHub Actions secret: QDRANT_API"
+            exit 1
+          fi
+
+      - name: Run live integration test with coverage
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          QDRANT_URL: ${{ secrets.QDRANT_URL }}
+          QDRANT_API: ${{ secrets.QDRANT_API }}
+          QDRANT_GRPC_PORT: "6334"
+          QDRANT_COLLECTION: audiobooks_hybrid
+          QDRANT_USER_PREFERENCE_COLLECTION: user
+          QDRANT_EMBEDDING_DIMENSION: "1536"
+          QDRANT_MIGRATION_ENABLED: "false"
+          USER_PREFERENCES_IMPORT_ON_STARTUP: "false"
+        run: >-
+          mvn --batch-mode --no-transfer-progress clean
+          -Dspotless.check.skip=true
+          org.jacoco:jacoco-maven-plugin:0.8.15:prepare-agent
+          -Dtest=LiveIntegrationTest
+          test
+          org.jacoco:jacoco-maven-plugin:0.8.15:report
+
+      - name: Upload JaCoCo report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-integration-jacoco-report
+          path: target/site/jacoco
+          if-no-files-found: warn
