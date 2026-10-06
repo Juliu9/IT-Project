@@ -2,7 +2,10 @@ package com.gen3.recommenderagent.integration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -10,6 +13,7 @@ import com.gen3.recommenderagent.api.RequestGateway;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
+import jakarta.servlet.ServletException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -40,8 +44,7 @@ import tools.jackson.databind.ObjectMapper;
 class LiveIntegrationTest {
 
   // Edit only this value when you want to try a different live request.
-  private static final String RAW_TEXT =
-      "give me five more";
+  private static final String RAW_TEXT = "";
 
   private static final int REDIS_PORT = 6379;
   private static final Duration SESSION_TIMEOUT = Duration.ofSeconds(5);
@@ -80,6 +83,11 @@ class LiveIntegrationTest {
     String userId = "full-live-test-user";
 
     MockMvc mockMvc = MockMvcBuilders.standaloneSetup(requestGateway).build();
+
+    if (rawText.isBlank()) {
+      assertBlankRequestRejected(mockMvc, sessionId, userId, rawText);
+      return;
+    }
 
     long startedAt = System.nanoTime();
     String response =
@@ -134,6 +142,33 @@ class LiveIntegrationTest {
         objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(completedRequest));
     System.out.println("===================================");
     System.out.println("====================================\n");
+  }
+
+  private void assertBlankRequestRejected(
+      MockMvc mockMvc, String sessionId, String userId, String rawText) {
+    ServletException exception =
+        assertThrows(
+            ServletException.class,
+            () ->
+                mockMvc.perform(
+                    post("/api/v1/recommendations")
+                        .header("X-Session-Id", sessionId)
+                        .header("X-User-Id", userId)
+                        .contentType(MediaType.TEXT_PLAIN)
+                        .content(rawText)));
+
+    IllegalArgumentException cause =
+        assertInstanceOf(IllegalArgumentException.class, exception.getCause());
+    assertEquals("Please enter your request", cause.getMessage());
+    assertNull(
+        sessionRepository.getSession(sessionId),
+        "A blank request must not create or update a Redis session");
+
+    System.out.println("\n=== Blank input integration result ===");
+    System.out.println("Raw text: <blank>");
+    System.out.println("Rejected with: " + cause.getMessage());
+    System.out.println("Session saved: false");
+    System.out.println("======================================\n");
   }
 
   private Session awaitSavedSession(String sessionId, Duration timeout)
