@@ -34,10 +34,11 @@ import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.engine.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.ranker.RankingService;
-import com.gen3.recommenderagent.ranker.strategy.HybridRankingStrategy;
-import com.gen3.recommenderagent.ranker.strategy.RelevanceRankingStrategy;
-import com.gen3.recommenderagent.ranker.strategy.SemanticQueryRankingStrategy;
-import com.gen3.recommenderagent.ranker.strategy.UserPreferenceRankingStrategy;
+import com.gen3.recommenderagent.ranker.strategy.CompositeScorer;
+import com.gen3.recommenderagent.ranker.strategy.RetrievalRelevanceScorer;
+import com.gen3.recommenderagent.ranker.strategy.SemanticScorer;
+import com.gen3.recommenderagent.ranker.strategy.UserPreferenceScorer;
+import com.gen3.recommenderagent.ranker.strategy.WeightedScorer;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
 import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.testsupport.SolrContainerTestSupport;
@@ -99,9 +100,11 @@ class RecommendationFlowIntegrationTest {
             new CandidateRetrievalExecutor(embeddingIndexer, new AudiobookRetrievalPlanner()));
     RankingService rankingService =
         new RankingService(
-            new RelevanceRankingStrategy(),
-            new HybridRankingStrategy(
-                new SemanticQueryRankingStrategy(), new UserPreferenceRankingStrategy()));
+            new CompositeScorer(
+                List.of(
+                    new WeightedScorer(new RetrievalRelevanceScorer(), 1.0),
+                    new WeightedScorer(new SemanticScorer(), 1.0),
+                    new WeightedScorer(new UserPreferenceScorer(), 1.0))));
     RequestContextMerger requestContextMerger = new RequestContextMerger();
     com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository userPreferences =
         mock(com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository.class);

@@ -8,18 +8,27 @@ import java.util.Set;
 public record RankingContext(
     SemanticQueryVectors queryVectors,
     UserPreferenceEmbedding userPreferences,
-    Set<String> excludedBookIds) {
+    Set<String> excludedBookIds,
+    Double minimumRetrievalScore,
+    Double maximumRetrievalScore) {
 
   public RankingContext {
     queryVectors = queryVectors == null ? SemanticQueryVectors.empty() : queryVectors;
     excludedBookIds = excludedBookIds == null ? Set.of() : Set.copyOf(excludedBookIds);
   }
 
-  public static RankingContext empty() {
-    return new RankingContext(SemanticQueryVectors.empty(), null, Set.of());
+  public RankingContext(
+      SemanticQueryVectors queryVectors,
+      UserPreferenceEmbedding userPreferences,
+      Set<String> excludedBookIds) {
+    this(queryVectors, userPreferences, excludedBookIds, null, null);
   }
 
-  public boolean hasPersonalization() {
-    return !queryVectors.isEmpty() || userPreferences != null;
+  public RankingContext withRetrievalScoreRange(Double minimum, Double maximum) {
+    return new RankingContext(queryVectors, userPreferences, excludedBookIds, minimum, maximum);
+  }
+
+  public static RankingContext empty() {
+    return new RankingContext(SemanticQueryVectors.empty(), null, Set.of(), null, null);
   }
 }
