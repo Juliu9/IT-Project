@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.ranker.strategy;
+package com.gen3.recommenderagent.ranker.scorer;
 
 /** A scorer and its nonnegative contribution weight in a composite. */
 public record WeightedScorer(CandidateScorer scorer, double weight) {

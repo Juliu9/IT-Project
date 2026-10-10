@@ -35,15 +35,14 @@ Each scorer returns a bounded score and reports when it lacks usable evidence. R
 normalizes the search backend's candidate scores within the current result set to `[0, 1]`; it does
 not recreate the backend score with local term overlap. User-preference scores are in `[0, 1]`;
 semantic scores are in `[-1, 1]` because positive query matches reward a candidate and negative-query
-matches penalize it. The hybrid scorer is a nested weighted composite of retrieval relevance and
-semantic scores. The top-level composite averages available scorers using their configured weights,
-so missing user vectors do not count as a zero preference signal.
+matches penalize it. One composite scorer averages retrieval relevance, semantic, and user-preference
+scores using their configured weights, so missing user vectors do not count as a zero preference
+signal.
 
 Weights are configurable with the `ranking.scoring.*` properties in `application.properties` (or
 their corresponding `RANKING_SCORING_*` environment variables). By default, retrieval relevance,
-semantic, and user-preference scorers have equal weight, while hybrid scoring is disabled to avoid
-counting its component signals twice. To use hybrid scoring, enable its weight and set the separate
-retrieval-relevance and semantic weights to zero.
+semantic, and user-preference scorers have equal weight. The favourites and listening-history
+weights used within user-preference scoring are configured in the same section.
 
 Topics, genres, and keywords provide semantic and lexical search content. Exact catalogue
 requirements are represented separately as `mustInclude` and `mustNotInclude`, so a request such as

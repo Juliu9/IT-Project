@@ -4,10 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors;
 import com.gen3.recommenderagent.domain.session.Recommendation;
-import com.gen3.recommenderagent.ranker.strategy.CompositeScorer;
-import com.gen3.recommenderagent.ranker.strategy.RetrievalRelevanceScorer;
-import com.gen3.recommenderagent.ranker.strategy.ScoreResult;
-import com.gen3.recommenderagent.ranker.strategy.WeightedScorer;
+import com.gen3.recommenderagent.ranker.scorer.CompositeScorer;
+import com.gen3.recommenderagent.ranker.scorer.RetrievalRelevanceScorer;
+import com.gen3.recommenderagent.ranker.scorer.ScoreResult;
+import com.gen3.recommenderagent.ranker.scorer.WeightedScorer;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import java.util.List;

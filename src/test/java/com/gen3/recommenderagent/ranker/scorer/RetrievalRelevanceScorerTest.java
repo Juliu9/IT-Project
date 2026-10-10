@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.ranker.strategy;
+package com.gen3.recommenderagent.ranker.scorer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

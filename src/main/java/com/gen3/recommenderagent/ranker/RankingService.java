@@ -4,8 +4,8 @@ import static com.gen3.recommenderagent.common.BookCountPolicy.clamp;
 
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors;
 import com.gen3.recommenderagent.domain.session.Recommendation;
-import com.gen3.recommenderagent.ranker.strategy.CandidateScorer;
-import com.gen3.recommenderagent.ranker.strategy.ScoreResult;
+import com.gen3.recommenderagent.ranker.scorer.CompositeScorer;
+import com.gen3.recommenderagent.ranker.scorer.ScoreResult;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -19,9 +19,9 @@ import org.springframework.stereotype.Service;
 @Service
 public class RankingService implements Ranker {
 
-  private final CandidateScorer compositeScorer;
+  private final CompositeScorer compositeScorer;
 
-  public RankingService(CandidateScorer compositeScorer) {
+  public RankingService(CompositeScorer compositeScorer) {
     this.compositeScorer = compositeScorer;
   }
 

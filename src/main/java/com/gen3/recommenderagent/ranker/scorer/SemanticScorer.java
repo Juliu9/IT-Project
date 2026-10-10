@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.ranker.strategy;
+package com.gen3.recommenderagent.ranker.scorer;
 
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors;
 import com.gen3.recommenderagent.embedding.VectorMath;

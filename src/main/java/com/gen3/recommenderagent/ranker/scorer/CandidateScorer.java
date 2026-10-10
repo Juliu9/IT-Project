@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.ranker.strategy;
+package com.gen3.recommenderagent.ranker.scorer;
 
 import com.gen3.recommenderagent.ranker.RankingContext;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;

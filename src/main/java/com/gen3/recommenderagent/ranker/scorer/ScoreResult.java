@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.ranker.strategy;
+package com.gen3.recommenderagent.ranker.scorer;
 
 /** A score in [-1, 1], or an explicit indication that the scorer had no usable evidence. */
 public record ScoreResult(boolean available, double value) {

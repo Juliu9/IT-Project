@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.ranker.strategy;
+package com.gen3.recommenderagent.ranker.scorer;
 
 import com.gen3.recommenderagent.embedding.VectorMath;
 import com.gen3.recommenderagent.ranker.RankingContext;
@@ -12,8 +12,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class UserPreferenceScorer implements CandidateScorer {
 
-  private static final double FAVOURITES_WEIGHT = 0.60;
-  private static final double HISTORY_WEIGHT = 0.40;
+  private final double favouritesWeight;
+  private final double historyWeight;
+
+  public UserPreferenceScorer(RankingScoringProperties properties) {
+    RankingScoringProperties.UserPreferenceWeights weights = properties.userPreference();
+    this.favouritesWeight = weights.favouritesWeight();
+    this.historyWeight = weights.historyWeight();
+  }
 
   @Override
   public ScoreResult score(AudiobookCandidate candidate, RankingContext context) {
@@ -28,8 +34,8 @@ public class UserPreferenceScorer implements CandidateScorer {
     UserPreferenceEmbedding preferences = context.userPreferences();
     List<WeightedSimilarity> similarities = new ArrayList<>(2);
     addSimilarity(
-        similarities, candidate.embedding(), preferences.favouritesVector(), FAVOURITES_WEIGHT);
-    addSimilarity(similarities, candidate.embedding(), preferences.historyVector(), HISTORY_WEIGHT);
+        similarities, candidate.embedding(), preferences.favouritesVector(), favouritesWeight);
+    addSimilarity(similarities, candidate.embedding(), preferences.historyVector(), historyWeight);
     if (similarities.isEmpty()) {
       return ScoreResult.unavailable();
     }
@@ -41,7 +47,7 @@ public class UserPreferenceScorer implements CandidateScorer {
 
   private void addSimilarity(
       List<WeightedSimilarity> similarities, float[] candidate, float[] preference, double weight) {
-    if (preference != null && preference.length == candidate.length) {
+    if (weight > 0.0 && preference != null && preference.length == candidate.length) {
       double similarity = Math.clamp(VectorMath.dotProduct(candidate, preference), 0.0, 1.0);
       similarities.add(new WeightedSimilarity(similarity * weight, weight));
     }

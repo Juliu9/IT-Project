@@ -34,11 +34,12 @@ import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.engine.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.ranker.RankingService;
-import com.gen3.recommenderagent.ranker.strategy.CompositeScorer;
-import com.gen3.recommenderagent.ranker.strategy.RetrievalRelevanceScorer;
-import com.gen3.recommenderagent.ranker.strategy.SemanticScorer;
-import com.gen3.recommenderagent.ranker.strategy.UserPreferenceScorer;
-import com.gen3.recommenderagent.ranker.strategy.WeightedScorer;
+import com.gen3.recommenderagent.ranker.scorer.CompositeScorer;
+import com.gen3.recommenderagent.ranker.scorer.RankingScoringProperties;
+import com.gen3.recommenderagent.ranker.scorer.RetrievalRelevanceScorer;
+import com.gen3.recommenderagent.ranker.scorer.SemanticScorer;
+import com.gen3.recommenderagent.ranker.scorer.UserPreferenceScorer;
+import com.gen3.recommenderagent.ranker.scorer.WeightedScorer;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
 import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.testsupport.SolrContainerTestSupport;
@@ -104,7 +105,7 @@ class RecommendationFlowIntegrationTest {
                 List.of(
                     new WeightedScorer(new RetrievalRelevanceScorer(), 1.0),
                     new WeightedScorer(new SemanticScorer(), 1.0),
-                    new WeightedScorer(new UserPreferenceScorer(), 1.0))));
+                    new WeightedScorer(new UserPreferenceScorer(scoringProperties()), 1.0))));
     RequestContextMerger requestContextMerger = new RequestContextMerger();
     com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository userPreferences =
         mock(com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository.class);
@@ -179,6 +180,11 @@ class RecommendationFlowIntegrationTest {
     assertFalse(returnedBookIds.contains("book-404"));
     assertFalse(response.contains("book-404"));
     returnedBookIds.forEach(bookId -> assertTrue(response.contains(bookId)));
+  }
+
+  private RankingScoringProperties scoringProperties() {
+    return new RankingScoringProperties(
+        1.0, 1.0, 1.0, new RankingScoringProperties.UserPreferenceWeights(0.6, 0.4));
   }
 
   private SessionRequest parsedRequest(String rawText) {
