@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.embedding.EmbeddingResponse;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.retry.RetryListener;
 import org.springframework.core.retry.RetryPolicy;
@@ -27,10 +28,13 @@ public class AiOperationObserver {
   private final boolean enabled;
 
   @Autowired
-  public AiOperationObserver(RetryTemplate retryTemplate) {
+  public AiOperationObserver(ObjectProvider<RetryTemplate> retryTemplateProvider) {
     this.enabled = true;
-    RetryListener delegate = retryTemplate.getRetryListener();
-    retryTemplate.setRetryListener(new LoggingRetryListener(delegate));
+    RetryTemplate retryTemplate = retryTemplateProvider.getIfAvailable();
+    if (retryTemplate != null) {
+      RetryListener delegate = retryTemplate.getRetryListener();
+      retryTemplate.setRetryListener(new LoggingRetryListener(delegate));
+    }
   }
 
   private AiOperationObserver() {

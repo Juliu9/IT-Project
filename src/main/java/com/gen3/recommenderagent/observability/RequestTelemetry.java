@@ -85,6 +85,14 @@ public class RequestTelemetry {
   }
 
   public void complete(SessionRequest request) {
+    finish(request, "SUCCESS");
+  }
+
+  public void fail(SessionRequest request) {
+    finish(request, "FAILURE");
+  }
+
+  private void finish(SessionRequest request, String outcome) {
     RequestState state = CURRENT.get();
     if (state == null) {
       return;
@@ -92,7 +100,7 @@ public class RequestTelemetry {
     Map<String, Object> event = new LinkedHashMap<>();
     event.put("event", "recommendation.completed");
     event.put("requestId", request == null ? null : request.getRequestId());
-    event.put("outcome", "SUCCESS");
+    event.put("outcome", outcome);
     event.put("durationMs", state.durationMillis());
     event.put(
         "intent",

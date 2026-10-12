@@ -56,15 +56,24 @@ public class RequestGateway {
     if (telemetry != null) {
       telemetry.start();
     }
-    SessionRequest currentRequest =
-        RequestTelemetry.measure("parseMs", () -> inputParser.parse(rawText).entity());
-    SessionRequest result = requestApplicationService.process(sessionId, userId, currentRequest);
-    String response =
-        RequestTelemetry.measure(
-            "responseMs", () -> responseGenerator.generate(result.getRecommendations(), result));
-    if (telemetry != null) {
-      telemetry.complete(result);
+    SessionRequest currentRequest = null;
+    boolean completed = false;
+    try {
+      currentRequest =
+          RequestTelemetry.measure("parseMs", () -> inputParser.parse(rawText).entity());
+      SessionRequest result = requestApplicationService.process(sessionId, userId, currentRequest);
+      String response =
+          RequestTelemetry.measure(
+              "responseMs", () -> responseGenerator.generate(result.getRecommendations(), result));
+      if (telemetry != null) {
+        telemetry.complete(result);
+      }
+      completed = true;
+      return response;
+    } finally {
+      if (telemetry != null && !completed) {
+        telemetry.fail(currentRequest);
+      }
     }
-    return response;
   }
 }
