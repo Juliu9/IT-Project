@@ -15,7 +15,6 @@ class RankingScoringPropertiesTest {
     MockEnvironment environment =
         new MockEnvironment()
             .withProperty("ranking.scoring.retrieval-relevance-weight", "2.0")
-            .withProperty("ranking.scoring.semantic-weight", "3.0")
             .withProperty("ranking.scoring.user-preference-weight", "4.0")
             .withProperty("ranking.scoring.user-preference.favourites-weight", "0.7")
             .withProperty("ranking.scoring.user-preference.history-weight", "0.3");
@@ -26,7 +25,6 @@ class RankingScoringPropertiesTest {
             .orElseThrow(() -> new AssertionError("Ranking scoring properties did not bind"));
 
     assertEquals(2.0, properties.retrievalRelevanceWeight());
-    assertEquals(3.0, properties.semanticWeight());
     assertEquals(4.0, properties.userPreferenceWeight());
     assertEquals(0.7, properties.userPreference().favouritesWeight());
     assertEquals(0.3, properties.userPreference().historyWeight());
@@ -39,7 +37,7 @@ class RankingScoringPropertiesTest {
 
     assertThrows(
         IllegalArgumentException.class,
-        () -> new RankingScoringProperties(0.0, 0.0, 0.0, preferenceWeights));
+        () -> new RankingScoringProperties(0.0, 0.0, preferenceWeights));
   }
 
   @Test

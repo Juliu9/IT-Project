@@ -3,7 +3,6 @@ package com.gen3.recommenderagent.ranker.scorer;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
-import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors;
 import com.gen3.recommenderagent.ranker.RankingContext;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
@@ -17,8 +16,7 @@ class RetrievalRelevanceScorerTest {
 
   @Test
   void minMaxNormalizesBackendScoresIntoZeroToOne() {
-    RankingContext context =
-        new RankingContext(SemanticQueryVectors.empty(), null, Set.of(), 2.0, 6.0);
+    RankingContext context = new RankingContext(null, Set.of(), 2.0, 6.0);
 
     assertEquals(0.0, scorer.score(candidate("low", 2.0), context).value());
     assertEquals(0.5, scorer.score(candidate("middle", 4.0), context).value());
@@ -27,8 +25,7 @@ class RetrievalRelevanceScorerTest {
 
   @Test
   void reportsUnavailableWhenBackendDidNotReturnAScore() {
-    RankingContext context =
-        new RankingContext(SemanticQueryVectors.empty(), null, Set.of(), null, null);
+    RankingContext context = new RankingContext(null, Set.of(), null, null);
 
     assertFalse(scorer.score(candidate("book", null), context).available());
   }

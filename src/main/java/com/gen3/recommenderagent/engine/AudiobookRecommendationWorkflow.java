@@ -52,7 +52,7 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
     SemanticQueryVectors vectors = semanticQueryVectorService.create(request);
     var candidates = candidateRetriever.getCandidates(request, vectors, CANDIDATE_LIMIT);
     RankingContext rankingContext =
-        new RankingContext(vectors, userPreferences(session).orElse(null), shownBooks(session));
+        new RankingContext(userPreferences(session).orElse(null), shownBooks(session));
     return ranker.rank(candidates, resolveResultLimit(request, session), rankingContext);
   }
 

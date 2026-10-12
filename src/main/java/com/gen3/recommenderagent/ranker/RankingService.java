@@ -2,7 +2,6 @@ package com.gen3.recommenderagent.ranker;
 
 import static com.gen3.recommenderagent.common.BookCountPolicy.clamp;
 
-import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.ranker.scorer.CompositeScorer;
 import com.gen3.recommenderagent.ranker.scorer.ScoreResult;
@@ -29,13 +28,6 @@ public class RankingService implements Ranker {
   @Override
   public List<Recommendation> rank(List<AudiobookCandidate> candidates, int requestedLimit) {
     return rank(candidates, requestedLimit, RankingContext.empty());
-  }
-
-  /** Uses semantic-query vectors for polarity-aware reranking when available. */
-  @Override
-  public List<Recommendation> rank(
-      List<AudiobookCandidate> candidates, int requestedLimit, SemanticQueryVectors vectors) {
-    return rank(candidates, requestedLimit, new RankingContext(vectors, null, Set.of()));
   }
 
   /**

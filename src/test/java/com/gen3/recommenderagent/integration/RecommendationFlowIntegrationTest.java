@@ -37,7 +37,6 @@ import com.gen3.recommenderagent.ranker.RankingService;
 import com.gen3.recommenderagent.ranker.scorer.CompositeScorer;
 import com.gen3.recommenderagent.ranker.scorer.RankingScoringProperties;
 import com.gen3.recommenderagent.ranker.scorer.RetrievalRelevanceScorer;
-import com.gen3.recommenderagent.ranker.scorer.SemanticScorer;
 import com.gen3.recommenderagent.ranker.scorer.UserPreferenceScorer;
 import com.gen3.recommenderagent.ranker.scorer.WeightedScorer;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
@@ -104,7 +103,6 @@ class RecommendationFlowIntegrationTest {
             new CompositeScorer(
                 List.of(
                     new WeightedScorer(new RetrievalRelevanceScorer(), 1.0),
-                    new WeightedScorer(new SemanticScorer(), 1.0),
                     new WeightedScorer(new UserPreferenceScorer(scoringProperties()), 1.0))));
     RequestContextMerger requestContextMerger = new RequestContextMerger();
     com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository userPreferences =
@@ -184,7 +182,7 @@ class RecommendationFlowIntegrationTest {
 
   private RankingScoringProperties scoringProperties() {
     return new RankingScoringProperties(
-        1.0, 1.0, 1.0, new RankingScoringProperties.UserPreferenceWeights(0.6, 0.4));
+        1.0, 1.0, new RankingScoringProperties.UserPreferenceWeights(0.6, 0.4));
   }
 
   private SessionRequest parsedRequest(String rawText) {

@@ -14,12 +14,10 @@ public class ScoringConfiguration {
   @Bean
   public CompositeScorer compositeScorer(
       RetrievalRelevanceScorer retrievalRelevanceScorer,
-      SemanticScorer semanticScorer,
       UserPreferenceScorer userPreferenceScorer,
       RankingScoringProperties properties) {
     List<WeightedScorer> scorers = new ArrayList<>();
     add(scorers, retrievalRelevanceScorer, properties.retrievalRelevanceWeight());
-    add(scorers, semanticScorer, properties.semanticWeight());
     add(scorers, userPreferenceScorer, properties.userPreferenceWeight());
     return new CompositeScorer(scorers);
   }

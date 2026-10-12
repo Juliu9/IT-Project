@@ -2,7 +2,6 @@ package com.gen3.recommenderagent.ranker;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.ranker.scorer.CompositeScorer;
 import com.gen3.recommenderagent.ranker.scorer.RetrievalRelevanceScorer;
@@ -42,8 +41,7 @@ class RankingServiceTest {
 
   @Test
   void excludesShownBooksBeforeRanking() {
-    RankingContext context =
-        new RankingContext(SemanticQueryVectors.empty(), null, Set.of("book-1"));
+    RankingContext context = new RankingContext(null, Set.of("book-1"));
 
     List<Recommendation> result =
         rankingService.rank(

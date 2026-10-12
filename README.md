@@ -33,16 +33,15 @@ Retrieval is deliberately independent of intent:
 
 Each scorer returns a bounded score and reports when it lacks usable evidence. Retrieval relevance
 normalizes the search backend's candidate scores within the current result set to `[0, 1]`; it does
-not recreate the backend score with local term overlap. User-preference scores are in `[0, 1]`;
-semantic scores are in `[-1, 1]` because positive query matches reward a candidate and negative-query
-matches penalize it. One composite scorer averages retrieval relevance, semantic, and user-preference
-scores using their configured weights, so missing user vectors do not count as a zero preference
-signal.
+not recreate or rescore the semantic evidence already represented by Qdrant's ANN or hybrid result.
+User-preference scores are also in `[0, 1]`. One composite scorer averages retrieval relevance and
+user-preference scores using their configured weights, so missing user vectors do not count as a
+zero preference signal.
 
 Weights are configurable with the `ranking.scoring.*` properties in `application.properties` (or
-their corresponding `RANKING_SCORING_*` environment variables). By default, retrieval relevance,
-semantic, and user-preference scorers have equal weight. The favourites and listening-history
-weights used within user-preference scoring are configured in the same section.
+their corresponding `RANKING_SCORING_*` environment variables). By default, retrieval relevance
+and user-preference scorers have equal weight. The favourites and listening-history weights used
+within user-preference scoring are configured in the same section.
 
 Topics, genres, and keywords provide semantic and lexical search content. Exact catalogue
 requirements are represented separately as `mustInclude` and `mustNotInclude`, so a request such as

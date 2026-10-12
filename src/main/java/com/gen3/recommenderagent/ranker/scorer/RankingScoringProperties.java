@@ -6,15 +6,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "ranking.scoring")
 public record RankingScoringProperties(
     double retrievalRelevanceWeight,
-    double semanticWeight,
     double userPreferenceWeight,
     UserPreferenceWeights userPreference) {
 
   public RankingScoringProperties {
     validateWeight("retrieval-relevance-weight", retrievalRelevanceWeight);
-    validateWeight("semantic-weight", semanticWeight);
     validateWeight("user-preference-weight", userPreferenceWeight);
-    if (retrievalRelevanceWeight + semanticWeight + userPreferenceWeight <= 0.0) {
+    if (retrievalRelevanceWeight + userPreferenceWeight <= 0.0) {
       throw new IllegalArgumentException(
           "At least one candidate scorer must have a positive weight");
     }
