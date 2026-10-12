@@ -72,6 +72,7 @@ public class AiOperationObserver {
   }
 
   private void logCompletion(Operation operation, AiUsage usage) {
+    RequestTelemetry.ai(operation.name(), operation.attempts(), usage);
     LOGGER.info(
         "ai.operation.completed operation={} attempts={} durationMs={} lastAttemptDurationMs={}"
             + " model={} promptTokens={}"

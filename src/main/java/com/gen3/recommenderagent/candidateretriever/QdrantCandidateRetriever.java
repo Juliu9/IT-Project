@@ -1,6 +1,7 @@
 package com.gen3.recommenderagent.candidateretriever;
 
 import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
 import java.io.IOException;
@@ -33,6 +34,7 @@ public class QdrantCandidateRetriever implements CandidateRetriever {
   public List<AudiobookCandidate> getCandidates(
       SessionRequest request, SemanticQueryVectors vectors, int limit) {
     try {
+      RequestTelemetry.retrievalBackend("qdrant");
       return retrievalExecutor.execute(candidateSearch, request, vectors, limit);
     } catch (IOException exception) {
       throw new IllegalStateException("Failed to retrieve candidates from Qdrant", exception);

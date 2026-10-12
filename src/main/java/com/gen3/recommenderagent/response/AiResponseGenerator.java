@@ -5,6 +5,7 @@ import static com.gen3.recommenderagent.common.ApplicationConstants.MAX_BOOK_COU
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
+import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.openai.errors.OpenAIException;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -56,11 +57,13 @@ public class AiResponseGenerator implements ResponseGenerator {
 
     String actionResponse = generateActionResponse(currentRequest);
     if (actionResponse != null) {
+      RequestTelemetry.responseMode("ACTION_RESPONSE");
       return actionResponse;
     }
 
     // If there are no recommendations, it returns a fallback message
     if (recommendations == null || recommendations.isEmpty()) {
+      RequestTelemetry.responseMode("NO_RESULTS");
       return generateFallbackResponse(currentRequest);
     }
 
@@ -71,6 +74,7 @@ public class AiResponseGenerator implements ResponseGenerator {
 
     // If the AI call fails, don’t crash — fall back to a simple built-in response.
     if (chatClient == null) {
+      RequestTelemetry.responseMode("FALLBACK");
       return buildHumanReadableResponse(recommendations, currentRequest);
     }
 
@@ -98,8 +102,10 @@ public class AiResponseGenerator implements ResponseGenerator {
                       .call()
                       .chatResponse(),
               AiOperationObserver.AiUsage::from);
+      RequestTelemetry.responseMode("AI");
       return aiResponse.getResult().getOutput().getText();
     } catch (OpenAIException exception) {
+      RequestTelemetry.responseMode("FALLBACK");
       return buildHumanReadableResponse(recommendations, currentRequest);
     }
   }

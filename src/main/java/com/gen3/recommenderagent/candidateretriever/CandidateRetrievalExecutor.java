@@ -4,6 +4,7 @@ import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetri
 import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
+import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
 import java.io.IOException;
@@ -30,14 +31,17 @@ public class CandidateRetrievalExecutor {
       int limit)
       throws IOException {
     AudiobookRetrievalPlan plan = retrievalPlanner.plan(limit, request);
-    return switch (plan.mode()) {
-      case SEMANTIC -> retrieveSemantic(candidateSearch, plan, vectors);
-      case KEYWORD ->
-          candidateSearch.searchKeyword(plan.keywordText(), plan.filters(), plan.limit());
-      case HYBRID -> retrieveHybrid(candidateSearch, plan, vectors);
-      case FILTER_ONLY -> candidateSearch.searchByFilters(plan.filters(), plan.limit());
-      case NONE -> List.of();
-    };
+    List<AudiobookCandidate> candidates =
+        switch (plan.mode()) {
+          case SEMANTIC -> retrieveSemantic(candidateSearch, plan, vectors);
+          case KEYWORD ->
+              candidateSearch.searchKeyword(plan.keywordText(), plan.filters(), plan.limit());
+          case HYBRID -> retrieveHybrid(candidateSearch, plan, vectors);
+          case FILTER_ONLY -> candidateSearch.searchByFilters(plan.filters(), plan.limit());
+          case NONE -> List.of();
+        };
+    RequestTelemetry.retrieval(plan.mode().name(), candidates.size());
+    return candidates;
   }
 
   private List<AudiobookCandidate> retrieveSemantic(
