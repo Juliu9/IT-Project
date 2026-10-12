@@ -46,7 +46,21 @@ public class DefaultSessionService implements SessionService {
       result.setRecommendations(List.of());
     }
 
-    session.addRequest(result);
+    session.addRequest(historyEntry(result));
     sessionRepository.updateSession(session);
+  }
+
+  private SessionRequest historyEntry(SessionRequest request) {
+    SessionRequest entry = new SessionRequest();
+    entry.setRequestId(request.getRequestId());
+    entry.setCreatedAt(request.getCreatedAt());
+    entry.setIntent(request.getIntent());
+    entry.setPositiveSemanticQuery(request.getPositiveSemanticQuery());
+    entry.setNegativeSemanticQuery(request.getNegativeSemanticQuery());
+    entry.setMustInclude(request.getMustInclude());
+    entry.setMustNotInclude(request.getMustNotInclude());
+    entry.setBookCount(request.getBookCount());
+    entry.setRecommendations(request.getRecommendations());
+    return entry;
   }
 }
