@@ -49,4 +49,36 @@ public class RequestGateway {
     // 3. Generate natural language response
     return responseGenerator.generate(result.getRecommendations(), result);
   }
+
+  /** Runs the same request flow with the measurements displayed by the bundled demo page. */
+  @PostMapping("/demo")
+  public DemoRecommendationResponse handleDemoRequest(
+      @RequestHeader("X-Session-Id") String sessionId,
+      @RequestHeader("X-User-Id") String userId,
+      @RequestBody String rawText) {
+    long totalStartedAt = System.nanoTime();
+
+    long parseStartedAt = System.nanoTime();
+    var parsedRequest = inputParser.parse(rawText);
+    long parseMs = elapsedMs(parseStartedAt);
+
+    long recommendStartedAt = System.nanoTime();
+    SessionRequest result =
+        requestApplicationService.process(sessionId, userId, parsedRequest.entity());
+    long recommendMs = elapsedMs(recommendStartedAt);
+
+    long responseStartedAt = System.nanoTime();
+    String response = responseGenerator.generate(result.getRecommendations(), result);
+    long responseMs = elapsedMs(responseStartedAt);
+
+    return new DemoRecommendationResponse(
+        response,
+        DemoRecommendationResponse.metrics(
+            parseMs, recommendMs, responseMs, elapsedMs(totalStartedAt), parsedRequest.response()),
+        result);
+  }
+
+  private long elapsedMs(long startedAt) {
+    return (System.nanoTime() - startedAt) / 1_000_000;
+  }
 }
