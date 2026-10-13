@@ -1,11 +1,13 @@
 package com.gen3.recommenderagent.inputparser;
 
 import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.observability.AiOperationObserver;
 import java.security.SecureRandom;
 import java.util.UUID;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ResponseEntity;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -13,9 +15,17 @@ public class AiInputParser implements InputParser {
   private static final SecureRandom RANDOM = new SecureRandom();
 
   private final ChatClient chatClient;
+  private final AiOperationObserver aiOperationObserver;
+
+  @Autowired
+  public AiInputParser(
+      ChatClient.Builder chatClientBuilder, AiOperationObserver aiOperationObserver) {
+    this.chatClient = chatClientBuilder.build();
+    this.aiOperationObserver = aiOperationObserver;
+  }
 
   public AiInputParser(ChatClient.Builder chatClientBuilder) {
-    this.chatClient = chatClientBuilder.build();
+    this(chatClientBuilder, AiOperationObserver.noop());
   }
 
   @Override
@@ -25,10 +35,13 @@ public class AiInputParser implements InputParser {
     }
 
     var aiResponse =
-        this.chatClient
-            .prompt()
-            .system(
-                """
+        aiOperationObserver.observe(
+            "parse",
+            () ->
+                this.chatClient
+                    .prompt()
+                    .system(
+                        """
                         Extract the user's audiobook search request.
 
                         Use only information explicitly provided by the user.
@@ -43,9 +56,10 @@ public class AiInputParser implements InputParser {
                         Use RECOMMENDATION for every new audiobook search, including searches by
                         theme, author, narrator, language, or duration. Do not select a retrieval mode.
                         """)
-            .user(rawText)
-            .call()
-            .responseEntity(ParsedRequest.class);
+                    .user(rawText)
+                    .call()
+                    .responseEntity(ParsedRequest.class),
+            response -> AiOperationObserver.AiUsage.from(response.response()));
 
     if (aiResponse.entity() == null) {
       throw new IllegalStateException("AI did not return a ParsedRequest");

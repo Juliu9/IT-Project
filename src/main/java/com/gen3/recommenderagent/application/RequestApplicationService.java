@@ -4,6 +4,7 @@ import com.gen3.recommenderagent.application.sessionservice.SessionService;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.observability.RequestTelemetry;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
@@ -20,7 +21,8 @@ public class RequestApplicationService {
   }
 
   public SessionRequest process(String sessionId, String userId, SessionRequest request) {
-    Session session = sessionService.load(sessionId, userId);
+    Session session =
+        RequestTelemetry.measure("sessionLoadMs", () -> sessionService.load(sessionId, userId));
 
     if (request.getIntent() == null) {
       request.setIntent(Intent.UNKNOWN);
@@ -29,7 +31,12 @@ public class RequestApplicationService {
     SessionRequest result = action.execute(request, session);
 
     session.addRecommendationIds(recommendationIds(result == null ? request : result));
-    sessionService.update(session, request, result);
+    RequestTelemetry.measure(
+        "sessionWriteMs",
+        () -> {
+          sessionService.update(session, request, result);
+          return null;
+        });
     return result;
   }
 

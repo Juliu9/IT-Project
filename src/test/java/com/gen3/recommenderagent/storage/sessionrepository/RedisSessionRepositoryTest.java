@@ -3,6 +3,7 @@ package com.gen3.recommenderagent.storage.sessionrepository;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gen3.recommenderagent.domain.session.MustInclude;
 import com.gen3.recommenderagent.domain.session.MustNotInclude;
@@ -13,6 +14,7 @@ import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.storage.sessionrepository.redis.RedisSessionRepository;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
@@ -79,6 +81,14 @@ class RedisSessionRepositoryTest {
     assertNotNull(retrieved);
 
     assertEquals("session-123", retrieved.getSessionId());
+    assertNotNull(retrieved.getExpiresAt());
+    Long ttl =
+        connectionFactory
+            .getConnection()
+            .keyCommands()
+            .ttl("session:session-123".getBytes(), TimeUnit.SECONDS);
+    assertNotNull(ttl);
+    assertTrue(ttl > 0);
   }
 
   // ============================================================

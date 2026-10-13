@@ -1,0 +1,18 @@
+services:
+  alloy:
+    image: grafana/alloy:v1.20.0
+    command:
+      - run
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    environment:
+      GRAFANA_LOKI_URL: ${GRAFANA_LOKI_URL:?Set the Grafana Cloud Loki push URL}
+      GRAFANA_LOKI_USER: ${GRAFANA_LOKI_USER:?Set the Grafana Cloud Loki user ID}
+      GRAFANA_LOKI_TOKEN: ${GRAFANA_LOKI_TOKEN:?Set the Grafana Cloud logs write token}
+    volumes:
+      - ./logs:/var/log/recommender-agent:ro
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy_data:/var/lib/alloy/data
+
+volumes:
+  alloy_data:

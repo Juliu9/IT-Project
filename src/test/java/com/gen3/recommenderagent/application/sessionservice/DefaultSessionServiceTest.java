@@ -2,6 +2,8 @@ package com.gen3.recommenderagent.application.sessionservice;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -24,6 +26,7 @@ class DefaultSessionServiceTest {
 
     Session session = service.load("session-1", "user-1");
     SessionRequest request = new SessionRequest();
+    request.setRawText("Recommend a fantasy audiobook");
     Recommendation recommendation = new Recommendation("book-1", 1, 1.0, "Book One");
     request.setRecommendations(List.of(recommendation));
 
@@ -33,7 +36,8 @@ class DefaultSessionServiceTest {
     assertEquals("user-1", session.getUserId());
     assertNotNull(request.getRequestId());
     assertNotNull(request.getCreatedAt());
-    assertSame(request, session.getRequests().getFirst());
+    assertNotSame(request, session.getRequests().getFirst());
+    assertNull(session.getRequests().getFirst().getRawText());
     assertEquals(List.of(), session.getShownBooks() == null ? List.of() : session.getShownBooks());
     verify(repository).updateSession(session);
   }

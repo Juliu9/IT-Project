@@ -4,10 +4,14 @@ import static com.gen3.recommenderagent.common.ApplicationConstants.MAX_BOOK_COU
 
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.observability.AiOperationObserver;
+import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.openai.errors.OpenAIException;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -15,9 +19,17 @@ public class AiResponseGenerator implements ResponseGenerator {
 
   // Holds the AI
   private final ChatClient chatClient;
+  private final AiOperationObserver aiOperationObserver;
+
+  @Autowired
+  public AiResponseGenerator(
+      ChatClient.Builder chatClientBuilder, AiOperationObserver aiOperationObserver) {
+    this.chatClient = (chatClientBuilder != null) ? chatClientBuilder.build() : null;
+    this.aiOperationObserver = aiOperationObserver;
+  }
 
   public AiResponseGenerator(ChatClient.Builder chatClientBuilder) {
-    this.chatClient = (chatClientBuilder != null) ? chatClientBuilder.build() : null;
+    this(chatClientBuilder, AiOperationObserver.noop());
   }
 
   /**
@@ -45,11 +57,13 @@ public class AiResponseGenerator implements ResponseGenerator {
 
     String actionResponse = generateActionResponse(currentRequest);
     if (actionResponse != null) {
+      RequestTelemetry.responseMode("ACTION_RESPONSE");
       return actionResponse;
     }
 
     // If there are no recommendations, it returns a fallback message
     if (recommendations == null || recommendations.isEmpty()) {
+      RequestTelemetry.responseMode("NO_RESULTS");
       return generateFallbackResponse(currentRequest);
     }
 
@@ -60,14 +74,19 @@ public class AiResponseGenerator implements ResponseGenerator {
 
     // If the AI call fails, don’t crash — fall back to a simple built-in response.
     if (chatClient == null) {
+      RequestTelemetry.responseMode("FALLBACK");
       return buildHumanReadableResponse(recommendations, currentRequest);
     }
 
     try {
-      return chatClient
-          .prompt()
-          .system(
-              """
+      ChatResponse aiResponse =
+          aiOperationObserver.observe(
+              "generate_response",
+              () ->
+                  chatClient
+                      .prompt()
+                      .system(
+                          """
                             You are a helpful audiobook recommendation assistant speaking directly to a user through a voice interface.
                             Rewrite the structured recommendation data into a short, natural-sounding spoken response.
                             Tone should be friendly, conversational, and concise.
@@ -79,10 +98,14 @@ public class AiResponseGenerator implements ResponseGenerator {
                             - Use simple sentences with commas and periods to create natural breathing pauses for the text-to-speech engine.
                             - Avoid complex punctuation like em-dashes or semicolons.
                             """)
-          .user(prompt)
-          .call()
-          .content();
+                      .user(prompt)
+                      .call()
+                      .chatResponse(),
+              AiOperationObserver.AiUsage::from);
+      RequestTelemetry.responseMode("AI");
+      return aiResponse.getResult().getOutput().getText();
     } catch (OpenAIException exception) {
+      RequestTelemetry.responseMode("FALLBACK");
       return buildHumanReadableResponse(recommendations, currentRequest);
     }
   }

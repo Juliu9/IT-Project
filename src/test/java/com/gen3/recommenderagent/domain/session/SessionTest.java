@@ -36,4 +36,26 @@ class SessionTest {
 
     assertEquals(List.of("book-1", "book-2", "book-3"), session.getShownBooks());
   }
+
+  @Test
+  void keepsOnlyTheLatestSearchAndLatestNonSearchRequest() {
+    Session session = new Session();
+    SessionRequest firstSearch = searchRequest("fantasy");
+    SessionRequest help = new SessionRequest();
+    SessionRequest latestSearch = searchRequest("history");
+
+    session.addRequest(firstSearch);
+    session.addRequest(help);
+    session.addRequest(latestSearch);
+
+    assertEquals(List.of(help, latestSearch), session.getRequests());
+  }
+
+  private SessionRequest searchRequest(String topic) {
+    SemanticQuery query = new SemanticQuery();
+    query.setTopics(List.of(topic));
+    SessionRequest request = new SessionRequest();
+    request.setPositiveSemanticQuery(query);
+    return request;
+  }
 }

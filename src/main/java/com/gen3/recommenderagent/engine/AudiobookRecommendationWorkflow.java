@@ -9,6 +9,7 @@ import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.gen3.recommenderagent.ranker.Ranker;
 import com.gen3.recommenderagent.ranker.RankingContext;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
@@ -49,11 +50,17 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
   /** Builds retrieval text, lets the retriever select its mode, and ranks the candidates. */
   @Override
   public List<Recommendation> recommend(SessionRequest request, Session session) {
-    SemanticQueryVectors vectors = semanticQueryVectorService.create(request);
-    var candidates = candidateRetriever.getCandidates(request, vectors, CANDIDATE_LIMIT);
+    SemanticQueryVectors vectors =
+        RequestTelemetry.measure("embedMs", () -> semanticQueryVectorService.create(request));
+    var candidates =
+        RequestTelemetry.measure(
+            "retrieveMs",
+            () -> candidateRetriever.getCandidates(request, vectors, CANDIDATE_LIMIT));
     RankingContext rankingContext =
         new RankingContext(userPreferences(session).orElse(null), shownBooks(session));
-    return ranker.rank(candidates, resolveResultLimit(request, session), rankingContext);
+    return RequestTelemetry.measure(
+        "rankMs",
+        () -> ranker.rank(candidates, resolveResultLimit(request, session), rankingContext));
   }
 
   private Optional<UserPreferenceEmbedding> userPreferences(Session session) {

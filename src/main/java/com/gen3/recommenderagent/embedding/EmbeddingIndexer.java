@@ -2,12 +2,14 @@ package com.gen3.recommenderagent.embedding;
 
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
+import com.gen3.recommenderagent.observability.AiOperationObserver;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -20,10 +22,17 @@ import org.springframework.stereotype.Service;
 public class EmbeddingIndexer {
 
   private final EmbeddingModel model;
+  private final AiOperationObserver aiOperationObserver;
 
   /** Uses the configured Spring AI embedding model. */
-  public EmbeddingIndexer(EmbeddingModel model) {
+  @Autowired
+  public EmbeddingIndexer(EmbeddingModel model, AiOperationObserver aiOperationObserver) {
     this.model = model;
+    this.aiOperationObserver = aiOperationObserver;
+  }
+
+  public EmbeddingIndexer(EmbeddingModel model) {
+    this(model, AiOperationObserver.noop());
   }
 
   /** Builds the stable, human-readable catalogue representation sent to the model. */
@@ -114,7 +123,11 @@ public class EmbeddingIndexer {
     if (texts.isEmpty()) {
       return List.copyOf(results);
     }
-    List<float[]> generated = model.embed(texts);
+    var response =
+        aiOperationObserver.observe(
+            "embed_query", () -> model.embedForResponse(texts), AiOperationObserver.AiUsage::from);
+    List<float[]> generated =
+        response.getResults().stream().map(embedding -> embedding.getOutput()).toList();
     if (generated.size() != texts.size()) {
       throw new IllegalStateException("Embedding model returned an unexpected batch size");
     }

@@ -158,6 +158,80 @@ curl -X POST http://localhost:8080/api/v1/recommendations \
   -d "Recommend a dark fantasy audiobook under ten hours, but no romance."
 ```
 
+## Grafana Cloud logs (local)
+
+This optional setup sends one safe, structured `recommendation.completed` event per request to
+Grafana Cloud. It does not send request text, session contents, or the application's other logs.
+
+### 1. Create Grafana Cloud credentials
+
+In Grafana Cloud, create a Cloud Access Policy token with the `logs:write` scope. From the Loki
+connection details, copy the Loki push URL and user ID. Create a `.env` file in the repository root:
+
+```dotenv
+GRAFANA_LOKI_URL=https://<loki-host>/loki/api/v1/push
+GRAFANA_LOKI_USER=<loki-user-id>
+GRAFANA_LOKI_TOKEN=<logs-write-token>
+```
+
+Docker Compose reads this file automatically. IntelliJ does not; do not put the Grafana variables
+in an IntelliJ environment-file setting.
+
+### 2. Configure application file logging
+
+Create the local log file and configure the application to write to it:
+
+```bash
+mkdir -p logs && touch logs/recommender-agent.log
+```
+
+In IntelliJ, add the following under **Run configuration → VM options**. Replace the path with the
+absolute path to this repository:
+
+```text
+-Dlogging.file.name=/absolute/path/to/IT-Project/logs/recommender-agent.log
+```
+
+For a terminal run instead, use:
+
+```bash
+LOGGING_FILE_NAME="$PWD/logs/recommender-agent.log" ./mvnw spring-boot:run
+```
+
+### 3. Start and manage the collector
+
+Start Redis, Qdrant, and the opt-in Alloy collector:
+
+```bash
+docker compose -f compose.yaml -f compose.observability.yaml up -d
+```
+
+Check its status and follow its logs:
+
+```bash
+docker compose -f compose.yaml -f compose.observability.yaml ps
+docker compose -f compose.yaml -f compose.observability.yaml logs -f alloy
+```
+
+Stop or restart only the collector without stopping Redis or Qdrant:
+
+```bash
+docker compose -f compose.yaml -f compose.observability.yaml stop alloy
+docker compose -f compose.yaml -f compose.observability.yaml restart alloy
+```
+
+### 4. View request events
+
+Make a recommendation request, then in Grafana **Explore** select the Loki data source and query:
+
+```logql
+{service="recommender-agent", environment="local"}
+```
+
+For failures only, add `outcome="FAILURE"` to the selector. Events are labelled with `service`,
+`environment`, `outcome`, and `backend`. Alloy persists its file position, so it catches up on
+completion events written while it was stopped. `.env` and `logs/` are intentionally ignored by Git.
+
 ## Tests
 
 Run the full suite with Docker available:
