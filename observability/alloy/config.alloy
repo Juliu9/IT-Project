@@ -1,0 +1,52 @@
+loki.source.file "recommender_agent" {
+  targets = [
+    {
+      __path__    = "/var/log/recommender-agent/recommender-agent.log",
+      service     = "recommender-agent",
+      environment = "local",
+    },
+  ]
+  forward_to = [loki.process.recommendation_events.receiver]
+}
+
+loki.process "recommendation_events" {
+  forward_to = [loki.write.grafana_cloud.receiver]
+
+  stage.match {
+    selector = "{service=\"recommender-agent\"} |~ \"recommendation.completed\""
+    action   = "keep"
+
+    stage.regex {
+      expression = ".* (?P<event_json>\\{\\\"event\\\":\\\"recommendation.completed\\\".*\\})$"
+    }
+
+    stage.json {
+      source = "event_json"
+      expressions = {
+        outcome = "outcome",
+        backend = "retrieval.backend",
+      }
+    }
+
+    stage.labels {
+      values = {
+        outcome = "",
+        backend = "",
+      }
+    }
+
+    stage.output {
+      source = "event_json"
+    }
+  }
+}
+
+loki.write "grafana_cloud" {
+  endpoint {
+    url = sys.env("GRAFANA_LOKI_URL")
+    basic_auth {
+      username = sys.env("GRAFANA_LOKI_USER")
+      password = sys.env("GRAFANA_LOKI_TOKEN")
+    }
+  }
+}

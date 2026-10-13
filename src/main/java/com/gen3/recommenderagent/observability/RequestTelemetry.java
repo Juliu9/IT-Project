@@ -17,6 +17,8 @@ import tools.jackson.databind.ObjectMapper;
 public class RequestTelemetry {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(RequestTelemetry.class);
+  // shortcut: request telemetry is synchronous; use OpenTelemetry context propagation for async
+  // work.
   private static final ThreadLocal<RequestState> CURRENT = new ThreadLocal<>();
   private final ObjectMapper objectMapper;
 
