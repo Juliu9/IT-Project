@@ -11,6 +11,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.gen3.recommenderagent.storage.audiobook.FakeAudiobookMetadataEnricher;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
@@ -69,7 +70,8 @@ class QdrantAudiobookRepositoryTest {
     repository.searchSemantic(new float[] {0.6f, 0.8f}, AudiobookFilters.empty(), 5);
 
     assertThat(candidates).hasSize(1);
-    assertThat(candidates.getFirst().audiobook()).isEqualTo(book);
+    assertThat(candidates.getFirst().audiobook())
+        .isEqualTo(new FakeAudiobookMetadataEnricher().enrich(book));
     assertThat(candidates.getFirst().score()).isEqualTo(0.92, within(0.0001));
     assertThat(candidates.getFirst().embedding()).containsExactly(0.6f, 0.8f);
     verify(client, times(1)).collectionExistsAsync("audiobooks");

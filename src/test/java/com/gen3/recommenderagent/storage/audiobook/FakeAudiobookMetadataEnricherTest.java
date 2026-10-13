@@ -24,12 +24,14 @@ class FakeAudiobookMetadataEnricherTest {
             "Summary",
             List.of("Real Narrator"),
             "German",
-            123);
+            123,
+            2019);
 
     assertThat(enricher.enrich(missing)).isEqualTo(enricher.enrich(missing));
     assertThat(enricher.enrich(missing).narrators()).isNotEmpty();
     assertThat(enricher.enrich(missing).language()).isNotBlank();
     assertThat(enricher.enrich(missing).durationMinutes()).isPositive();
+    assertThat(enricher.enrich(missing).publicationYear()).isBetween(1950, 2025);
     assertThat(enricher.enrich(complete)).isEqualTo(complete);
   }
 }

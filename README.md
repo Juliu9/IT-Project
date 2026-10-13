@@ -15,7 +15,7 @@ history in Redis, and returns a natural-language response.
    normalized direction `positive - negative`, while ranking reuses the two vectors separately.
 5. Qdrant retrieves candidates by semantic similarity, exact filters, or hybrid search.
 6. `RankingService` removes duplicates and previously shown books, scores each candidate with the
-   configured composite of retrieval relevance, semantic, hybrid, and user-preference scorers, and
+   configured composite of retrieval relevance, user-preference, and universal-rule scorers, and
    orders by the combined score.
 7. `RequestApplicationService` records the shown book IDs, and `SessionService` appends the
    completed request to the Redis-backed `Session`.
@@ -34,14 +34,16 @@ Retrieval is deliberately independent of intent:
 Each scorer returns a bounded score and reports when it lacks usable evidence. Retrieval relevance
 normalizes the search backend's candidate scores within the current result set to `[0, 1]`; it does
 not recreate or rescore the semantic evidence already represented by Qdrant's ANN or hybrid result.
-User-preference scores are also in `[0, 1]`. One composite scorer averages retrieval relevance and
-user-preference scores using their configured weights, so missing user vectors do not count as a
-zero preference signal.
+User-preference scores are also in `[0, 1]`. Universal rules add user-independent publication
+recency and duration-plausibility signals. One composite scorer averages all available signals using
+their configured weights, so missing evidence does not count as a zero signal.
 
 Weights are configurable with the `ranking.scoring.*` properties in `application.properties` (or
 their corresponding `RANKING_SCORING_*` environment variables). By default, retrieval relevance
-and user-preference scorers have equal weight. The favourites and listening-history weights used
-within user-preference scoring are configured in the same section.
+and user-preference scorers have equal weight, while universal rules have a weight of `0.5`.
+Publication recency and duration plausibility contribute `0.7` and `0.3` within the universal
+scorer. Until the source catalogue supplies publication years, deterministic placeholder years are
+derived from book IDs; real values are always preserved.
 
 Topics, genres, and keywords provide semantic and lexical search content. Exact catalogue
 requirements are represented separately as `mustInclude` and `mustNotInclude`, so a request such as

@@ -26,6 +26,7 @@ class QdrantPointMapperTest {
 
     assertThat(first.getId()).isEqualTo(second.getId());
     assertThat(first.getPayloadMap().get("bookId").getStringValue()).isEqualTo("book-7");
+    assertThat(first.getPayloadMap()).containsKey("publicationYear");
     assertThat(
             first
                 .getVectors()
@@ -53,5 +54,6 @@ class QdrantPointMapperTest {
     assertThat(record.id()).isEqualTo("1");
     assertThat(record.authors()).containsExactly("Author");
     assertThat(record.title()).isEqualTo("Title");
+    assertThat(record.publicationYear()).isNotNull();
   }
 }

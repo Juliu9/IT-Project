@@ -18,7 +18,11 @@ class UserPreferenceScorerTest {
   void userVectorsCanPromoteARelevantPreferenceMatch() {
     RankingScoringProperties properties =
         new RankingScoringProperties(
-            1.0, 1.0, new RankingScoringProperties.UserPreferenceWeights(0.6, 0.4));
+            1.0,
+            1.0,
+            0.5,
+            new RankingScoringProperties.UserPreferenceWeights(0.6, 0.4),
+            new RankingScoringProperties.UniversalRuleWeights(0.7, 0.3));
     UserPreferenceScorer preferenceScorer = new UserPreferenceScorer(properties);
     AudiobookCandidate generic = candidate("generic", 0.90, new float[] {0, 1});
     AudiobookCandidate preferred = candidate("preferred", 0.80, new float[] {1, 0});
@@ -38,7 +42,11 @@ class UserPreferenceScorerTest {
   void usesConfiguredFavouriteAndHistoryWeights() {
     RankingScoringProperties properties =
         new RankingScoringProperties(
-            1.0, 1.0, new RankingScoringProperties.UserPreferenceWeights(0.75, 0.25));
+            1.0,
+            1.0,
+            0.5,
+            new RankingScoringProperties.UserPreferenceWeights(0.75, 0.25),
+            new RankingScoringProperties.UniversalRuleWeights(0.7, 0.3));
     UserPreferenceScorer scorer = new UserPreferenceScorer(properties);
     AudiobookCandidate candidate = candidate("book", 0.5, new float[] {1, 0});
     UserPreferenceEmbedding preferences =
@@ -53,7 +61,11 @@ class UserPreferenceScorerTest {
   void ignoresAnAvailablePreferenceSignalWhenItsWeightIsZero() {
     RankingScoringProperties properties =
         new RankingScoringProperties(
-            1.0, 1.0, new RankingScoringProperties.UserPreferenceWeights(0.0, 1.0));
+            1.0,
+            1.0,
+            0.5,
+            new RankingScoringProperties.UserPreferenceWeights(0.0, 1.0),
+            new RankingScoringProperties.UniversalRuleWeights(0.7, 0.3));
     UserPreferenceScorer scorer = new UserPreferenceScorer(properties);
     AudiobookCandidate candidate = candidate("book", 0.5, new float[] {1, 0});
     UserPreferenceEmbedding preferences =

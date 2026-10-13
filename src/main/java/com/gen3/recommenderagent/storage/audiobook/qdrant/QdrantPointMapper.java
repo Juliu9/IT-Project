@@ -6,8 +6,10 @@ import static io.qdrant.client.ValueFactory.value;
 import static io.qdrant.client.VectorFactory.vector;
 import static io.qdrant.client.VectorsFactory.namedVectors;
 
+import com.gen3.recommenderagent.storage.audiobook.FakeAudiobookMetadataEnricher;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.port.AudiobookMetadataEnricher;
 import io.qdrant.client.grpc.JsonWithInt.Value;
 import io.qdrant.client.grpc.Points.PointStruct;
 import io.qdrant.client.grpc.Points.ScoredPoint;
@@ -16,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /** Converts database-independent audiobook records to and from Qdrant points. */
@@ -26,15 +29,24 @@ public class QdrantPointMapper {
   public static final String KEYWORD_VECTOR = "keywords";
 
   private final SparseTextEncoder sparseEncoder;
+  private final AudiobookMetadataEnricher metadataEnricher;
 
   /** Uses the same sparse encoder for catalogue indexing and request retrieval. */
   public QdrantPointMapper(SparseTextEncoder sparseEncoder) {
+    this(sparseEncoder, new FakeAudiobookMetadataEnricher());
+  }
+
+  /** Uses shared metadata enrichment for both legacy payloads and newly indexed points. */
+  @Autowired
+  public QdrantPointMapper(
+      SparseTextEncoder sparseEncoder, AudiobookMetadataEnricher metadataEnricher) {
     this.sparseEncoder = sparseEncoder;
+    this.metadataEnricher = metadataEnricher;
   }
 
   /** Creates an idempotent Qdrant point containing the normalized vector and catalogue payload. */
   public PointStruct toPoint(AudiobookEmbedding embedding) {
-    AudiobookRecord record = embedding.record();
+    AudiobookRecord record = metadataEnricher.enrich(embedding.record());
     SparseVectorData sparse = sparseEncoder.encode(searchableText(record));
     return PointStruct.newBuilder()
         .setId(pointId(record.id()))
@@ -52,15 +64,17 @@ public class QdrantPointMapper {
   /** Restores an audiobook record from a Qdrant similarity-search result. */
   public AudiobookRecord toRecord(ScoredPoint point) {
     Map<String, Value> payload = point.getPayloadMap();
-    return new AudiobookRecord(
-        stringValue(payload, "bookId"),
-        stringValue(payload, "source"),
-        stringValue(payload, "title"),
-        listValue(payload.get("authors")),
-        stringValue(payload, "description"),
-        listValue(payload.get("narrators")),
-        stringValue(payload, "language"),
-        integerValue(payload.get("durationMinutes")));
+    return metadataEnricher.enrich(
+        new AudiobookRecord(
+            stringValue(payload, "bookId"),
+            stringValue(payload, "source"),
+            stringValue(payload, "title"),
+            listValue(payload.get("authors")),
+            stringValue(payload, "description"),
+            listValue(payload.get("narrators")),
+            stringValue(payload, "language"),
+            integerValue(payload.get("durationMinutes")),
+            integerValue(payload.get("publicationYear"))));
   }
 
   /** Extracts the normalized dense vector included in a similarity-search result. */
@@ -102,6 +116,9 @@ public class QdrantPointMapper {
     put(payload, "language", record.language());
     if (record.durationMinutes() != null) {
       payload.put("durationMinutes", value(record.durationMinutes().longValue()));
+    }
+    if (record.publicationYear() != null) {
+      payload.put("publicationYear", value(record.publicationYear().longValue()));
     }
     List<Value> authors =
         record.authors() == null

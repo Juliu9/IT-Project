@@ -7,17 +7,23 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record RankingScoringProperties(
     double retrievalRelevanceWeight,
     double userPreferenceWeight,
-    UserPreferenceWeights userPreference) {
+    double universalRulesWeight,
+    UserPreferenceWeights userPreference,
+    UniversalRuleWeights universalRules) {
 
   public RankingScoringProperties {
     validateWeight("retrieval-relevance-weight", retrievalRelevanceWeight);
     validateWeight("user-preference-weight", userPreferenceWeight);
-    if (retrievalRelevanceWeight + userPreferenceWeight <= 0.0) {
+    validateWeight("universal-rules-weight", universalRulesWeight);
+    if (retrievalRelevanceWeight + userPreferenceWeight + universalRulesWeight <= 0.0) {
       throw new IllegalArgumentException(
           "At least one candidate scorer must have a positive weight");
     }
     if (userPreference == null) {
       throw new IllegalArgumentException("User-preference scorer weights must be configured");
+    }
+    if (universalRules == null) {
+      throw new IllegalArgumentException("Universal-rule scorer weights must be configured");
     }
   }
 
@@ -36,6 +42,19 @@ public record RankingScoringProperties(
       if (favouritesWeight + historyWeight <= 0.0) {
         throw new IllegalArgumentException(
             "At least one user-preference signal must have a positive weight");
+      }
+    }
+  }
+
+  /** Relative contributions of user-independent catalogue quality signals. */
+  public record UniversalRuleWeights(double recencyWeight, double durationPlausibilityWeight) {
+
+    public UniversalRuleWeights {
+      validateWeight("universal-rules.recency-weight", recencyWeight);
+      validateWeight("universal-rules.duration-plausibility-weight", durationPlausibilityWeight);
+      if (recencyWeight + durationPlausibilityWeight <= 0.0) {
+        throw new IllegalArgumentException(
+            "At least one universal rule must have a positive weight");
       }
     }
   }

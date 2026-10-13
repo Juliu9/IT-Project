@@ -182,7 +182,11 @@ class RecommendationFlowIntegrationTest {
 
   private RankingScoringProperties scoringProperties() {
     return new RankingScoringProperties(
-        1.0, 1.0, new RankingScoringProperties.UserPreferenceWeights(0.6, 0.4));
+        1.0,
+        1.0,
+        0.5,
+        new RankingScoringProperties.UserPreferenceWeights(0.6, 0.4),
+        new RankingScoringProperties.UniversalRuleWeights(0.7, 0.3));
   }
 
   private SessionRequest parsedRequest(String rawText) {

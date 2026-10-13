@@ -15,10 +15,12 @@ public class ScoringConfiguration {
   public CompositeScorer compositeScorer(
       RetrievalRelevanceScorer retrievalRelevanceScorer,
       UserPreferenceScorer userPreferenceScorer,
+      UniversalRulesScorer universalRulesScorer,
       RankingScoringProperties properties) {
     List<WeightedScorer> scorers = new ArrayList<>();
     add(scorers, retrievalRelevanceScorer, properties.retrievalRelevanceWeight());
     add(scorers, userPreferenceScorer, properties.userPreferenceWeight());
+    add(scorers, universalRulesScorer, properties.universalRulesWeight());
     return new CompositeScorer(scorers);
   }
 
