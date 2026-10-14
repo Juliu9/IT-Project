@@ -31,7 +31,8 @@ public class DefaultSessionService implements SessionService {
   }
 
   @Override
-  public void update(Session session, SessionRequest originalRequest, SessionRequest actionResult) {
+  public boolean update(
+      Session session, SessionRequest originalRequest, SessionRequest actionResult) {
     SessionRequest result = actionResult == null ? originalRequest : actionResult;
     if (result.getRawText() == null && originalRequest != null) {
       result.setRawText(originalRequest.getRawText());
@@ -47,7 +48,7 @@ public class DefaultSessionService implements SessionService {
     }
 
     session.addRequest(historyEntry(result));
-    sessionRepository.updateSession(session);
+    return sessionRepository.updateSession(session);
   }
 
   private SessionRequest historyEntry(SessionRequest request) {

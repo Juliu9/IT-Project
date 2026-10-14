@@ -6,5 +6,5 @@ public interface SessionRepository {
 
   Session getSession(String sessionId, String userId);
 
-  void updateSession(Session session);
+  boolean updateSession(Session session);
 }

@@ -19,8 +19,9 @@ final class RecommendationFlowTestSupport {
     }
 
     @Override
-    public void updateSession(Session session) {
+    public boolean updateSession(Session session) {
       sessions.put(new SessionKey(session.getSessionId(), session.getUserId()), session);
+      return true;
     }
 
     private record SessionKey(String sessionId, String userId) {}

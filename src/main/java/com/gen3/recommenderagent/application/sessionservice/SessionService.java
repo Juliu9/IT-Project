@@ -8,5 +8,5 @@ public interface SessionService {
 
   Session load(String sessionId, String userId);
 
-  void update(Session session, SessionRequest originalRequest, SessionRequest actionResult);
+  boolean update(Session session, SessionRequest originalRequest, SessionRequest actionResult);
 }

@@ -42,27 +42,21 @@ public class AiInputParser implements InputParser {
                     .prompt()
                     .system(
                         """
-                        Extract the user's audiobook search request.
+                        Extract the user's audiobook request using only stated information.
 
-                        Use only information explicitly provided by the user.
-                        Choose one of these intents: RECOMMENDATION, REFINE, MORE_RESULTS,
-                        CHANGE_COUNT, UPDATE_PREFERENCES, CLEAR_HISTORY, HELP, or UNKNOWN.
-                        Put desired concepts in positiveSemanticQuery and concepts to avoid in
-                        negativeSemanticQuery. Put exact author, narrator, language, duration, and
-                        source requirements in mustInclude. Put exact values that must be excluded in
-                        mustNotInclude. For example, "only English" belongs in mustInclude.language,
-                        while "not English" belongs in mustNotInclude.language. Put the requested
-                        number of results in bookCount. Do not invent values or report contradictions.
-                        Use RECOMMENDATION for every new audiobook search, including searches by
-                        theme, author, narrator, language, or duration. Do not select a retrieval mode.
-                        Set personalised to true when the user asks for books they would like,
-                        recommendations based on their taste, favourites, or listening history.
-                        "Give me books I would like" is RECOMMENDATION with personalised=true
-                        and no invented search criteria. Set personalised=false for ordinary searches.
-                        Statements of taste such as "I like fantasy and Ursula Le Guin", including
-                        short preference answers such as "fantasy", are UPDATE_PREFERENCES.
-                        Put liked authors and narrators in positiveSemanticQuery; use mustInclude
-                        only when the user explicitly requires exact matches.
+                        Set intent to RECOMMENDATION, REFINE, MORE_RESULTS, CHANGE_COUNT,
+                        UPDATE_PREFERENCES, CLEAR_HISTORY, HELP, or UNKNOWN. Use RECOMMENDATION
+                        for a new search; do not choose a retrieval mode. Put desired and avoided
+                        concepts in positiveSemanticQuery and negativeSemanticQuery. Use mustInclude
+                        and mustNotInclude only for exact author, narrator, language, duration, or
+                        source requirements. Put the requested count in bookCount.
+
+                        Set personalised=true only when the user requests recommendations based on
+                        their taste, favourites, or history. "Give me books I would like" is a
+                        personalised RECOMMENDATION with no invented criteria. Statements of taste,
+                        including short answers such as "fantasy", are UPDATE_PREFERENCES; keep
+                        liked authors and narrators semantic unless an exact match is required.
+                        Do not invent values or report contradictions.
                         """)
                     .user(rawText)
                     .call()

@@ -15,6 +15,7 @@ public class Session {
   private Instant createdAt;
   private Instant updatedAt;
   private Instant expiresAt;
+  private long version;
   private Integer bookCount = MAX_BOOK_COUNT;
   private List<String> shownBooks;
   private List<SessionRequest> requests = new ArrayList<>();
@@ -73,6 +74,14 @@ public class Session {
 
   public void setExpiresAt(Instant expiresAt) {
     this.expiresAt = expiresAt;
+  }
+
+  public long getVersion() {
+    return version;
+  }
+
+  public void setVersion(long version) {
+    this.version = version;
   }
 
   public Integer getBookCount() {

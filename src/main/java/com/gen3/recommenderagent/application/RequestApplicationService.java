@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class RequestApplicationService {
 
+  private static final int SESSION_UPDATE_ATTEMPTS = 3;
   private final SessionService sessionService;
   private final ActionRegistry actionRegistry;
   private final RequestContextMerger requestContextMerger;
@@ -27,12 +28,27 @@ public class RequestApplicationService {
   }
 
   public SessionRequest process(String sessionId, String userId, SessionRequest request) {
-    Session session =
-        RequestTelemetry.measure("sessionLoadMs", () -> sessionService.load(sessionId, userId));
-
     if (request.getIntent() == null) {
       request.setIntent(Intent.UNKNOWN);
     }
+    for (int attempt = 0; attempt < SESSION_UPDATE_ATTEMPTS; attempt++) {
+      Session session =
+          RequestTelemetry.measure("sessionLoadMs", () -> sessionService.load(sessionId, userId));
+      SessionRequest attemptRequest = copyOf(request);
+      SessionRequest result = processAttempt(session, attemptRequest);
+
+      session.addRecommendationIds(recommendationIds(result == null ? attemptRequest : result));
+      boolean saved =
+          RequestTelemetry.measure(
+              "sessionWriteMs", () -> sessionService.update(session, attemptRequest, result));
+      if (saved) {
+        return result;
+      }
+    }
+    throw new IllegalStateException("Session was updated concurrently; please retry");
+  }
+
+  private SessionRequest processAttempt(Session session, SessionRequest request) {
     if (session.isAwaitingPersonalisedPreferences()
         && (request.getIntent() == Intent.UPDATE_PREFERENCES
             || request.getIntent() == Intent.RECOMMENDATION
@@ -45,15 +61,24 @@ public class RequestApplicationService {
     }
     IntentAction action = actionRegistry.get(request.getIntent());
     SessionRequest result = action.execute(request, session);
-
-    session.addRecommendationIds(recommendationIds(result == null ? request : result));
-    RequestTelemetry.measure(
-        "sessionWriteMs",
-        () -> {
-          sessionService.update(session, request, result);
-          return null;
-        });
     return result;
+  }
+
+  private SessionRequest copyOf(SessionRequest source) {
+    SessionRequest copy = new SessionRequest();
+    copy.setRequestId(source.getRequestId());
+    copy.setRawText(source.getRawText());
+    copy.setCreatedAt(source.getCreatedAt());
+    copy.setIntent(source.getIntent());
+    copy.setPositiveSemanticQuery(source.getPositiveSemanticQuery());
+    copy.setNegativeSemanticQuery(source.getNegativeSemanticQuery());
+    copy.setMustInclude(source.getMustInclude());
+    copy.setMustNotInclude(source.getMustNotInclude());
+    copy.setBookCount(source.getBookCount());
+    copy.setPersonalised(source.isPersonalised());
+    copy.setPreferenceClarificationRequired(source.isPreferenceClarificationRequired());
+    copy.setRecommendations(source.getRecommendations());
+    return copy;
   }
 
   private List<String> recommendationIds(SessionRequest result) {

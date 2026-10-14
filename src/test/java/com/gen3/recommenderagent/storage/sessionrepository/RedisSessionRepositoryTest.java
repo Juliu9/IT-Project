@@ -1,6 +1,7 @@
 package com.gen3.recommenderagent.storage.sessionrepository;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -392,6 +393,21 @@ class RedisSessionRepositoryTest {
 
     assertEquals("a:b", redisSessionCache.getSession("c", "a:b").getUserId());
     assertEquals("a", redisSessionCache.getSession("b:c", "a").getUserId());
+  }
+
+  @Test
+  void rejectsAStaleSessionWrite() {
+    Session initial = session("concurrent-session");
+    assertTrue(redisSessionCache.updateSession(initial));
+    Session current = redisSessionCache.getSession("concurrent-session", USER_ID);
+    Session stale = redisSessionCache.getSession("concurrent-session", USER_ID);
+
+    current.setBookCount(2);
+    assertTrue(redisSessionCache.updateSession(current));
+    stale.setBookCount(3);
+    assertFalse(redisSessionCache.updateSession(stale));
+
+    assertEquals(2, redisSessionCache.getSession("concurrent-session", USER_ID).getBookCount());
   }
 
   private Session session(String sessionId) {
