@@ -140,7 +140,8 @@ class RecommendationFlowIntegrationTest {
             new ClearHistoryAction(),
             new NoOpAction());
     RequestApplicationService applicationService =
-        new RequestApplicationService(new DefaultSessionService(sessionRepository), registry);
+        new RequestApplicationService(
+            new DefaultSessionService(sessionRepository), registry, requestContextMerger);
 
     RequestGateway gateway =
         new RequestGateway(inputParser, applicationService, new AiResponseGenerator(null));

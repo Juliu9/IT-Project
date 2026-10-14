@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.gen3.recommenderagent.application.action.RequestContextMerger;
 import com.gen3.recommenderagent.application.sessionservice.SessionService;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Recommendation;
@@ -37,7 +38,7 @@ class RequestApplicationServiceTest {
     when(action.execute(request, session)).thenReturn(result);
 
     RequestApplicationService service =
-        new RequestApplicationService(sessionService, actionRegistry);
+        new RequestApplicationService(sessionService, actionRegistry, new RequestContextMerger());
 
     assertSame(result, service.process("session-1", "user-1", request));
 
@@ -61,7 +62,7 @@ class RequestApplicationServiceTest {
     when(actionRegistry.get(Intent.UNKNOWN)).thenReturn(action);
     when(action.execute(request, session)).thenReturn(request);
 
-    new RequestApplicationService(sessionService, actionRegistry)
+    new RequestApplicationService(sessionService, actionRegistry, new RequestContextMerger())
         .process("session-2", "user-2", request);
 
     verify(actionRegistry).get(Intent.UNKNOWN);

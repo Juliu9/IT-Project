@@ -81,8 +81,7 @@ class PersonalisedRecommendationFlowTest {
                 books, new CandidateRetrievalExecutor(indexer, new AudiobookRetrievalPlanner())),
             ranker,
             new SemanticQueryVectorService(indexer),
-            users,
-            merger);
+            users);
     ActionRegistry registry =
         new ActionRegistry(
             new RecommendationAction(workflow, merger),
@@ -92,7 +91,8 @@ class PersonalisedRecommendationFlowTest {
             new UpdatePreferencesAction(merger),
             new ClearHistoryAction(),
             new NoOpAction());
-    application = new RequestApplicationService(new DefaultSessionService(sessions), registry);
+    application =
+        new RequestApplicationService(new DefaultSessionService(sessions), registry, merger);
   }
 
   @Test

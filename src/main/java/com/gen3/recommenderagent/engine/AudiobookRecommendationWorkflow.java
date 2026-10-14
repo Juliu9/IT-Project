@@ -3,7 +3,6 @@ package com.gen3.recommenderagent.engine;
 import static com.gen3.recommenderagent.common.BookCountPolicy.clamp;
 import static com.gen3.recommenderagent.common.BookCountPolicy.clampOrDefault;
 
-import com.gen3.recommenderagent.application.action.RequestContextMerger;
 import com.gen3.recommenderagent.candidateretriever.CandidateRetriever;
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectorService;
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors;
@@ -24,7 +23,6 @@ import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /** Runs the candidate retrieval and ranking steps shared by recommendation-producing intents. */
@@ -38,34 +36,17 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
   private final Ranker ranker;
   private final SemanticQueryVectorService semanticQueryVectorService;
   private final UserPreferenceVectorRepository userPreferenceVectorRepository;
-  private final RequestContextMerger requestContextMerger;
 
   /** Receives database-independent ports so handlers do not depend on storage adapters. */
-  @Autowired
-  public AudiobookRecommendationWorkflow(
-      CandidateRetriever candidateRetriever,
-      Ranker ranker,
-      SemanticQueryVectorService semanticQueryVectorService,
-      UserPreferenceVectorRepository userPreferenceVectorRepository,
-      RequestContextMerger requestContextMerger) {
-    this.candidateRetriever = candidateRetriever;
-    this.ranker = ranker;
-    this.semanticQueryVectorService = semanticQueryVectorService;
-    this.userPreferenceVectorRepository = userPreferenceVectorRepository;
-    this.requestContextMerger = requestContextMerger;
-  }
-
   public AudiobookRecommendationWorkflow(
       CandidateRetriever candidateRetriever,
       Ranker ranker,
       SemanticQueryVectorService semanticQueryVectorService,
       UserPreferenceVectorRepository userPreferenceVectorRepository) {
-    this(
-        candidateRetriever,
-        ranker,
-        semanticQueryVectorService,
-        userPreferenceVectorRepository,
-        new RequestContextMerger());
+    this.candidateRetriever = candidateRetriever;
+    this.ranker = ranker;
+    this.semanticQueryVectorService = semanticQueryVectorService;
+    this.userPreferenceVectorRepository = userPreferenceVectorRepository;
   }
 
   /** Builds retrieval text, lets the retriever select its mode, and ranks the candidates. */
@@ -99,9 +80,6 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
     if (request == null || !request.isPersonalised()) {
       return semanticQueryVectorService.create(request);
     }
-    if (session != null && session.isAwaitingPersonalisedPreferences()) {
-      requestContextMerger.updatePreferences(session, request);
-    }
     if (preferences != null) {
       List<float[]> positive = new ArrayList<>();
       addVector(positive, preferences.favouritesVector());
@@ -109,7 +87,6 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
       float[] combined = VectorMath.directionalAverage(positive, List.of());
       return new SemanticQueryVectors(List.of(combined), List.of());
     }
-    requestContextMerger.applyPreferences(request, session);
     return semanticQueryVectorService.createPersonalised(request);
   }
 
