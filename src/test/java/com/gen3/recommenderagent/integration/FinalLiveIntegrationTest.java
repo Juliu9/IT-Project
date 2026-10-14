@@ -11,6 +11,7 @@ import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantConfig;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantPointMapper;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.SparseTextEncoder;
 import io.qdrant.client.QdrantClient;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
@@ -33,7 +34,11 @@ class FinalLiveIntegrationTest {
 
     QdrantClient client =
         new QdrantConfig()
-            .qdrantClient(environment("QDRANT_URL", ""), grpcPort, environment("QDRANT_API", ""));
+            .qdrantClient(
+                environment("QDRANT_URL", ""),
+                grpcPort,
+                environment("QDRANT_API", ""),
+                Duration.ofSeconds(CONNECTION_TIMEOUT_SECONDS));
     try {
       boolean collectionExists =
           client
