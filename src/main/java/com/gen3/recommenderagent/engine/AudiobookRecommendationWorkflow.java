@@ -9,12 +9,14 @@ import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.embedding.VectorMath;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.gen3.recommenderagent.ranker.Ranker;
 import com.gen3.recommenderagent.ranker.RankingContext;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -50,17 +52,45 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
   /** Builds retrieval text, lets the retriever select its mode, and ranks the candidates. */
   @Override
   public List<Recommendation> recommend(SessionRequest request, Session session) {
+    UserPreferenceEmbedding preferences = userPreferences(session).orElse(null);
     SemanticQueryVectors vectors =
-        RequestTelemetry.measure("embedMs", () -> semanticQueryVectorService.create(request));
+        RequestTelemetry.measure("embedMs", () -> retrievalVectors(request, session, preferences));
+    if (request != null && request.isPersonalised()) {
+      boolean needsPreferences = vectors == null || vectors.isEmpty();
+      request.setPreferenceClarificationRequired(needsPreferences);
+      if (needsPreferences) {
+        return List.of();
+      }
+    }
     var candidates =
         RequestTelemetry.measure(
             "retrieveMs",
             () -> candidateRetriever.getCandidates(request, vectors, CANDIDATE_LIMIT));
-    RankingContext rankingContext =
-        new RankingContext(userPreferences(session).orElse(null), shownBooks(session));
+    RankingContext rankingContext = new RankingContext(preferences, shownBooks(session));
     return RequestTelemetry.measure(
         "rankMs",
         () -> ranker.rank(candidates, resolveResultLimit(request, session), rankingContext));
+  }
+
+  private SemanticQueryVectors retrievalVectors(
+      SessionRequest request, Session session, UserPreferenceEmbedding preferences) {
+    if (request == null || !request.isPersonalised()) {
+      return semanticQueryVectorService.create(request);
+    }
+    if (preferences != null) {
+      List<float[]> positive = new ArrayList<>();
+      addVector(positive, preferences.favouritesVector());
+      addVector(positive, preferences.historyVector());
+      float[] combined = VectorMath.directionalAverage(positive, List.of());
+      return new SemanticQueryVectors(List.of(combined), List.of());
+    }
+    return semanticQueryVectorService.createPersonalised(request);
+  }
+
+  private void addVector(List<float[]> vectors, float[] vector) {
+    if (vector != null && vector.length > 0) {
+      vectors.add(vector);
+    }
   }
 
   private Optional<UserPreferenceEmbedding> userPreferences(Session session) {

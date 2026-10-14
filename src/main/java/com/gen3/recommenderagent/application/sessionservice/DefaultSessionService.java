@@ -20,7 +20,7 @@ public class DefaultSessionService implements SessionService {
 
   @Override
   public Session load(String sessionId, String userId) {
-    Session session = sessionRepository.getSession(sessionId);
+    Session session = sessionRepository.getSession(sessionId, userId);
     if (session == null) {
       session = new Session();
       session.setSessionId(sessionId);
@@ -31,7 +31,8 @@ public class DefaultSessionService implements SessionService {
   }
 
   @Override
-  public void update(Session session, SessionRequest originalRequest, SessionRequest actionResult) {
+  public boolean update(
+      Session session, SessionRequest originalRequest, SessionRequest actionResult) {
     SessionRequest result = actionResult == null ? originalRequest : actionResult;
     if (result.getRawText() == null && originalRequest != null) {
       result.setRawText(originalRequest.getRawText());
@@ -47,7 +48,7 @@ public class DefaultSessionService implements SessionService {
     }
 
     session.addRequest(historyEntry(result));
-    sessionRepository.updateSession(session);
+    return sessionRepository.updateSession(session);
   }
 
   private SessionRequest historyEntry(SessionRequest request) {
@@ -55,6 +56,8 @@ public class DefaultSessionService implements SessionService {
     entry.setRequestId(request.getRequestId());
     entry.setCreatedAt(request.getCreatedAt());
     entry.setIntent(request.getIntent());
+    entry.setPersonalised(request.isPersonalised());
+    entry.setPreferenceClarificationRequired(request.isPreferenceClarificationRequired());
     entry.setPositiveSemanticQuery(request.getPositiveSemanticQuery());
     entry.setNegativeSemanticQuery(request.getNegativeSemanticQuery());
     entry.setMustInclude(request.getMustInclude());

@@ -15,10 +15,16 @@ public class Session {
   private Instant createdAt;
   private Instant updatedAt;
   private Instant expiresAt;
+  private long version;
   private Integer bookCount = MAX_BOOK_COUNT;
   private List<String> shownBooks;
   private List<SessionRequest> requests = new ArrayList<>();
   private SessionPreferences preferences;
+
+  public boolean isAwaitingPersonalisedPreferences() {
+    return requests != null
+        && requests.stream().anyMatch(SessionRequest::isPreferenceClarificationRequired);
+  }
 
   public Session() {}
 
@@ -70,6 +76,14 @@ public class Session {
     this.expiresAt = expiresAt;
   }
 
+  public long getVersion() {
+    return version;
+  }
+
+  public void setVersion(long version) {
+    this.version = version;
+  }
+
   public Integer getBookCount() {
     return bookCount;
   }
@@ -101,7 +115,8 @@ public class Session {
 
   private boolean hasSearchCriteria(SessionRequest request) {
     return request != null
-        && (request.getPositiveSemanticQuery() != null
+        && (request.isPersonalised()
+            || request.getPositiveSemanticQuery() != null
             || request.getNegativeSemanticQuery() != null
             || request.getMustInclude() != null
             || request.getMustNotInclude() != null);

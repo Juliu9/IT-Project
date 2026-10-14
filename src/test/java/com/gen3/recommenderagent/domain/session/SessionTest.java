@@ -2,6 +2,8 @@ package com.gen3.recommenderagent.domain.session;
 
 import static com.gen3.recommenderagent.common.ApplicationConstants.MAX_BOOK_COUNT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -49,6 +51,19 @@ class SessionTest {
     session.addRequest(latestSearch);
 
     assertEquals(List.of(help, latestSearch), session.getRequests());
+  }
+
+  @Test
+  void derivesPendingPersonalisedPreferencesFromRetainedRequests() {
+    Session session = new Session();
+    SessionRequest pending = new SessionRequest();
+    pending.setPreferenceClarificationRequired(true);
+
+    session.addRequest(pending);
+    assertTrue(session.isAwaitingPersonalisedPreferences());
+
+    session.clearHistory();
+    assertFalse(session.isAwaitingPersonalisedPreferences());
   }
 
   private SessionRequest searchRequest(String topic) {

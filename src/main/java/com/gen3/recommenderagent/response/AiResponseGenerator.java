@@ -49,6 +49,11 @@ public class AiResponseGenerator implements ResponseGenerator {
       return "I'm sorry, I couldn't process your request right now.";
     }
 
+    if (currentRequest != null && currentRequest.isPreferenceClarificationRequired()) {
+      RequestTelemetry.responseMode("PREFERENCE_CLARIFICATION");
+      return "What genres, authors, or narrators do you like?";
+    }
+
     if (currentRequest != null
         && currentRequest.getBookCount() != null
         && currentRequest.getBookCount() > MAX_BOOK_COUNT) {

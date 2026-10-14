@@ -140,7 +140,8 @@ class RecommendationFlowIntegrationTest {
             new ClearHistoryAction(),
             new NoOpAction());
     RequestApplicationService applicationService =
-        new RequestApplicationService(new DefaultSessionService(sessionRepository), registry);
+        new RequestApplicationService(
+            new DefaultSessionService(sessionRepository), registry, requestContextMerger);
 
     RequestGateway gateway =
         new RequestGateway(inputParser, applicationService, new AiResponseGenerator(null));
@@ -160,7 +161,7 @@ class RecommendationFlowIntegrationTest {
             .getResponse()
             .getContentAsString();
 
-    Session savedSession = sessionRepository.getSession("session-1");
+    Session savedSession = sessionRepository.getSession("session-1", "user-1");
     assertNotNull(savedSession);
     assertEquals("user-1", savedSession.getUserId());
     assertEquals(1, savedSession.getRequests().size());

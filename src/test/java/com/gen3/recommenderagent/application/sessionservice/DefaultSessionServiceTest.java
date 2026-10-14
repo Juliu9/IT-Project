@@ -21,7 +21,7 @@ class DefaultSessionServiceTest {
   @Test
   void createsNewSessionAndPersistsActionOutcome() {
     SessionRepository repository = mock(SessionRepository.class);
-    when(repository.getSession("session-1")).thenReturn(null);
+    when(repository.getSession("session-1", "user-1")).thenReturn(null);
     DefaultSessionService service = new DefaultSessionService(repository);
 
     Session session = service.load("session-1", "user-1");
@@ -46,7 +46,7 @@ class DefaultSessionServiceTest {
   void loadsExistingSessionWithoutReplacingIt() {
     SessionRepository repository = mock(SessionRepository.class);
     Session existing = new Session();
-    when(repository.getSession("session-2")).thenReturn(existing);
+    when(repository.getSession("session-2", "user-2")).thenReturn(existing);
 
     Session session = new DefaultSessionService(repository).load("session-2", "user-2");
 
