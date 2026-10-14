@@ -82,6 +82,7 @@ public class RequestContextMerger {
   }
 
   private void merge(SessionRequest base, SessionRequest target) {
+    target.setPersonalised(base.isPersonalised() || target.isPersonalised());
     target.setPositiveSemanticQuery(
         merge(base.getPositiveSemanticQuery(), target.getPositiveSemanticQuery()));
     target.setNegativeSemanticQuery(
@@ -93,7 +94,8 @@ public class RequestContextMerger {
   private boolean hasSearchCriteria(SessionRequest request) {
     return request != null
         && request.getIntent() != Intent.UPDATE_PREFERENCES
-        && (request.getPositiveSemanticQuery() != null
+        && (request.isPersonalised()
+            || request.getPositiveSemanticQuery() != null
             || request.getNegativeSemanticQuery() != null
             || request.getMustInclude() != null
             || request.getMustNotInclude() != null);

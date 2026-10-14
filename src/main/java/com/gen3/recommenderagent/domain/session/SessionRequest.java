@@ -18,6 +18,24 @@ public class SessionRequest {
   private MustInclude mustInclude;
   private MustNotInclude mustNotInclude;
   private Integer bookCount;
+  private boolean personalised;
+  private boolean preferenceClarificationRequired;
+
+  public boolean isPersonalised() {
+    return personalised;
+  }
+
+  public void setPersonalised(boolean personalised) {
+    this.personalised = personalised;
+  }
+
+  public boolean isPreferenceClarificationRequired() {
+    return preferenceClarificationRequired;
+  }
+
+  public void setPreferenceClarificationRequired(boolean required) {
+    this.preferenceClarificationRequired = required;
+  }
 
   private List<Recommendation> recommendations;
 

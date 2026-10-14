@@ -55,6 +55,8 @@ public class DefaultSessionService implements SessionService {
     entry.setRequestId(request.getRequestId());
     entry.setCreatedAt(request.getCreatedAt());
     entry.setIntent(request.getIntent());
+    entry.setPersonalised(request.isPersonalised());
+    entry.setPreferenceClarificationRequired(request.isPreferenceClarificationRequired());
     entry.setPositiveSemanticQuery(request.getPositiveSemanticQuery());
     entry.setNegativeSemanticQuery(request.getNegativeSemanticQuery());
     entry.setMustInclude(request.getMustInclude());

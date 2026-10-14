@@ -29,6 +29,9 @@ Retrieval is deliberately independent of intent:
 | Filters only | `FILTER_ONLY` |
 | Neither | `NONE` |
 
+Personalised requests use dense semantic retrieval with the same exact filters, even when no
+search text is supplied. See the preference flow below.
+
 ### Candidate scoring
 
 Each scorer returns a bounded score and reports when it lacks usable evidence. Retrieval relevance
@@ -60,6 +63,8 @@ negative semantic queries continue to control vector direction rather than exact
 - `mustInclude`
 - `mustNotInclude`
 - `bookCount`
+- `personalised` (asks for recommendations based on the user's taste)
+- `preferenceClarificationRequired` (response state when preferences are needed)
 - intent, raw text, request metadata, and recommendations
 
 The supported intents are:
@@ -79,6 +84,32 @@ limit. `UPDATE_PREFERENCES` stores semantic and exact-filter defaults in the Red
 these defaults are merged into later searches. Imported favourite and listening-history vectors are
 stored separately in Qdrant and automatically influence personalized ranking when the request's user
 ID has a matching preference point.
+
+### Personalised recommendations
+
+For requests such as "Give me books I would like", the parser sets `personalised=true`.
+The workflow looks up the user's Qdrant preference point using `X-User-Id` and combines the
+favourites and listening-history vectors with equal weight, then normalizes the result for
+candidate retrieval. If only one vector exists, that vector is used. No query embedding API call
+is needed for a known user. Exact request/session filters and the usual ranking and shown-book
+exclusions still apply.
+
+When there is no stored user vector, `SessionPreferences` supplies the embedding input. Semantic
+preferences and structured author, narrator, language, duration, and source preferences are encoded;
+positive preferences are combined with the inverse of negative preferences.
+
+If these preferences are empty, the response is "What genres, authors, or narrators do you like?"
+and retrieval is skipped. Redis retains `awaitingPersonalisedPreferences` on the session. The
+next preference answer in the same `X-Session-Id` is appended to `SessionPreferences`, encoded,
+and immediately used to retrieve recommendations. For example:
+
+1. User: "Give me books I would like."
+2. Assistant: "What genres, authors, or narrators do you like?"
+3. User: "I like fantasy and Ursula Le Guin."
+4. Assistant returns recommendations using the newly saved preferences.
+
+`MORE_RESULTS` and `REFINE` retain the personalised mode of the previous search. `HELP` and
+`CHANGE_COUNT` leave the pending preference question active; `CLEAR_HISTORY` cancels it.
 
 Each session has a `bookCount` limit. It defaults to the shared `MAX_BOOK_COUNT` value of five, and
 values above that maximum are capped by `Session.setBookCount`.

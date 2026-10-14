@@ -27,6 +27,15 @@ public class RequestApplicationService {
     if (request.getIntent() == null) {
       request.setIntent(Intent.UNKNOWN);
     }
+    if (session.isAwaitingPersonalisedPreferences()
+        && (request.getIntent() == Intent.UPDATE_PREFERENCES
+            || request.getIntent() == Intent.RECOMMENDATION
+            || request.getIntent() == Intent.REFINE
+            || request.getIntent() == Intent.MORE_RESULTS
+            || request.getIntent() == Intent.UNKNOWN)) {
+      request.setIntent(Intent.RECOMMENDATION);
+      request.setPersonalised(true);
+    }
     IntentAction action = actionRegistry.get(request.getIntent());
     SessionRequest result = action.execute(request, session);
 

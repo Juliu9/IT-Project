@@ -14,6 +14,15 @@ public class ParsedRequest {
   private MustInclude mustInclude;
   private MustNotInclude mustNotInclude;
   private Integer bookCount;
+  private boolean personalised;
+
+  public boolean isPersonalised() {
+    return personalised;
+  }
+
+  public void setPersonalised(boolean personalised) {
+    this.personalised = personalised;
+  }
 
   public ParsedRequest() {}
 

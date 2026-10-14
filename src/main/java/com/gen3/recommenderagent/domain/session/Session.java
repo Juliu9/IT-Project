@@ -19,6 +19,15 @@ public class Session {
   private List<String> shownBooks;
   private List<SessionRequest> requests = new ArrayList<>();
   private SessionPreferences preferences;
+  private boolean awaitingPersonalisedPreferences;
+
+  public boolean isAwaitingPersonalisedPreferences() {
+    return awaitingPersonalisedPreferences;
+  }
+
+  public void setAwaitingPersonalisedPreferences(boolean awaiting) {
+    this.awaitingPersonalisedPreferences = awaiting;
+  }
 
   public Session() {}
 
@@ -101,7 +110,8 @@ public class Session {
 
   private boolean hasSearchCriteria(SessionRequest request) {
     return request != null
-        && (request.getPositiveSemanticQuery() != null
+        && (request.isPersonalised()
+            || request.getPositiveSemanticQuery() != null
             || request.getNegativeSemanticQuery() != null
             || request.getMustInclude() != null
             || request.getMustNotInclude() != null);
@@ -128,6 +138,7 @@ public class Session {
   }
 
   public void clearHistory() {
+    this.awaitingPersonalisedPreferences = false;
     this.requests.clear();
     if (this.shownBooks != null) {
       this.shownBooks.clear();

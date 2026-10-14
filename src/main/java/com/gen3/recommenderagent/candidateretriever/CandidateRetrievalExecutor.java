@@ -31,6 +31,11 @@ public class CandidateRetrievalExecutor {
       int limit)
       throws IOException {
     AudiobookRetrievalPlan plan = retrievalPlanner.plan(limit, request);
+    if (request != null && request.isPersonalised() && vectors != null && !vectors.isEmpty()) {
+      List<AudiobookCandidate> candidates = retrieveSemantic(candidateSearch, plan, vectors);
+      RequestTelemetry.retrieval("SEMANTIC", candidates.size());
+      return candidates;
+    }
     List<AudiobookCandidate> candidates =
         switch (plan.mode()) {
           case SEMANTIC -> retrieveSemantic(candidateSearch, plan, vectors);

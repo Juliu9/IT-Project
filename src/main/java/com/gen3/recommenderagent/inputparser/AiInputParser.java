@@ -55,6 +55,14 @@ public class AiInputParser implements InputParser {
                         number of results in bookCount. Do not invent values or report contradictions.
                         Use RECOMMENDATION for every new audiobook search, including searches by
                         theme, author, narrator, language, or duration. Do not select a retrieval mode.
+                        Set personalised to true when the user asks for books they would like,
+                        recommendations based on their taste, favourites, or listening history.
+                        "Give me books I would like" is RECOMMENDATION with personalised=true
+                        and no invented search criteria. Set personalised=false for ordinary searches.
+                        Statements of taste such as "I like fantasy and Ursula Le Guin", including
+                        short preference answers such as "fantasy", are UPDATE_PREFERENCES.
+                        Put liked authors and narrators in positiveSemanticQuery; use mustInclude
+                        only when the user explicitly requires exact matches.
                         """)
                     .user(rawText)
                     .call()
@@ -69,6 +77,7 @@ public class AiInputParser implements InputParser {
 
     SessionRequest request = new SessionRequest();
     request.setIntent(parsed.getIntent());
+    request.setPersonalised(parsed.isPersonalised());
     request.setPositiveSemanticQuery(parsed.getPositiveSemanticQuery());
     request.setNegativeSemanticQuery(parsed.getNegativeSemanticQuery());
     request.setMustInclude(parsed.getMustInclude());

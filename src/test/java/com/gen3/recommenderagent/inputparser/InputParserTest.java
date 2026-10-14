@@ -26,6 +26,30 @@ import tools.jackson.databind.ObjectMapper;
 class InputParserTest {
 
   @Test
+  void mapsPersonalisedRequestWithoutInventingSearchCriteria() {
+    String rawText = "Give me books I would like";
+    ParsedRequest parsed = new ParsedRequest();
+    parsed.setIntent(Intent.RECOMMENDATION);
+    parsed.setPersonalised(true);
+    ChatClient client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    when(client
+            .prompt()
+            .system(anyString())
+            .user(rawText)
+            .call()
+            .responseEntity(ParsedRequest.class))
+        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+    ChatClient.Builder builder = mock(ChatClient.Builder.class);
+    when(builder.build()).thenReturn(client);
+
+    SessionRequest result = new AiInputParser(builder).parse(rawText).entity();
+
+    assertEquals(true, result.isPersonalised());
+    assertEquals(null, result.getPositiveSemanticQuery());
+    assertEquals(null, result.getMustInclude());
+  }
+
+  @Test
   void shouldMapAiResultWithoutCallingARealAiService() {
     String rawText = "Recommend science fiction audiobooks.";
 
