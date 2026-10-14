@@ -31,7 +31,8 @@ public class AiInputParser implements InputParser {
   @Override
   public ResponseEntity<ChatResponse, SessionRequest> parse(String rawText) {
     if (rawText == null || rawText.isBlank()) {
-      throw new IllegalArgumentException("Please enter your request");
+      throw new InvalidRequestException(
+          "I didn’t catch a request. What would you like to listen to?");
     }
 
     var aiResponse =

@@ -52,7 +52,7 @@ public class RequestGateway {
   public String handleRequest(
       @RequestHeader("X-Session-Id") String sessionId,
       @RequestHeader("X-User-Id") String userId,
-      @RequestBody String rawText) {
+      @RequestBody(required = false) String rawText) {
     if (telemetry != null) {
       telemetry.start();
     }

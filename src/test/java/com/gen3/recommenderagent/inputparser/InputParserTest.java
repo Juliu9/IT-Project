@@ -107,10 +107,11 @@ class InputParserTest {
 
     InputParser parser = new AiInputParser(builder);
 
-    IllegalArgumentException exception =
-        assertThrows(IllegalArgumentException.class, () -> parser.parse("   "));
+    InvalidRequestException exception =
+        assertThrows(InvalidRequestException.class, () -> parser.parse("   "));
 
-    assertEquals("Please enter your request", exception.getMessage());
+    assertEquals(
+        "I didn’t catch a request. What would you like to listen to?", exception.getMessage());
     verifyNoInteractions(chatClient);
   }
 
