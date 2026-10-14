@@ -20,7 +20,7 @@ public class DefaultSessionService implements SessionService {
 
   @Override
   public Session load(String sessionId, String userId) {
-    Session session = sessionRepository.getSession(sessionId);
+    Session session = sessionRepository.getSession(sessionId, userId);
     if (session == null) {
       session = new Session();
       session.setSessionId(sessionId);

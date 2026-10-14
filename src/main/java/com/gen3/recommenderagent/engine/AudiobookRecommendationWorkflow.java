@@ -58,9 +58,6 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
     if (request != null && request.isPersonalised()) {
       boolean needsPreferences = vectors == null || vectors.isEmpty();
       request.setPreferenceClarificationRequired(needsPreferences);
-      if (session != null) {
-        session.setAwaitingPersonalisedPreferences(needsPreferences);
-      }
       if (needsPreferences) {
         return List.of();
       }

@@ -29,6 +29,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers(disabledWithoutDocker = true)
 class RedisSessionRepositoryTest {
 
+  private static final String USER_ID = "user-1";
+
   @Container
   static GenericContainer<?> redis =
       new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
@@ -70,13 +72,11 @@ class RedisSessionRepositoryTest {
   @Test
   void shouldSaveAndRetrieveSessionId() {
 
-    Session session = new Session();
-
-    session.setSessionId("session-123");
+    Session session = session("session-123");
 
     redisSessionCache.updateSession(session);
 
-    Session retrieved = redisSessionCache.getSession("session-123");
+    Session retrieved = redisSessionCache.getSession("session-123", USER_ID);
 
     assertNotNull(retrieved);
 
@@ -86,7 +86,7 @@ class RedisSessionRepositoryTest {
         connectionFactory
             .getConnection()
             .keyCommands()
-            .ttl("session:session-123".getBytes(), TimeUnit.SECONDS);
+            .ttl(key("session-123").getBytes(), TimeUnit.SECONDS);
     assertNotNull(ttl);
     assertTrue(ttl > 0);
   }
@@ -98,9 +98,7 @@ class RedisSessionRepositoryTest {
   @Test
   void shouldSaveAndRetrieveSessionRequest() {
 
-    Session session = new Session();
-
-    session.setSessionId("session-request-test");
+    Session session = session("session-request-test");
 
     SessionRequest request = new SessionRequest();
 
@@ -108,7 +106,7 @@ class RedisSessionRepositoryTest {
 
     redisSessionCache.updateSession(session);
 
-    Session retrieved = redisSessionCache.getSession("session-request-test");
+    Session retrieved = redisSessionCache.getSession("session-request-test", USER_ID);
 
     assertNotNull(retrieved);
 
@@ -119,20 +117,18 @@ class RedisSessionRepositoryTest {
 
   @Test
   void shouldStoreShownBooksAsIdsOnly() {
-    Session session = new Session();
-    session.setSessionId("shown-book-ids-test");
+    Session session = session("shown-book-ids-test");
     session.addRecommendationIds(List.of("book-1", "book-2"));
 
     redisSessionCache.updateSession(session);
 
-    Session retrieved = redisSessionCache.getSession("shown-book-ids-test");
+    Session retrieved = redisSessionCache.getSession("shown-book-ids-test", USER_ID);
     assertEquals(List.of("book-1", "book-2"), retrieved.getShownBooks());
   }
 
   @Test
   void shouldSaveAndRetrieveSessionPreferences() {
-    Session session = new Session();
-    session.setSessionId("session-preferences-test");
+    Session session = session("session-preferences-test");
 
     SemanticQuery positiveQuery = new SemanticQuery();
     positiveQuery.setGenres(List.of("fantasy"));
@@ -146,7 +142,7 @@ class RedisSessionRepositoryTest {
 
     redisSessionCache.updateSession(session);
 
-    Session retrieved = redisSessionCache.getSession("session-preferences-test");
+    Session retrieved = redisSessionCache.getSession("session-preferences-test", USER_ID);
     assertNotNull(retrieved.getPreferences());
     assertEquals(
         List.of("fantasy"), retrieved.getPreferences().getPositiveSemanticQuery().getGenres());
@@ -160,9 +156,7 @@ class RedisSessionRepositoryTest {
   @Test
   void shouldSaveAndRetrieveQuery() {
 
-    Session session = new Session();
-
-    session.setSessionId("semanticQuery-test");
+    Session session = session("semanticQuery-test");
 
     SemanticQuery semanticQuery = new SemanticQuery();
 
@@ -182,7 +176,7 @@ class RedisSessionRepositoryTest {
 
     redisSessionCache.updateSession(session);
 
-    Session retrieved = redisSessionCache.getSession("semanticQuery-test");
+    Session retrieved = redisSessionCache.getSession("semanticQuery-test", USER_ID);
 
     SemanticQuery retrievedSemanticQuery =
         retrieved.getRequests().get(0).getPositiveSemanticQuery();
@@ -205,9 +199,7 @@ class RedisSessionRepositoryTest {
   @Test
   void shouldSaveAndRetrieveNegativeSemanticQuery() {
 
-    Session session = new Session();
-
-    session.setSessionId("negative-query-test");
+    Session session = session("negative-query-test");
 
     SemanticQuery negativeQuery = new SemanticQuery();
     negativeQuery.setGenres(List.of("romance"));
@@ -220,7 +212,7 @@ class RedisSessionRepositoryTest {
 
     redisSessionCache.updateSession(session);
 
-    Session retrieved = redisSessionCache.getSession("negative-query-test");
+    Session retrieved = redisSessionCache.getSession("negative-query-test", USER_ID);
 
     SemanticQuery retrievedQuery = retrieved.getRequests().get(0).getNegativeSemanticQuery();
 
@@ -235,9 +227,7 @@ class RedisSessionRepositoryTest {
   @Test
   void shouldSaveAndRetrieveIncludeAndExcludeFilters() {
 
-    Session session = new Session();
-
-    session.setSessionId("constraints-test");
+    Session session = session("constraints-test");
 
     MustInclude mustInclude = new MustInclude();
     mustInclude.setDuration("under 10 hours");
@@ -257,7 +247,7 @@ class RedisSessionRepositoryTest {
 
     redisSessionCache.updateSession(session);
 
-    Session retrieved = redisSessionCache.getSession("constraints-test");
+    Session retrieved = redisSessionCache.getSession("constraints-test", USER_ID);
 
     SessionRequest retrievedRequest = retrieved.getRequests().get(0);
     assertEquals(5, retrievedRequest.getBookCount());
@@ -275,9 +265,7 @@ class RedisSessionRepositoryTest {
   @Test
   void shouldSaveAndRetrieveRecommendations() {
 
-    Session session = new Session();
-
-    session.setSessionId("recommendations-test");
+    Session session = session("recommendations-test");
 
     List<Recommendation> recommendations =
         List.of(
@@ -292,7 +280,7 @@ class RedisSessionRepositoryTest {
 
     redisSessionCache.updateSession(session);
 
-    Session retrieved = redisSessionCache.getSession("recommendations-test");
+    Session retrieved = redisSessionCache.getSession("recommendations-test", USER_ID);
 
     List<Recommendation> retrievedRecommendations =
         retrieved.getRequests().get(0).getRecommendations();
@@ -317,9 +305,7 @@ class RedisSessionRepositoryTest {
   @Test
   void shouldPreserveNullOptionalObjects() {
 
-    Session session = new Session();
-
-    session.setSessionId("null-test");
+    Session session = session("null-test");
 
     SessionRequest request = new SessionRequest();
 
@@ -327,7 +313,7 @@ class RedisSessionRepositoryTest {
 
     redisSessionCache.updateSession(session);
 
-    Session retrieved = redisSessionCache.getSession("null-test");
+    Session retrieved = redisSessionCache.getSession("null-test", USER_ID);
 
     SessionRequest retrievedRequest = retrieved.getRequests().get(0);
 
@@ -347,9 +333,7 @@ class RedisSessionRepositoryTest {
 
     String sessionId = "update-test";
 
-    Session session = new Session();
-
-    session.setSessionId(sessionId);
+    Session session = session(sessionId);
 
     SemanticQuery semanticQuery = new SemanticQuery();
 
@@ -371,12 +355,53 @@ class RedisSessionRepositoryTest {
     redisSessionCache.updateSession(session);
 
     // Retrieve
-    Session retrieved = redisSessionCache.getSession(sessionId);
+    Session retrieved = redisSessionCache.getSession(sessionId, USER_ID);
 
     assertNotNull(retrieved);
 
     assertEquals(
         List.of("WWI", "Vietnam War"),
         retrieved.getRequests().get(0).getPositiveSemanticQuery().getTopics());
+  }
+
+  @Test
+  void separatesSessionsWithTheSameSessionIdForDifferentUsers() {
+    Session first = session("shared-session");
+    first.setUserId("user:one");
+    Session second = session("shared-session");
+    second.setUserId("user:two");
+
+    redisSessionCache.updateSession(first);
+    redisSessionCache.updateSession(second);
+
+    assertEquals(
+        "user:one", redisSessionCache.getSession("shared-session", "user:one").getUserId());
+    assertEquals(
+        "user:two", redisSessionCache.getSession("shared-session", "user:two").getUserId());
+  }
+
+  @Test
+  void keepsCompositeKeysDistinctWhenIdsContainSeparators() {
+    Session first = session("c");
+    first.setUserId("a:b");
+    Session second = session("b:c");
+    second.setUserId("a");
+
+    redisSessionCache.updateSession(first);
+    redisSessionCache.updateSession(second);
+
+    assertEquals("a:b", redisSessionCache.getSession("c", "a:b").getUserId());
+    assertEquals("a", redisSessionCache.getSession("b:c", "a").getUserId());
+  }
+
+  private Session session(String sessionId) {
+    Session session = new Session();
+    session.setSessionId(sessionId);
+    session.setUserId(USER_ID);
+    return session;
+  }
+
+  private String key(String sessionId) {
+    return "session:" + USER_ID.length() + ":" + USER_ID + ":" + sessionId;
   }
 }

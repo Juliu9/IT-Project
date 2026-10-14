@@ -121,8 +121,9 @@ BM25-style sparse vector (`keywords`), and filterable audiobook metadata. Author
 language, duration, and source can be required or excluded. Hybrid retrieval combines dense and
 sparse results using reciprocal-rank fusion.
 
-Redis stores session history. `shownBooks` contains only unique audiobook IDs rather than duplicate
-recommendation objects. There is no PostgreSQL or user-profile dependency.
+Redis stores session history under the pair of user ID and session ID. `shownBooks` contains only
+unique audiobook IDs rather than duplicate recommendation objects. There is no PostgreSQL or
+user-profile dependency.
 
 The Solr implementation is retained as an isolated compatibility adapter under
 `storage/audiobook/solr`. Normal recommendation functionality does not depend on Solr. Set

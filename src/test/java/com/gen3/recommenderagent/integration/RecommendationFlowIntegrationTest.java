@@ -161,7 +161,7 @@ class RecommendationFlowIntegrationTest {
             .getResponse()
             .getContentAsString();
 
-    Session savedSession = sessionRepository.getSession("session-1");
+    Session savedSession = sessionRepository.getSession("session-1", "user-1");
     assertNotNull(savedSession);
     assertEquals("user-1", savedSession.getUserId());
     assertEquals(1, savedSession.getRequests().size());

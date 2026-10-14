@@ -160,7 +160,7 @@ class PersonalisedRecommendationFlowTest {
     assertThat(responseGenerator.generate(first.getRecommendations(), first))
         .isEqualTo("What genres, authors, or narrators do you like?");
     verifyNoInteractions(books, embeddingModel, ranker);
-    assertThat(sessions.getSession("session").isAwaitingPersonalisedPreferences()).isTrue();
+    assertThat(sessions.getSession("session", "user").isAwaitingPersonalisedPreferences()).isTrue();
 
     // Simulate a separate request reading the persisted session, as Redis does.
     JsonMapper mapper = JsonMapper.builder().build();
@@ -192,7 +192,9 @@ class PersonalisedRecommendationFlowTest {
     SemanticQuery earlier = new SemanticQuery();
     earlier.setGenres(List.of("fantasy"));
     session.getPreferences().setPositiveSemanticQuery(earlier);
-    session.setAwaitingPersonalisedPreferences(true);
+    SessionRequest pending = personalisedRequest();
+    pending.setPreferenceClarificationRequired(true);
+    session.addRequest(pending);
     sessions.updateSession(session);
     SessionRequest answer = new SessionRequest();
     answer.setIntent(Intent.UPDATE_PREFERENCES);
@@ -248,11 +250,12 @@ class PersonalisedRecommendationFlowTest {
     SessionRequest help = new SessionRequest();
     help.setIntent(Intent.HELP);
     assertThat(process(help).getIntent()).isEqualTo(Intent.HELP);
-    assertThat(sessions.getSession("session").isAwaitingPersonalisedPreferences()).isTrue();
+    assertThat(sessions.getSession("session", "user").isAwaitingPersonalisedPreferences()).isTrue();
     SessionRequest clear = new SessionRequest();
     clear.setIntent(Intent.CLEAR_HISTORY);
     process(clear);
-    assertThat(sessions.getSession("session").isAwaitingPersonalisedPreferences()).isFalse();
+    assertThat(sessions.getSession("session", "user").isAwaitingPersonalisedPreferences())
+        .isFalse();
     verifyNoInteractions(books, embeddingModel);
   }
 

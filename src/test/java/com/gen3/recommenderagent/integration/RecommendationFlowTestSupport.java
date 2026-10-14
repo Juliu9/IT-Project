@@ -11,16 +11,18 @@ final class RecommendationFlowTestSupport {
 
   static final class InMemorySessionRepository implements SessionRepository {
 
-    private final Map<String, Session> sessions = new HashMap<>();
+    private final Map<SessionKey, Session> sessions = new HashMap<>();
 
     @Override
-    public Session getSession(String sessionId) {
-      return sessions.get(sessionId);
+    public Session getSession(String sessionId, String userId) {
+      return sessions.get(new SessionKey(sessionId, userId));
     }
 
     @Override
     public void updateSession(Session session) {
-      sessions.put(session.getSessionId(), session);
+      sessions.put(new SessionKey(session.getSessionId(), session.getUserId()), session);
     }
+
+    private record SessionKey(String sessionId, String userId) {}
   }
 }

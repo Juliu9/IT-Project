@@ -19,14 +19,10 @@ public class Session {
   private List<String> shownBooks;
   private List<SessionRequest> requests = new ArrayList<>();
   private SessionPreferences preferences;
-  private boolean awaitingPersonalisedPreferences;
 
   public boolean isAwaitingPersonalisedPreferences() {
-    return awaitingPersonalisedPreferences;
-  }
-
-  public void setAwaitingPersonalisedPreferences(boolean awaiting) {
-    this.awaitingPersonalisedPreferences = awaiting;
+    return requests != null
+        && requests.stream().anyMatch(SessionRequest::isPreferenceClarificationRequired);
   }
 
   public Session() {}
@@ -138,7 +134,6 @@ public class Session {
   }
 
   public void clearHistory() {
-    this.awaitingPersonalisedPreferences = false;
     this.requests.clear();
     if (this.shownBooks != null) {
       this.shownBooks.clear();
