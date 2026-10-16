@@ -58,7 +58,9 @@ public class QdrantUserPreferenceRepository implements UserPreferenceVectorRepos
     if (userId == null || userId.isBlank()) {
       return Optional.empty();
     }
-    initialize();
+    if (!collectionExists()) {
+      return Optional.empty();
+    }
 
     List<RetrievedPoint> points =
         await(
@@ -95,6 +97,24 @@ public class QdrantUserPreferenceRepository implements UserPreferenceVectorRepos
         createCollection();
       }
       initialized = true;
+    }
+  }
+
+  private boolean collectionExists() throws IOException {
+    if (initialized) {
+      return true;
+    }
+    synchronized (initializationLock) {
+      if (initialized) {
+        return true;
+      }
+      boolean exists =
+          await(
+              client.collectionExistsAsync(collection), "check Qdrant user preference collection");
+      if (exists) {
+        initialized = true;
+      }
+      return exists;
     }
   }
 

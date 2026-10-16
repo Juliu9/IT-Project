@@ -35,6 +35,8 @@ public final class SolrContainerTestSupport {
     addField(client, "authors", "text_general", true);
     addField(client, "rt_authors", "text_general", true);
     addField(client, "description", "text_general", false);
+    addField(client, "short_description", "string", false);
+    addField(client, "publicationYear", "pint", false);
     addField(client, "all", "text_general", false);
   }
 

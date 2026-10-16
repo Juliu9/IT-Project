@@ -82,6 +82,8 @@ public class SolrAudiobookRepository
         "narrators",
         "language",
         "durationMinutes",
+        "publicationYear",
+        "short_description",
         "score");
     addFilters(solrQuery, filters);
 
@@ -238,7 +240,9 @@ public class SolrAudiobookRepository
         "description",
         "narrators",
         "language",
-        "durationMinutes");
+        "durationMinutes",
+        "publicationYear",
+        "short_description");
     try {
       QueryResponse response = solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
       return response.getResults().stream().map(this::toRecord).toList();
@@ -262,6 +266,8 @@ public class SolrAudiobookRepository
         "narrators",
         "language",
         "durationMinutes",
+        "publicationYear",
+        "short_description",
         "score");
     addFilters(solrQuery, filters);
     return solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
@@ -421,7 +427,9 @@ public class SolrAudiobookRepository
         field(document, "description"),
         stringList(document.getFieldValue("narrators")),
         field(document, "language"),
-        integer(document.getFieldValue("durationMinutes")));
+        integer(document.getFieldValue("durationMinutes")),
+        integer(document.getFieldValue("publicationYear")),
+        field(document, "short_description"));
   }
 
   /** Converts a scalar or multivalued Solr field into a stable string list. */

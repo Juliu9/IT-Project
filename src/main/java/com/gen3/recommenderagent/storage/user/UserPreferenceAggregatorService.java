@@ -11,9 +11,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -42,6 +42,8 @@ public class UserPreferenceAggregatorService {
     Set<String> allUserIds = new HashSet<>();
     allUserIds.addAll(favsByUser.keySet());
     allUserIds.addAll(histByUser.keySet());
+    Map<String, float[]> vectors =
+        audiobookVectorRepository.findEmbeddingsByBookIds(bookIds(favourites, history));
 
     Instant now = Instant.now();
 
@@ -49,7 +51,7 @@ public class UserPreferenceAggregatorService {
       // 1. Process Favourites (Standard Average)
       List<float[]> favVectors = new ArrayList<>();
       for (UserFavourite fav : favsByUser.getOrDefault(userId, List.of())) {
-        audiobookVectorRepository.findEmbeddingByBookId(fav.bookId()).ifPresent(favVectors::add);
+        addVector(favVectors, vectors.get(fav.bookId()));
       }
       float[] aggregatedFavs = VectorMath.average(favVectors);
 
@@ -58,10 +60,9 @@ public class UserPreferenceAggregatorService {
       List<Double> histWeights = new ArrayList<>();
 
       for (UserHistory hist : histByUser.getOrDefault(userId, List.of())) {
-        Optional<float[]> vectorOpt =
-            audiobookVectorRepository.findEmbeddingByBookId(hist.bookId());
-        if (vectorOpt.isPresent()) {
-          histVectors.add(vectorOpt.get());
+        float[] vector = vectors.get(hist.bookId());
+        if (vector != null && vector.length > 0) {
+          histVectors.add(vector);
 
           // Calculate weight based on the LAST interaction
           long daysAgo = Duration.between(hist.lastInteractionTime(), now).toDays();
@@ -80,6 +81,20 @@ public class UserPreferenceAggregatorService {
             new UserPreferenceEmbedding(userId, aggregatedFavs, aggregatedHist);
         userPreferenceVectorRepository.save(embedding);
       }
+    }
+  }
+
+  private Set<String> bookIds(List<UserFavourite> favourites, List<UserHistory> history) {
+    Set<String> ids = new LinkedHashSet<>();
+    favourites.stream().map(UserFavourite::bookId).forEach(ids::add);
+    history.stream().map(UserHistory::bookId).forEach(ids::add);
+    ids.removeIf(id -> id == null || id.isBlank());
+    return ids;
+  }
+
+  private void addVector(List<float[]> vectors, float[] vector) {
+    if (vector != null && vector.length > 0) {
+      vectors.add(vector);
     }
   }
 }

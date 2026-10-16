@@ -39,6 +39,8 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -81,7 +83,7 @@ public class QdrantAudiobookRepository
       return List.of();
     }
     validateDimension(queryVector);
-    initialize();
+    requireCollection();
     QueryPoints.Builder request = baseQuery(filters, limit);
     request.setUsing(QdrantPointMapper.DENSE_VECTOR).setQuery(denseQuery(queryVector));
     return query(request.build());
@@ -95,7 +97,7 @@ public class QdrantAudiobookRepository
     if (sparse.isEmpty() || limit <= 0) {
       return List.of();
     }
-    initialize();
+    requireCollection();
     QueryPoints.Builder request = baseQuery(filters, limit);
     request.setUsing(QdrantPointMapper.KEYWORD_VECTOR).setQuery(sparseQuery(sparse));
     return query(request.build());
@@ -113,7 +115,7 @@ public class QdrantAudiobookRepository
     if (sparse.isEmpty()) {
       return searchSemantic(queryVector, filters, limit);
     }
-    initialize();
+    requireCollection();
     int prefetchLimit = limit * 4;
     Filter filter = filter(filters);
     PrefetchQuery.Builder dense =
@@ -150,7 +152,7 @@ public class QdrantAudiobookRepository
     if (filters == null || !filters.hasConditions() || limit <= 0) {
       return List.of();
     }
-    initialize();
+    requireCollection();
     return query(baseQuery(filters, limit).build());
   }
 
@@ -187,7 +189,7 @@ public class QdrantAudiobookRepository
     if (updates == null || updates.isEmpty()) {
       return;
     }
-    initialize();
+    requireCollection();
     List<PointsUpdateOperation> operations = new ArrayList<>();
     for (ShortDescriptionUpdate update : updates) {
       if (update != null && hasText(update.storageReference()) && hasText(update.description())) {
@@ -204,7 +206,7 @@ public class QdrantAudiobookRepository
   /** Adds fake metadata only to fields absent from existing Qdrant payloads. */
   @Override
   public int enrichMissingMetadata(AudiobookMetadataEnricher metadataEnricher) throws IOException {
-    initialize();
+    requireCollection();
     createPayloadIndex("publicationYear", FieldType.FieldTypeInteger);
     int updated = 0;
     io.qdrant.client.grpc.Common.PointId offset = null;
@@ -297,7 +299,7 @@ public class QdrantAudiobookRepository
     if (maximumRecords <= 0) {
       return List.of();
     }
-    initialize();
+    requireCollection();
     createPayloadIndex("short_description", FieldType.FieldTypeKeyword);
     List<StoredAudiobook> records = new ArrayList<>();
     io.qdrant.client.grpc.Common.PointId offset = null;
@@ -351,27 +353,41 @@ public class QdrantAudiobookRepository
   /** Retrieves the stored vector for one favourite audiobook by its catalogue ID. */
   @Override
   public Optional<float[]> findEmbeddingByBookId(String bookId) throws IOException {
-    if (bookId == null || bookId.isBlank()) {
+    if (!hasText(bookId)) {
       return Optional.empty();
     }
-    initialize();
-    List<RetrievedPoint> points =
-        await(
-            client.retrieveAsync(collection, List.of(mapper.pointId(bookId)), false, true, null),
-            "retrieve an audiobook vector from Qdrant");
-    if (points.isEmpty() || !points.getFirst().hasVectors()) {
-      return Optional.empty();
+    return Optional.ofNullable(findEmbeddingsByBookIds(List.of(bookId)).get(bookId));
+  }
+
+  /** Retrieves many catalogue vectors in bounded gRPC calls for preference imports. */
+  @Override
+  public Map<String, float[]> findEmbeddingsByBookIds(Collection<String> bookIds)
+      throws IOException {
+    if (bookIds == null || bookIds.isEmpty()) {
+      return Map.of();
     }
-    var namedVectors = points.getFirst().getVectors().getVectors().getVectorsMap();
-    if (!namedVectors.containsKey(QdrantPointMapper.DENSE_VECTOR)) {
-      return Optional.empty();
+    List<String> ids = bookIds.stream().filter(this::hasText).distinct().toList();
+    if (ids.isEmpty()) {
+      return Map.of();
     }
-    List<Float> values = namedVectors.get(QdrantPointMapper.DENSE_VECTOR).getDense().getDataList();
-    float[] vector = new float[values.size()];
-    for (int index = 0; index < values.size(); index++) {
-      vector[index] = values.get(index);
+    requireCollection();
+    Map<String, float[]> vectors = new LinkedHashMap<>();
+    for (int start = 0; start < ids.size(); start += 100) {
+      List<String> batch = ids.subList(start, Math.min(start + 100, ids.size()));
+      List<RetrievedPoint> points =
+          await(
+              client.retrieveAsync(
+                  collection, batch.stream().map(mapper::pointId).toList(), false, true, null),
+              "retrieve audiobook vectors from Qdrant");
+      for (RetrievedPoint point : points) {
+        float[] vector = denseVector(point);
+        String bookId = mapper.toRecord(point).id();
+        if (hasText(bookId) && vector != null) {
+          vectors.put(bookId, vector);
+        }
+      }
     }
-    return Optional.of(vector);
+    return vectors;
   }
 
   /** Creates named dense and sparse vectors plus indexes used by payload filters. */
@@ -387,6 +403,21 @@ public class QdrantAudiobookRepository
       boolean exists = await(client.collectionExistsAsync(collection), "check Qdrant collection");
       if (!exists) {
         createCollection();
+      }
+      initialized = true;
+    }
+  }
+
+  private void requireCollection() throws IOException {
+    if (initialized) {
+      return;
+    }
+    synchronized (initializationLock) {
+      if (initialized) {
+        return;
+      }
+      if (!await(client.collectionExistsAsync(collection), "check Qdrant collection")) {
+        throw new IOException("Qdrant collection does not exist: " + collection);
       }
       initialized = true;
     }
@@ -555,6 +586,25 @@ public class QdrantAudiobookRepository
       values.add(value);
     }
     return values;
+  }
+
+  private float[] denseVector(RetrievedPoint point) {
+    if (point == null || !point.hasVectors()) {
+      return null;
+    }
+    var vectors = point.getVectors().getVectors().getVectorsMap();
+    if (!vectors.containsKey(QdrantPointMapper.DENSE_VECTOR)) {
+      return null;
+    }
+    List<Float> values = vectors.get(QdrantPointMapper.DENSE_VECTOR).getDense().getDataList();
+    if (values.isEmpty()) {
+      return null;
+    }
+    float[] vector = new float[values.size()];
+    for (int index = 0; index < values.size(); index++) {
+      vector[index] = values.get(index);
+    }
+    return vector;
   }
 
   private boolean hasText(String value) {

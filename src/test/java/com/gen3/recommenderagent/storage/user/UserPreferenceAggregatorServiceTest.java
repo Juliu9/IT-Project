@@ -15,7 +15,8 @@ import java.io.IOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -27,10 +28,15 @@ class UserPreferenceAggregatorServiceTest {
   void aggregatesAvailableVectors() throws IOException {
     AudiobookVectorRepository audiobooks = mock(AudiobookVectorRepository.class);
     UserPreferenceVectorRepository users = mock(UserPreferenceVectorRepository.class);
-    when(audiobooks.findEmbeddingByBookId("fav")).thenReturn(Optional.of(new float[] {1, 0}));
-    when(audiobooks.findEmbeddingByBookId("missing")).thenReturn(Optional.empty());
-    when(audiobooks.findEmbeddingByBookId("recent")).thenReturn(Optional.of(new float[] {1, 0}));
-    when(audiobooks.findEmbeddingByBookId("old")).thenReturn(Optional.of(new float[] {0, 1}));
+    when(audiobooks.findEmbeddingsByBookIds(org.mockito.ArgumentMatchers.anyCollection()))
+        .thenReturn(
+            Map.of(
+                "fav",
+                new float[] {1, 0},
+                "recent",
+                new float[] {1, 0},
+                "old",
+                new float[] {0, 1}));
     Instant now = Instant.now();
     UserPreferenceAggregatorService service =
         new UserPreferenceAggregatorService(audiobooks, users);
@@ -45,6 +51,7 @@ class UserPreferenceAggregatorServiceTest {
         ArgumentCaptor.forClass(UserPreferenceEmbedding.class);
     verify(users).save(saved.capture());
     verifyNoMoreInteractions(users);
+    verify(audiobooks).findEmbeddingsByBookIds(Set.of("fav", "missing", "recent", "old"));
     assertArrayEquals(new float[] {1, 0}, saved.getValue().favouritesVector(), 0.0001f);
     assertArrayEquals(
         new float[] {0.8944272f, 0.4472136f}, saved.getValue().historyVector(), 0.0001f);

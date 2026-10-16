@@ -50,7 +50,7 @@ class SolrAudiobookRepositoryUnitTest {
     assertEquals("title rt_title authors rt_authors all", query.get("qf"));
     assertEquals(5, query.getRows());
     assertEquals(
-        "id,source,title,authors,description,narrators,language,durationMinutes,score",
+        "id,source,title,authors,description,narrators,language,durationMinutes,publicationYear,short_description,score",
         query.getFields());
   }
 
@@ -62,6 +62,8 @@ class SolrAudiobookRepositoryUnitTest {
     SolrDocument document = new SolrDocument();
     document.setField("id", "book-1");
     document.setField("authors", java.util.List.of("Author One", "Author Two"));
+    document.setField("publicationYear", 2024);
+    document.setField("short_description", "A brief description.");
     document.setField("score", 2.5f);
     SolrDocumentList documents = new SolrDocumentList();
     documents.setNumFound(7);
@@ -80,6 +82,8 @@ class SolrAudiobookRepositoryUnitTest {
     assertEquals("book-1", page.records().getFirst().id());
     assertEquals(
         java.util.List.of("Author One", "Author Two"), page.records().getFirst().authors());
+    assertEquals(2024, page.records().getFirst().publicationYear());
+    assertEquals("A brief description.", page.records().getFirst().shortDescription());
   }
 
   @Test

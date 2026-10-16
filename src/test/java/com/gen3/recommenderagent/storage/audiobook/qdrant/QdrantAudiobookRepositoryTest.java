@@ -1,6 +1,7 @@
 package com.gen3.recommenderagent.storage.audiobook.qdrant;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -37,6 +38,7 @@ import io.qdrant.client.grpc.Points.VectorsOutput;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -116,6 +118,24 @@ class QdrantAudiobookRepositoryTest {
   }
 
   @Test
+  void readsPreferenceImportVectorsInBoundedBatches() throws Exception {
+    QdrantClient client = mock(QdrantClient.class);
+    SparseTextEncoder sparseEncoder = new Bm25SparseTextEncoder();
+    QdrantPointMapper mapper = new QdrantPointMapper(sparseEncoder);
+    when(client.collectionExistsAsync("audiobooks")).thenReturn(Futures.immediateFuture(true));
+    when(client.retrieveAsync(eq("audiobooks"), anyList(), eq(false), eq(true), isNull()))
+        .thenReturn(Futures.immediateFuture(List.of()));
+    QdrantAudiobookRepository repository =
+        new QdrantAudiobookRepository(client, mapper, sparseEncoder, "audiobooks", 2);
+
+    repository.findEmbeddingsByBookIds(
+        IntStream.range(0, 101).mapToObj(index -> "book-" + index).toList());
+
+    verify(client, times(2))
+        .retrieveAsync(eq("audiobooks"), anyList(), eq(false), eq(true), isNull());
+  }
+
+  @Test
   void loadsOnlyRecordsMissingShortDescriptions() throws Exception {
     QdrantClient client = mock(QdrantClient.class);
     SparseTextEncoder sparseEncoder = new Bm25SparseTextEncoder();
@@ -188,7 +208,7 @@ class QdrantAudiobookRepositoryTest {
   }
 
   @Test
-  void createsShortDescriptionIndexOnlyForTheEnrichmentScan() throws Exception {
+  void createsCollectionOnlyForExplicitIndexing() throws Exception {
     QdrantClient client = mock(QdrantClient.class);
     SparseTextEncoder sparseEncoder = new Bm25SparseTextEncoder();
     QdrantPointMapper mapper = new QdrantPointMapper(sparseEncoder);
@@ -200,11 +220,16 @@ class QdrantAudiobookRepositoryTest {
                     .getDefaultInstance()));
     when(client.createPayloadIndexAsync(any(CreateFieldIndexCollection.class), any()))
         .thenReturn(Futures.immediateFuture(UpdateResult.getDefaultInstance()));
-    when(client.queryAsync(any(QueryPoints.class))).thenReturn(Futures.immediateFuture(List.of()));
+    when(client.upsertAsync(eq("audiobooks"), anyList()))
+        .thenReturn(Futures.immediateFuture(UpdateResult.getDefaultInstance()));
     QdrantAudiobookRepository repository =
         new QdrantAudiobookRepository(client, mapper, sparseEncoder, "audiobooks", 2);
 
-    repository.searchSemantic(new float[] {0.6f, 0.8f}, AudiobookFilters.empty(), 5);
+    repository.indexEmbeddings(
+        List.of(
+            new AudiobookEmbedding(
+                new AudiobookRecord("book-1", "source", "Title", List.of(), "Summary"),
+                new float[] {0.6f, 0.8f})));
 
     ArgumentCaptor<CreateFieldIndexCollection> index =
         ArgumentCaptor.forClass(CreateFieldIndexCollection.class);
@@ -213,6 +238,23 @@ class QdrantAudiobookRepositoryTest {
         .extracting(CreateFieldIndexCollection::getFieldName)
         .contains("bookId")
         .doesNotContain("short_description");
+  }
+
+  @Test
+  void doesNotCreateCollectionForSearch() {
+    QdrantClient client = mock(QdrantClient.class);
+    SparseTextEncoder sparseEncoder = new Bm25SparseTextEncoder();
+    when(client.collectionExistsAsync("audiobooks")).thenReturn(Futures.immediateFuture(false));
+    QdrantAudiobookRepository repository =
+        new QdrantAudiobookRepository(
+            client, new QdrantPointMapper(sparseEncoder), sparseEncoder, "audiobooks", 2);
+
+    assertThatThrownBy(
+            () -> repository.searchSemantic(new float[] {0.6f, 0.8f}, AudiobookFilters.empty(), 5))
+        .isInstanceOf(java.io.IOException.class)
+        .hasMessageContaining("does not exist");
+
+    verify(client, never()).createCollectionAsync(any());
   }
 
   @Test
