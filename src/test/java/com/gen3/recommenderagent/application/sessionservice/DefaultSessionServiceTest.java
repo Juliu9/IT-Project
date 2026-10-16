@@ -1,44 +1,37 @@
 package com.gen3.recommenderagent.application.sessionservice;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
-import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class DefaultSessionServiceTest {
 
   @Test
-  void createsNewSessionAndPersistsActionOutcome() {
+  void createsNewSession() {
     SessionRepository repository = mock(SessionRepository.class);
     when(repository.getSession("session-1", "user-1")).thenReturn(null);
     DefaultSessionService service = new DefaultSessionService(repository);
 
     Session session = service.load("session-1", "user-1");
-    SessionRequest request = new SessionRequest();
-    request.setRawText("Recommend a fantasy audiobook");
-    Recommendation recommendation = new Recommendation("book-1", 1, 1.0, "Book One");
-    request.setRecommendations(List.of(recommendation));
-
-    service.update(session, request, request);
-
     assertEquals("session-1", session.getSessionId());
     assertEquals("user-1", session.getUserId());
-    assertNotNull(request.getRequestId());
-    assertNotNull(request.getCreatedAt());
-    assertNotSame(request, session.getRequests().getFirst());
-    assertNull(session.getRequests().getFirst().getRawText());
-    assertEquals(List.of(), session.getShownBooks() == null ? List.of() : session.getShownBooks());
+  }
+
+  @Test
+  void savesACompletedSessionWithoutApplyingTransitionRules() {
+    SessionRepository repository = mock(SessionRepository.class);
+    Session session = new Session();
+    when(repository.updateSession(session)).thenReturn(true);
+
+    org.junit.jupiter.api.Assertions.assertTrue(
+        new DefaultSessionService(repository).save(session));
+
     verify(repository).updateSession(session);
   }
 

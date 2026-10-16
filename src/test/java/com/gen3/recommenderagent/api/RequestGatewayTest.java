@@ -7,7 +7,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.gen3.recommenderagent.application.RequestApplicationService;
+import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.application.sessionservice.SessionCommitException;
 import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalException;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.inputparser.InputParser;
@@ -25,7 +26,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class RequestGatewayTest {
 
   @Mock private InputParser inputParser;
-  @Mock private RequestApplicationService requestApplicationService;
+  @Mock private SessionTransitionService sessionTransitionService;
   @Mock private ResponseGenerator responseGenerator;
   @Mock private RequestTelemetry telemetry;
 
@@ -34,7 +35,7 @@ class RequestGatewayTest {
     IllegalArgumentException exception = new IllegalArgumentException("invalid request");
     when(inputParser.parse("bad request")).thenThrow(exception);
     RequestGateway gateway =
-        new RequestGateway(inputParser, requestApplicationService, responseGenerator, telemetry);
+        new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
 
     assertThatThrownBy(() -> gateway.handleRequest("session", "user", "bad request"))
         .isSameAs(exception);
@@ -50,7 +51,7 @@ class RequestGatewayTest {
             new InvalidRequestException(
                 "I didn’t catch a request. What would you like to listen to?"));
     RequestGateway gateway =
-        new RequestGateway(inputParser, requestApplicationService, responseGenerator, telemetry);
+        new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
     MockMvc mockMvc =
         MockMvcBuilders.standaloneSetup(gateway)
             .setControllerAdvice(new RequestExceptionHandler())
@@ -73,10 +74,10 @@ class RequestGatewayTest {
     SessionRequest parsedRequest = new SessionRequest();
     when(inputParser.parse("recommend science fiction"))
         .thenReturn(new org.springframework.ai.chat.client.ResponseEntity<>(null, parsedRequest));
-    when(requestApplicationService.process("session", "user", parsedRequest))
+    when(sessionTransitionService.process("session", "user", parsedRequest))
         .thenThrow(new CandidateRetrievalException("Qdrant", new RuntimeException("timed out")));
     RequestGateway gateway =
-        new RequestGateway(inputParser, requestApplicationService, responseGenerator, telemetry);
+        new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
     MockMvc mockMvc =
         MockMvcBuilders.standaloneSetup(gateway)
             .setControllerAdvice(new RequestExceptionHandler())
@@ -92,5 +93,51 @@ class RequestGatewayTest {
         .andExpect(
             content()
                 .string("Recommendations are temporarily unavailable. Please try again shortly."));
+  }
+
+  @Test
+  void returnsRetryAdviceWhenTheSessionIsBusy() throws Exception {
+    SessionRequest parsedRequest = new SessionRequest();
+    when(inputParser.parse("recommend science fiction"))
+        .thenReturn(new org.springframework.ai.chat.client.ResponseEntity<>(null, parsedRequest));
+    when(sessionTransitionService.process("session", "user", parsedRequest))
+        .thenThrow(
+            new com.gen3.recommenderagent.storage.sessionrepository.redis.SessionBusyException());
+    RequestGateway gateway =
+        new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
+
+    MockMvcBuilders.standaloneSetup(gateway)
+        .setControllerAdvice(new RequestExceptionHandler())
+        .build()
+        .perform(
+            post("/api/v1/recommendations")
+                .header("X-Session-Id", "session")
+                .header("X-User-Id", "user")
+                .content("recommend science fiction"))
+        .andExpect(status().isConflict())
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                .string("Retry-After", "1"));
+  }
+
+  @Test
+  void returnsServiceUnavailableWhenTheSessionCommitFails() throws Exception {
+    SessionRequest parsedRequest = new SessionRequest();
+    when(inputParser.parse("recommend science fiction"))
+        .thenReturn(new org.springframework.ai.chat.client.ResponseEntity<>(null, parsedRequest));
+    when(sessionTransitionService.process("session", "user", parsedRequest))
+        .thenThrow(new SessionCommitException());
+    RequestGateway gateway =
+        new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
+
+    MockMvcBuilders.standaloneSetup(gateway)
+        .setControllerAdvice(new RequestExceptionHandler())
+        .build()
+        .perform(
+            post("/api/v1/recommendations")
+                .header("X-Session-Id", "session")
+                .header("X-User-Id", "user")
+                .content("recommend science fiction"))
+        .andExpect(status().isServiceUnavailable());
   }
 }

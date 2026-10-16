@@ -1,11 +1,8 @@
 package com.gen3.recommenderagent.application.sessionservice;
 
 import com.gen3.recommenderagent.domain.session.Session;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
 import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
@@ -32,44 +29,12 @@ public class DefaultSessionService implements SessionService {
   }
 
   @Override
-  public boolean update(
-      Session session, SessionRequest originalRequest, SessionRequest actionResult) {
-    SessionRequest result = actionResult == null ? originalRequest : actionResult;
-    if (result.getRawText() == null && originalRequest != null) {
-      result.setRawText(originalRequest.getRawText());
-    }
-    if (result.getRequestId() == null) {
-      result.setRequestId(UUID.randomUUID().toString());
-    }
-    if (result.getCreatedAt() == null) {
-      result.setCreatedAt(Instant.now());
-    }
-    if (result.getRecommendations() == null) {
-      result.setRecommendations(List.of());
-    }
-
-    session.addRequest(historyEntry(result));
+  public boolean save(Session session) {
     return sessionRepository.updateSession(session);
   }
 
   @Override
   public <T> T withSessionLock(String sessionId, String userId, Supplier<T> operation) {
     return sessionRepository.withSessionLock(sessionId, userId, operation);
-  }
-
-  private SessionRequest historyEntry(SessionRequest request) {
-    SessionRequest entry = new SessionRequest();
-    entry.setRequestId(request.getRequestId());
-    entry.setCreatedAt(request.getCreatedAt());
-    entry.setIntent(request.getIntent());
-    entry.setPersonalised(request.isPersonalised());
-    entry.setPreferenceClarificationRequired(request.isPreferenceClarificationRequired());
-    entry.setPositiveSemanticQuery(request.getPositiveSemanticQuery());
-    entry.setNegativeSemanticQuery(request.getNegativeSemanticQuery());
-    entry.setMustInclude(request.getMustInclude());
-    entry.setMustNotInclude(request.getMustNotInclude());
-    entry.setBookCount(request.getBookCount());
-    entry.setRecommendations(request.getRecommendations());
-    return entry;
   }
 }

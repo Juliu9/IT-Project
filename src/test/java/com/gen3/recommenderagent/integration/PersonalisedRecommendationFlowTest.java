@@ -10,15 +10,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.application.ActionRegistry;
-import com.gen3.recommenderagent.application.RequestApplicationService;
-import com.gen3.recommenderagent.application.action.ChangeCountAction;
-import com.gen3.recommenderagent.application.action.ClearHistoryAction;
-import com.gen3.recommenderagent.application.action.ContinuationRecommendationAction;
-import com.gen3.recommenderagent.application.action.NoOpAction;
-import com.gen3.recommenderagent.application.action.RecommendationAction;
-import com.gen3.recommenderagent.application.action.RequestContextMerger;
-import com.gen3.recommenderagent.application.action.UpdatePreferencesAction;
+import com.gen3.recommenderagent.application.RequestContextMerger;
+import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.application.sessionservice.DefaultSessionService;
 import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalExecutor;
 import com.gen3.recommenderagent.candidateretriever.QdrantCandidateRetriever;
@@ -62,7 +55,7 @@ class PersonalisedRecommendationFlowTest {
   private final RecommendationFlowTestSupport.InMemorySessionRepository sessions =
       new RecommendationFlowTestSupport.InMemorySessionRepository();
   private final AiResponseGenerator responseGenerator = new AiResponseGenerator(null);
-  private final RequestApplicationService application;
+  private final SessionTransitionService application;
 
   PersonalisedRecommendationFlowTest() throws Exception {
     when(users.findEmbeddingByUserId("user")).thenReturn(Optional.empty());
@@ -81,16 +74,8 @@ class PersonalisedRecommendationFlowTest {
             ranker,
             new SemanticQueryVectorService(indexer),
             users);
-    ActionRegistry registry =
-        new ActionRegistry(
-            new RecommendationAction(workflow, merger),
-            new ContinuationRecommendationAction(workflow, merger),
-            new ChangeCountAction(merger),
-            new UpdatePreferencesAction(merger),
-            new ClearHistoryAction(),
-            new NoOpAction());
     application =
-        new RequestApplicationService(new DefaultSessionService(sessions), registry, merger);
+        new SessionTransitionService(new DefaultSessionService(sessions), merger, workflow);
   }
 
   @Test

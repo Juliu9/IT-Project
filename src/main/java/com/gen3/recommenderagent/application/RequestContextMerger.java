@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.application.action;
+package com.gen3.recommenderagent.application;
 
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.MustInclude;
@@ -49,12 +49,10 @@ public class RequestContextMerger {
     return target;
   }
 
-  /**
-   * Merges new preference fields into the session without retaining request metadata or results.
-   */
-  public void updatePreferences(Session session, SessionRequest request) {
-    if (session == null || request == null) {
-      return;
+  /** Returns the effective preferences after applying the request over current preferences. */
+  public SessionPreferences mergedPreferences(SessionRequest request, Session session) {
+    if (request == null) {
+      return session == null ? null : session.getPreferences();
     }
     SessionRequest combined = new SessionRequest();
     combined.setPositiveSemanticQuery(copy(request.getPositiveSemanticQuery()));
@@ -67,18 +65,15 @@ public class RequestContextMerger {
     preferences.setNegativeSemanticQuery(copy(combined.getNegativeSemanticQuery()));
     preferences.setMustInclude(copy(combined.getMustInclude()));
     preferences.setMustNotInclude(copy(combined.getMustNotInclude()));
-    session.setPreferences(preferences);
+    return preferences;
   }
 
-  /** Stores an explicit count and writes the effective session count back to the request. */
-  public void applyBookCount(SessionRequest request, Session session) {
-    if (request == null || session == null) {
-      return;
+  /** Resolves the request count without mutating the session. */
+  public Integer resolveBookCount(SessionRequest request, Session session) {
+    if (request != null && request.getBookCount() != null) {
+      return request.getBookCount();
     }
-    if (request.getBookCount() != null) {
-      session.setBookCount(request.getBookCount());
-    }
-    request.setBookCount(session.getBookCount());
+    return session == null ? null : session.getBookCount();
   }
 
   private void merge(SessionRequest base, SessionRequest target) {

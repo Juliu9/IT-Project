@@ -11,15 +11,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.gen3.recommenderagent.api.RequestGateway;
-import com.gen3.recommenderagent.application.ActionRegistry;
-import com.gen3.recommenderagent.application.RequestApplicationService;
-import com.gen3.recommenderagent.application.action.ChangeCountAction;
-import com.gen3.recommenderagent.application.action.ClearHistoryAction;
-import com.gen3.recommenderagent.application.action.ContinuationRecommendationAction;
-import com.gen3.recommenderagent.application.action.NoOpAction;
-import com.gen3.recommenderagent.application.action.RecommendationAction;
-import com.gen3.recommenderagent.application.action.RequestContextMerger;
-import com.gen3.recommenderagent.application.action.UpdatePreferencesAction;
+import com.gen3.recommenderagent.application.RequestContextMerger;
+import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.application.sessionservice.DefaultSessionService;
 import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalExecutor;
 import com.gen3.recommenderagent.candidateretriever.CandidateRetriever;
@@ -112,22 +105,11 @@ class RecommendationFlowIntegrationTest {
             rankingService,
             new SemanticQueryVectorService(embeddingIndexer),
             userPreferences);
-    RecommendationAction recommendationAction =
-        new RecommendationAction(workflow, requestContextMerger);
     RecommendationFlowTestSupport.InMemorySessionRepository sessionRepository =
         new RecommendationFlowTestSupport.InMemorySessionRepository();
-
-    ActionRegistry registry =
-        new ActionRegistry(
-            recommendationAction,
-            new ContinuationRecommendationAction(workflow, requestContextMerger),
-            new ChangeCountAction(requestContextMerger),
-            new UpdatePreferencesAction(requestContextMerger),
-            new ClearHistoryAction(),
-            new NoOpAction());
-    RequestApplicationService applicationService =
-        new RequestApplicationService(
-            new DefaultSessionService(sessionRepository), registry, requestContextMerger);
+    SessionTransitionService applicationService =
+        new SessionTransitionService(
+            new DefaultSessionService(sessionRepository), requestContextMerger, workflow);
 
     RequestGateway gateway =
         new RequestGateway(inputParser, applicationService, new AiResponseGenerator(null));

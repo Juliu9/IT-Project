@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.storage.sessionrepository;
+package com.gen3.recommenderagent.storage.sessionrepository.redis;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -14,10 +14,15 @@ import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
-import com.gen3.recommenderagent.storage.sessionrepository.redis.RedisSessionRepository;
-import com.gen3.recommenderagent.storage.sessionrepository.redis.SessionBusyException;
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
@@ -42,6 +47,8 @@ class RedisSessionRepositoryTest {
   private RedisSessionRepository redisSessionCache;
 
   private LettuceConnectionFactory connectionFactory;
+  private ScheduledExecutorService lockRenewalExecutor;
+  private StringRedisTemplate stringRedisTemplate;
 
   @BeforeEach
   void setUp() {
@@ -66,9 +73,21 @@ class RedisSessionRepositoryTest {
 
     redisTemplate.afterPropertiesSet();
 
-    StringRedisTemplate stringRedisTemplate = new StringRedisTemplate(connectionFactory);
+    stringRedisTemplate = new StringRedisTemplate(connectionFactory);
     stringRedisTemplate.afterPropertiesSet();
-    redisSessionCache = new RedisSessionRepository(redisTemplate, stringRedisTemplate);
+    lockRenewalExecutor = Executors.newSingleThreadScheduledExecutor();
+    redisSessionCache =
+        new RedisSessionRepository(
+            redisTemplate,
+            stringRedisTemplate,
+            Duration.ofMillis(200),
+            Duration.ofMillis(25),
+            lockRenewalExecutor);
+  }
+
+  @AfterEach
+  void closeLockRenewalExecutor() {
+    lockRenewalExecutor.shutdownNow();
   }
 
   // ============================================================
@@ -114,6 +133,55 @@ class RedisSessionRepositoryTest {
 
     assertEquals(
         "second", redisSessionCache.withSessionLock("session-lock-test", USER_ID, () -> "second"));
+  }
+
+  @Test
+  void renewsTheLockForAStillRunningTransition() throws Exception {
+    CountDownLatch entered = new CountDownLatch(1);
+    CountDownLatch finish = new CountDownLatch(1);
+    ExecutorService requestExecutor = Executors.newSingleThreadExecutor();
+    try {
+      Future<String> first =
+          requestExecutor.submit(
+              () ->
+                  redisSessionCache.withSessionLock(
+                      "renewal-test",
+                      USER_ID,
+                      () -> {
+                        entered.countDown();
+                        await(finish);
+                        return "first";
+                      }));
+      assertTrue(entered.await(1, TimeUnit.SECONDS));
+      Thread.sleep(250);
+
+      assertThrows(
+          SessionBusyException.class,
+          () -> redisSessionCache.withSessionLock("renewal-test", USER_ID, () -> "second"));
+
+      finish.countDown();
+      assertEquals("first", first.get(1, TimeUnit.SECONDS));
+    } finally {
+      finish.countDown();
+      requestExecutor.shutdownNow();
+    }
+  }
+
+  @Test
+  void doesNotCommitWhenTheLockOwnershipChanges() {
+    Session session = session("ownership-test");
+
+    boolean saved =
+        redisSessionCache.withSessionLock(
+            "ownership-test",
+            USER_ID,
+            () -> {
+              stringRedisTemplate.opsForValue().set(key("ownership-test") + ":lock", "other");
+              return redisSessionCache.updateSession(session);
+            });
+
+    assertFalse(saved);
+    assertNull(redisSessionCache.getSession("ownership-test", USER_ID));
   }
 
   // ============================================================
@@ -443,5 +511,17 @@ class RedisSessionRepositoryTest {
 
   private String key(String sessionId) {
     return "session:" + USER_ID.length() + ":" + USER_ID + ":" + sessionId;
+  }
+
+  private void await(CountDownLatch latch) {
+    try {
+      if (!latch.await(1, TimeUnit.SECONDS)) {
+        throw new IllegalStateException("Timed out waiting for the test transition");
+      }
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException(
+          "Interrupted while waiting for the test transition", exception);
+    }
   }
 }

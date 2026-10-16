@@ -1,8 +1,10 @@
 package com.gen3.recommenderagent.api;
 
+import com.gen3.recommenderagent.application.sessionservice.SessionCommitException;
 import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalException;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import com.gen3.recommenderagent.storage.sessionrepository.redis.SessionBusyException;
+import com.gen3.recommenderagent.storage.sessionrepository.redis.SessionLockLostException;
 import java.nio.charset.StandardCharsets;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +25,21 @@ public class RequestExceptionHandler {
   @ExceptionHandler(SessionBusyException.class)
   public ResponseEntity<String> handleBusySession(SessionBusyException exception) {
     return ResponseEntity.status(409)
+        .header("Retry-After", "1")
+        .contentType(new MediaType(MediaType.TEXT_PLAIN, StandardCharsets.UTF_8))
+        .body(exception.getMessage());
+  }
+
+  @ExceptionHandler(SessionCommitException.class)
+  public ResponseEntity<String> handleUnsafeSessionCommit(SessionCommitException exception) {
+    return ResponseEntity.status(503)
+        .contentType(new MediaType(MediaType.TEXT_PLAIN, StandardCharsets.UTF_8))
+        .body(exception.getMessage());
+  }
+
+  @ExceptionHandler(SessionLockLostException.class)
+  public ResponseEntity<String> handleLostSessionLock(SessionLockLostException exception) {
+    return ResponseEntity.status(503)
         .contentType(new MediaType(MediaType.TEXT_PLAIN, StandardCharsets.UTF_8))
         .body(exception.getMessage());
   }
