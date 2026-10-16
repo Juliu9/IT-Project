@@ -3,6 +3,7 @@ package com.gen3.recommenderagent.application;
 import com.gen3.recommenderagent.application.sessionservice.SessionCommitException;
 import com.gen3.recommenderagent.application.sessionservice.SessionService;
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.ConversationState;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
@@ -17,23 +18,18 @@ import org.springframework.stereotype.Service;
 @Service
 public class SessionTransitionService {
 
+  private static final ConversationState CONVERSATION_STATE = new ConversationState();
+
   private final SessionService sessionService;
-  private final RequestContextMerger requestContextMerger;
   private final RecommendationWorkflow recommendationWorkflow;
 
   public SessionTransitionService(
-      SessionService sessionService,
-      RequestContextMerger requestContextMerger,
-      RecommendationWorkflow recommendationWorkflow) {
+      SessionService sessionService, RecommendationWorkflow recommendationWorkflow) {
     this.sessionService = sessionService;
-    this.requestContextMerger = requestContextMerger;
     this.recommendationWorkflow = recommendationWorkflow;
   }
 
   public SessionRequest process(String sessionId, String userId, SessionRequest request) {
-    if (request.getIntent() == null) {
-      request.setIntent(Intent.UNKNOWN);
-    }
     return RequestTelemetry.measure(
         "sessionLockMs",
         () ->
@@ -44,13 +40,12 @@ public class SessionTransitionService {
   private SessionRequest processLocked(String sessionId, String userId, SessionRequest original) {
     Session session =
         RequestTelemetry.measure("sessionLoadMs", () -> sessionService.load(sessionId, userId));
-    SessionRequest result = copyOf(original);
-    prepare(result, session);
+    SessionRequest result = CONVERSATION_STATE.resolve(session, original);
     result.setRecommendations(
-        recommendationIntent(result.getIntent())
+        CONVERSATION_STATE.isRecommendationIntent(result.getIntent())
             ? recommendationWorkflow.recommend(result, session)
             : List.of());
-    applyTransition(session, result);
+    applyTransition(session, result, originalIntent(original));
     boolean saved = RequestTelemetry.measure("sessionWriteMs", () -> sessionService.save(session));
     if (!saved) {
       throw new SessionCommitException();
@@ -58,51 +53,19 @@ public class SessionTransitionService {
     return result;
   }
 
-  private void prepare(SessionRequest request, Session session) {
-    if (session.isAwaitingPersonalisedPreferences() && acceptsPreferences(request.getIntent())) {
-      if (request.getIntent() == Intent.UPDATE_PREFERENCES) {
-        session.setPreferences(requestContextMerger.mergedPreferences(request, session));
-      }
-      requestContextMerger.applyPreferences(request, session);
-      request.setIntent(Intent.RECOMMENDATION);
-      request.setPersonalised(true);
+  private void applyTransition(Session session, SessionRequest request, Intent originalIntent) {
+    if (originalIntent == Intent.UPDATE_PREFERENCES) {
+      session.setPreferences(CONVERSATION_STATE.mergedPreferences(session, request));
     }
-    if (request.getIntent() == Intent.REFINE || request.getIntent() == Intent.MORE_RESULTS) {
-      requestContextMerger.applyPreviousSearch(request, session);
+    if (originalIntent == Intent.CHANGE_COUNT) {
+      session.setBookCount(CONVERSATION_STATE.resolveBookCount(request, session));
     }
-    if (recommendationIntent(request.getIntent())) {
-      requestContextMerger.applyPreferences(request, session);
-      request.setBookCount(requestContextMerger.resolveBookCount(request, session));
-    }
-  }
-
-  private void applyTransition(Session session, SessionRequest request) {
-    if (request.getIntent() == Intent.UPDATE_PREFERENCES) {
-      session.setPreferences(requestContextMerger.mergedPreferences(request, session));
-    }
-    if (request.getIntent() == Intent.CHANGE_COUNT) {
-      session.setBookCount(requestContextMerger.resolveBookCount(request, session));
-    }
-    if (request.getIntent() == Intent.CLEAR_HISTORY) {
+    if (originalIntent == Intent.CLEAR_HISTORY) {
       session.clearHistory();
     }
     complete(request);
     session.addRecommendationIds(recommendationIds(request));
     session.addRequest(historyEntry(request));
-  }
-
-  private boolean acceptsPreferences(Intent intent) {
-    return intent == Intent.UPDATE_PREFERENCES
-        || intent == Intent.RECOMMENDATION
-        || intent == Intent.REFINE
-        || intent == Intent.MORE_RESULTS
-        || intent == Intent.UNKNOWN;
-  }
-
-  private boolean recommendationIntent(Intent intent) {
-    return intent == Intent.RECOMMENDATION
-        || intent == Intent.REFINE
-        || intent == Intent.MORE_RESULTS;
   }
 
   private void complete(SessionRequest request) {
@@ -112,6 +75,10 @@ public class SessionTransitionService {
     if (request.getCreatedAt() == null) {
       request.setCreatedAt(Instant.now());
     }
+  }
+
+  private Intent originalIntent(SessionRequest request) {
+    return request == null || request.getIntent() == null ? Intent.UNKNOWN : request.getIntent();
   }
 
   private List<String> recommendationIds(SessionRequest request) {
@@ -136,21 +103,5 @@ public class SessionTransitionService {
     entry.setBookCount(request.getBookCount());
     entry.setRecommendations(request.getRecommendations());
     return entry;
-  }
-
-  private SessionRequest copyOf(SessionRequest source) {
-    SessionRequest copy = new SessionRequest();
-    copy.setRequestId(source.getRequestId());
-    copy.setRawText(source.getRawText());
-    copy.setCreatedAt(source.getCreatedAt());
-    copy.setIntent(source.getIntent());
-    copy.setPositiveSemanticQuery(source.getPositiveSemanticQuery());
-    copy.setNegativeSemanticQuery(source.getNegativeSemanticQuery());
-    copy.setMustInclude(source.getMustInclude());
-    copy.setMustNotInclude(source.getMustNotInclude());
-    copy.setBookCount(source.getBookCount());
-    copy.setPersonalised(source.isPersonalised());
-    copy.setPreferenceClarificationRequired(source.isPreferenceClarificationRequired());
-    return copy;
   }
 }

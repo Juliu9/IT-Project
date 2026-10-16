@@ -11,7 +11,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.gen3.recommenderagent.api.RequestGateway;
-import com.gen3.recommenderagent.application.RequestContextMerger;
 import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.application.sessionservice.DefaultSessionService;
 import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalExecutor;
@@ -96,7 +95,6 @@ class RecommendationFlowIntegrationTest {
                 List.of(
                     new WeightedScorer(new RetrievalRelevanceScorer(), 1.0),
                     new WeightedScorer(new UserPreferenceScorer(scoringProperties()), 1.0))));
-    RequestContextMerger requestContextMerger = new RequestContextMerger();
     com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository userPreferences =
         mock(com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository.class);
     AudiobookRecommendationWorkflow workflow =
@@ -108,8 +106,7 @@ class RecommendationFlowIntegrationTest {
     RecommendationFlowTestSupport.InMemorySessionRepository sessionRepository =
         new RecommendationFlowTestSupport.InMemorySessionRepository();
     SessionTransitionService applicationService =
-        new SessionTransitionService(
-            new DefaultSessionService(sessionRepository), requestContextMerger, workflow);
+        new SessionTransitionService(new DefaultSessionService(sessionRepository), workflow);
 
     RequestGateway gateway =
         new RequestGateway(inputParser, applicationService, new AiResponseGenerator(null));

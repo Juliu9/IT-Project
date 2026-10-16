@@ -105,22 +105,13 @@ public class Session {
     if (request == null) {
       return;
     }
-    if (hasSearchCriteria(request)) {
-      requests.removeIf(this::hasSearchCriteria);
+    if (ConversationState.isSearchContext(request)) {
+      requests.removeIf(ConversationState::isSearchContext);
     } else {
-      requests.removeIf(existing -> !hasSearchCriteria(existing));
+      requests.removeIf(existing -> !ConversationState.isSearchContext(existing));
     }
     this.requests.add(request);
     this.updatedAt = Instant.now();
-  }
-
-  private boolean hasSearchCriteria(SessionRequest request) {
-    return request != null
-        && (request.isPersonalised()
-            || request.getPositiveSemanticQuery() != null
-            || request.getNegativeSemanticQuery() != null
-            || request.getMustInclude() != null
-            || request.getMustNotInclude() != null);
   }
 
   public SessionPreferences getPreferences() {

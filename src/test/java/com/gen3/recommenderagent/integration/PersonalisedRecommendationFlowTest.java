@@ -10,7 +10,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.application.RequestContextMerger;
 import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.application.sessionservice.DefaultSessionService;
 import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalExecutor;
@@ -66,7 +65,6 @@ class PersonalisedRecommendationFlowTest {
     when(ranker.rank(anyList(), eq(5), any(RankingContext.class)))
         .thenReturn(List.of(new Recommendation("book", 1, 0.9, "A Book")));
     EmbeddingIndexer indexer = new EmbeddingIndexer(embeddingModel);
-    RequestContextMerger merger = new RequestContextMerger();
     AudiobookRecommendationWorkflow workflow =
         new AudiobookRecommendationWorkflow(
             new QdrantCandidateRetriever(
@@ -74,8 +72,7 @@ class PersonalisedRecommendationFlowTest {
             ranker,
             new SemanticQueryVectorService(indexer),
             users);
-    application =
-        new SessionTransitionService(new DefaultSessionService(sessions), merger, workflow);
+    application = new SessionTransitionService(new DefaultSessionService(sessions), workflow);
   }
 
   @Test

@@ -98,7 +98,7 @@ class SessionTransitionServiceTest {
 
   private SessionTransitionService service(
       SessionService sessions, RecommendationWorkflow workflow) {
-    return new SessionTransitionService(sessions, new RequestContextMerger(), workflow);
+    return new SessionTransitionService(sessions, workflow);
   }
 
   private SessionRequest request(Intent intent) {

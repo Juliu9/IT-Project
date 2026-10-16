@@ -1,64 +1,37 @@
-package com.gen3.recommenderagent.application;
+package com.gen3.recommenderagent.domain.session;
 
 import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.MustInclude;
-import com.gen3.recommenderagent.domain.session.MustNotInclude;
-import com.gen3.recommenderagent.domain.session.SemanticQuery;
-import com.gen3.recommenderagent.domain.session.Session;
-import com.gen3.recommenderagent.domain.session.SessionPreferences;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import org.springframework.stereotype.Component;
 
-/** Combines explicit request fields with prior search criteria and session-level preferences. */
-@Component
-public class RequestContextMerger {
+/** Resolves an incoming request against the conversational state held by a session. */
+public final class ConversationState {
 
-  /** Adds the latest recommendation-producing request as the base for a follow-up request. */
-  public SessionRequest applyPreviousSearch(SessionRequest target, Session session) {
-    if (target == null || session == null || session.getRequests() == null) {
-      return target;
+  public SessionRequest resolve(Session session, SessionRequest request) {
+    SessionRequest effective = copyOf(request);
+    if (session == null) {
+      return effective;
     }
-    List<SessionRequest> requests = session.getRequests();
-    for (int index = requests.size() - 1; index >= 0; index--) {
-      SessionRequest previous = requests.get(index);
-      if (hasSearchCriteria(previous)) {
-        merge(previous, target);
-        break;
-      }
+    if (session.isAwaitingPersonalisedPreferences() && acceptsPreferences(effective.getIntent())) {
+      applyPreferences(effective, session);
+      effective.setIntent(Intent.RECOMMENDATION);
+      effective.setPersonalised(true);
     }
-    return target;
+    if (effective.getIntent() == Intent.REFINE || effective.getIntent() == Intent.MORE_RESULTS) {
+      applyPreviousSearch(effective, session);
+    }
+    if (isRecommendationIntent(effective.getIntent())) {
+      applyPreferences(effective, session);
+      effective.setBookCount(resolveBookCount(effective, session));
+    }
+    return effective;
   }
 
-  /** Applies persistent session preferences as defaults underneath explicit request values. */
-  public SessionRequest applyPreferences(SessionRequest target, Session session) {
-    if (target == null || session == null || session.getPreferences() == null) {
-      return target;
-    }
-    SessionPreferences preferences = session.getPreferences();
-    SessionRequest base = new SessionRequest();
-    base.setPositiveSemanticQuery(preferences.getPositiveSemanticQuery());
-    base.setNegativeSemanticQuery(preferences.getNegativeSemanticQuery());
-    base.setMustInclude(preferences.getMustInclude());
-    base.setMustNotInclude(preferences.getMustNotInclude());
-    merge(base, target);
-    return target;
-  }
-
-  /** Returns the effective preferences after applying the request over current preferences. */
-  public SessionPreferences mergedPreferences(SessionRequest request, Session session) {
-    if (request == null) {
-      return session == null ? null : session.getPreferences();
-    }
-    SessionRequest combined = new SessionRequest();
-    combined.setPositiveSemanticQuery(copy(request.getPositiveSemanticQuery()));
-    combined.setNegativeSemanticQuery(copy(request.getNegativeSemanticQuery()));
-    combined.setMustInclude(copy(request.getMustInclude()));
-    combined.setMustNotInclude(copy(request.getMustNotInclude()));
+  public SessionPreferences mergedPreferences(Session session, SessionRequest request) {
+    SessionRequest combined = copyOf(request);
     applyPreferences(combined, session);
     SessionPreferences preferences = new SessionPreferences();
     preferences.setPositiveSemanticQuery(copy(combined.getPositiveSemanticQuery()));
@@ -68,12 +41,62 @@ public class RequestContextMerger {
     return preferences;
   }
 
-  /** Resolves the request count without mutating the session. */
   public Integer resolveBookCount(SessionRequest request, Session session) {
     if (request != null && request.getBookCount() != null) {
       return request.getBookCount();
     }
     return session == null ? null : session.getBookCount();
+  }
+
+  public boolean isRecommendationIntent(Intent intent) {
+    return intent == Intent.RECOMMENDATION
+        || intent == Intent.REFINE
+        || intent == Intent.MORE_RESULTS;
+  }
+
+  public static boolean isSearchContext(SessionRequest request) {
+    return request != null
+        && request.getIntent() != Intent.UPDATE_PREFERENCES
+        && (request.isPersonalised()
+            || request.getPositiveSemanticQuery() != null
+            || request.getNegativeSemanticQuery() != null
+            || request.getMustInclude() != null
+            || request.getMustNotInclude() != null);
+  }
+
+  private boolean acceptsPreferences(Intent intent) {
+    return intent == Intent.UPDATE_PREFERENCES
+        || intent == Intent.RECOMMENDATION
+        || intent == Intent.REFINE
+        || intent == Intent.MORE_RESULTS
+        || intent == Intent.UNKNOWN;
+  }
+
+  private void applyPreviousSearch(SessionRequest target, Session session) {
+    List<SessionRequest> requests = session.getRequests();
+    if (requests == null) {
+      return;
+    }
+    for (int index = requests.size() - 1; index >= 0; index--) {
+      SessionRequest previous = requests.get(index);
+      if (isSearchContext(previous)) {
+        merge(previous, target);
+        return;
+      }
+    }
+  }
+
+  private void applyPreferences(SessionRequest target, Session session) {
+    if (target == null || session == null || session.getPreferences() == null) {
+      return;
+    }
+    SessionPreferences preferences = session.getPreferences();
+    SessionRequest base = new SessionRequest();
+    base.setPositiveSemanticQuery(preferences.getPositiveSemanticQuery());
+    base.setNegativeSemanticQuery(preferences.getNegativeSemanticQuery());
+    base.setMustInclude(preferences.getMustInclude());
+    base.setMustNotInclude(preferences.getMustNotInclude());
+    merge(base, target);
   }
 
   private void merge(SessionRequest base, SessionRequest target) {
@@ -84,16 +107,6 @@ public class RequestContextMerger {
         merge(base.getNegativeSemanticQuery(), target.getNegativeSemanticQuery()));
     target.setMustInclude(merge(base.getMustInclude(), target.getMustInclude()));
     target.setMustNotInclude(merge(base.getMustNotInclude(), target.getMustNotInclude()));
-  }
-
-  private boolean hasSearchCriteria(SessionRequest request) {
-    return request != null
-        && request.getIntent() != Intent.UPDATE_PREFERENCES
-        && (request.isPersonalised()
-            || request.getPositiveSemanticQuery() != null
-            || request.getNegativeSemanticQuery() != null
-            || request.getMustInclude() != null
-            || request.getMustNotInclude() != null);
   }
 
   private SemanticQuery merge(SemanticQuery base, SemanticQuery override) {
@@ -173,6 +186,26 @@ public class RequestContextMerger {
             base == null ? null : base.getSource(),
             override == null ? null : override.getSource()));
     return merged;
+  }
+
+  private SessionRequest copyOf(SessionRequest source) {
+    SessionRequest copy = new SessionRequest();
+    copy.setIntent(Intent.UNKNOWN);
+    if (source == null) {
+      return copy;
+    }
+    copy.setRequestId(source.getRequestId());
+    copy.setRawText(source.getRawText());
+    copy.setCreatedAt(source.getCreatedAt());
+    copy.setIntent(source.getIntent() == null ? Intent.UNKNOWN : source.getIntent());
+    copy.setPositiveSemanticQuery(copy(source.getPositiveSemanticQuery()));
+    copy.setNegativeSemanticQuery(copy(source.getNegativeSemanticQuery()));
+    copy.setMustInclude(copy(source.getMustInclude()));
+    copy.setMustNotInclude(copy(source.getMustNotInclude()));
+    copy.setBookCount(source.getBookCount());
+    copy.setPersonalised(source.isPersonalised());
+    copy.setPreferenceClarificationRequired(source.isPreferenceClarificationRequired());
+    return copy;
   }
 
   private SemanticQuery copy(SemanticQuery source) {
