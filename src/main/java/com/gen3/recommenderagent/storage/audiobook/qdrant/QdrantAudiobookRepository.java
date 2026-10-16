@@ -423,7 +423,6 @@ public class QdrantAudiobookRepository
     createPayloadIndex("source", FieldType.FieldTypeKeyword);
     createPayloadIndex("durationMinutes", FieldType.FieldTypeInteger);
     createPayloadIndex("publicationYear", FieldType.FieldTypeInteger);
-    createPayloadIndex("short_description", FieldType.FieldTypeKeyword);
   }
 
   /** Executes a universal Qdrant query and maps its fused score to the shared candidate type. */

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 class SessionTest {
@@ -37,6 +38,17 @@ class SessionTest {
     session.addRecommendationIds(List.of("book-2", "book-3"));
 
     assertEquals(List.of("book-1", "book-2", "book-3"), session.getShownBooks());
+  }
+
+  @Test
+  void evictsTheOldestShownBookWhenTheHistoryCapIsReached() {
+    Session session = new Session();
+
+    session.addRecommendationIds(IntStream.rangeClosed(1, 501).mapToObj(i -> "book-" + i).toList());
+
+    assertEquals(500, session.getShownBooks().size());
+    assertEquals("book-2", session.getShownBooks().getFirst());
+    assertEquals("book-501", session.getShownBooks().getLast());
   }
 
   @Test

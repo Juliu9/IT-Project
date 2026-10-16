@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gen3.recommenderagent.domain.session.MustInclude;
@@ -14,6 +15,7 @@ import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.storage.sessionrepository.redis.RedisSessionRepository;
+import com.gen3.recommenderagent.storage.sessionrepository.redis.SessionBusyException;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.serializer.JacksonJsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.testcontainers.containers.GenericContainer;
@@ -63,7 +66,9 @@ class RedisSessionRepositoryTest {
 
     redisTemplate.afterPropertiesSet();
 
-    redisSessionCache = new RedisSessionRepository(redisTemplate);
+    StringRedisTemplate stringRedisTemplate = new StringRedisTemplate(connectionFactory);
+    stringRedisTemplate.afterPropertiesSet();
+    redisSessionCache = new RedisSessionRepository(redisTemplate, stringRedisTemplate);
   }
 
   // ============================================================
@@ -90,6 +95,25 @@ class RedisSessionRepositoryTest {
             .ttl(key("session-123").getBytes(), TimeUnit.SECONDS);
     assertNotNull(ttl);
     assertTrue(ttl > 0);
+  }
+
+  @Test
+  void releasesTheSessionLockAfterTheOperationCompletes() {
+    assertThrows(
+        SessionBusyException.class,
+        () ->
+            redisSessionCache.withSessionLock(
+                "session-lock-test",
+                USER_ID,
+                () ->
+                    redisSessionCache.withSessionLock(
+                        "session-lock-test", USER_ID, () -> "second")));
+
+    assertEquals(
+        "first", redisSessionCache.withSessionLock("session-lock-test", USER_ID, () -> "first"));
+
+    assertEquals(
+        "second", redisSessionCache.withSessionLock("session-lock-test", USER_ID, () -> "second"));
   }
 
   // ============================================================

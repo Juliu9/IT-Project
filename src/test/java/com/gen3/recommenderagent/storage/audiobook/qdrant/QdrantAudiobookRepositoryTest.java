@@ -153,6 +153,33 @@ class QdrantAudiobookRepositoryTest {
   }
 
   @Test
+  void createsShortDescriptionIndexOnlyForTheEnrichmentScan() throws Exception {
+    QdrantClient client = mock(QdrantClient.class);
+    SparseTextEncoder sparseEncoder = new Bm25SparseTextEncoder();
+    QdrantPointMapper mapper = new QdrantPointMapper(sparseEncoder);
+    when(client.collectionExistsAsync("audiobooks")).thenReturn(Futures.immediateFuture(false));
+    when(client.createCollectionAsync(any()))
+        .thenReturn(
+            Futures.immediateFuture(
+                io.qdrant.client.grpc.Collections.CollectionOperationResponse
+                    .getDefaultInstance()));
+    when(client.createPayloadIndexAsync(any(CreateFieldIndexCollection.class), any()))
+        .thenReturn(Futures.immediateFuture(UpdateResult.getDefaultInstance()));
+    when(client.queryAsync(any(QueryPoints.class))).thenReturn(Futures.immediateFuture(List.of()));
+    QdrantAudiobookRepository repository =
+        new QdrantAudiobookRepository(client, mapper, sparseEncoder, "audiobooks", 2);
+
+    repository.searchSemantic(new float[] {0.6f, 0.8f}, AudiobookFilters.empty(), 5);
+
+    ArgumentCaptor<CreateFieldIndexCollection> index =
+        ArgumentCaptor.forClass(CreateFieldIndexCollection.class);
+    verify(client, times(6)).createPayloadIndexAsync(index.capture(), any());
+    assertThat(index.getAllValues())
+        .extracting(CreateFieldIndexCollection::getFieldName)
+        .doesNotContain("short_description");
+  }
+
+  @Test
   void fillsOnlyMissingMetadataPayloads() throws Exception {
     QdrantClient client = mock(QdrantClient.class);
     SparseTextEncoder sparseEncoder = new Bm25SparseTextEncoder();

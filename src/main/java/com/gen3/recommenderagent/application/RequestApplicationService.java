@@ -13,7 +13,6 @@ import org.springframework.stereotype.Service;
 @Service
 public class RequestApplicationService {
 
-  private static final int SESSION_UPDATE_ATTEMPTS = 3;
   private final SessionService sessionService;
   private final ActionRegistry actionRegistry;
   private final RequestContextMerger requestContextMerger;
@@ -31,21 +30,25 @@ public class RequestApplicationService {
     if (request.getIntent() == null) {
       request.setIntent(Intent.UNKNOWN);
     }
-    for (int attempt = 0; attempt < SESSION_UPDATE_ATTEMPTS; attempt++) {
-      Session session =
-          RequestTelemetry.measure("sessionLoadMs", () -> sessionService.load(sessionId, userId));
-      SessionRequest attemptRequest = copyOf(request);
-      SessionRequest result = processAttempt(session, attemptRequest);
+    return sessionService.withSessionLock(
+        sessionId,
+        userId,
+        () -> {
+          Session session =
+              RequestTelemetry.measure(
+                  "sessionLoadMs", () -> sessionService.load(sessionId, userId));
+          SessionRequest attemptRequest = copyOf(request);
+          SessionRequest result = processAttempt(session, attemptRequest);
 
-      session.addRecommendationIds(recommendationIds(result == null ? attemptRequest : result));
-      boolean saved =
-          RequestTelemetry.measure(
-              "sessionWriteMs", () -> sessionService.update(session, attemptRequest, result));
-      if (saved) {
-        return result;
-      }
-    }
-    throw new IllegalStateException("Session was updated concurrently; please retry");
+          session.addRecommendationIds(recommendationIds(result == null ? attemptRequest : result));
+          boolean saved =
+              RequestTelemetry.measure(
+                  "sessionWriteMs", () -> sessionService.update(session, attemptRequest, result));
+          if (!saved) {
+            throw new IllegalStateException("Could not save the locked session");
+          }
+          return result;
+        });
   }
 
   private SessionRequest processAttempt(Session session, SessionRequest request) {

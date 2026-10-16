@@ -16,6 +16,7 @@ import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.util.List;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 
@@ -35,6 +36,7 @@ class RequestApplicationServiceTest {
             new Recommendation("book-2", 2, 0.8, "Second")));
     Session session = new Session();
 
+    runWithinSessionLock(sessionService);
     when(sessionService.load("session-1", "user-1")).thenReturn(session);
     when(actionRegistry.get(Intent.RECOMMENDATION)).thenReturn(action);
     when(action.execute(any(), eq(session))).thenReturn(result);
@@ -61,6 +63,7 @@ class RequestApplicationServiceTest {
     SessionRequest request = new SessionRequest();
     Session session = new Session();
 
+    runWithinSessionLock(sessionService);
     when(sessionService.load("session-2", "user-2")).thenReturn(session);
     when(actionRegistry.get(Intent.UNKNOWN)).thenReturn(action);
     when(action.execute(any(), eq(session))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -74,16 +77,16 @@ class RequestApplicationServiceTest {
   }
 
   @Test
-  void retriesTheRequestAfterAConcurrentSessionWrite() {
+  void doesNotRepeatRetrievalWhenTheLockedSessionSaveFails() {
     SessionService sessionService = mock(SessionService.class);
     ActionRegistry actionRegistry = mock(ActionRegistry.class);
     IntentAction action = mock(IntentAction.class);
     SessionRequest request = new SessionRequest();
     request.setIntent(Intent.RECOMMENDATION);
-    Session firstSession = new Session();
-    Session updatedSession = new Session();
+    Session session = new Session();
 
-    when(sessionService.load("session-3", "user-3")).thenReturn(firstSession, updatedSession);
+    runWithinSessionLock(sessionService);
+    when(sessionService.load("session-3", "user-3")).thenReturn(session);
     when(actionRegistry.get(Intent.RECOMMENDATION)).thenReturn(action);
     when(action.execute(any(), any()))
         .thenAnswer(
@@ -92,13 +95,23 @@ class RequestApplicationServiceTest {
               attemptedRequest.setRecommendations(List.of());
               return attemptedRequest;
             });
-    when(sessionService.update(any(), any(), any())).thenReturn(false, true);
+    when(sessionService.update(any(), any(), any())).thenReturn(false);
 
-    new RequestApplicationService(sessionService, actionRegistry, new RequestContextMerger())
-        .process("session-3", "user-3", request);
+    org.junit.jupiter.api.Assertions.assertThrows(
+        IllegalStateException.class,
+        () ->
+            new RequestApplicationService(
+                    sessionService, actionRegistry, new RequestContextMerger())
+                .process("session-3", "user-3", request));
 
-    verify(sessionService, org.mockito.Mockito.times(2)).load("session-3", "user-3");
-    verify(action, org.mockito.Mockito.times(2)).execute(any(), any());
-    verify(sessionService, org.mockito.Mockito.times(2)).update(any(), any(), any());
+    verify(sessionService).load("session-3", "user-3");
+    verify(action).execute(any(), any());
+    verify(sessionService).update(any(), any(), any());
+  }
+
+  @SuppressWarnings("unchecked")
+  private void runWithinSessionLock(SessionService sessionService) {
+    when(sessionService.withSessionLock(any(), any(), any()))
+        .thenAnswer(invocation -> ((Supplier<SessionRequest>) invocation.getArgument(2)).get());
   }
 }

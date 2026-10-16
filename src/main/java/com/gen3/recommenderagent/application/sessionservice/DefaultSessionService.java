@@ -6,6 +6,7 @@ import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
 /** Redis-backed implementation of the application session lifecycle. */
@@ -49,6 +50,11 @@ public class DefaultSessionService implements SessionService {
 
     session.addRequest(historyEntry(result));
     return sessionRepository.updateSession(session);
+  }
+
+  @Override
+  public <T> T withSessionLock(String sessionId, String userId, Supplier<T> operation) {
+    return sessionRepository.withSessionLock(sessionId, userId, operation);
   }
 
   private SessionRequest historyEntry(SessionRequest request) {

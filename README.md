@@ -82,7 +82,7 @@ export AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MODE=import
 For the remaining catalogue, submit up to 100,000 records at a time and repeat after each import;
 each submission selects the records still missing `short_description`. A pending manifest blocks
 another submission until it is imported. Batch requests use
-`gpt-4o-mini`, group ten books per request, and ask for a spoiler-free sentence of at most 25
+`gpt-4o-mini`, group ten books per request, and ask for a spoiler-free sentence of at most 20
 words. Keep the default mode (`disabled`) for ordinary application startup.
 
 ## Fill missing catalogue metadata
@@ -95,8 +95,8 @@ export AUDIOBOOK_FAKE_METADATA_ENRICH_ON_STARTUP=true
 ./mvnw spring-boot:run
 ```
 
-The job scans the entire Qdrant collection in pages and only fills fields that are missing or
-invalid. Existing values are preserved, so it is safe to rerun. It runs only while the
+The job scans the entire Qdrant collection in pages and only fills fields that are missing.
+Existing values are preserved, so it is safe to rerun. It runs only while the
 short-description batch mode is `disabled`. Normal requests only read the stored Qdrant payload,
 so these mock values are treated like ordinary catalogue data after enrichment. Unset the variable
 for normal application startup.
