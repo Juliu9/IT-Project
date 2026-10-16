@@ -94,7 +94,11 @@ public class RankingService implements Ranker {
       }
       recommendations.add(
           new Recommendation(
-              candidate.audiobook().id(), rank, score, candidate.audiobook().title()));
+              candidate.audiobook().id(),
+              rank,
+              score,
+              candidate.audiobook().title(),
+              candidate.audiobook().shortDescription()));
     }
     return recommendations;
   }

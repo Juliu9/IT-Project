@@ -41,6 +41,26 @@ class ResponseGeneratorTest {
   }
 
   @Test
+  void shouldIncludeStoredShortDescriptionsInFallbackResponses() {
+    AiResponseGenerator generator = new AiResponseGenerator(null);
+    SessionRequest request = new SessionRequest();
+    request.setIntent(Intent.RECOMMENDATION);
+
+    String response =
+        generator.generate(
+            List.of(
+                new Recommendation(
+                    "book-101",
+                    1,
+                    0.91,
+                    "Dune",
+                    "A young noble navigates danger and destiny on a desert planet.")),
+            request);
+
+    assertTrue(response.contains("A young noble navigates danger and destiny on a desert planet."));
+  }
+
+  @Test
   void shouldRejectRequestsForMoreThanFiveRecommendations() {
     AiResponseGenerator generator = new AiResponseGenerator(null);
 

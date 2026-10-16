@@ -1,0 +1,70 @@
+package com.gen3.recommenderagent.storage.audiobook;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.qdrant.Bm25SparseTextEncoder;
+import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
+import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantPointMapper;
+import java.net.http.HttpClient;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
+
+class BatchShortDescriptionEnricherTest {
+
+  @Test
+  void shouldReadCompletedBatchDescriptionsByBookId() throws Exception {
+    BatchShortDescriptionEnricher enricher =
+        new BatchShortDescriptionEnricher(
+            mock(QdrantAudiobookRepository.class),
+            new ObjectMapper(),
+            HttpClient.newHttpClient(),
+            "test-key",
+            "https://example.test/v1",
+            "disabled",
+            "",
+            Path.of("target"),
+            1);
+
+    String output =
+        """
+        {"response":{"status_code":200,"body":{"choices":[{"message":{"content":"{\\\"book-1\\\":\\\"A concise description.\\\"}"}}]}}}
+        {"response":{"status_code":200,"body":{"choices":[{"message":{"content":"{\\\"book-2\\\":\\\"An incomplete description"}}]}}}
+        {"response":{"status_code":400,"body":{}}}
+        """;
+
+    assertThat(enricher.parseDescriptions(output))
+        .containsExactlyEntriesOf(java.util.Map.of("book-1", "A concise description."));
+  }
+
+  @Test
+  void shouldPersistTheQdrantPointIdsSubmittedToOpenAi() throws Exception {
+    Path directory = Files.createTempDirectory("short-description-test");
+    BatchShortDescriptionEnricher enricher =
+        new BatchShortDescriptionEnricher(
+            mock(QdrantAudiobookRepository.class),
+            new ObjectMapper(),
+            HttpClient.newHttpClient(),
+            "test-key",
+            "https://example.test/v1",
+            "disabled",
+            "",
+            directory,
+            1);
+    QdrantPointMapper mapper = new QdrantPointMapper(new Bm25SparseTextEncoder());
+    var pointId = mapper.pointId("book-1");
+    var book =
+        new QdrantAudiobookRepository.StoredAudiobook(
+            new AudiobookRecord("book-1", "source", "Title", List.of(), "Summary"), pointId);
+
+    enricher.writeManifest(
+        directory.resolve("short-description-batch.json"), "batch-1", List.of(book));
+
+    assertThat(enricher.pendingPointIds())
+        .containsExactlyEntriesOf(java.util.Map.of("book-1", pointId));
+  }
+}

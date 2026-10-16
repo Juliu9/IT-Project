@@ -1,5 +1,7 @@
 package com.gen3.recommenderagent.storage.audiobook.qdrant;
 
+import static io.qdrant.client.ConditionFactory.hasId;
+import static io.qdrant.client.ConditionFactory.isEmpty;
 import static io.qdrant.client.ConditionFactory.matchKeyword;
 import static io.qdrant.client.ConditionFactory.matchKeywords;
 import static io.qdrant.client.ConditionFactory.range;
@@ -11,6 +13,7 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditio
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
+import com.gen3.recommenderagent.storage.audiobook.port.AudiobookMetadataEnricher;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorRepository;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Collections;
@@ -20,17 +23,23 @@ import io.qdrant.client.grpc.Common.Range;
 import io.qdrant.client.grpc.Points.CreateFieldIndexCollection;
 import io.qdrant.client.grpc.Points.DenseVector;
 import io.qdrant.client.grpc.Points.FieldType;
+import io.qdrant.client.grpc.Points.PointsIdsList;
+import io.qdrant.client.grpc.Points.PointsSelector;
+import io.qdrant.client.grpc.Points.PointsUpdateOperation;
 import io.qdrant.client.grpc.Points.PrefetchQuery;
 import io.qdrant.client.grpc.Points.Query;
 import io.qdrant.client.grpc.Points.QueryPoints;
 import io.qdrant.client.grpc.Points.RetrievedPoint;
 import io.qdrant.client.grpc.Points.ScoredPoint;
+import io.qdrant.client.grpc.Points.ScrollPoints;
+import io.qdrant.client.grpc.Points.ScrollResponse;
 import io.qdrant.client.grpc.Points.SparseVector;
 import io.qdrant.client.grpc.Points.VectorInput;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import org.springframework.beans.factory.annotation.Value;
@@ -171,6 +180,173 @@ public class QdrantAudiobookRepository
         "write audiobook vectors to Qdrant");
   }
 
+  /** Stores generated short descriptions without recalculating or rewriting the book vectors. */
+  public void updateShortDescriptions(
+      java.util.Map<String, String> descriptions,
+      java.util.Map<String, io.qdrant.client.grpc.Common.PointId> pointIds)
+      throws IOException {
+    if (descriptions == null || descriptions.isEmpty() || pointIds == null || pointIds.isEmpty()) {
+      return;
+    }
+    initialize();
+    updatePayloads(
+        descriptions.entrySet().stream()
+            .filter(entry -> entry.getKey() != null && !entry.getKey().isBlank())
+            .filter(entry -> entry.getValue() != null && !entry.getValue().isBlank())
+            .filter(entry -> pointIds.containsKey(entry.getKey()))
+            .map(
+                entry ->
+                    PointsUpdateOperation.newBuilder()
+                        .setSetPayload(
+                            PointsUpdateOperation.SetPayload.newBuilder()
+                                .putPayload(
+                                    "short_description",
+                                    io.qdrant.client.ValueFactory.value(entry.getValue()))
+                                .setPointsSelector(
+                                    PointsSelector.newBuilder()
+                                        .setPoints(
+                                            PointsIdsList.newBuilder()
+                                                .addIds(pointIds.get(entry.getKey())))))
+                        .build())
+            .toList());
+  }
+
+  /** Adds fake metadata only to fields absent from existing Qdrant payloads. */
+  public int enrichMissingMetadata(AudiobookMetadataEnricher metadataEnricher) throws IOException {
+    initialize();
+    createPayloadIndex("publicationYear", FieldType.FieldTypeInteger);
+    int updated = 0;
+    io.qdrant.client.grpc.Common.PointId offset = null;
+    while (true) {
+      ScrollPoints.Builder request =
+          ScrollPoints.newBuilder()
+              .setCollectionName(collection)
+              .setLimit(500)
+              .setWithPayload(enable(true));
+      if (offset != null) {
+        request.setOffset(offset);
+      }
+      ScrollResponse page = await(client.scrollAsync(request.build()), "read audiobook records");
+      List<PointsUpdateOperation> operations = new ArrayList<>();
+      for (RetrievedPoint point : page.getResultList()) {
+        AudiobookRecord existing = mapper.toRecord(point);
+        List<PointsUpdateOperation> missingFields =
+            missingMetadataUpdates(
+                point.getId(), point.getPayloadMap(), metadataEnricher.enrich(existing));
+        if (!missingFields.isEmpty()) {
+          operations.addAll(missingFields);
+          updated++;
+        }
+      }
+      updatePayloads(operations);
+      if (!page.hasNextPageOffset() || page.getResultCount() == 0) {
+        return updated;
+      }
+      offset = page.getNextPageOffset();
+    }
+  }
+
+  private List<PointsUpdateOperation> missingMetadataUpdates(
+      io.qdrant.client.grpc.Common.PointId pointId,
+      Map<String, io.qdrant.client.grpc.JsonWithInt.Value> existingPayload,
+      AudiobookRecord enriched) {
+    List<PointsUpdateOperation> operations = new ArrayList<>();
+    if (!existingPayload.containsKey("narrators")) {
+      operations.add(
+          setMissingPayload(
+              pointId,
+              "narrators",
+              io.qdrant.client.ValueFactory.list(
+                  enriched.narrators().stream()
+                      .map(io.qdrant.client.ValueFactory::value)
+                      .toList())));
+    }
+    if (!existingPayload.containsKey("language")) {
+      operations.add(
+          setMissingPayload(
+              pointId, "language", io.qdrant.client.ValueFactory.value(enriched.language())));
+    }
+    if (!existingPayload.containsKey("durationMinutes")) {
+      operations.add(
+          setMissingPayload(
+              pointId,
+              "durationMinutes",
+              io.qdrant.client.ValueFactory.value(enriched.durationMinutes().longValue())));
+    }
+    if (!existingPayload.containsKey("publicationYear")) {
+      operations.add(
+          setMissingPayload(
+              pointId,
+              "publicationYear",
+              io.qdrant.client.ValueFactory.value(enriched.publicationYear().longValue())));
+    }
+    return operations;
+  }
+
+  private PointsUpdateOperation setMissingPayload(
+      io.qdrant.client.grpc.Common.PointId pointId,
+      String field,
+      io.qdrant.client.grpc.JsonWithInt.Value value) {
+    PointsSelector selector =
+        PointsSelector.newBuilder()
+            .setFilter(Filter.newBuilder().addMust(hasId(pointId)).addMust(isEmpty(field)))
+            .build();
+    return PointsUpdateOperation.newBuilder()
+        .setSetPayload(
+            PointsUpdateOperation.SetPayload.newBuilder()
+                .putPayload(field, value)
+                .setPointsSelector(selector))
+        .build();
+  }
+
+  /** Loads Qdrant records that still need a generated short description. */
+  public List<StoredAudiobook> findRecordsWithoutShortDescription(int maximumRecords)
+      throws IOException {
+    if (maximumRecords <= 0) {
+      return List.of();
+    }
+    initialize();
+    createPayloadIndex("short_description", FieldType.FieldTypeKeyword);
+    List<StoredAudiobook> records = new ArrayList<>();
+    io.qdrant.client.grpc.Common.PointId offset = null;
+    while (records.size() < maximumRecords) {
+      ScrollPoints.Builder request =
+          ScrollPoints.newBuilder()
+              .setCollectionName(collection)
+              .setFilter(Filter.newBuilder().addMust(isEmpty("short_description")))
+              .setLimit(Math.min(500, maximumRecords - records.size()))
+              .setWithPayload(enable(true));
+      if (offset != null) {
+        request.setOffset(offset);
+      }
+      ScrollResponse page = await(client.scrollAsync(request.build()), "read audiobook records");
+      records.addAll(
+          page.getResultList().stream()
+              .map(point -> new StoredAudiobook(mapper.toRecord(point), point.getId()))
+              .toList());
+      if (!page.hasNextPageOffset() || page.getResultCount() == 0) {
+        break;
+      }
+      offset = page.getNextPageOffset();
+    }
+    return records;
+  }
+
+  /** A record read from Qdrant together with its actual point ID. */
+  public record StoredAudiobook(
+      AudiobookRecord record, io.qdrant.client.grpc.Common.PointId pointId) {}
+
+  private void updatePayloads(List<PointsUpdateOperation> operations) throws IOException {
+    if (operations.isEmpty()) {
+      return;
+    }
+    for (int start = 0; start < operations.size(); start += 100) {
+      List<PointsUpdateOperation> batch =
+          operations.subList(start, Math.min(start + 100, operations.size()));
+      await(client.batchUpdateAsync(collection, batch), "store audiobook short descriptions");
+    }
+  }
+
   /** Retrieves the stored vector for one favourite audiobook by its catalogue ID. */
   @Override
   public Optional<float[]> findEmbeddingByBookId(String bookId) throws IOException {
@@ -246,6 +422,8 @@ public class QdrantAudiobookRepository
     createPayloadIndex("language", FieldType.FieldTypeKeyword);
     createPayloadIndex("source", FieldType.FieldTypeKeyword);
     createPayloadIndex("durationMinutes", FieldType.FieldTypeInteger);
+    createPayloadIndex("publicationYear", FieldType.FieldTypeInteger);
+    createPayloadIndex("short_description", FieldType.FieldTypeKeyword);
   }
 
   /** Executes a universal Qdrant query and maps its fused score to the shared candidate type. */
