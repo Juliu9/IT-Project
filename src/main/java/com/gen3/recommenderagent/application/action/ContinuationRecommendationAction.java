@@ -6,14 +6,14 @@ import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.engine.RecommendationWorkflow;
 import org.springframework.stereotype.Component;
 
-/** Reuses the latest search criteria and returns unseen recommendations. */
+/** Reuses the latest search and session preferences for refine and more-results requests. */
 @Component
-public class MoreResultsAction implements IntentAction {
+public class ContinuationRecommendationAction implements IntentAction {
 
   private final RecommendationWorkflow workflow;
   private final RequestContextMerger requestContextMerger;
 
-  public MoreResultsAction(
+  public ContinuationRecommendationAction(
       RecommendationWorkflow workflow, RequestContextMerger requestContextMerger) {
     this.workflow = workflow;
     this.requestContextMerger = requestContextMerger;

@@ -95,6 +95,7 @@ public class SolrAudiobookRepository
     }
     addConditions(query, filters.mustInclude(), false);
     addConditions(query, filters.mustNotInclude(), true);
+    addAnyValueFilter(query, "id", filters.excludedBookIds(), true);
   }
 
   private void addConditions(

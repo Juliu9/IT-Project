@@ -14,10 +14,9 @@ import com.gen3.recommenderagent.application.ActionRegistry;
 import com.gen3.recommenderagent.application.RequestApplicationService;
 import com.gen3.recommenderagent.application.action.ChangeCountAction;
 import com.gen3.recommenderagent.application.action.ClearHistoryAction;
-import com.gen3.recommenderagent.application.action.MoreResultsAction;
+import com.gen3.recommenderagent.application.action.ContinuationRecommendationAction;
 import com.gen3.recommenderagent.application.action.NoOpAction;
 import com.gen3.recommenderagent.application.action.RecommendationAction;
-import com.gen3.recommenderagent.application.action.RefineAction;
 import com.gen3.recommenderagent.application.action.RequestContextMerger;
 import com.gen3.recommenderagent.application.action.UpdatePreferencesAction;
 import com.gen3.recommenderagent.application.sessionservice.DefaultSessionService;
@@ -85,9 +84,8 @@ class PersonalisedRecommendationFlowTest {
     ActionRegistry registry =
         new ActionRegistry(
             new RecommendationAction(workflow, merger),
-            new RefineAction(workflow, merger),
-            new MoreResultsAction(workflow, merger),
-            new ChangeCountAction(),
+            new ContinuationRecommendationAction(workflow, merger),
+            new ChangeCountAction(merger),
             new UpdatePreferencesAction(merger),
             new ClearHistoryAction(),
             new NoOpAction());

@@ -9,6 +9,7 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
 import java.io.IOException;
 import java.util.List;
+import java.util.Set;
 import org.springframework.stereotype.Component;
 
 /** Executes one database-independent retrieval plan against a selected storage adapter. */
@@ -28,24 +29,24 @@ public class CandidateRetrievalExecutor {
       AudiobookCandidateSearch candidateSearch,
       SessionRequest request,
       SemanticQueryVectors vectors,
-      int limit)
+      int limit,
+      Set<String> excludedBookIds)
       throws IOException {
-    AudiobookRetrievalPlan plan = retrievalPlanner.plan(limit, request);
-    if (request != null && request.isPersonalised() && vectors != null && !vectors.isEmpty()) {
-      List<AudiobookCandidate> candidates = retrieveSemantic(candidateSearch, plan, vectors);
-      RequestTelemetry.retrieval("SEMANTIC", candidates.size());
-      return candidates;
-    }
+    AudiobookRetrievalPlan plan = retrievalPlanner.plan(limit, request, excludedBookIds);
+    boolean personalised =
+        request != null && request.isPersonalised() && vectors != null && !vectors.isEmpty();
     List<AudiobookCandidate> candidates =
-        switch (plan.mode()) {
-          case SEMANTIC -> retrieveSemantic(candidateSearch, plan, vectors);
-          case KEYWORD ->
-              candidateSearch.searchKeyword(plan.keywordText(), plan.filters(), plan.limit());
-          case HYBRID -> retrieveHybrid(candidateSearch, plan, vectors);
-          case FILTER_ONLY -> candidateSearch.searchByFilters(plan.filters(), plan.limit());
-          case NONE -> List.of();
-        };
-    RequestTelemetry.retrieval(plan.mode().name(), candidates.size());
+        personalised
+            ? retrieveSemantic(candidateSearch, plan, vectors)
+            : switch (plan.mode()) {
+              case SEMANTIC -> retrieveSemantic(candidateSearch, plan, vectors);
+              case KEYWORD ->
+                  candidateSearch.searchKeyword(plan.keywordText(), plan.filters(), plan.limit());
+              case HYBRID -> retrieveHybrid(candidateSearch, plan, vectors);
+              case FILTER_ONLY -> candidateSearch.searchByFilters(plan.filters(), plan.limit());
+              case NONE -> List.of();
+            };
+    RequestTelemetry.retrieval(personalised ? "SEMANTIC" : plan.mode().name(), candidates.size());
     return candidates;
   }
 

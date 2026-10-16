@@ -2,10 +2,9 @@ package com.gen3.recommenderagent.application;
 
 import com.gen3.recommenderagent.application.action.ChangeCountAction;
 import com.gen3.recommenderagent.application.action.ClearHistoryAction;
-import com.gen3.recommenderagent.application.action.MoreResultsAction;
+import com.gen3.recommenderagent.application.action.ContinuationRecommendationAction;
 import com.gen3.recommenderagent.application.action.NoOpAction;
 import com.gen3.recommenderagent.application.action.RecommendationAction;
-import com.gen3.recommenderagent.application.action.RefineAction;
 import com.gen3.recommenderagent.application.action.UpdatePreferencesAction;
 import com.gen3.recommenderagent.domain.Intent;
 import java.util.EnumMap;
@@ -20,8 +19,7 @@ public class ActionRegistry {
 
   public ActionRegistry(
       RecommendationAction recommendationAction,
-      RefineAction refineAction,
-      MoreResultsAction moreResultsAction,
+      ContinuationRecommendationAction continuationRecommendationAction,
       ChangeCountAction changeCountAction,
       UpdatePreferencesAction updatePreferencesAction,
       ClearHistoryAction clearHistoryAction,
@@ -29,8 +27,8 @@ public class ActionRegistry {
     EnumMap<Intent, IntentAction> registry = new EnumMap<>(Intent.class);
 
     registry.put(Intent.RECOMMENDATION, recommendationAction);
-    registry.put(Intent.REFINE, refineAction);
-    registry.put(Intent.MORE_RESULTS, moreResultsAction);
+    registry.put(Intent.REFINE, continuationRecommendationAction);
+    registry.put(Intent.MORE_RESULTS, continuationRecommendationAction);
     registry.put(Intent.CHANGE_COUNT, changeCountAction);
     registry.put(Intent.UPDATE_PREFERENCES, updatePreferencesAction);
     registry.put(Intent.CLEAR_HISTORY, clearHistoryAction);

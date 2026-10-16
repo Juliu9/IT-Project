@@ -6,9 +6,9 @@ and ranks candidates, retains a 24-hour Redis session, and returns a concise spo
 ## How it works
 
 1. OpenAI parses the request into an intent, semantic query, exact filters, and result count.
-2. Qdrant retrieves candidates using semantic, keyword, hybrid, or filter-only search.
-3. The ranker excludes books already shown in the session and scores the remaining candidates.
-4. Redis saves the request and shown-book IDs under the `(userId, sessionId)` pair.
+2. Qdrant retrieves unseen candidates using semantic, keyword, hybrid, or filter-only search.
+3. The ranker scores candidates and defensively excludes any book already shown in the session.
+4. Redis saves the request and up to 500 recent shown-book IDs under the `(userId, sessionId)` pair.
 
 Supported intents are `RECOMMENDATION`, `REFINE`, `MORE_RESULTS`, `CHANGE_COUNT`,
 `UPDATE_PREFERENCES`, `CLEAR_HISTORY`, `HELP`, and `UNKNOWN`.
@@ -48,7 +48,7 @@ Only `OPENAI_API_KEY` is required. The defaults suit local Docker:
 | `QDRANT_GRPC_PORT` | `6334` | Qdrant gRPC port |
 | `QDRANT_API_KEY` | empty | Qdrant Cloud API key |
 | `QDRANT_COLLECTION` | `audiobooks_hybrid` | Audiobook collection |
-| `QDRANT_TIMEOUT` | `30s` | Maximum time for one Qdrant call |
+| `QDRANT_TIMEOUT` | `10s` | Maximum time for one Qdrant call |
 | `AUDIOBOOK_CANDIDATE_RETRIEVER` | `qdrant` | Set to `solr` for the legacy adapter |
 | `QDRANT_MIGRATION_ENABLED` | `false` | Run the opt-in Solr-to-Qdrant migration |
 

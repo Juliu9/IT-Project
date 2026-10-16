@@ -419,6 +419,7 @@ public class QdrantAudiobookRepository
     await(client.createCollectionAsync(request), "create hybrid Qdrant collection");
     createPayloadIndex("authors", FieldType.FieldTypeKeyword);
     createPayloadIndex("narrators", FieldType.FieldTypeKeyword);
+    createPayloadIndex("bookId", FieldType.FieldTypeKeyword);
     createPayloadIndex("language", FieldType.FieldTypeKeyword);
     createPayloadIndex("source", FieldType.FieldTypeKeyword);
     createPayloadIndex("durationMinutes", FieldType.FieldTypeInteger);
@@ -477,6 +478,9 @@ public class QdrantAudiobookRepository
     Filter.Builder builder = Filter.newBuilder();
     addConditions(builder, filters.mustInclude(), false);
     addConditions(builder, filters.mustNotInclude(), true);
+    if (filters.excludedBookIds() != null && !filters.excludedBookIds().isEmpty()) {
+      builder.addMustNot(matchKeywords("bookId", filters.excludedBookIds()));
+    }
     return builder.build();
   }
 

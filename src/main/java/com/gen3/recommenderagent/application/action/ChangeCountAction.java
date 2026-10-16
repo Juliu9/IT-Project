@@ -10,14 +10,15 @@ import org.springframework.stereotype.Component;
 @Component
 public class ChangeCountAction implements IntentAction {
 
+  private final RequestContextMerger requestContextMerger;
+
+  public ChangeCountAction(RequestContextMerger requestContextMerger) {
+    this.requestContextMerger = requestContextMerger;
+  }
+
   @Override
   public SessionRequest execute(SessionRequest request, Session session) {
-    if (session != null) {
-      if (request.getBookCount() != null) {
-        session.setBookCount(request.getBookCount());
-      }
-      request.setBookCount(session.getBookCount());
-    }
+    requestContextMerger.applyBookCount(request, session);
     request.setRecommendations(List.of());
     return request;
   }

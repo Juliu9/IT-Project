@@ -40,14 +40,15 @@ class IntentActionsTest {
   }
 
   @Test
-  void refineActionCombinesLatestSearchWithNewCriteria() {
+  void continuationActionCombinesLatestSearchWithNewCriteria() {
     RecommendationWorkflow workflow = mock(RecommendationWorkflow.class);
     Session session = new Session();
     session.addRequest(requestWithTopics("science fiction"));
     SessionRequest refinement = requestWithTopics("first contact");
     when(workflow.recommend(refinement, session)).thenReturn(List.of());
 
-    new RefineAction(workflow, requestContextMerger).execute(refinement, session);
+    new ContinuationRecommendationAction(workflow, requestContextMerger)
+        .execute(refinement, session);
 
     assertEquals(
         List.of("science fiction", "first contact"),
@@ -56,7 +57,7 @@ class IntentActionsTest {
   }
 
   @Test
-  void moreResultsActionReusesLatestSearch() {
+  void continuationActionReusesLatestSearch() {
     RecommendationWorkflow workflow = mock(RecommendationWorkflow.class);
     Session session = new Session();
     session.setBookCount(2);
@@ -66,7 +67,7 @@ class IntentActionsTest {
     SessionRequest request = new SessionRequest();
     when(workflow.recommend(request, session)).thenReturn(List.of());
 
-    new MoreResultsAction(workflow, requestContextMerger).execute(request, session);
+    new ContinuationRecommendationAction(workflow, requestContextMerger).execute(request, session);
 
     assertEquals(List.of("history"), request.getPositiveSemanticQuery().getTopics());
     assertEquals(2, request.getBookCount());
@@ -80,7 +81,7 @@ class IntentActionsTest {
 
     SessionRequest countRequest = new SessionRequest();
     countRequest.setBookCount(2);
-    new ChangeCountAction().execute(countRequest, session);
+    new ChangeCountAction(requestContextMerger).execute(countRequest, session);
     assertEquals(2, session.getBookCount());
     assertTrue(countRequest.getRecommendations().isEmpty());
 

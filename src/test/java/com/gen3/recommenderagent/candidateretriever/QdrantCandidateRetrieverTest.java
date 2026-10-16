@@ -17,6 +17,7 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class QdrantCandidateRetrieverTest {
@@ -36,7 +37,7 @@ class QdrantCandidateRetrieverTest {
     new QdrantCandidateRetriever(
             repository,
             new CandidateRetrievalExecutor(embeddingIndexer, new AudiobookRetrievalPlanner()))
-        .getCandidates(request, vectors, 5);
+        .getCandidates(request, vectors, 5, Set.of());
 
     verify(repository)
         .searchHybrid(
@@ -44,7 +45,8 @@ class QdrantCandidateRetrieverTest {
             "desert",
             new AudiobookFilters(
                 new AudiobookFilterConditions(List.of(), List.of(), "English", null, null, null),
-                AudiobookFilterConditions.empty()),
+                AudiobookFilterConditions.empty(),
+                List.of()),
             5);
   }
 
@@ -58,7 +60,7 @@ class QdrantCandidateRetrieverTest {
         new QdrantCandidateRetriever(
                 repository,
                 new CandidateRetrievalExecutor(embeddingIndexer, new AudiobookRetrievalPlanner()))
-            .getCandidates(new SessionRequest(), vectors, 5);
+            .getCandidates(new SessionRequest(), vectors, 5, Set.of());
 
     assertThat(result).isEmpty();
     verify(embeddingIndexer, never()).combineSemanticQueries(vectors);
@@ -81,7 +83,7 @@ class QdrantCandidateRetrieverTest {
         new QdrantCandidateRetriever(
                 repository,
                 new CandidateRetrievalExecutor(embeddingIndexer, new AudiobookRetrievalPlanner()))
-            .getCandidates(request, vectors, 5);
+            .getCandidates(request, vectors, 5, Set.of());
 
     assertThat(candidates).hasSize(1);
     assertThat(candidates.getFirst().audiobook().id()).isEqualTo("42");

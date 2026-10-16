@@ -173,9 +173,10 @@ class QdrantAudiobookRepositoryTest {
 
     ArgumentCaptor<CreateFieldIndexCollection> index =
         ArgumentCaptor.forClass(CreateFieldIndexCollection.class);
-    verify(client, times(6)).createPayloadIndexAsync(index.capture(), any());
+    verify(client, times(7)).createPayloadIndexAsync(index.capture(), any());
     assertThat(index.getAllValues())
         .extracting(CreateFieldIndexCollection::getFieldName)
+        .contains("bookId")
         .doesNotContain("short_description");
   }
 
@@ -270,15 +271,16 @@ class QdrantAudiobookRepositoryTest {
     AudiobookFilters filters =
         new AudiobookFilters(
             new AudiobookFilterConditions(List.of(), List.of(), "English", "NLS", null, null),
-            new AudiobookFilterConditions(List.of(), List.of(), "French", "Legacy", null, null));
+            new AudiobookFilterConditions(List.of(), List.of(), "French", "Legacy", null, null),
+            List.of("shown-1", "shown-2"));
 
     repository.searchByFilters(filters, 5);
 
     ArgumentCaptor<QueryPoints> request = ArgumentCaptor.forClass(QueryPoints.class);
     verify(client).queryAsync(request.capture());
     assertThat(request.getValue().getFilter().getMustCount()).isEqualTo(2);
-    assertThat(request.getValue().getFilter().getMustNotCount()).isEqualTo(2);
+    assertThat(request.getValue().getFilter().getMustNotCount()).isEqualTo(3);
     assertThat(request.getValue().getFilter().toString())
-        .contains("language", "English", "source", "NLS", "French", "Legacy");
+        .contains("language", "English", "source", "NLS", "French", "Legacy", "bookId", "shown-1");
   }
 }

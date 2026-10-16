@@ -15,10 +15,9 @@ import com.gen3.recommenderagent.application.ActionRegistry;
 import com.gen3.recommenderagent.application.RequestApplicationService;
 import com.gen3.recommenderagent.application.action.ChangeCountAction;
 import com.gen3.recommenderagent.application.action.ClearHistoryAction;
-import com.gen3.recommenderagent.application.action.MoreResultsAction;
+import com.gen3.recommenderagent.application.action.ContinuationRecommendationAction;
 import com.gen3.recommenderagent.application.action.NoOpAction;
 import com.gen3.recommenderagent.application.action.RecommendationAction;
-import com.gen3.recommenderagent.application.action.RefineAction;
 import com.gen3.recommenderagent.application.action.RequestContextMerger;
 import com.gen3.recommenderagent.application.action.UpdatePreferencesAction;
 import com.gen3.recommenderagent.application.sessionservice.DefaultSessionService;
@@ -107,35 +106,22 @@ class RecommendationFlowIntegrationTest {
     RequestContextMerger requestContextMerger = new RequestContextMerger();
     com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository userPreferences =
         mock(com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository.class);
+    AudiobookRecommendationWorkflow workflow =
+        new AudiobookRecommendationWorkflow(
+            candidateRetriever,
+            rankingService,
+            new SemanticQueryVectorService(embeddingIndexer),
+            userPreferences);
     RecommendationAction recommendationAction =
-        new RecommendationAction(
-            new AudiobookRecommendationWorkflow(
-                candidateRetriever,
-                rankingService,
-                new SemanticQueryVectorService(embeddingIndexer),
-                userPreferences),
-            requestContextMerger);
+        new RecommendationAction(workflow, requestContextMerger);
     RecommendationFlowTestSupport.InMemorySessionRepository sessionRepository =
         new RecommendationFlowTestSupport.InMemorySessionRepository();
 
     ActionRegistry registry =
         new ActionRegistry(
             recommendationAction,
-            new RefineAction(
-                new AudiobookRecommendationWorkflow(
-                    candidateRetriever,
-                    rankingService,
-                    new SemanticQueryVectorService(embeddingIndexer),
-                    userPreferences),
-                requestContextMerger),
-            new MoreResultsAction(
-                new AudiobookRecommendationWorkflow(
-                    candidateRetriever,
-                    rankingService,
-                    new SemanticQueryVectorService(embeddingIndexer),
-                    userPreferences),
-                requestContextMerger),
-            new ChangeCountAction(),
+            new ContinuationRecommendationAction(workflow, requestContextMerger),
+            new ChangeCountAction(requestContextMerger),
             new UpdatePreferencesAction(requestContextMerger),
             new ClearHistoryAction(),
             new NoOpAction());

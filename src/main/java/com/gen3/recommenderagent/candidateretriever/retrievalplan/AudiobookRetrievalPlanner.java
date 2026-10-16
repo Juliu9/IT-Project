@@ -9,6 +9,7 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
@@ -20,14 +21,16 @@ public class AudiobookRetrievalPlanner {
   private static final Pattern FIRST_NUMBER = Pattern.compile("(\\d+)");
 
   /** Separates semantic text, lexical terms, and exact payload constraints. */
-  public AudiobookRetrievalPlan plan(int limit, SessionRequest request) {
+  public AudiobookRetrievalPlan plan(
+      int limit, SessionRequest request, Set<String> excludedBookIds) {
     SemanticQuery positive = request == null ? null : request.getPositiveSemanticQuery();
     SemanticQuery negative = request == null ? null : request.getNegativeSemanticQuery();
     String keywordText = lexicalText(positive, "");
     AudiobookFilters filters =
         new AudiobookFilters(
             includeConditions(request == null ? null : request.getMustInclude()),
-            excludeConditions(request == null ? null : request.getMustNotInclude()));
+            excludeConditions(request == null ? null : request.getMustNotInclude()),
+            excludedBookIds == null ? List.of() : List.copyOf(excludedBookIds));
     return new AudiobookRetrievalPlan(
         modeFor(positive, negative, filters), keywordText, filters, Math.max(limit, 1));
   }

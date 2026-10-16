@@ -6,6 +6,7 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
 import java.io.IOException;
 import java.util.List;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
@@ -32,10 +33,13 @@ public class QdrantCandidateRetriever implements CandidateRetriever {
   /** Embeds the combined raw and processed user request once, then searches Qdrant. */
   @Override
   public List<AudiobookCandidate> getCandidates(
-      SessionRequest request, SemanticQueryVectors vectors, int limit) {
+      SessionRequest request,
+      SemanticQueryVectors vectors,
+      int limit,
+      Set<String> excludedBookIds) {
     try {
       RequestTelemetry.retrievalBackend("qdrant");
-      return retrievalExecutor.execute(candidateSearch, request, vectors, limit);
+      return retrievalExecutor.execute(candidateSearch, request, vectors, limit, excludedBookIds);
     } catch (IOException exception) {
       throw new IllegalStateException("Failed to retrieve candidates from Qdrant", exception);
     }
