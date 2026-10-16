@@ -41,7 +41,7 @@ public class QdrantCandidateRetriever implements CandidateRetriever {
       RequestTelemetry.retrievalBackend("qdrant");
       return retrievalExecutor.execute(candidateSearch, request, vectors, limit, excludedBookIds);
     } catch (IOException exception) {
-      throw new IllegalStateException("Failed to retrieve candidates from Qdrant", exception);
+      throw new CandidateRetrievalException("Qdrant", exception);
     }
   }
 }

@@ -148,3 +148,7 @@ Run all tests with Docker available:
 
 The suite includes unit tests plus Redis and Solr container-backed integration tests. Never commit
 API keys, `.env`, or local logs.
+
+Changes targeting `staging` run the API-free test suite. Changes targeting `main` run the tagged
+integration checks. Configure the repository secrets `OPENAI_API_KEY`, `QDRANT_URL`, and
+`QDRANT_API_KEY`; only the `main` checks receive them.

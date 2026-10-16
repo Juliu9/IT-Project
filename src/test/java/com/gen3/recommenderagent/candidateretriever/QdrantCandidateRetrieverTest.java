@@ -1,6 +1,7 @@
 package com.gen3.recommenderagent.candidateretriever;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -16,6 +17,7 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditio
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
+import java.io.IOException;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -90,6 +92,28 @@ class QdrantCandidateRetrieverTest {
     assertThat(candidates.getFirst().score()).isEqualTo(0.91);
     verify(embeddingIndexer).combineSemanticQueries(vectors);
     verify(repository).searchSemantic(vector, AudiobookFilters.empty(), 5);
+  }
+
+  @Test
+  void mapsQdrantFailuresToTheSharedRetrievalException() throws Exception {
+    QdrantAudiobookRepository repository = mock(QdrantAudiobookRepository.class);
+    EmbeddingIndexer embeddingIndexer = mock(EmbeddingIndexer.class);
+    SessionRequest request = requestWithTopic("space");
+    float[] vector = {0.6f, 0.8f};
+    SemanticQueryVectors vectors = new SemanticQueryVectors(List.of(vector), List.of());
+    when(embeddingIndexer.combineSemanticQueries(vectors)).thenReturn(vector);
+    when(repository.searchSemantic(vector, AudiobookFilters.empty(), 5))
+        .thenThrow(new IOException("timed out"));
+
+    assertThatThrownBy(
+            () ->
+                new QdrantCandidateRetriever(
+                        repository,
+                        new CandidateRetrievalExecutor(
+                            embeddingIndexer, new AudiobookRetrievalPlanner()))
+                    .getCandidates(request, vectors, 5, Set.of()))
+        .isInstanceOf(CandidateRetrievalException.class)
+        .hasCauseInstanceOf(IOException.class);
   }
 
   private SessionRequest requestWithTopic(String topic) {

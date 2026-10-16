@@ -41,6 +41,7 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(BatchShortDescriptionEnricher.class);
   private static final int BOOKS_PER_REQUEST = 10;
+  private static final int MAX_DESCRIPTION_WORDS = 20;
   private final QdrantAudiobookRepository qdrant;
   private final ObjectMapper mapper;
   private final HttpClient client;
@@ -340,7 +341,7 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
               entry -> {
                 String description = entry.getValue().asText();
                 if (hasText(entry.getKey()) && hasText(description)) {
-                  descriptions.put(entry.getKey(), description.trim());
+                  descriptions.put(entry.getKey(), trimToWordLimit(description));
                 }
               });
     }
@@ -386,5 +387,11 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
 
   private static boolean hasText(String value) {
     return value != null && !value.isBlank();
+  }
+
+  private static String trimToWordLimit(String description) {
+    String[] words = description.trim().split("\\s+");
+    return String.join(
+        " ", java.util.Arrays.copyOf(words, Math.min(words.length, MAX_DESCRIPTION_WORDS)));
   }
 }

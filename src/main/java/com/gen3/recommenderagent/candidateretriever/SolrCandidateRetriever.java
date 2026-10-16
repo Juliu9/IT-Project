@@ -39,7 +39,7 @@ public class SolrCandidateRetriever implements CandidateRetriever {
       RequestTelemetry.retrievalBackend("solr");
       return retrievalExecutor.execute(candidateSearch, request, vectors, limit, excludedBookIds);
     } catch (IOException exception) {
-      throw new RuntimeException("Failed to retrieve semantic candidates from Solr", exception);
+      throw new CandidateRetrievalException("Solr", exception);
     }
   }
 }

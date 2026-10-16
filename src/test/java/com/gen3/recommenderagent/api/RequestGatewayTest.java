@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.gen3.recommenderagent.application.RequestApplicationService;
+import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalException;
+import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
@@ -64,5 +66,31 @@ class RequestGatewayTest {
         .andExpect(content().string("I didn’t catch a request. What would you like to listen to?"));
 
     verify(telemetry).fail(null);
+  }
+
+  @Test
+  void returnsServiceUnavailableWhenCandidateRetrievalFails() throws Exception {
+    SessionRequest parsedRequest = new SessionRequest();
+    when(inputParser.parse("recommend science fiction"))
+        .thenReturn(new org.springframework.ai.chat.client.ResponseEntity<>(null, parsedRequest));
+    when(requestApplicationService.process("session", "user", parsedRequest))
+        .thenThrow(new CandidateRetrievalException("Qdrant", new RuntimeException("timed out")));
+    RequestGateway gateway =
+        new RequestGateway(inputParser, requestApplicationService, responseGenerator, telemetry);
+    MockMvc mockMvc =
+        MockMvcBuilders.standaloneSetup(gateway)
+            .setControllerAdvice(new RequestExceptionHandler())
+            .build();
+
+    mockMvc
+        .perform(
+            post("/api/v1/recommendations")
+                .header("X-Session-Id", "session")
+                .header("X-User-Id", "user")
+                .content("recommend science fiction"))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(
+            content()
+                .string("Recommendations are temporarily unavailable. Please try again shortly."));
   }
 }

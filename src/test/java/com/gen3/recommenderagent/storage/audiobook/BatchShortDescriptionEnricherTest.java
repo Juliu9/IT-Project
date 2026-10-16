@@ -32,6 +32,17 @@ class BatchShortDescriptionEnricherTest {
   }
 
   @Test
+  void trimsDescriptionsToTwentyWordsBeforeStoringThem() throws Exception {
+    BatchShortDescriptionEnricher enricher = enricher(Path.of("target"));
+    String output =
+        "{\"response\":{\"status_code\":200,\"body\":{\"choices\":[{\"message\":{\"content\":\"{\\\"book-1\\\":\\\"one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twenty-one\\\"}\"}}]}}}";
+
+    assertThat(enricher.parseDescriptions(output).get("book-1"))
+        .isEqualTo(
+            "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty");
+  }
+
+  @Test
   void shouldPersistTheQdrantPointIdsSubmittedToOpenAi() throws Exception {
     Path directory = Files.createTempDirectory("short-description-test");
     BatchShortDescriptionEnricher enricher = enricher(directory);
