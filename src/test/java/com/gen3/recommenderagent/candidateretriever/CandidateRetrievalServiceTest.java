@@ -16,17 +16,21 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
+import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
 import java.io.IOException;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-class QdrantCandidateRetrieverTest {
+class CandidateRetrievalServiceTest {
 
   @Test
-  void routesSemanticAndFilterContentToHybridSearch() throws Exception {
-    QdrantAudiobookRepository repository = mock(QdrantAudiobookRepository.class);
+  void routesSemanticAndFilterContentToTheSelectedAdapter() throws Exception {
+    AudiobookCandidateSearch candidateSearch = mock(AudiobookCandidateSearch.class);
     EmbeddingIndexer embeddingIndexer = mock(EmbeddingIndexer.class);
     SessionRequest request = requestWithTopic("desert");
     MustInclude filter = new MustInclude();
@@ -36,12 +40,10 @@ class QdrantCandidateRetrieverTest {
     SemanticQueryVectors vectors = new SemanticQueryVectors(List.of(vector), List.of());
     when(embeddingIndexer.combineSemanticQueries(vectors)).thenReturn(vector);
 
-    new QdrantCandidateRetriever(
-            repository,
-            new CandidateRetrievalExecutor(embeddingIndexer, new AudiobookRetrievalPlanner()))
+    service("qdrant", candidateSearch, embeddingIndexer)
         .getCandidates(request, vectors, 5, Set.of());
 
-    verify(repository)
+    verify(candidateSearch)
         .searchHybrid(
             vector,
             "desert",
@@ -53,24 +55,34 @@ class QdrantCandidateRetrieverTest {
   }
 
   @Test
-  void skipsRetrievalWhenRequestHasNoSearchContent() throws Exception {
-    QdrantAudiobookRepository repository = mock(QdrantAudiobookRepository.class);
+  void skipsRetrievalWhenRequestHasNoSearchContent() {
+    AudiobookCandidateSearch candidateSearch = mock(AudiobookCandidateSearch.class);
     EmbeddingIndexer embeddingIndexer = mock(EmbeddingIndexer.class);
-    SemanticQueryVectors vectors = SemanticQueryVectors.empty();
 
     List<AudiobookCandidate> result =
-        new QdrantCandidateRetriever(
-                repository,
-                new CandidateRetrievalExecutor(embeddingIndexer, new AudiobookRetrievalPlanner()))
-            .getCandidates(new SessionRequest(), vectors, 5, Set.of());
+        service("qdrant", candidateSearch, embeddingIndexer)
+            .getCandidates(new SessionRequest(), SemanticQueryVectors.empty(), 5, Set.of());
 
     assertThat(result).isEmpty();
-    verify(embeddingIndexer, never()).combineSemanticQueries(vectors);
+    verify(embeddingIndexer, never()).combineSemanticQueries(SemanticQueryVectors.empty());
   }
 
   @Test
-  void combinesSemanticVectorsOnceAndSuppliesResultToQdrant() throws Exception {
-    QdrantAudiobookRepository repository = mock(QdrantAudiobookRepository.class);
+  void fallsBackToKeywordSearchWhenNoUsableEmbeddingIsAvailable() throws Exception {
+    AudiobookCandidateSearch candidateSearch = mock(AudiobookCandidateSearch.class);
+    EmbeddingIndexer embeddingIndexer = mock(EmbeddingIndexer.class);
+    SessionRequest request = requestWithTopic("space");
+    SemanticQueryVectors vectors = new SemanticQueryVectors(List.of(new float[] {1}), List.of());
+    when(embeddingIndexer.combineSemanticQueries(vectors)).thenReturn(new float[0]);
+
+    service("solr", candidateSearch, embeddingIndexer).getCandidates(request, vectors, 5, Set.of());
+
+    verify(candidateSearch).searchKeyword("space", AudiobookFilters.empty(), 5);
+  }
+
+  @Test
+  void returnsCandidatesFromTheSelectedAdapter() throws Exception {
+    AudiobookCandidateSearch candidateSearch = mock(AudiobookCandidateSearch.class);
     EmbeddingIndexer embeddingIndexer = mock(EmbeddingIndexer.class);
     SessionRequest request = requestWithTopic("space");
     float[] vector = {0.6f, 0.8f};
@@ -78,42 +90,47 @@ class QdrantCandidateRetrieverTest {
     AudiobookRecord book =
         new AudiobookRecord("42", "catalogue", "Book", List.of("Writer"), "Description");
     when(embeddingIndexer.combineSemanticQueries(vectors)).thenReturn(vector);
-    when(repository.searchSemantic(vector, AudiobookFilters.empty(), 5))
+    when(candidateSearch.searchSemantic(vector, AudiobookFilters.empty(), 5))
         .thenReturn(List.of(new AudiobookCandidate(book, 0.91)));
 
     List<AudiobookCandidate> candidates =
-        new QdrantCandidateRetriever(
-                repository,
-                new CandidateRetrievalExecutor(embeddingIndexer, new AudiobookRetrievalPlanner()))
+        service("qdrant", candidateSearch, embeddingIndexer)
             .getCandidates(request, vectors, 5, Set.of());
 
     assertThat(candidates).hasSize(1);
     assertThat(candidates.getFirst().audiobook().id()).isEqualTo("42");
     assertThat(candidates.getFirst().score()).isEqualTo(0.91);
-    verify(embeddingIndexer).combineSemanticQueries(vectors);
-    verify(repository).searchSemantic(vector, AudiobookFilters.empty(), 5);
   }
 
-  @Test
-  void mapsQdrantFailuresToTheSharedRetrievalException() throws Exception {
-    QdrantAudiobookRepository repository = mock(QdrantAudiobookRepository.class);
+  @ParameterizedTest
+  @MethodSource("backends")
+  void translatesAdapterFailuresUsingTheConfiguredBackend(String backend) throws Exception {
+    AudiobookCandidateSearch candidateSearch = mock(AudiobookCandidateSearch.class);
     EmbeddingIndexer embeddingIndexer = mock(EmbeddingIndexer.class);
     SessionRequest request = requestWithTopic("space");
     float[] vector = {0.6f, 0.8f};
     SemanticQueryVectors vectors = new SemanticQueryVectors(List.of(vector), List.of());
     when(embeddingIndexer.combineSemanticQueries(vectors)).thenReturn(vector);
-    when(repository.searchSemantic(vector, AudiobookFilters.empty(), 5))
+    when(candidateSearch.searchSemantic(vector, AudiobookFilters.empty(), 5))
         .thenThrow(new IOException("timed out"));
 
     assertThatThrownBy(
             () ->
-                new QdrantCandidateRetriever(
-                        repository,
-                        new CandidateRetrievalExecutor(
-                            embeddingIndexer, new AudiobookRetrievalPlanner()))
+                service(backend, candidateSearch, embeddingIndexer)
                     .getCandidates(request, vectors, 5, Set.of()))
         .isInstanceOf(CandidateRetrievalException.class)
-        .hasCauseInstanceOf(IOException.class);
+        .hasCauseInstanceOf(IOException.class)
+        .hasMessageContaining(backend);
+  }
+
+  private static Stream<Arguments> backends() {
+    return Stream.of(Arguments.of("qdrant"), Arguments.of("solr"));
+  }
+
+  private CandidateRetrievalService service(
+      String backend, AudiobookCandidateSearch candidateSearch, EmbeddingIndexer embeddingIndexer) {
+    return new CandidateRetrievalService(
+        backend, candidateSearch, embeddingIndexer, new AudiobookRetrievalPlanner());
   }
 
   private SessionRequest requestWithTopic(String topic) {

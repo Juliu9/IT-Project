@@ -12,8 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.application.sessionservice.DefaultSessionService;
-import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalExecutor;
-import com.gen3.recommenderagent.candidateretriever.QdrantCandidateRetriever;
+import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalService;
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectorService;
 import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.domain.Intent;
@@ -67,8 +66,8 @@ class PersonalisedRecommendationFlowTest {
     EmbeddingIndexer indexer = new EmbeddingIndexer(embeddingModel);
     AudiobookRecommendationWorkflow workflow =
         new AudiobookRecommendationWorkflow(
-            new QdrantCandidateRetriever(
-                books, new CandidateRetrievalExecutor(indexer, new AudiobookRetrievalPlanner())),
+            new CandidateRetrievalService(
+                "qdrant", books, indexer, new AudiobookRetrievalPlanner()),
             ranker,
             new SemanticQueryVectorService(indexer),
             users);

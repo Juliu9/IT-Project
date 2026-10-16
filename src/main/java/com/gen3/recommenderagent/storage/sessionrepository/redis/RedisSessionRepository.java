@@ -13,6 +13,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.RedisOperations;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -50,6 +51,7 @@ public class RedisSessionRepository implements SessionRepository {
   private final ScheduledExecutorService lockRenewalExecutor;
   private final ThreadLocal<LockOwnership> activeLock = new ThreadLocal<>();
 
+  @Autowired
   public RedisSessionRepository(
       RedisTemplate<String, Session> redisTemplate, StringRedisTemplate stringRedisTemplate) {
     this(

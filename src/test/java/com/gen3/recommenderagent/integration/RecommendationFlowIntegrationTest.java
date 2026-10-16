@@ -13,10 +13,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.gen3.recommenderagent.api.RequestGateway;
 import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.application.sessionservice.DefaultSessionService;
-import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalExecutor;
+import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalService;
 import com.gen3.recommenderagent.candidateretriever.CandidateRetriever;
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectorService;
-import com.gen3.recommenderagent.candidateretriever.SolrCandidateRetriever;
 import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
@@ -86,9 +85,8 @@ class RecommendationFlowIntegrationTest {
     when(embeddingIndexer.embedSemanticQueries(anyList()))
         .thenReturn(List.of(new float[0], new float[0]));
     CandidateRetriever candidateRetriever =
-        new SolrCandidateRetriever(
-            repository,
-            new CandidateRetrievalExecutor(embeddingIndexer, new AudiobookRetrievalPlanner()));
+        new CandidateRetrievalService(
+            "solr", repository, embeddingIndexer, new AudiobookRetrievalPlanner());
     RankingService rankingService =
         new RankingService(
             new CompositeScorer(
