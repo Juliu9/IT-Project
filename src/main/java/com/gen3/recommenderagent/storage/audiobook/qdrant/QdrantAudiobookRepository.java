@@ -13,6 +13,7 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditio
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
+import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookMetadataEnricher;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorRepository;
 import io.qdrant.client.QdrantClient;
@@ -23,7 +24,6 @@ import io.qdrant.client.grpc.Common.Range;
 import io.qdrant.client.grpc.Points.CreateFieldIndexCollection;
 import io.qdrant.client.grpc.Points.DenseVector;
 import io.qdrant.client.grpc.Points.FieldType;
-import io.qdrant.client.grpc.Points.PointsIdsList;
 import io.qdrant.client.grpc.Points.PointsSelector;
 import io.qdrant.client.grpc.Points.PointsUpdateOperation;
 import io.qdrant.client.grpc.Points.PrefetchQuery;
@@ -38,6 +38,7 @@ import io.qdrant.client.grpc.Points.VectorInput;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -48,7 +49,7 @@ import org.springframework.stereotype.Repository;
 /** Stores and searches normalized audiobook vectors in a Qdrant collection. */
 @Repository
 public class QdrantAudiobookRepository
-    implements AudiobookCandidateSearch, AudiobookVectorRepository {
+    implements AudiobookCandidateSearch, AudiobookEnrichmentStore, AudiobookVectorRepository {
 
   private final QdrantClient client;
   private final QdrantPointMapper mapper;
@@ -181,37 +182,27 @@ public class QdrantAudiobookRepository
   }
 
   /** Stores generated short descriptions without recalculating or rewriting the book vectors. */
-  public void updateShortDescriptions(
-      java.util.Map<String, String> descriptions,
-      java.util.Map<String, io.qdrant.client.grpc.Common.PointId> pointIds)
-      throws IOException {
-    if (descriptions == null || descriptions.isEmpty() || pointIds == null || pointIds.isEmpty()) {
+  @Override
+  public void updateShortDescriptions(List<ShortDescriptionUpdate> updates) throws IOException {
+    if (updates == null || updates.isEmpty()) {
       return;
     }
     initialize();
-    updatePayloads(
-        descriptions.entrySet().stream()
-            .filter(entry -> entry.getKey() != null && !entry.getKey().isBlank())
-            .filter(entry -> entry.getValue() != null && !entry.getValue().isBlank())
-            .filter(entry -> pointIds.containsKey(entry.getKey()))
-            .map(
-                entry ->
-                    PointsUpdateOperation.newBuilder()
-                        .setSetPayload(
-                            PointsUpdateOperation.SetPayload.newBuilder()
-                                .putPayload(
-                                    "short_description",
-                                    io.qdrant.client.ValueFactory.value(entry.getValue()))
-                                .setPointsSelector(
-                                    PointsSelector.newBuilder()
-                                        .setPoints(
-                                            PointsIdsList.newBuilder()
-                                                .addIds(pointIds.get(entry.getKey())))))
-                        .build())
-            .toList());
+    List<PointsUpdateOperation> operations = new ArrayList<>();
+    for (ShortDescriptionUpdate update : updates) {
+      if (update != null && hasText(update.storageReference()) && hasText(update.description())) {
+        operations.add(
+            setMissingPayload(
+                pointId(update.storageReference()),
+                "short_description",
+                io.qdrant.client.ValueFactory.value(update.description())));
+      }
+    }
+    updatePayloads(operations);
   }
 
   /** Adds fake metadata only to fields absent from existing Qdrant payloads. */
+  @Override
   public int enrichMissingMetadata(AudiobookMetadataEnricher metadataEnricher) throws IOException {
     initialize();
     createPayloadIndex("publicationYear", FieldType.FieldTypeInteger);
@@ -300,6 +291,7 @@ public class QdrantAudiobookRepository
   }
 
   /** Loads Qdrant records that still need a generated short description. */
+  @Override
   public List<StoredAudiobook> findRecordsWithoutShortDescription(int maximumRecords)
       throws IOException {
     if (maximumRecords <= 0) {
@@ -322,7 +314,11 @@ public class QdrantAudiobookRepository
       ScrollResponse page = await(client.scrollAsync(request.build()), "read audiobook records");
       records.addAll(
           page.getResultList().stream()
-              .map(point -> new StoredAudiobook(mapper.toRecord(point), point.getId()))
+              .map(
+                  point ->
+                      new StoredAudiobook(
+                          mapper.toRecord(point),
+                          Base64.getEncoder().encodeToString(point.getId().toByteArray())))
               .toList());
       if (!page.hasNextPageOffset() || page.getResultCount() == 0) {
         break;
@@ -332,9 +328,14 @@ public class QdrantAudiobookRepository
     return records;
   }
 
-  /** A record read from Qdrant together with its actual point ID. */
-  public record StoredAudiobook(
-      AudiobookRecord record, io.qdrant.client.grpc.Common.PointId pointId) {}
+  private io.qdrant.client.grpc.Common.PointId pointId(String storageReference) throws IOException {
+    try {
+      return io.qdrant.client.grpc.Common.PointId.parseFrom(
+          Base64.getDecoder().decode(storageReference));
+    } catch (IllegalArgumentException exception) {
+      throw new IOException("Invalid Qdrant storage reference", exception);
+    }
+  }
 
   private void updatePayloads(List<PointsUpdateOperation> operations) throws IOException {
     if (operations.isEmpty()) {
@@ -554,6 +555,10 @@ public class QdrantAudiobookRepository
       values.add(value);
     }
     return values;
+  }
+
+  private boolean hasText(String value) {
+    return value != null && !value.isBlank();
   }
 
   /** Converts asynchronous Qdrant failures into the repository's checked I/O contract. */

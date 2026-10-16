@@ -4,12 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.Bm25SparseTextEncoder;
-import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantPointMapper;
 import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Base64;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -43,20 +44,22 @@ class BatchShortDescriptionEnricherTest {
   }
 
   @Test
-  void shouldPersistTheQdrantPointIdsSubmittedToOpenAi() throws Exception {
+  void shouldPersistTheStorageReferencesSubmittedToOpenAi() throws Exception {
     Path directory = Files.createTempDirectory("short-description-test");
     BatchShortDescriptionEnricher enricher = enricher(directory);
     QdrantPointMapper mapper = new QdrantPointMapper(new Bm25SparseTextEncoder());
     var pointId = mapper.pointId("book-1");
+    String storageReference = Base64.getEncoder().encodeToString(pointId.toByteArray());
     var book =
-        new QdrantAudiobookRepository.StoredAudiobook(
-            new AudiobookRecord("book-1", "source", "Title", List.of(), "Summary"), pointId);
+        new AudiobookEnrichmentStore.StoredAudiobook(
+            new AudiobookRecord("book-1", "source", "Title", List.of(), "Summary"),
+            storageReference);
 
     enricher.writeManifest(
         directory.resolve("short-description-batch.json"), "batch-1", List.of(book));
 
-    assertThat(enricher.pendingPointIds())
-        .containsExactlyEntriesOf(java.util.Map.of("book-1", pointId));
+    assertThat(enricher.pendingStorageReferences())
+        .containsExactlyEntriesOf(java.util.Map.of("book-1", storageReference));
   }
 
   @Test
@@ -65,9 +68,13 @@ class BatchShortDescriptionEnricherTest {
     var request =
         enricher.batchRequest(
             List.of(
-                new QdrantAudiobookRepository.StoredAudiobook(
+                new AudiobookEnrichmentStore.StoredAudiobook(
                     new AudiobookRecord("book-1", "source", "Title", List.of(), "Summary"),
-                    new QdrantPointMapper(new Bm25SparseTextEncoder()).pointId("book-1"))),
+                    Base64.getEncoder()
+                        .encodeToString(
+                            new QdrantPointMapper(new Bm25SparseTextEncoder())
+                                .pointId("book-1")
+                                .toByteArray()))),
             0);
 
     var body = request.path("body");
@@ -78,7 +85,7 @@ class BatchShortDescriptionEnricherTest {
 
   private BatchShortDescriptionEnricher enricher(Path outputDirectory) {
     return new BatchShortDescriptionEnricher(
-        mock(QdrantAudiobookRepository.class),
+        mock(AudiobookEnrichmentStore.class),
         new ObjectMapper(),
         HttpClient.newHttpClient(),
         "test-key",

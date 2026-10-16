@@ -18,6 +18,7 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore;
 import com.google.common.util.concurrent.Futures;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Points.CreateFieldIndexCollection;
@@ -33,6 +34,7 @@ import io.qdrant.client.grpc.Points.ScrollResponse;
 import io.qdrant.client.grpc.Points.UpdateResult;
 import io.qdrant.client.grpc.Points.VectorOutput;
 import io.qdrant.client.grpc.Points.VectorsOutput;
+import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -136,12 +138,13 @@ class QdrantAudiobookRepositoryTest {
     QdrantAudiobookRepository repository =
         new QdrantAudiobookRepository(client, mapper, sparseEncoder, "audiobooks", 2);
 
-    List<QdrantAudiobookRepository.StoredAudiobook> records =
+    List<AudiobookEnrichmentStore.StoredAudiobook> records =
         repository.findRecordsWithoutShortDescription(10);
 
     assertThat(records).hasSize(1);
     assertThat(records.getFirst().record().id()).isEqualTo("book-3");
-    assertThat(records.getFirst().pointId()).isEqualTo(point.getId());
+    assertThat(records.getFirst().storageReference())
+        .isEqualTo(Base64.getEncoder().encodeToString(point.getId().toByteArray()));
     ArgumentCaptor<ScrollPoints> request = ArgumentCaptor.forClass(ScrollPoints.class);
     verify(client).scrollAsync(request.capture());
     assertThat(request.getValue().getFilter().toString()).contains("short_description");
@@ -150,6 +153,38 @@ class QdrantAudiobookRepositoryTest {
     verify(client).createPayloadIndexAsync(index.capture(), any());
     assertThat(index.getValue().getFieldName()).isEqualTo("short_description");
     assertThat(index.getValue().getFieldType()).isEqualTo(FieldType.FieldTypeKeyword);
+  }
+
+  @Test
+  void storesShortDescriptionsOnlyWhenTheyAreStillMissing() throws Exception {
+    QdrantClient client = mock(QdrantClient.class);
+    SparseTextEncoder sparseEncoder = new Bm25SparseTextEncoder();
+    QdrantPointMapper mapper = new QdrantPointMapper(sparseEncoder);
+    when(client.collectionExistsAsync("audiobooks")).thenReturn(Futures.immediateFuture(true));
+    when(client.batchUpdateAsync(eq("audiobooks"), anyList()))
+        .thenReturn(Futures.immediateFuture(List.of(UpdateResult.getDefaultInstance())));
+    QdrantAudiobookRepository repository =
+        new QdrantAudiobookRepository(client, mapper, sparseEncoder, "audiobooks", 2);
+
+    repository.updateShortDescriptions(
+        List.of(
+            new AudiobookEnrichmentStore.ShortDescriptionUpdate(
+                Base64.getEncoder().encodeToString(mapper.pointId("book-3").toByteArray()),
+                "A short description.")));
+
+    ArgumentCaptor<List<io.qdrant.client.grpc.Points.PointsUpdateOperation>> operations =
+        ArgumentCaptor.forClass(List.class);
+    verify(client).batchUpdateAsync(eq("audiobooks"), operations.capture());
+    assertThat(operations.getValue()).hasSize(1);
+    assertThat(
+            operations
+                .getValue()
+                .getFirst()
+                .getSetPayload()
+                .getPointsSelector()
+                .getFilter()
+                .toString())
+        .contains("short_description", "is_empty");
   }
 
   @Test

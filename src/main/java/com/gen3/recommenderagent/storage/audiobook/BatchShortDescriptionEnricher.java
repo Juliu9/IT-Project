@@ -1,7 +1,7 @@
 package com.gen3.recommenderagent.storage.audiobook;
 
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
+import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -12,7 +12,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,7 +41,7 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
   private static final Logger LOGGER = LoggerFactory.getLogger(BatchShortDescriptionEnricher.class);
   private static final int BOOKS_PER_REQUEST = 10;
   private static final int MAX_DESCRIPTION_WORDS = 20;
-  private final QdrantAudiobookRepository qdrant;
+  private final AudiobookEnrichmentStore enrichmentStore;
   private final ObjectMapper mapper;
   private final HttpClient client;
   private final String apiKey;
@@ -54,7 +53,7 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
 
   @Autowired
   public BatchShortDescriptionEnricher(
-      QdrantAudiobookRepository qdrant,
+      AudiobookEnrichmentStore enrichmentStore,
       ObjectMapper mapper,
       @Value("${spring.ai.openai.api-key}") String apiKey,
       @Value("${audiobook.short-description.batch.mode:disabled}") String mode,
@@ -63,7 +62,7 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
           Path outputDirectory,
       @Value("${audiobook.short-description.batch.maximum-records:100000}") int maximumRecords) {
     this(
-        qdrant,
+        enrichmentStore,
         mapper,
         HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).build(),
         apiKey,
@@ -75,7 +74,7 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
   }
 
   BatchShortDescriptionEnricher(
-      QdrantAudiobookRepository qdrant,
+      AudiobookEnrichmentStore enrichmentStore,
       ObjectMapper mapper,
       HttpClient client,
       String apiKey,
@@ -84,7 +83,7 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
       String batchId,
       Path outputDirectory,
       int maximumRecords) {
-    this.qdrant = qdrant;
+    this.enrichmentStore = enrichmentStore;
     this.mapper = mapper;
     this.client = client;
     this.apiKey = apiKey;
@@ -123,11 +122,11 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
               + manifest
               + ". Import it before submitting another batch.");
     }
-    List<QdrantAudiobookRepository.StoredAudiobook> books =
-        qdrant.findRecordsWithoutShortDescription(maximumRecords);
+    List<AudiobookEnrichmentStore.StoredAudiobook> books =
+        enrichmentStore.findRecordsWithoutShortDescription(maximumRecords);
     Files.createDirectories(outputDirectory);
     Path input = Files.createTempFile(outputDirectory, "short-descriptions-", ".jsonl");
-    List<QdrantAudiobookRepository.StoredAudiobook> validBooks = validBooks(books);
+    List<AudiobookEnrichmentStore.StoredAudiobook> validBooks = validBooks(books);
     int records = writeBatchInput(input, validBooks);
     if (records == 0) {
       Files.deleteIfExists(input);
@@ -150,11 +149,11 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
         records);
   }
 
-  private int writeBatchInput(Path input, List<QdrantAudiobookRepository.StoredAudiobook> books)
+  private int writeBatchInput(Path input, List<AudiobookEnrichmentStore.StoredAudiobook> books)
       throws IOException {
     int loaded = 0;
     try (var writer = Files.newBufferedWriter(input, StandardCharsets.UTF_8)) {
-      for (List<QdrantAudiobookRepository.StoredAudiobook> group : groups(books)) {
+      for (List<AudiobookEnrichmentStore.StoredAudiobook> group : groups(books)) {
         writer.write(mapper.writeValueAsString(batchRequest(group, loaded)));
         writer.newLine();
         loaded += group.size();
@@ -163,25 +162,26 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
     return loaded;
   }
 
-  private List<QdrantAudiobookRepository.StoredAudiobook> validBooks(
-      List<QdrantAudiobookRepository.StoredAudiobook> records) {
+  private List<AudiobookEnrichmentStore.StoredAudiobook> validBooks(
+      List<AudiobookEnrichmentStore.StoredAudiobook> records) {
     return records.stream()
-        .filter(record -> record != null && record.pointId() != null)
+        .filter(
+            record ->
+                record != null && record.record() != null && hasText(record.storageReference()))
         .filter(record -> hasText(record.record().id()) && hasText(record.record().description()))
         .toList();
   }
 
-  private List<List<QdrantAudiobookRepository.StoredAudiobook>> groups(
-      List<QdrantAudiobookRepository.StoredAudiobook> records) {
-    List<List<QdrantAudiobookRepository.StoredAudiobook>> groups = new ArrayList<>();
+  private List<List<AudiobookEnrichmentStore.StoredAudiobook>> groups(
+      List<AudiobookEnrichmentStore.StoredAudiobook> records) {
+    List<List<AudiobookEnrichmentStore.StoredAudiobook>> groups = new ArrayList<>();
     for (int start = 0; start < records.size(); start += BOOKS_PER_REQUEST) {
       groups.add(records.subList(start, Math.min(start + BOOKS_PER_REQUEST, records.size())));
     }
     return groups;
   }
 
-  ObjectNode batchRequest(
-      List<QdrantAudiobookRepository.StoredAudiobook> books, int requestNumber) {
+  ObjectNode batchRequest(List<AudiobookEnrichmentStore.StoredAudiobook> books, int requestNumber) {
     ObjectNode request = mapper.createObjectNode();
     request.put("custom_id", "short-description-" + requestNumber);
     request.put("method", "POST");
@@ -199,7 +199,7 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
             "content",
             "Write one meaningful, spoiler-free sentence of at most 20 words for each audiobook. Return only a JSON object mapping each supplied ID to its sentence.");
     ArrayNode booksJson = mapper.createArrayNode();
-    for (QdrantAudiobookRepository.StoredAudiobook storedBook : books) {
+    for (AudiobookEnrichmentStore.StoredAudiobook storedBook : books) {
       AudiobookRecord book = storedBook.record();
       booksJson
           .addObject()
@@ -260,10 +260,17 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
     }
     Map<String, String> descriptions =
         parseDescriptions(getText("/files/" + outputFileId + "/content"));
-    descriptions.keySet().retainAll(manifest.pointIds().keySet());
-    qdrant.updateShortDescriptions(descriptions, manifest.pointIds());
+    List<AudiobookEnrichmentStore.ShortDescriptionUpdate> updates =
+        descriptions.entrySet().stream()
+            .filter(entry -> manifest.storageReferences().containsKey(entry.getKey()))
+            .map(
+                entry ->
+                    new AudiobookEnrichmentStore.ShortDescriptionUpdate(
+                        manifest.storageReferences().get(entry.getKey()), entry.getValue()))
+            .toList();
+    enrichmentStore.updateShortDescriptions(updates);
     Files.delete(manifestPath());
-    LOGGER.info("Stored {} short audiobook descriptions in Qdrant", descriptions.size());
+    LOGGER.info("Imported {} generated short audiobook descriptions", updates.size());
   }
 
   private Path manifestPath() {
@@ -271,14 +278,16 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
   }
 
   void writeManifest(
-      Path manifest, String submittedBatchId, List<QdrantAudiobookRepository.StoredAudiobook> books)
+      Path manifest, String submittedBatchId, List<AudiobookEnrichmentStore.StoredAudiobook> books)
       throws IOException {
-    Map<String, String> pointIds = new LinkedHashMap<>();
-    for (QdrantAudiobookRepository.StoredAudiobook book : books) {
-      pointIds.put(
-          book.record().id(), Base64.getEncoder().encodeToString(book.pointId().toByteArray()));
+    Map<String, String> storageReferences = new LinkedHashMap<>();
+    for (AudiobookEnrichmentStore.StoredAudiobook book : books) {
+      storageReferences.put(book.record().id(), book.storageReference());
     }
-    mapper.writeValue(manifest.toFile(), new StoredBatchManifest(submittedBatchId, pointIds));
+    // Keep the persisted field name stable so batches submitted before this adapter boundary can
+    // still be imported. The values are now deliberately opaque to this workflow.
+    mapper.writeValue(
+        manifest.toFile(), new StoredBatchManifest(submittedBatchId, storageReferences));
   }
 
   private BatchManifest readManifest() throws IOException {
@@ -287,27 +296,19 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
       throw new IllegalStateException(
           "No pending short-description batch manifest was found at "
               + manifest
-              + ". Import cannot safely identify the Qdrant points.");
+              + ". Import cannot safely identify the stored audiobooks.");
     }
     StoredBatchManifest stored = mapper.readValue(manifest.toFile(), StoredBatchManifest.class);
-    Map<String, io.qdrant.client.grpc.Common.PointId> pointIds = new LinkedHashMap<>();
-    for (Map.Entry<String, String> entry : stored.pointIds().entrySet()) {
-      pointIds.put(
-          entry.getKey(),
-          io.qdrant.client.grpc.Common.PointId.parseFrom(
-              Base64.getDecoder().decode(entry.getValue())));
-    }
-    return new BatchManifest(stored.batchId(), pointIds);
+    return new BatchManifest(stored.batchId(), stored.pointIds());
   }
 
-  Map<String, io.qdrant.client.grpc.Common.PointId> pendingPointIds() throws IOException {
-    return readManifest().pointIds();
+  Map<String, String> pendingStorageReferences() throws IOException {
+    return readManifest().storageReferences();
   }
 
   private record StoredBatchManifest(String batchId, Map<String, String> pointIds) {}
 
-  private record BatchManifest(
-      String batchId, Map<String, io.qdrant.client.grpc.Common.PointId> pointIds) {}
+  private record BatchManifest(String batchId, Map<String, String> storageReferences) {}
 
   Map<String, String> parseDescriptions(String output) throws IOException {
     Map<String, String> descriptions = new LinkedHashMap<>();
