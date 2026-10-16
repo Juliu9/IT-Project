@@ -48,6 +48,7 @@ public class FakeAudiobookMetadataEnricher implements AudiobookMetadataEnricher 
         narrators,
         language,
         duration,
-        publicationYear);
+        publicationYear,
+        record.shortDescription());
   }
 }

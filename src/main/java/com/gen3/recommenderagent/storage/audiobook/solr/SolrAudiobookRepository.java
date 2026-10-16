@@ -1,6 +1,5 @@
 package com.gen3.recommenderagent.storage.audiobook.solr;
 
-import com.gen3.recommenderagent.storage.audiobook.FakeAudiobookMetadataEnricher;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
@@ -9,7 +8,6 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookSearchPage;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCatalogueRepository;
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookMetadataEnricher;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorIndexer;
 import java.io.IOException;
 import java.util.Collection;
@@ -26,7 +24,6 @@ import org.apache.solr.client.solrj.util.ClientUtils;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrInputDocument;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Repository;
@@ -45,26 +42,16 @@ public class SolrAudiobookRepository
   private final String collection;
   private final String vectorField;
   private final int vectorDimension;
-  private final AudiobookMetadataEnricher metadataEnricher;
 
-  @Autowired
   public SolrAudiobookRepository(
       SolrClient solrClient,
       @Value("${solr.collection}") String collection,
       @Value("${solr.vector-field:embedding}") String vectorField,
-      @Value("${solr.embedding-dimension:1536}") int vectorDimension,
-      AudiobookMetadataEnricher metadataEnricher) {
+      @Value("${solr.embedding-dimension:1536}") int vectorDimension) {
     this.solrClient = solrClient;
     this.collection = collection;
     this.vectorField = vectorField;
     this.vectorDimension = vectorDimension;
-    this.metadataEnricher = metadataEnricher;
-  }
-
-  /** Convenience constructor used by focused tests and standalone adapters. */
-  public SolrAudiobookRepository(
-      SolrClient solrClient, String collection, String vectorField, int vectorDimension) {
-    this(solrClient, collection, vectorField, vectorDimension, new FakeAudiobookMetadataEnricher());
   }
 
   public SolrAudiobookRepository(SolrClient solrClient, String collection) {
@@ -95,6 +82,8 @@ public class SolrAudiobookRepository
         "narrators",
         "language",
         "durationMinutes",
+        "publicationYear",
+        "short_description",
         "score");
     addFilters(solrQuery, filters);
 
@@ -108,6 +97,7 @@ public class SolrAudiobookRepository
     }
     addConditions(query, filters.mustInclude(), false);
     addConditions(query, filters.mustNotInclude(), true);
+    addAnyValueFilter(query, "id", filters.excludedBookIds(), true);
   }
 
   private void addConditions(
@@ -250,7 +240,9 @@ public class SolrAudiobookRepository
         "description",
         "narrators",
         "language",
-        "durationMinutes");
+        "durationMinutes",
+        "publicationYear",
+        "short_description");
     try {
       QueryResponse response = solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
       return response.getResults().stream().map(this::toRecord).toList();
@@ -274,6 +266,8 @@ public class SolrAudiobookRepository
         "narrators",
         "language",
         "durationMinutes",
+        "publicationYear",
+        "short_description",
         "score");
     addFilters(solrQuery, filters);
     return solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
@@ -425,17 +419,17 @@ public class SolrAudiobookRepository
 
   /** Maps one Solr document to the fields used by the application. */
   private AudiobookRecord toRecord(SolrDocument document) {
-    AudiobookRecord record =
-        new AudiobookRecord(
-            field(document, "id"),
-            field(document, "source"),
-            field(document, "title"),
-            stringList(document.getFieldValue("authors")),
-            field(document, "description"),
-            stringList(document.getFieldValue("narrators")),
-            field(document, "language"),
-            integer(document.getFieldValue("durationMinutes")));
-    return metadataEnricher.enrich(record);
+    return new AudiobookRecord(
+        field(document, "id"),
+        field(document, "source"),
+        field(document, "title"),
+        stringList(document.getFieldValue("authors")),
+        field(document, "description"),
+        stringList(document.getFieldValue("narrators")),
+        field(document, "language"),
+        integer(document.getFieldValue("durationMinutes")),
+        integer(document.getFieldValue("publicationYear")),
+        field(document, "short_description"));
   }
 
   /** Converts a scalar or multivalued Solr field into a stable string list. */

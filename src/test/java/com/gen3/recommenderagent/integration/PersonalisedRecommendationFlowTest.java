@@ -10,19 +10,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.application.ActionRegistry;
-import com.gen3.recommenderagent.application.RequestApplicationService;
-import com.gen3.recommenderagent.application.action.ChangeCountAction;
-import com.gen3.recommenderagent.application.action.ClearHistoryAction;
-import com.gen3.recommenderagent.application.action.MoreResultsAction;
-import com.gen3.recommenderagent.application.action.NoOpAction;
-import com.gen3.recommenderagent.application.action.RecommendationAction;
-import com.gen3.recommenderagent.application.action.RefineAction;
-import com.gen3.recommenderagent.application.action.RequestContextMerger;
-import com.gen3.recommenderagent.application.action.UpdatePreferencesAction;
+import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.application.sessionservice.DefaultSessionService;
-import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalExecutor;
-import com.gen3.recommenderagent.candidateretriever.QdrantCandidateRetriever;
+import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalService;
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectorService;
 import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.domain.Intent;
@@ -63,7 +53,7 @@ class PersonalisedRecommendationFlowTest {
   private final RecommendationFlowTestSupport.InMemorySessionRepository sessions =
       new RecommendationFlowTestSupport.InMemorySessionRepository();
   private final AiResponseGenerator responseGenerator = new AiResponseGenerator(null);
-  private final RequestApplicationService application;
+  private final SessionTransitionService application;
 
   PersonalisedRecommendationFlowTest() throws Exception {
     when(users.findEmbeddingByUserId("user")).thenReturn(Optional.empty());
@@ -74,25 +64,14 @@ class PersonalisedRecommendationFlowTest {
     when(ranker.rank(anyList(), eq(5), any(RankingContext.class)))
         .thenReturn(List.of(new Recommendation("book", 1, 0.9, "A Book")));
     EmbeddingIndexer indexer = new EmbeddingIndexer(embeddingModel);
-    RequestContextMerger merger = new RequestContextMerger();
     AudiobookRecommendationWorkflow workflow =
         new AudiobookRecommendationWorkflow(
-            new QdrantCandidateRetriever(
-                books, new CandidateRetrievalExecutor(indexer, new AudiobookRetrievalPlanner())),
+            new CandidateRetrievalService(
+                "qdrant", books, indexer, new AudiobookRetrievalPlanner()),
             ranker,
             new SemanticQueryVectorService(indexer),
             users);
-    ActionRegistry registry =
-        new ActionRegistry(
-            new RecommendationAction(workflow, merger),
-            new RefineAction(workflow, merger),
-            new MoreResultsAction(workflow, merger),
-            new ChangeCountAction(),
-            new UpdatePreferencesAction(merger),
-            new ClearHistoryAction(),
-            new NoOpAction());
-    application =
-        new RequestApplicationService(new DefaultSessionService(sessions), registry, merger);
+    application = new SessionTransitionService(new DefaultSessionService(sessions), workflow);
   }
 
   @Test

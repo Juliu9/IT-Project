@@ -11,21 +11,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.gen3.recommenderagent.api.RequestGateway;
-import com.gen3.recommenderagent.application.ActionRegistry;
-import com.gen3.recommenderagent.application.RequestApplicationService;
-import com.gen3.recommenderagent.application.action.ChangeCountAction;
-import com.gen3.recommenderagent.application.action.ClearHistoryAction;
-import com.gen3.recommenderagent.application.action.MoreResultsAction;
-import com.gen3.recommenderagent.application.action.NoOpAction;
-import com.gen3.recommenderagent.application.action.RecommendationAction;
-import com.gen3.recommenderagent.application.action.RefineAction;
-import com.gen3.recommenderagent.application.action.RequestContextMerger;
-import com.gen3.recommenderagent.application.action.UpdatePreferencesAction;
+import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.application.sessionservice.DefaultSessionService;
-import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalExecutor;
+import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalService;
 import com.gen3.recommenderagent.candidateretriever.CandidateRetriever;
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectorService;
-import com.gen3.recommenderagent.candidateretriever.SolrCandidateRetriever;
 import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
@@ -95,53 +85,26 @@ class RecommendationFlowIntegrationTest {
     when(embeddingIndexer.embedSemanticQueries(anyList()))
         .thenReturn(List.of(new float[0], new float[0]));
     CandidateRetriever candidateRetriever =
-        new SolrCandidateRetriever(
-            repository,
-            new CandidateRetrievalExecutor(embeddingIndexer, new AudiobookRetrievalPlanner()));
+        new CandidateRetrievalService(
+            "solr", repository, embeddingIndexer, new AudiobookRetrievalPlanner());
     RankingService rankingService =
         new RankingService(
             new CompositeScorer(
                 List.of(
                     new WeightedScorer(new RetrievalRelevanceScorer(), 1.0),
                     new WeightedScorer(new UserPreferenceScorer(scoringProperties()), 1.0))));
-    RequestContextMerger requestContextMerger = new RequestContextMerger();
     com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository userPreferences =
         mock(com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository.class);
-    RecommendationAction recommendationAction =
-        new RecommendationAction(
-            new AudiobookRecommendationWorkflow(
-                candidateRetriever,
-                rankingService,
-                new SemanticQueryVectorService(embeddingIndexer),
-                userPreferences),
-            requestContextMerger);
+    AudiobookRecommendationWorkflow workflow =
+        new AudiobookRecommendationWorkflow(
+            candidateRetriever,
+            rankingService,
+            new SemanticQueryVectorService(embeddingIndexer),
+            userPreferences);
     RecommendationFlowTestSupport.InMemorySessionRepository sessionRepository =
         new RecommendationFlowTestSupport.InMemorySessionRepository();
-
-    ActionRegistry registry =
-        new ActionRegistry(
-            recommendationAction,
-            new RefineAction(
-                new AudiobookRecommendationWorkflow(
-                    candidateRetriever,
-                    rankingService,
-                    new SemanticQueryVectorService(embeddingIndexer),
-                    userPreferences),
-                requestContextMerger),
-            new MoreResultsAction(
-                new AudiobookRecommendationWorkflow(
-                    candidateRetriever,
-                    rankingService,
-                    new SemanticQueryVectorService(embeddingIndexer),
-                    userPreferences),
-                requestContextMerger),
-            new ChangeCountAction(),
-            new UpdatePreferencesAction(requestContextMerger),
-            new ClearHistoryAction(),
-            new NoOpAction());
-    RequestApplicationService applicationService =
-        new RequestApplicationService(
-            new DefaultSessionService(sessionRepository), registry, requestContextMerger);
+    SessionTransitionService applicationService =
+        new SessionTransitionService(new DefaultSessionService(sessionRepository), workflow);
 
     RequestGateway gateway =
         new RequestGateway(inputParser, applicationService, new AiResponseGenerator(null));

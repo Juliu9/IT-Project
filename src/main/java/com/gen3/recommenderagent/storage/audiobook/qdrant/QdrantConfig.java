@@ -25,7 +25,7 @@ public class QdrantConfig {
       @Value("${qdrant.url}") String qdrantUrl,
       @Value("${qdrant.grpc-port:6334}") int grpcPort,
       @Value("${qdrant.api-key:}") String apiKey,
-      @Value("${qdrant.timeout:5s}") Duration timeout) {
+      @Value("${qdrant.timeout:10s}") Duration timeout) {
     URI uri = parseUrl(qdrantUrl);
     boolean useTls = "https".equalsIgnoreCase(uri.getScheme());
     QdrantGrpcClient.Builder builder =

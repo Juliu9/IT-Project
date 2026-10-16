@@ -1,6 +1,6 @@
 package com.gen3.recommenderagent.api;
 
-import com.gen3.recommenderagent.application.RequestApplicationService;
+import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
@@ -17,27 +17,27 @@ import org.springframework.web.bind.annotation.RestController;
 public class RequestGateway {
 
   private final InputParser inputParser;
-  private final RequestApplicationService requestApplicationService;
+  private final SessionTransitionService sessionTransitionService;
   private final ResponseGenerator responseGenerator;
   private final RequestTelemetry telemetry;
 
   @Autowired
   public RequestGateway(
       InputParser inputParser,
-      RequestApplicationService requestApplicationService,
+      SessionTransitionService sessionTransitionService,
       ResponseGenerator responseGenerator,
       RequestTelemetry telemetry) {
     this.inputParser = inputParser;
-    this.requestApplicationService = requestApplicationService;
+    this.sessionTransitionService = sessionTransitionService;
     this.responseGenerator = responseGenerator;
     this.telemetry = telemetry;
   }
 
   public RequestGateway(
       InputParser inputParser,
-      RequestApplicationService requestApplicationService,
+      SessionTransitionService sessionTransitionService,
       ResponseGenerator responseGenerator) {
-    this(inputParser, requestApplicationService, responseGenerator, null);
+    this(inputParser, sessionTransitionService, responseGenerator, null);
   }
 
   /**
@@ -61,7 +61,7 @@ public class RequestGateway {
     try {
       currentRequest =
           RequestTelemetry.measure("parseMs", () -> inputParser.parse(rawText).entity());
-      SessionRequest result = requestApplicationService.process(sessionId, userId, currentRequest);
+      SessionRequest result = sessionTransitionService.process(sessionId, userId, currentRequest);
       String response =
           RequestTelemetry.measure(
               "responseMs", () -> responseGenerator.generate(result.getRecommendations(), result));

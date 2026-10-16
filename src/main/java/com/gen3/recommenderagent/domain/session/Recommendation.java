@@ -6,12 +6,22 @@ public class Recommendation {
   private Integer rank;
   private Double score;
   private String title;
+  private String shortDescription;
+
+  /** Required to read recommendations retained in Redis session JSON. */
+  public Recommendation() {}
 
   public Recommendation(String bookId, Integer rank, Double score, String title) {
+    this(bookId, rank, score, title, null);
+  }
+
+  public Recommendation(
+      String bookId, Integer rank, Double score, String title, String shortDescription) {
     this.bookId = bookId;
     this.rank = rank;
     this.score = score;
     this.title = title;
+    this.shortDescription = shortDescription;
   }
 
   public String getTitle() {
@@ -20,6 +30,14 @@ public class Recommendation {
 
   public void setTitle(String title) {
     this.title = title;
+  }
+
+  public String getShortDescription() {
+    return shortDescription;
+  }
+
+  public void setShortDescription(String shortDescription) {
+    this.shortDescription = shortDescription;
   }
 
   public String getBookId() {

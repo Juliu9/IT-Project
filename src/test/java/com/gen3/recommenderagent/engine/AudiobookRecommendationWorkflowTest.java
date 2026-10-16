@@ -22,6 +22,7 @@ import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -45,7 +46,8 @@ class AudiobookRecommendationWorkflowTest {
     List<Recommendation> recommendations =
         List.of(new Recommendation("book-1", 1, 0.9, "Book One"));
     when(vectorService.create(request)).thenReturn(vectors);
-    when(retriever.getCandidates(request, vectors, 50)).thenReturn(candidates);
+    when(retriever.getCandidates(request, vectors, 50, Set.of("already-shown")))
+        .thenReturn(candidates);
     when(userPreferences.findEmbeddingByUserId("user-1")).thenReturn(Optional.of(preferences));
     when(ranker.rank(anyList(), eq(3), any(RankingContext.class))).thenReturn(recommendations);
     AudiobookRecommendationWorkflow workflow =
@@ -58,5 +60,6 @@ class AudiobookRecommendationWorkflowTest {
     assertSame(recommendations, result);
     assertSame(preferences, context.getValue().userPreferences());
     assertEquals(java.util.Set.of("already-shown"), context.getValue().excludedBookIds());
+    verify(retriever).getCandidates(request, vectors, 50, Set.of("already-shown"));
   }
 }

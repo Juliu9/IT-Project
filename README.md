@@ -6,9 +6,9 @@ and ranks candidates, retains a 24-hour Redis session, and returns a concise spo
 ## How it works
 
 1. OpenAI parses the request into an intent, semantic query, exact filters, and result count.
-2. Qdrant retrieves candidates using semantic, keyword, hybrid, or filter-only search.
-3. The ranker excludes books already shown in the session and scores the remaining candidates.
-4. Redis saves the request and shown-book IDs under the `(userId, sessionId)` pair.
+2. Qdrant retrieves unseen candidates using semantic, keyword, hybrid, or filter-only search.
+3. The ranker scores candidates and defensively excludes any book already shown in the session.
+4. Redis saves the request and up to 500 recent shown-book IDs under the `(userId, sessionId)` pair.
 
 Supported intents are `RECOMMENDATION`, `REFINE`, `MORE_RESULTS`, `CHANGE_COUNT`,
 `UPDATE_PREFERENCES`, `CLEAR_HISTORY`, `HELP`, and `UNKNOWN`.
@@ -48,13 +48,58 @@ Only `OPENAI_API_KEY` is required. The defaults suit local Docker:
 | `QDRANT_GRPC_PORT` | `6334` | Qdrant gRPC port |
 | `QDRANT_API_KEY` | empty | Qdrant Cloud API key |
 | `QDRANT_COLLECTION` | `audiobooks_hybrid` | Audiobook collection |
-| `QDRANT_TIMEOUT` | `5s` | Maximum time for one Qdrant call |
+| `QDRANT_TIMEOUT` | `10s` | Maximum time for one Qdrant call |
 | `AUDIOBOOK_CANDIDATE_RETRIEVER` | `qdrant` | Set to `solr` for the legacy adapter |
 | `QDRANT_MIGRATION_ENABLED` | `false` | Run the opt-in Solr-to-Qdrant migration |
 
 Qdrant stores dense and sparse vectors plus filterable metadata. Exact author, narrator, language,
 duration, and source constraints are applied as filters. Solr remains only for legacy retrieval,
 migration, and its integration tests.
+
+## Short book descriptions
+
+Recommendations use a stored, one-sentence `short_description` when it is available. Generate
+these descriptions offline with OpenAI's Batch API; normal requests never call AI for a summary.
+The job reads and updates Qdrant directly, without re-embedding books.
+
+Start with a small submission to check quality and spend:
+
+```bash
+export AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MODE=submit
+export AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MAXIMUM_RECORDS=1000
+./mvnw spring-boot:run
+```
+
+The job records the Batch ID and exact Qdrant point IDs in
+`data/short-descriptions/short-description-batch.json`. Once OpenAI reports it as completed,
+import its output:
+
+```bash
+export AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MODE=import
+./mvnw spring-boot:run
+```
+
+For the remaining catalogue, submit up to 100,000 records at a time and repeat after each import;
+each submission selects the records still missing `short_description`. A pending manifest blocks
+another submission until it is imported. Batch requests use
+`gpt-4o-mini`, group ten books per request, and ask for a spoiler-free sentence of at most 20
+words. Keep the default mode (`disabled`) for ordinary application startup.
+
+## Fill missing catalogue metadata
+
+To add deterministic placeholder narrator, language, duration, and publication-year values to the
+Qdrant catalogue—without creating short descriptions or calling OpenAI—run:
+
+```bash
+export AUDIOBOOK_FAKE_METADATA_ENRICH_ON_STARTUP=true
+./mvnw spring-boot:run
+```
+
+The job scans the entire Qdrant collection in pages and only fills fields that are missing.
+Existing values are preserved, so it is safe to rerun. It runs only while the
+short-description batch mode is `disabled`. Normal requests only read the stored Qdrant payload,
+so these mock values are treated like ordinary catalogue data after enrichment. Unset the variable
+for normal application startup.
 
 ## Grafana Cloud logs
 
@@ -103,3 +148,7 @@ Run all tests with Docker available:
 
 The suite includes unit tests plus Redis and Solr container-backed integration tests. Never commit
 API keys, `.env`, or local logs.
+
+Changes targeting `staging` run the API-free test suite. Changes targeting `main` run the tagged
+integration checks. Configure the repository secrets `OPENAI_API_KEY`, `QDRANT_URL`, and
+`QDRANT_API_KEY`; only the `main` checks receive them.

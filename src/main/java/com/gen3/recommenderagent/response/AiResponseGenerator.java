@@ -95,7 +95,7 @@ public class AiResponseGenerator implements ResponseGenerator {
                             You are a helpful audiobook recommendation assistant speaking directly to a user through a voice interface.
                             Rewrite the structured recommendation data into a short, natural-sounding spoken response.
                             Tone should be friendly, conversational, and concise.
-                            Include the user's intent and mention each recommendation by its title.
+                            Include the user's intent, each recommendation's title, and its supplied short description when available.
                             CRITICAL INSTRUCTIONS FOR OUTPUT:
                             - Do NOT use any markdown formatting (no asterisks, bold, or italics).
                             - Do NOT use quotation marks around book titles. Just state the title naturally.
@@ -158,9 +158,12 @@ public class AiResponseGenerator implements ResponseGenerator {
     }
 
     return String.format(
-        "rank=%s title=\"%s\" score=%s",
+        "rank=%s title=\"%s\" description=\"%s\" score=%s",
         recommendation.getRank() != null ? recommendation.getRank() : "n/a",
         recommendation.getTitle() != null ? recommendation.getTitle() : "unknown",
+        recommendation.getShortDescription() != null
+            ? recommendation.getShortDescription()
+            : "not available",
         recommendation.getScore() != null ? recommendation.getScore() : "n/a");
   }
 
@@ -206,6 +209,10 @@ public class AiResponseGenerator implements ResponseGenerator {
       title = title.replace("$b", "").trim();
 
       response.append(title);
+      if (recommendation.getShortDescription() != null
+          && !recommendation.getShortDescription().isBlank()) {
+        response.append(", ").append(recommendation.getShortDescription());
+      }
       if (recommendation.getBookId() != null && !recommendation.getBookId().isBlank()) {
         response.append(" (").append(recommendation.getBookId()).append(")");
       }

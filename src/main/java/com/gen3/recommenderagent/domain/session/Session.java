@@ -1,6 +1,7 @@
 package com.gen3.recommenderagent.domain.session;
 
 import static com.gen3.recommenderagent.common.ApplicationConstants.MAX_BOOK_COUNT;
+import static com.gen3.recommenderagent.common.ApplicationConstants.MAX_SHOWN_BOOKS;
 import static com.gen3.recommenderagent.common.BookCountPolicy.clampOrDefault;
 
 import java.time.Instant;
@@ -33,7 +34,7 @@ public class Session {
   }
 
   public void setShownBooks(List<String> shownBooks) {
-    this.shownBooks = shownBooks;
+    this.shownBooks = shownBooks == null ? null : new ArrayList<>(shownBooks);
   }
 
   public String getSessionId() {
@@ -104,22 +105,13 @@ public class Session {
     if (request == null) {
       return;
     }
-    if (hasSearchCriteria(request)) {
-      requests.removeIf(this::hasSearchCriteria);
+    if (ConversationState.isSearchContext(request)) {
+      requests.removeIf(ConversationState::isSearchContext);
     } else {
-      requests.removeIf(existing -> !hasSearchCriteria(existing));
+      requests.removeIf(existing -> !ConversationState.isSearchContext(existing));
     }
     this.requests.add(request);
     this.updatedAt = Instant.now();
-  }
-
-  private boolean hasSearchCriteria(SessionRequest request) {
-    return request != null
-        && (request.isPersonalised()
-            || request.getPositiveSemanticQuery() != null
-            || request.getNegativeSemanticQuery() != null
-            || request.getMustInclude() != null
-            || request.getMustNotInclude() != null);
   }
 
   public SessionPreferences getPreferences() {
@@ -138,7 +130,13 @@ public class Session {
       bookIds.stream()
           .filter(bookId -> bookId != null && !bookId.isBlank())
           .filter(bookId -> !this.shownBooks.contains(bookId))
-          .forEach(this.shownBooks::add);
+          .forEach(
+              bookId -> {
+                if (this.shownBooks.size() == MAX_SHOWN_BOOKS) {
+                  this.shownBooks.removeFirst();
+                }
+                this.shownBooks.add(bookId);
+              });
     }
   }
 
