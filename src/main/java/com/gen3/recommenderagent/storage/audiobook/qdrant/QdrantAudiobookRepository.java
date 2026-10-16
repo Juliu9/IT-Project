@@ -40,6 +40,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -374,14 +375,18 @@ public class QdrantAudiobookRepository
     Map<String, float[]> vectors = new LinkedHashMap<>();
     for (int start = 0; start < ids.size(); start += 100) {
       List<String> batch = ids.subList(start, Math.min(start + 100, ids.size()));
+      Map<io.qdrant.client.grpc.Common.PointId, String> bookIdsByPoint = new HashMap<>();
+      for (String bookId : batch) {
+        bookIdsByPoint.put(mapper.pointId(bookId), bookId);
+      }
       List<RetrievedPoint> points =
           await(
               client.retrieveAsync(
-                  collection, batch.stream().map(mapper::pointId).toList(), false, true, null),
+                  collection, List.copyOf(bookIdsByPoint.keySet()), false, true, null),
               "retrieve audiobook vectors from Qdrant");
       for (RetrievedPoint point : points) {
         float[] vector = denseVector(point);
-        String bookId = mapper.toRecord(point).id();
+        String bookId = bookIdsByPoint.get(point.getId());
         if (hasText(bookId) && vector != null) {
           vectors.put(bookId, vector);
         }
