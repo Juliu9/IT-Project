@@ -8,6 +8,9 @@ public class Recommendation {
   private String title;
   private String shortDescription;
 
+  /** Required to read recommendations retained in Redis session JSON. */
+  public Recommendation() {}
+
   public Recommendation(String bookId, Integer rank, Double score, String title) {
     this(bookId, rank, score, title, null);
   }

@@ -18,17 +18,7 @@ class BatchShortDescriptionEnricherTest {
 
   @Test
   void shouldReadCompletedBatchDescriptionsByBookId() throws Exception {
-    BatchShortDescriptionEnricher enricher =
-        new BatchShortDescriptionEnricher(
-            mock(QdrantAudiobookRepository.class),
-            new ObjectMapper(),
-            HttpClient.newHttpClient(),
-            "test-key",
-            "https://example.test/v1",
-            "disabled",
-            "",
-            Path.of("target"),
-            1);
+    BatchShortDescriptionEnricher enricher = enricher(Path.of("target"));
 
     String output =
         """
@@ -44,17 +34,7 @@ class BatchShortDescriptionEnricherTest {
   @Test
   void shouldPersistTheQdrantPointIdsSubmittedToOpenAi() throws Exception {
     Path directory = Files.createTempDirectory("short-description-test");
-    BatchShortDescriptionEnricher enricher =
-        new BatchShortDescriptionEnricher(
-            mock(QdrantAudiobookRepository.class),
-            new ObjectMapper(),
-            HttpClient.newHttpClient(),
-            "test-key",
-            "https://example.test/v1",
-            "disabled",
-            "",
-            directory,
-            1);
+    BatchShortDescriptionEnricher enricher = enricher(directory);
     QdrantPointMapper mapper = new QdrantPointMapper(new Bm25SparseTextEncoder());
     var pointId = mapper.pointId("book-1");
     var book =
@@ -66,5 +46,35 @@ class BatchShortDescriptionEnricherTest {
 
     assertThat(enricher.pendingPointIds())
         .containsExactlyEntriesOf(java.util.Map.of("book-1", pointId));
+  }
+
+  @Test
+  void shouldRequestTwentyWordShortDescriptions() {
+    BatchShortDescriptionEnricher enricher = enricher(Path.of("target"));
+    var request =
+        enricher.batchRequest(
+            List.of(
+                new QdrantAudiobookRepository.StoredAudiobook(
+                    new AudiobookRecord("book-1", "source", "Title", List.of(), "Summary"),
+                    new QdrantPointMapper(new Bm25SparseTextEncoder()).pointId("book-1"))),
+            0);
+
+    var body = request.path("body");
+    assertThat(body.path("model").asText()).isEqualTo("gpt-4o-mini");
+    assertThat(body.path("max_tokens").asInt()).isEqualTo(600);
+    assertThat(body.path("messages").get(0).path("content").asText()).contains("at most 20 words");
+  }
+
+  private BatchShortDescriptionEnricher enricher(Path outputDirectory) {
+    return new BatchShortDescriptionEnricher(
+        mock(QdrantAudiobookRepository.class),
+        new ObjectMapper(),
+        HttpClient.newHttpClient(),
+        "test-key",
+        "https://example.test/v1",
+        "disabled",
+        "",
+        outputDirectory,
+        1);
   }
 }
