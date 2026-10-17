@@ -3,18 +3,22 @@ package com.gen3.recommenderagent.integration;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.gen3.recommenderagent.api.RequestExceptionHandler;
 import com.gen3.recommenderagent.api.RequestGateway;
+import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -35,15 +39,17 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>A temporary Redis container isolates session data from shared environments. Qdrant migration
  * and user preference import remain disabled so the test does not bulk-write external data. Edit
- * {@link #RAW_TEXT} to choose the request committed and tested by GitHub Actions.
+ * {@link #INITIAL_RAW_TEXT} and {@link #FOLLOW_UP_RAW_TEXT} to choose the two requests committed
+ * and tested by GitHub Actions.
  */
 @SpringBootTest
 @Testcontainers
 @Tag("external")
 class LiveIntegrationTest {
 
-  // Edit only this value when you want to try a different live request.
-  private static final String RAW_TEXT = "   ";
+  // Both requests are sent with the same session ID and user ID.
+  private static final String INITIAL_RAW_TEXT = "Recommend three science fiction audiobooks.";
+  private static final String FOLLOW_UP_RAW_TEXT = "Give me up to five more recommendations.";
 
   private static final int REDIS_PORT = 6379;
   private static final Duration SESSION_TIMEOUT = Duration.ofSeconds(5);
@@ -76,8 +82,7 @@ class LiveIntegrationTest {
   @Autowired private ObjectMapper objectMapper;
 
   @Test
-  void shouldRunConfiguredRawTextThroughCompleteLiveFlow() throws Exception {
-    String rawText = RAW_TEXT;
+  void shouldRunTwoRequestsInTheSameLiveSession() throws Exception {
     String sessionId = "full-live-" + UUID.randomUUID();
     String userId = "full-live-test-user";
 
@@ -86,10 +91,51 @@ class LiveIntegrationTest {
             .setControllerAdvice(new RequestExceptionHandler())
             .build();
 
-    if (rawText.isBlank()) {
-      assertBlankRequestRejected(mockMvc, sessionId, userId, rawText);
-      return;
-    }
+    TurnResult firstTurn =
+        submitTurn(mockMvc, sessionId, userId, 1, INITIAL_RAW_TEXT, Intent.RECOMMENDATION, 3);
+    assertFalse(
+        firstTurn.recommendationIds().isEmpty(),
+        "The initial request returned no audiobook recommendations");
+
+    TurnResult secondTurn =
+        submitTurn(mockMvc, sessionId, userId, 2, FOLLOW_UP_RAW_TEXT, Intent.MORE_RESULTS, 5);
+    assertFalse(
+        secondTurn.recommendationIds().isEmpty(),
+        "The follow-up request returned no additional audiobook recommendations");
+
+    Set<String> duplicateIds = new HashSet<>(firstTurn.recommendationIds());
+    duplicateIds.retainAll(secondTurn.recommendationIds());
+    assertTrue(
+        duplicateIds.isEmpty(),
+        "The follow-up request repeated audiobook IDs from the first turn: " + duplicateIds);
+
+    Session finalSession = awaitSavedSession(sessionId, userId, SESSION_TIMEOUT);
+    assertNotNull(finalSession, "The final session was not saved to Docker Redis");
+    assertTrue(
+        finalSession.getShownBooks().containsAll(firstTurn.recommendationIds()),
+        "The session did not retain all audiobook IDs shown in the first turn");
+    assertTrue(
+        finalSession.getShownBooks().containsAll(secondTurn.recommendationIds()),
+        "The session did not retain all audiobook IDs shown in the second turn");
+
+    System.out.println("\n=== Multi-turn live integration result ===");
+    System.out.println("Session ID: " + sessionId);
+    printTurn(firstTurn);
+    printTurn(secondTurn);
+    System.out.println("All shown audiobook IDs: " + finalSession.getShownBooks());
+    System.out.println("==========================================\n");
+  }
+
+  private TurnResult submitTurn(
+      MockMvc mockMvc,
+      String sessionId,
+      String userId,
+      int turnNumber,
+      String rawText,
+      Intent expectedIntent,
+      int maximumRecommendations)
+      throws Exception {
+    assertFalse(rawText.isBlank(), "Turn " + turnNumber + " raw text must not be blank");
 
     long startedAt = System.nanoTime();
     String response =
@@ -109,65 +155,66 @@ class LiveIntegrationTest {
     assertFalse(response.isBlank(), "The final response must not be blank");
 
     Session savedSession = awaitSavedSession(sessionId, userId, SESSION_TIMEOUT);
-    assertNotNull(savedSession, "The completed request was not saved to Docker Redis");
+    assertNotNull(
+        savedSession, "Turn " + turnNumber + " was not saved to the Docker Redis session");
     assertEquals(userId, savedSession.getUserId());
     assertFalse(savedSession.getRequests().isEmpty(), "The session contains no requests");
 
     SessionRequest completedRequest = savedSession.getRequests().getLast();
-    assertEquals(rawText, completedRequest.getRawText());
     assertNotNull(completedRequest.getRequestId());
     assertFalse(
         completedRequest.getRequestId().isBlank(), "The completed request has no request ID");
-    assertNotNull(completedRequest.getIntent(), "The AI parser returned no intent");
+    assertEquals(
+        expectedIntent,
+        completedRequest.getIntent(),
+        "Turn " + turnNumber + " was classified with the wrong intent");
 
-    System.out.println("\n=== Full live integration result ===");
-    System.out.println("Raw text: " + rawText);
-    System.out.println("Elapsed time: " + elapsedMilliseconds + " ms");
-    System.out.println("Request ID: " + completedRequest.getRequestId());
-    System.out.println("Intent: " + completedRequest.getIntent());
-    if (completedRequest.getRecommendations() == null
-        || completedRequest.getRecommendations().isEmpty()) {
+    List<String> recommendationIds = recommendationIds(completedRequest);
+    assertTrue(
+        recommendationIds.size() <= maximumRecommendations,
+        "Turn "
+            + turnNumber
+            + " returned more than "
+            + maximumRecommendations
+            + " recommendations");
+
+    return new TurnResult(
+        turnNumber, rawText, elapsedMilliseconds, response, completedRequest, recommendationIds);
+  }
+
+  private List<String> recommendationIds(SessionRequest request) {
+    if (request.getRecommendations() == null) {
+      return List.of();
+    }
+    return request.getRecommendations().stream()
+        .filter(recommendation -> recommendation != null)
+        .map(Recommendation::getBookId)
+        .filter(bookId -> bookId != null && !bookId.isBlank())
+        .toList();
+  }
+
+  private void printTurn(TurnResult turn) throws Exception {
+    System.out.println("\n--- Turn " + turn.turnNumber() + " ---");
+    System.out.println("Raw text: " + turn.rawText());
+    System.out.println("Elapsed time: " + turn.elapsedMilliseconds() + " ms");
+    System.out.println("Request ID: " + turn.completedRequest().getRequestId());
+    System.out.println("Intent: " + turn.completedRequest().getIntent());
+    if (turn.completedRequest().getRecommendations() == null
+        || turn.completedRequest().getRecommendations().isEmpty()) {
       System.out.println("Recommendations: none");
     } else {
-      System.out.println("Recommendations: " + completedRequest.getRecommendations().size());
-      completedRequest
+      System.out.println("Recommendations: " + turn.completedRequest().getRecommendations().size());
+      turn.completedRequest()
           .getRecommendations()
           .forEach(
               recommendation ->
                   System.out.println(
                       "- " + recommendation.getBookId() + ": " + recommendation.getTitle()));
     }
-    System.out.println("Final response: " + response);
-
-    System.out.println("\n=== Complete SessionRequest ===");
+    System.out.println("Final response: " + turn.response());
+    System.out.println("Complete SessionRequest:");
     System.out.println(
-        objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(completedRequest));
-    System.out.println("===================================");
-    System.out.println("====================================\n");
-  }
-
-  private void assertBlankRequestRejected(
-      MockMvc mockMvc, String sessionId, String userId, String rawText) throws Exception {
-    String rejectionMessage = "I didn't catch that. What would you like to listen to?";
-    mockMvc
-        .perform(
-            post("/api/v1/recommendations")
-                .header("X-Session-Id", sessionId)
-                .header("X-User-Id", userId)
-                .contentType(MediaType.TEXT_PLAIN)
-                .content(rawText))
-        .andExpect(status().isBadRequest())
-        .andExpect(content().string(rejectionMessage));
-
-    assertNull(
-        sessionRepository.getSession(sessionId, userId),
-        "A blank request must not create or update a Redis session");
-
-    System.out.println("\n=== Blank input integration result ===");
-    System.out.println("Raw text: <blank>");
-    System.out.println("Rejected with: " + rejectionMessage);
-    System.out.println("Session saved: false");
-    System.out.println("======================================\n");
+        objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(turn.completedRequest()));
   }
 
   private Session awaitSavedSession(String sessionId, String userId, Duration timeout)
@@ -187,4 +234,12 @@ class LiveIntegrationTest {
     String value = System.getenv(name);
     return value == null || value.isBlank() ? fallback : value;
   }
+
+  private record TurnResult(
+      int turnNumber,
+      String rawText,
+      long elapsedMilliseconds,
+      String response,
+      SessionRequest completedRequest,
+      List<String> recommendationIds) {}
 }
