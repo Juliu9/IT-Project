@@ -325,9 +325,11 @@ class RedisSessionRepositoryTest {
     MustInclude mustInclude = new MustInclude();
     mustInclude.setDuration("under 10 hours");
     mustInclude.setLanguage("English");
+    mustInclude.setPublicationYear("after 2020");
     mustInclude.setSource("NLS");
     MustNotInclude mustNotInclude = new MustNotInclude();
     mustNotInclude.setLanguage("French");
+    mustNotInclude.setPublicationYear("before 2000");
     mustNotInclude.setSource("Legacy");
 
     SessionRequest request = new SessionRequest();
@@ -346,8 +348,10 @@ class RedisSessionRepositoryTest {
     assertEquals(5, retrievedRequest.getBookCount());
     assertEquals("under 10 hours", retrievedRequest.getMustInclude().getDuration());
     assertEquals("English", retrievedRequest.getMustInclude().getLanguage());
+    assertEquals("after 2020", retrievedRequest.getMustInclude().getPublicationYear());
     assertEquals("NLS", retrievedRequest.getMustInclude().getSource());
     assertEquals("French", retrievedRequest.getMustNotInclude().getLanguage());
+    assertEquals("before 2000", retrievedRequest.getMustNotInclude().getPublicationYear());
     assertEquals("Legacy", retrievedRequest.getMustNotInclude().getSource());
   }
 

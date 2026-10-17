@@ -48,8 +48,8 @@ public class AiInputParser implements InputParser {
                         UPDATE_PREFERENCES, CLEAR_HISTORY, HELP, or UNKNOWN. Use RECOMMENDATION
                         for a new search; do not choose a retrieval mode. Put desired and avoided
                         concepts in positiveSemanticQuery and negativeSemanticQuery. Use mustInclude
-                        and mustNotInclude only for exact author, narrator, language, duration, or
-                        source requirements. Set bookCount only when the user explicitly requests
+                        and mustNotInclude only for exact author, narrator, language, duration,
+                        publication year, or source requirements. Set bookCount only when the user explicitly requests
                         a number of recommendations; otherwise leave it null.
 
                         Set personalised=true only when the user requests recommendations based on

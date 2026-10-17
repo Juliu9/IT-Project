@@ -68,38 +68,44 @@ public class AudiobookRetrievalPlanner {
     if (filter == null) {
       return AudiobookFilterConditions.empty();
     }
-    DurationBounds bounds = durationBounds(filter.getDuration());
+    RangeBounds bounds = durationBounds(filter.getDuration());
+    RangeBounds years = yearBounds(filter.getPublicationYear());
     return new AudiobookFilterConditions(
         copy(filter.getAuthors()),
         copy(filter.getNarrators()),
         filter.getLanguage(),
         filter.getSource(),
         bounds.minimum(),
-        bounds.maximum());
+        bounds.maximum(),
+        years.minimum(),
+        years.maximum());
   }
 
   private AudiobookFilterConditions excludeConditions(MustNotInclude filter) {
     if (filter == null) {
       return AudiobookFilterConditions.empty();
     }
-    DurationBounds bounds = durationBounds(filter.getDuration());
+    RangeBounds bounds = durationBounds(filter.getDuration());
+    RangeBounds years = yearBounds(filter.getPublicationYear());
     return new AudiobookFilterConditions(
         copy(filter.getAuthors()),
         copy(filter.getNarrators()),
         filter.getLanguage(),
         filter.getSource(),
         bounds.minimum(),
-        bounds.maximum());
+        bounds.maximum(),
+        years.minimum(),
+        years.maximum());
   }
 
   /** Parses values such as "under 10 hours" and "more than 480 minutes". */
-  private DurationBounds durationBounds(String duration) {
+  private RangeBounds durationBounds(String duration) {
     if (!hasText(duration)) {
-      return DurationBounds.empty();
+      return RangeBounds.empty();
     }
     Matcher matcher = FIRST_NUMBER.matcher(duration);
     if (!matcher.find()) {
-      return DurationBounds.empty();
+      return RangeBounds.empty();
     }
     int value = Integer.parseInt(matcher.group(1));
     String normalized = duration.toLowerCase(Locale.ROOT);
@@ -109,7 +115,42 @@ public class AudiobookRetrievalPlanner {
             || normalized.contains("more than")
             || normalized.contains("at least")
             || normalized.contains("minimum");
-    return lowerBound ? new DurationBounds(minutes, null) : new DurationBounds(null, minutes);
+    return lowerBound ? new RangeBounds(minutes, null) : new RangeBounds(null, minutes);
+  }
+
+  /** Parses values such as "after 2020" and "before 2000". */
+  private RangeBounds yearBounds(String publicationYear) {
+    if (!hasText(publicationYear)) {
+      return RangeBounds.empty();
+    }
+    Matcher matcher = FIRST_NUMBER.matcher(publicationYear);
+    if (!matcher.find()) {
+      return RangeBounds.empty();
+    }
+    int year = Integer.parseInt(matcher.group(1));
+    String normalized = publicationYear.toLowerCase(Locale.ROOT);
+    boolean lowerBound =
+        normalized.contains("after")
+            || normalized.contains("from")
+            || normalized.contains("since")
+            || normalized.contains("newer")
+            || normalized.contains("over")
+            || normalized.contains("more than")
+            || normalized.contains("at least")
+            || normalized.contains("minimum");
+    boolean upperBound =
+        normalized.contains("before")
+            || normalized.contains("older")
+            || normalized.contains("under")
+            || normalized.contains("less than")
+            || normalized.contains("maximum");
+    if (lowerBound) {
+      return new RangeBounds(year, null);
+    }
+    if (upperBound) {
+      return new RangeBounds(null, year);
+    }
+    return new RangeBounds(year, year);
   }
 
   /** Adds nonblank parsed terms to the lexical query. */
@@ -145,9 +186,9 @@ public class AudiobookRetrievalPlanner {
     return value != null && !value.isBlank();
   }
 
-  private record DurationBounds(Integer minimum, Integer maximum) {
-    private static DurationBounds empty() {
-      return new DurationBounds(null, null);
+  private record RangeBounds(Integer minimum, Integer maximum) {
+    private static RangeBounds empty() {
+      return new RangeBounds(null, null);
     }
   }
 }

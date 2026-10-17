@@ -109,19 +109,33 @@ public class SolrAudiobookRepository
     addAnyValueFilter(query, "narrators", conditions.narrators(), excluded);
     addExactFilter(query, "language", conditions.language(), excluded);
     addExactFilter(query, "source", conditions.source(), excluded);
-    if (conditions.minimumDurationMinutes() != null
-        || conditions.maximumDurationMinutes() != null) {
-      String minimum =
-          conditions.minimumDurationMinutes() == null
-              ? "*"
-              : conditions.minimumDurationMinutes().toString();
-      String maximum =
-          conditions.maximumDurationMinutes() == null
-              ? "*"
-              : conditions.maximumDurationMinutes().toString();
-      query.addFilterQuery(
-          (excluded ? "-" : "") + "durationMinutes:[" + minimum + " TO " + maximum + "]");
+    addRangeFilter(
+        query,
+        "durationMinutes",
+        conditions.minimumDurationMinutes(),
+        conditions.maximumDurationMinutes(),
+        excluded);
+    addRangeFilter(
+        query,
+        "publicationYear",
+        conditions.minimumPublicationYear(),
+        conditions.maximumPublicationYear(),
+        excluded);
+  }
+
+  private void addRangeFilter(
+      SolrQuery query, String field, Integer minimum, Integer maximum, boolean excluded) {
+    if (minimum == null && maximum == null) {
+      return;
     }
+    query.addFilterQuery(
+        (excluded ? "-" : "")
+            + field
+            + ":["
+            + (minimum == null ? "*" : minimum)
+            + " TO "
+            + (maximum == null ? "*" : maximum)
+            + "]");
   }
 
   /** Adds one OR-based exact filter for a multivalued Solr field. */

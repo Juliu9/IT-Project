@@ -350,18 +350,20 @@ class QdrantAudiobookRepositoryTest {
             client, new QdrantPointMapper(sparseEncoder), sparseEncoder, "audiobooks", 2);
     AudiobookFilters filters =
         new AudiobookFilters(
-            new AudiobookFilterConditions(List.of(), List.of(), "English", "NLS", null, null),
-            new AudiobookFilterConditions(List.of(), List.of(), "French", "Legacy", null, null),
+            new AudiobookFilterConditions(
+                List.of(), List.of(), "English", "NLS", null, null, 2020, null),
+            new AudiobookFilterConditions(
+                List.of(), List.of(), "French", "Legacy", null, null, null, 2000),
             List.of("shown-1", "shown-2"));
 
     repository.searchByFilters(filters, 5);
 
     ArgumentCaptor<QueryPoints> request = ArgumentCaptor.forClass(QueryPoints.class);
     verify(client).queryAsync(request.capture());
-    assertThat(request.getValue().getFilter().getMustCount()).isEqualTo(2);
-    assertThat(request.getValue().getFilter().getMustNotCount()).isEqualTo(2);
+    assertThat(request.getValue().getFilter().getMustCount()).isEqualTo(3);
+    assertThat(request.getValue().getFilter().getMustNotCount()).isEqualTo(3);
     assertThat(request.getValue().getFilter().toString())
-        .contains("language", "English", "source", "NLS", "French", "Legacy")
+        .contains("language", "English", "source", "NLS", "publicationYear", "French", "Legacy")
         .doesNotContain("bookId", "shown-1");
   }
 }

@@ -140,8 +140,10 @@ class SolrAudiobookRepositoryUnitTest {
         .thenReturn(response);
     AudiobookFilters filters =
         new AudiobookFilters(
-            new AudiobookFilterConditions(List.of(), List.of(), "English", "NLS", null, 600),
-            new AudiobookFilterConditions(List.of(), List.of(), "French", "Legacy", null, null),
+            new AudiobookFilterConditions(
+                List.of(), List.of(), "English", "NLS", null, 600, 2020, null),
+            new AudiobookFilterConditions(
+                List.of(), List.of(), "French", "Legacy", null, null, null, 2000),
             List.of("shown-1", "shown-2"));
 
     new SolrAudiobookRepository(client, "combinedbooks").searchKeyword("mystery", filters, 5);
@@ -157,8 +159,10 @@ class SolrAudiobookRepositoryUnitTest {
             "language:\"English\"",
             "source:\"NLS\"",
             "durationMinutes:[* TO 600]",
+            "publicationYear:[2020 TO *]",
             "-language:\"French\"",
             "-source:\"Legacy\"",
+            "-publicationYear:[* TO 2000]",
             "-id:(\"shown\\-1\" OR \"shown\\-2\")"),
         List.of(queryCaptor.getValue().getFilterQueries()));
   }

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.MustInclude;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
@@ -145,6 +146,20 @@ class ResponseGeneratorTest {
 
     assertNotNull(response);
     assertTrue(response.toLowerCase().contains("try again"));
+  }
+
+  @Test
+  void shouldExplainWhenNoBooksMatchTheRequestedPublicationPeriod() {
+    AiResponseGenerator generator = new AiResponseGenerator(null);
+    SessionRequest request = new SessionRequest();
+    request.setIntent(Intent.RECOMMENDATION);
+    MustInclude publicationYear = new MustInclude();
+    publicationYear.setPublicationYear("before 1900");
+    request.setMustInclude(publicationYear);
+
+    assertEquals(
+        "Sorry, we don't have books from that time period.",
+        generator.generate(List.of(), request));
   }
 
   @Test

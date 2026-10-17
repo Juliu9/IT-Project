@@ -141,14 +141,16 @@ class InputParserTest {
     SessionRequest request =
         new ObjectMapper()
             .readValue(
-                "{\"bookCount\":3,\"mustInclude\":{\"language\":\"English\",\"source\":\"NLS\"},"
-                    + "\"mustNotInclude\":{\"language\":\"French\",\"source\":\"Legacy\"}}",
+                "{\"bookCount\":3,\"mustInclude\":{\"language\":\"English\",\"publicationYear\":\"after 2020\",\"source\":\"NLS\"},"
+                    + "\"mustNotInclude\":{\"language\":\"French\",\"publicationYear\":\"before 2000\",\"source\":\"Legacy\"}}",
                 SessionRequest.class);
 
     assertEquals(3, request.getBookCount());
     assertEquals("English", request.getMustInclude().getLanguage());
+    assertEquals("after 2020", request.getMustInclude().getPublicationYear());
     assertEquals("NLS", request.getMustInclude().getSource());
     assertEquals("French", request.getMustNotInclude().getLanguage());
+    assertEquals("before 2000", request.getMustNotInclude().getPublicationYear());
     assertEquals("Legacy", request.getMustNotInclude().getSource());
   }
 }

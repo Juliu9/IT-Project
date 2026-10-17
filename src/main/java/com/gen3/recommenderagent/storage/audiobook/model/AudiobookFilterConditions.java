@@ -9,10 +9,12 @@ public record AudiobookFilterConditions(
     String language,
     String source,
     Integer minimumDurationMinutes,
-    Integer maximumDurationMinutes) {
+    Integer maximumDurationMinutes,
+    Integer minimumPublicationYear,
+    Integer maximumPublicationYear) {
 
   public static AudiobookFilterConditions empty() {
-    return new AudiobookFilterConditions(List.of(), List.of(), null, null, null, null);
+    return new AudiobookFilterConditions(List.of(), List.of(), null, null, null, null, null, null);
   }
 
   public boolean hasConditions() {
@@ -21,6 +23,8 @@ public record AudiobookFilterConditions(
         || (language != null && !language.isBlank())
         || (source != null && !source.isBlank())
         || minimumDurationMinutes != null
-        || maximumDurationMinutes != null;
+        || maximumDurationMinutes != null
+        || minimumPublicationYear != null
+        || maximumPublicationYear != null;
   }
 }
