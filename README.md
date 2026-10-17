@@ -1,137 +1,33 @@
 # RecommenderAgent
 
-An AI-driven audiobook recommendation service built with Spring Boot 4.1 and Java 21.
+Spring Boot service for audiobook recommendations. It parses a natural-language request, retrieves
+and ranks candidates, retains a 24-hour Redis session, and returns a concise spoken-style response.
 
-The service accepts a natural-language request, parses it into structured positive and negative
-semantic queries plus exact filters, retrieves audiobook candidates, ranks them, stores the session
-history in Redis, and returns a natural-language response.
+## How it works
 
-## Recommendation flow
+1. OpenAI parses the request into an intent, semantic query, exact filters, and result count.
+2. Qdrant retrieves unseen candidates using semantic, keyword, hybrid, or filter-only search.
+3. The ranker scores candidates and defensively excludes any book already shown in the session.
+4. Redis saves the request and up to 500 recent shown-book IDs under the `(userId, sessionId)` pair.
 
-1. `AiInputParser` classifies the request and creates a `SessionRequest`.
-2. `ActionRegistry` selects the action for the parsed intent.
-3. `AudiobookRetrievalPlanner` selects a retrieval mode from the request content.
-4. Positive and negative semantic queries are embedded once. Candidate retrieval uses the
-   normalized direction `positive - negative`, while ranking reuses the two vectors separately.
-5. Qdrant retrieves candidates by semantic similarity, exact filters, or hybrid search.
-6. `RankingService` removes duplicates and previously shown books, then combines repository
-   relevance, request semantics, and the user's Qdrant favourite/history vectors.
-7. `RequestApplicationService` records the shown book IDs, and `SessionService` appends the
-   completed request to the Redis-backed `Session`.
+Supported intents are `RECOMMENDATION`, `REFINE`, `MORE_RESULTS`, `CHANGE_COUNT`,
+`UPDATE_PREFERENCES`, `CLEAR_HISTORY`, `HELP`, and `UNKNOWN`.
 
-Retrieval is deliberately independent of intent:
+Personalised requests such as “Give me books I would like” use a stored Qdrant user vector when
+available. Otherwise, session preferences are used; if none exist, the service asks what the user
+likes. `REFINE` and `MORE_RESULTS` reuse the last search.
 
-| Request content | Retrieval mode |
-| --- | --- |
-| Semantic query and filters | `HYBRID` |
-| Semantic query only | `SEMANTIC` |
-| Filters only | `FILTER_ONLY` |
-| Neither | `NONE` |
+## Run locally
 
-Topics, genres, and keywords provide semantic and lexical search content. Exact catalogue
-requirements are represented separately as `mustInclude` and `mustNotInclude`, so a request such as
-"only English, but not from source NLS" becomes a Qdrant `must` language condition and a `must_not`
-source condition. Both groups support author, narrator, language, duration, and source. Positive and
-negative semantic queries continue to control vector direction rather than exact exclusions.
-
-## Request model and intents
-
-`SessionRequest` contains:
-
-- `positiveSemanticQuery`
-- `negativeSemanticQuery`
-- `mustInclude`
-- `mustNotInclude`
-- `bookCount`
-- intent, raw text, request metadata, and recommendations
-
-The supported intents are:
-
-- `RECOMMENDATION`
-- `REFINE`
-- `MORE_RESULTS`
-- `CHANGE_COUNT`
-- `UPDATE_PREFERENCES`
-- `CLEAR_HISTORY`
-- `HELP`
-- `UNKNOWN`
-
-`REFINE` merges new criteria into the latest search, `MORE_RESULTS` repeats that search while
-excluding books already shown in the session, and `CHANGE_COUNT` updates the bounded session result
-limit. `UPDATE_PREFERENCES` stores semantic and exact-filter defaults in the Redis-backed session;
-these defaults are merged into later searches. Imported favourite and listening-history vectors are
-stored separately in Qdrant and automatically influence personalized ranking when the request's user
-ID has a matching preference point.
-
-Each session has a `bookCount` limit. It defaults to the shared `MAX_BOOK_COUNT` value of five, and
-values above that maximum are capped by `Session.setBookCount`.
-
-## Storage and retrieval adapters
-
-Qdrant is the default candidate source. It stores a normalized named dense vector (`dense`), a
-BM25-style sparse vector (`keywords`), and filterable audiobook metadata. Authors, narrators,
-language, duration, and source can be required or excluded. Hybrid retrieval combines dense and
-sparse results using reciprocal-rank fusion.
-
-Redis stores session history. `shownBooks` contains only unique audiobook IDs rather than duplicate
-recommendation objects. There is no PostgreSQL or user-profile dependency.
-
-The Solr implementation is retained as an isolated compatibility adapter under
-`storage/audiobook/solr`. Normal recommendation functionality does not depend on Solr. Set
-`AUDIOBOOK_CANDIDATE_RETRIEVER=solr` only when the legacy adapter is explicitly required.
-
-An opt-in migration runner can copy a Solr catalogue to Qdrant. Set
-`QDRANT_MIGRATION_ENABLED=true` for a migration run, then return it to `false` after completion.
-
-## Prerequisites
-
-- Java 21
-- Maven 3.9 or the included Maven wrapper
-- Docker and Docker Compose
-- An OpenAI API key
-
-Solr 9.x is required only for the legacy adapter, migration, and Solr integration tests.
-
-## Configuration
-
-Required:
-
-| Variable | Description |
-| --- | --- |
-| `OPENAI_API_KEY` | OpenAI chat and embedding API key |
-
-Common optional settings:
-
-| Variable | Default | Description |
-| --- | --- | --- |
-| `REDIS_HOST` | `localhost` | Redis host |
-| `REDIS_PORT` | `6379` | Redis port |
-| `QDRANT_URL` | `http://localhost:6333` | Qdrant HTTP URL |
-| `QDRANT_GRPC_PORT` | `6334` | Qdrant gRPC port |
-| `QDRANT_API_KEY` | empty | Qdrant API key |
-| `QDRANT_COLLECTION` | `audiobooks_hybrid` | Qdrant collection |
-| `AUDIOBOOK_CANDIDATE_RETRIEVER` | `qdrant` | Candidate adapter (`qdrant` or `solr`) |
-| `QDRANT_MIGRATION_ENABLED` | `false` | Enable the Solr-to-Qdrant migration runner |
-
-Solr settings (`SOLR_URL`, `SOLR_COLLECTION`, `SOLR_USERNAME`, and `SOLR_PASSWORD`) are optional
-unless Solr retrieval or migration is enabled.
-
-## Running locally
-
-Start Redis and Qdrant:
+Requirements: Java 21, Docker Compose, and an OpenAI API key.
 
 ```bash
 docker compose up -d
-```
-
-Export the API key and run the application:
-
-```bash
 export OPENAI_API_KEY="your-key"
 ./mvnw spring-boot:run
 ```
 
-The API accepts plain text:
+Make a request:
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/recommendations \
@@ -141,37 +37,118 @@ curl -X POST http://localhost:8080/api/v1/recommendations \
   -d "Recommend a dark fantasy audiobook under ten hours, but no romance."
 ```
 
+## Configuration
+
+Only `OPENAI_API_KEY` is required. The defaults suit local Docker:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` | Redis session store |
+| `QDRANT_URL` | `http://localhost:6333` | Qdrant endpoint |
+| `QDRANT_GRPC_PORT` | `6334` | Qdrant gRPC port |
+| `QDRANT_API_KEY` | empty | Qdrant Cloud API key |
+| `QDRANT_COLLECTION` | `audiobooks_hybrid` | Audiobook collection |
+| `QDRANT_TIMEOUT` | `10s` | Maximum time for one Qdrant call |
+| `AUDIOBOOK_CANDIDATE_RETRIEVER` | `qdrant` | Set to `solr` for the legacy adapter |
+| `QDRANT_MIGRATION_ENABLED` | `false` | Run the opt-in Solr-to-Qdrant migration |
+
+Qdrant stores dense and sparse vectors plus filterable metadata. Exact author, narrator, language,
+duration, and source constraints are applied as filters. Solr remains only for legacy retrieval,
+migration, and its integration tests.
+
+## Short book descriptions
+
+Recommendations use a stored, one-sentence `short_description` when it is available. Generate
+these descriptions offline with OpenAI's Batch API; normal requests never call AI for a summary.
+The job reads and updates Qdrant directly, without re-embedding books.
+
+Start with a small submission to check quality and spend:
+
+```bash
+export AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MODE=submit
+export AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MAXIMUM_RECORDS=1000
+./mvnw spring-boot:run
+```
+
+The job records the Batch ID and exact Qdrant point IDs in
+`data/short-descriptions/short-description-batch.json`. Once OpenAI reports it as completed,
+import its output:
+
+```bash
+export AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MODE=import
+./mvnw spring-boot:run
+```
+
+For the remaining catalogue, submit up to 100,000 records at a time and repeat after each import;
+each submission selects the records still missing `short_description`. A pending manifest blocks
+another submission until it is imported. Batch requests use
+`gpt-4o-mini`, group ten books per request, and ask for a spoiler-free sentence of at most 20
+words. Keep the default mode (`disabled`) for ordinary application startup.
+
+## Fill missing catalogue metadata
+
+To add deterministic placeholder narrator, language, duration, and publication-year values to the
+Qdrant catalogue—without creating short descriptions or calling OpenAI—run:
+
+```bash
+export AUDIOBOOK_FAKE_METADATA_ENRICH_ON_STARTUP=true
+./mvnw spring-boot:run
+```
+
+The job scans the entire Qdrant collection in pages and only fills fields that are missing.
+Existing values are preserved, so it is safe to rerun. It runs only while the
+short-description batch mode is `disabled`. Normal requests only read the stored Qdrant payload,
+so these mock values are treated like ordinary catalogue data after enrichment. Unset the variable
+for normal application startup.
+
+## Grafana Cloud logs
+
+The optional Alloy collector sends only structured `recommendation.completed` events to Grafana
+Cloud; it excludes request text and session contents.
+
+1. Create a Grafana Cloud access-policy token with `logs:write`, then create `.env` in the repo:
+
+   ```dotenv
+   GRAFANA_LOKI_URL=https://<loki-host>/loki/api/v1/push
+   GRAFANA_LOKI_USER=<loki-user-id>
+   GRAFANA_LOKI_TOKEN=<logs-write-token>
+   ```
+
+2. Configure the application log file. In IntelliJ, add this VM option; from a terminal, set the
+   same value as `LOGGING_FILE_NAME`:
+
+   ```text
+   -Dlogging.file.name=/absolute/path/to/IT-Project/logs/recommender-agent.log
+   ```
+
+3. Start the collector and inspect it if needed:
+
+   ```bash
+   mkdir -p logs && touch logs/recommender-agent.log
+   docker compose -f compose.yaml -f compose.observability.yaml up -d
+   docker compose -f compose.yaml -f compose.observability.yaml logs -f alloy
+   ```
+
+4. In Grafana **Explore**, select the Loki source and run:
+
+   ```logql
+   {service="recommender-agent", environment="local"}
+   ```
+
+   Add `outcome="FAILURE"` to see only failed requests. Alloy retains its file position and sends
+   events written while it was stopped once it resumes.
+
 ## Tests
 
-Run the full suite with Docker available:
+Run all tests with Docker available:
 
 ```bash
 ./mvnw clean test
 ```
 
-JUnit 5 unit tests cover parsing, planning, embeddings, retrieval, ranking, actions, and session
-handling. Testcontainers starts Redis and Solr for integration tests. Docker-backed tests are
-skipped automatically if Docker is unavailable.
+The suite includes unit tests plus Redis and Solr container-backed integration tests. Never commit
+API keys, `.env`, or local logs.
 
-## Project structure
-
-```text
-src/main/java/com/gen3/recommenderagent/
-├── api/                 # REST entry point
-├── application/         # Use cases, intent actions, and session service
-├── candidateretriever/  # Candidate adapters, query vectors, and retrieval plans
-├── common/              # Constants shared across layers
-├── config/              # Redis and application configuration
-├── domain/              # Intents and session-domain models
-├── embedding/           # Text construction and vector operations
-├── engine/              # Recommendation workflow
-├── inputparser/         # Natural-language request parsing
-├── ranker/              # Candidate scoring and final ranking
-├── response/            # Natural-language response generation
-└── storage/             # Redis, Qdrant, and isolated Solr repositories
-```
-
-The test source tree mirrors these application packages; integration-only support remains under
-`integration/` and `testsupport/`.
-
-Never commit API keys or `.env` files.
+Changes targeting `staging` run the API-free test suite. Changes targeting `main` run the tagged
+integration checks. Configure the repository secrets `OPENAI_API_KEY`, `QDRANT_URL`, and
+`QDRANT_API_KEY`; only the `main` checks receive them.

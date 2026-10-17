@@ -26,6 +26,30 @@ import tools.jackson.databind.ObjectMapper;
 class InputParserTest {
 
   @Test
+  void mapsPersonalisedRequestWithoutInventingSearchCriteria() {
+    String rawText = "Give me books I would like";
+    ParsedRequest parsed = new ParsedRequest();
+    parsed.setIntent(Intent.RECOMMENDATION);
+    parsed.setPersonalised(true);
+    ChatClient client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    when(client
+            .prompt()
+            .system(anyString())
+            .user(rawText)
+            .call()
+            .responseEntity(ParsedRequest.class))
+        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+    ChatClient.Builder builder = mock(ChatClient.Builder.class);
+    when(builder.build()).thenReturn(client);
+
+    SessionRequest result = new AiInputParser(builder).parse(rawText).entity();
+
+    assertEquals(true, result.isPersonalised());
+    assertEquals(null, result.getPositiveSemanticQuery());
+    assertEquals(null, result.getMustInclude());
+  }
+
+  @Test
   void shouldMapAiResultWithoutCallingARealAiService() {
     String rawText = "Recommend science fiction audiobooks.";
 
@@ -83,10 +107,10 @@ class InputParserTest {
 
     InputParser parser = new AiInputParser(builder);
 
-    IllegalArgumentException exception =
-        assertThrows(IllegalArgumentException.class, () -> parser.parse("   "));
+    InvalidRequestException exception =
+        assertThrows(InvalidRequestException.class, () -> parser.parse("   "));
 
-    assertEquals("Please enter your request", exception.getMessage());
+    assertEquals("I didn't catch that. What would you like to listen to?", exception.getMessage());
     verifyNoInteractions(chatClient);
   }
 
@@ -117,14 +141,16 @@ class InputParserTest {
     SessionRequest request =
         new ObjectMapper()
             .readValue(
-                "{\"bookCount\":3,\"mustInclude\":{\"language\":\"English\",\"source\":\"NLS\"},"
-                    + "\"mustNotInclude\":{\"language\":\"French\",\"source\":\"Legacy\"}}",
+                "{\"bookCount\":3,\"mustInclude\":{\"language\":\"English\",\"publicationYear\":\"after 2020\",\"source\":\"NLS\"},"
+                    + "\"mustNotInclude\":{\"language\":\"French\",\"publicationYear\":\"before 2000\",\"source\":\"Legacy\"}}",
                 SessionRequest.class);
 
     assertEquals(3, request.getBookCount());
     assertEquals("English", request.getMustInclude().getLanguage());
+    assertEquals("after 2020", request.getMustInclude().getPublicationYear());
     assertEquals("NLS", request.getMustInclude().getSource());
     assertEquals("French", request.getMustNotInclude().getLanguage());
+    assertEquals("before 2000", request.getMustNotInclude().getPublicationYear());
     assertEquals("Legacy", request.getMustNotInclude().getSource());
   }
 }

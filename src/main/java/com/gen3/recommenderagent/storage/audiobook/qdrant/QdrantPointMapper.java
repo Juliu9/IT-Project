@@ -10,6 +10,7 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import io.qdrant.client.grpc.JsonWithInt.Value;
 import io.qdrant.client.grpc.Points.PointStruct;
+import io.qdrant.client.grpc.Points.RetrievedPoint;
 import io.qdrant.client.grpc.Points.ScoredPoint;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
@@ -27,7 +28,7 @@ public class QdrantPointMapper {
 
   private final SparseTextEncoder sparseEncoder;
 
-  /** Uses the same sparse encoder for catalogue indexing and request retrieval. */
+  /** Maps stored Qdrant data without inventing metadata at request time. */
   public QdrantPointMapper(SparseTextEncoder sparseEncoder) {
     this.sparseEncoder = sparseEncoder;
   }
@@ -51,7 +52,15 @@ public class QdrantPointMapper {
 
   /** Restores an audiobook record from a Qdrant similarity-search result. */
   public AudiobookRecord toRecord(ScoredPoint point) {
-    Map<String, Value> payload = point.getPayloadMap();
+    return toRecord(point.getPayloadMap());
+  }
+
+  /** Restores an audiobook record from a Qdrant scroll result. */
+  public AudiobookRecord toRecord(RetrievedPoint point) {
+    return toRecord(point.getPayloadMap());
+  }
+
+  private AudiobookRecord toRecord(Map<String, Value> payload) {
     return new AudiobookRecord(
         stringValue(payload, "bookId"),
         stringValue(payload, "source"),
@@ -60,7 +69,9 @@ public class QdrantPointMapper {
         stringValue(payload, "description"),
         listValue(payload.get("narrators")),
         stringValue(payload, "language"),
-        integerValue(payload.get("durationMinutes")));
+        integerValue(payload.get("durationMinutes")),
+        integerValue(payload.get("publicationYear")),
+        stringValue(payload, "short_description"));
   }
 
   /** Extracts the normalized dense vector included in a similarity-search result. */
@@ -99,9 +110,13 @@ public class QdrantPointMapper {
     put(payload, "source", record.source());
     put(payload, "title", record.title());
     put(payload, "description", record.description());
+    put(payload, "short_description", record.shortDescription());
     put(payload, "language", record.language());
     if (record.durationMinutes() != null) {
       payload.put("durationMinutes", value(record.durationMinutes().longValue()));
+    }
+    if (record.publicationYear() != null) {
+      payload.put("publicationYear", value(record.publicationYear().longValue()));
     }
     List<Value> authors =
         record.authors() == null

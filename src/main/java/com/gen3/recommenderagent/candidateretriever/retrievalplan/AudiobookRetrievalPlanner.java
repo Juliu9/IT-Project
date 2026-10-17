@@ -9,6 +9,7 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
@@ -20,14 +21,16 @@ public class AudiobookRetrievalPlanner {
   private static final Pattern FIRST_NUMBER = Pattern.compile("(\\d+)");
 
   /** Separates semantic text, lexical terms, and exact payload constraints. */
-  public AudiobookRetrievalPlan plan(int limit, SessionRequest request) {
+  public AudiobookRetrievalPlan plan(
+      int limit, SessionRequest request, Set<String> excludedBookIds) {
     SemanticQuery positive = request == null ? null : request.getPositiveSemanticQuery();
     SemanticQuery negative = request == null ? null : request.getNegativeSemanticQuery();
     String keywordText = lexicalText(positive, "");
     AudiobookFilters filters =
         new AudiobookFilters(
             includeConditions(request == null ? null : request.getMustInclude()),
-            excludeConditions(request == null ? null : request.getMustNotInclude()));
+            excludeConditions(request == null ? null : request.getMustNotInclude()),
+            excludedBookIds == null ? List.of() : List.copyOf(excludedBookIds));
     return new AudiobookRetrievalPlan(
         modeFor(positive, negative, filters), keywordText, filters, Math.max(limit, 1));
   }
@@ -65,38 +68,44 @@ public class AudiobookRetrievalPlanner {
     if (filter == null) {
       return AudiobookFilterConditions.empty();
     }
-    DurationBounds bounds = durationBounds(filter.getDuration());
+    RangeBounds bounds = durationBounds(filter.getDuration());
+    RangeBounds years = yearBounds(filter.getPublicationYear());
     return new AudiobookFilterConditions(
         copy(filter.getAuthors()),
         copy(filter.getNarrators()),
         filter.getLanguage(),
         filter.getSource(),
         bounds.minimum(),
-        bounds.maximum());
+        bounds.maximum(),
+        years.minimum(),
+        years.maximum());
   }
 
   private AudiobookFilterConditions excludeConditions(MustNotInclude filter) {
     if (filter == null) {
       return AudiobookFilterConditions.empty();
     }
-    DurationBounds bounds = durationBounds(filter.getDuration());
+    RangeBounds bounds = durationBounds(filter.getDuration());
+    RangeBounds years = yearBounds(filter.getPublicationYear());
     return new AudiobookFilterConditions(
         copy(filter.getAuthors()),
         copy(filter.getNarrators()),
         filter.getLanguage(),
         filter.getSource(),
         bounds.minimum(),
-        bounds.maximum());
+        bounds.maximum(),
+        years.minimum(),
+        years.maximum());
   }
 
   /** Parses values such as "under 10 hours" and "more than 480 minutes". */
-  private DurationBounds durationBounds(String duration) {
+  private RangeBounds durationBounds(String duration) {
     if (!hasText(duration)) {
-      return DurationBounds.empty();
+      return RangeBounds.empty();
     }
     Matcher matcher = FIRST_NUMBER.matcher(duration);
     if (!matcher.find()) {
-      return DurationBounds.empty();
+      return RangeBounds.empty();
     }
     int value = Integer.parseInt(matcher.group(1));
     String normalized = duration.toLowerCase(Locale.ROOT);
@@ -106,7 +115,42 @@ public class AudiobookRetrievalPlanner {
             || normalized.contains("more than")
             || normalized.contains("at least")
             || normalized.contains("minimum");
-    return lowerBound ? new DurationBounds(minutes, null) : new DurationBounds(null, minutes);
+    return lowerBound ? new RangeBounds(minutes, null) : new RangeBounds(null, minutes);
+  }
+
+  /** Parses values such as "after 2020" and "before 2000". */
+  private RangeBounds yearBounds(String publicationYear) {
+    if (!hasText(publicationYear)) {
+      return RangeBounds.empty();
+    }
+    Matcher matcher = FIRST_NUMBER.matcher(publicationYear);
+    if (!matcher.find()) {
+      return RangeBounds.empty();
+    }
+    int year = Integer.parseInt(matcher.group(1));
+    String normalized = publicationYear.toLowerCase(Locale.ROOT);
+    boolean lowerBound =
+        normalized.contains("after")
+            || normalized.contains("from")
+            || normalized.contains("since")
+            || normalized.contains("newer")
+            || normalized.contains("over")
+            || normalized.contains("more than")
+            || normalized.contains("at least")
+            || normalized.contains("minimum");
+    boolean upperBound =
+        normalized.contains("before")
+            || normalized.contains("older")
+            || normalized.contains("under")
+            || normalized.contains("less than")
+            || normalized.contains("maximum");
+    if (lowerBound) {
+      return new RangeBounds(year, null);
+    }
+    if (upperBound) {
+      return new RangeBounds(null, year);
+    }
+    return new RangeBounds(year, year);
   }
 
   /** Adds nonblank parsed terms to the lexical query. */
@@ -142,9 +186,9 @@ public class AudiobookRetrievalPlanner {
     return value != null && !value.isBlank();
   }
 
-  private record DurationBounds(Integer minimum, Integer maximum) {
-    private static DurationBounds empty() {
-      return new DurationBounds(null, null);
+  private record RangeBounds(Integer minimum, Integer maximum) {
+    private static RangeBounds empty() {
+      return new RangeBounds(null, null);
     }
   }
 }

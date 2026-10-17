@@ -11,21 +11,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.gen3.recommenderagent.api.RequestGateway;
-import com.gen3.recommenderagent.application.ActionRegistry;
-import com.gen3.recommenderagent.application.RequestApplicationService;
-import com.gen3.recommenderagent.application.action.ChangeCountAction;
-import com.gen3.recommenderagent.application.action.ClearHistoryAction;
-import com.gen3.recommenderagent.application.action.MoreResultsAction;
-import com.gen3.recommenderagent.application.action.NoOpAction;
-import com.gen3.recommenderagent.application.action.RecommendationAction;
-import com.gen3.recommenderagent.application.action.RefineAction;
-import com.gen3.recommenderagent.application.action.RequestContextMerger;
-import com.gen3.recommenderagent.application.action.UpdatePreferencesAction;
+import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.application.sessionservice.DefaultSessionService;
-import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalExecutor;
+import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalService;
 import com.gen3.recommenderagent.candidateretriever.CandidateRetriever;
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectorService;
-import com.gen3.recommenderagent.candidateretriever.SolrCandidateRetriever;
 import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
@@ -34,10 +24,11 @@ import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.engine.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.ranker.RankingService;
-import com.gen3.recommenderagent.ranker.strategy.HybridRankingStrategy;
-import com.gen3.recommenderagent.ranker.strategy.RelevanceRankingStrategy;
-import com.gen3.recommenderagent.ranker.strategy.SemanticQueryRankingStrategy;
-import com.gen3.recommenderagent.ranker.strategy.UserPreferenceRankingStrategy;
+import com.gen3.recommenderagent.ranker.scorer.CompositeScorer;
+import com.gen3.recommenderagent.ranker.scorer.RankingScoringProperties;
+import com.gen3.recommenderagent.ranker.scorer.RetrievalRelevanceScorer;
+import com.gen3.recommenderagent.ranker.scorer.UserPreferenceScorer;
+import com.gen3.recommenderagent.ranker.scorer.WeightedScorer;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
 import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.testsupport.SolrContainerTestSupport;
@@ -94,51 +85,26 @@ class RecommendationFlowIntegrationTest {
     when(embeddingIndexer.embedSemanticQueries(anyList()))
         .thenReturn(List.of(new float[0], new float[0]));
     CandidateRetriever candidateRetriever =
-        new SolrCandidateRetriever(
-            repository,
-            new CandidateRetrievalExecutor(embeddingIndexer, new AudiobookRetrievalPlanner()));
+        new CandidateRetrievalService(
+            "solr", repository, embeddingIndexer, new AudiobookRetrievalPlanner());
     RankingService rankingService =
         new RankingService(
-            new RelevanceRankingStrategy(),
-            new HybridRankingStrategy(
-                new SemanticQueryRankingStrategy(), new UserPreferenceRankingStrategy()));
-    RequestContextMerger requestContextMerger = new RequestContextMerger();
+            new CompositeScorer(
+                List.of(
+                    new WeightedScorer(new RetrievalRelevanceScorer(), 1.0),
+                    new WeightedScorer(new UserPreferenceScorer(scoringProperties()), 1.0))));
     com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository userPreferences =
         mock(com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository.class);
-    RecommendationAction recommendationAction =
-        new RecommendationAction(
-            new AudiobookRecommendationWorkflow(
-                candidateRetriever,
-                rankingService,
-                new SemanticQueryVectorService(embeddingIndexer),
-                userPreferences),
-            requestContextMerger);
+    AudiobookRecommendationWorkflow workflow =
+        new AudiobookRecommendationWorkflow(
+            candidateRetriever,
+            rankingService,
+            new SemanticQueryVectorService(embeddingIndexer),
+            userPreferences);
     RecommendationFlowTestSupport.InMemorySessionRepository sessionRepository =
         new RecommendationFlowTestSupport.InMemorySessionRepository();
-
-    ActionRegistry registry =
-        new ActionRegistry(
-            recommendationAction,
-            new RefineAction(
-                new AudiobookRecommendationWorkflow(
-                    candidateRetriever,
-                    rankingService,
-                    new SemanticQueryVectorService(embeddingIndexer),
-                    userPreferences),
-                requestContextMerger),
-            new MoreResultsAction(
-                new AudiobookRecommendationWorkflow(
-                    candidateRetriever,
-                    rankingService,
-                    new SemanticQueryVectorService(embeddingIndexer),
-                    userPreferences),
-                requestContextMerger),
-            new ChangeCountAction(),
-            new UpdatePreferencesAction(requestContextMerger),
-            new ClearHistoryAction(),
-            new NoOpAction());
-    RequestApplicationService applicationService =
-        new RequestApplicationService(new DefaultSessionService(sessionRepository), registry);
+    SessionTransitionService applicationService =
+        new SessionTransitionService(new DefaultSessionService(sessionRepository), workflow);
 
     RequestGateway gateway =
         new RequestGateway(inputParser, applicationService, new AiResponseGenerator(null));
@@ -158,7 +124,7 @@ class RecommendationFlowIntegrationTest {
             .getResponse()
             .getContentAsString();
 
-    Session savedSession = sessionRepository.getSession("session-1");
+    Session savedSession = sessionRepository.getSession("session-1", "user-1");
     assertNotNull(savedSession);
     assertEquals("user-1", savedSession.getUserId());
     assertEquals(1, savedSession.getRequests().size());
@@ -176,6 +142,15 @@ class RecommendationFlowIntegrationTest {
     assertFalse(returnedBookIds.contains("book-404"));
     assertFalse(response.contains("book-404"));
     returnedBookIds.forEach(bookId -> assertTrue(response.contains(bookId)));
+  }
+
+  private RankingScoringProperties scoringProperties() {
+    return new RankingScoringProperties(
+        1.0,
+        1.0,
+        0.5,
+        new RankingScoringProperties.UserPreferenceWeights(0.6, 0.4),
+        new RankingScoringProperties.UniversalRuleWeights(0.7, 0.3));
   }
 
   private SessionRequest parsedRequest(String rawText) {

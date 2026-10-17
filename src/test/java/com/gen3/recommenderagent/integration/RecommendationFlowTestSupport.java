@@ -4,6 +4,7 @@ import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Supplier;
 
 final class RecommendationFlowTestSupport {
 
@@ -11,16 +12,24 @@ final class RecommendationFlowTestSupport {
 
   static final class InMemorySessionRepository implements SessionRepository {
 
-    private final Map<String, Session> sessions = new HashMap<>();
+    private final Map<SessionKey, Session> sessions = new HashMap<>();
 
     @Override
-    public Session getSession(String sessionId) {
-      return sessions.get(sessionId);
+    public Session getSession(String sessionId, String userId) {
+      return sessions.get(new SessionKey(sessionId, userId));
     }
 
     @Override
-    public void updateSession(Session session) {
-      sessions.put(session.getSessionId(), session);
+    public boolean updateSession(Session session) {
+      sessions.put(new SessionKey(session.getSessionId(), session.getUserId()), session);
+      return true;
     }
+
+    @Override
+    public <T> T withSessionLock(String sessionId, String userId, Supplier<T> operation) {
+      return operation.get();
+    }
+
+    private record SessionKey(String sessionId, String userId) {}
   }
 }

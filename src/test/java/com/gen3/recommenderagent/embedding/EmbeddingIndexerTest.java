@@ -12,7 +12,9 @@ import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.embedding.Embedding;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.embedding.EmbeddingResponse;
 
 class EmbeddingIndexerTest {
 
@@ -62,10 +64,12 @@ class EmbeddingIndexerTest {
     query.setGenres(List.of("science fiction"));
     query.setKeywords(List.of("survival"));
     String text = indexer.buildSemanticQueryText(query);
-    when(model.embed(List.of(text))).thenReturn(List.of(new float[] {0, 5}));
+    EmbeddingResponse response = mock(EmbeddingResponse.class);
+    when(response.getResults()).thenReturn(List.of(new Embedding(new float[] {0, 5}, 0)));
+    when(model.embedForResponse(List.of(text))).thenReturn(response);
 
     assertArrayEquals(new float[] {0, 1}, indexer.embedSemanticQuery(query), 0.0001f);
-    verify(model).embed(List.of(text));
+    verify(model).embedForResponse(List.of(text));
   }
 
   @Test
@@ -78,13 +82,17 @@ class EmbeddingIndexerTest {
     negative.setKeywords(List.of("gore"));
     List<String> texts =
         List.of(indexer.buildSemanticQueryText(positive), indexer.buildSemanticQueryText(negative));
-    when(model.embed(texts)).thenReturn(List.of(new float[] {3, 4}, new float[] {0, 2}));
+    EmbeddingResponse response = mock(EmbeddingResponse.class);
+    when(response.getResults())
+        .thenReturn(
+            List.of(new Embedding(new float[] {3, 4}, 0), new Embedding(new float[] {0, 2}, 1)));
+    when(model.embedForResponse(texts)).thenReturn(response);
 
     List<float[]> vectors = indexer.embedSemanticQueries(List.of(positive, negative));
 
     assertArrayEquals(new float[] {0.6f, 0.8f}, vectors.get(0), 0.0001f);
     assertArrayEquals(new float[] {0, 1}, vectors.get(1), 0.0001f);
-    verify(model).embed(texts);
+    verify(model).embedForResponse(texts);
   }
 
   @Test

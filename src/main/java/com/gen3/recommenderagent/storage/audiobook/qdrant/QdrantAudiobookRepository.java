@@ -1,5 +1,7 @@
 package com.gen3.recommenderagent.storage.audiobook.qdrant;
 
+import static io.qdrant.client.ConditionFactory.hasId;
+import static io.qdrant.client.ConditionFactory.isEmpty;
 import static io.qdrant.client.ConditionFactory.matchKeyword;
 import static io.qdrant.client.ConditionFactory.matchKeywords;
 import static io.qdrant.client.ConditionFactory.range;
@@ -11,6 +13,8 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditio
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
+import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore;
+import com.gen3.recommenderagent.storage.audiobook.port.AudiobookMetadataEnricher;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorRepository;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Collections;
@@ -20,17 +24,26 @@ import io.qdrant.client.grpc.Common.Range;
 import io.qdrant.client.grpc.Points.CreateFieldIndexCollection;
 import io.qdrant.client.grpc.Points.DenseVector;
 import io.qdrant.client.grpc.Points.FieldType;
+import io.qdrant.client.grpc.Points.PointsSelector;
+import io.qdrant.client.grpc.Points.PointsUpdateOperation;
 import io.qdrant.client.grpc.Points.PrefetchQuery;
 import io.qdrant.client.grpc.Points.Query;
 import io.qdrant.client.grpc.Points.QueryPoints;
 import io.qdrant.client.grpc.Points.RetrievedPoint;
 import io.qdrant.client.grpc.Points.ScoredPoint;
+import io.qdrant.client.grpc.Points.ScrollPoints;
+import io.qdrant.client.grpc.Points.ScrollResponse;
 import io.qdrant.client.grpc.Points.SparseVector;
 import io.qdrant.client.grpc.Points.VectorInput;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,7 +52,7 @@ import org.springframework.stereotype.Repository;
 /** Stores and searches normalized audiobook vectors in a Qdrant collection. */
 @Repository
 public class QdrantAudiobookRepository
-    implements AudiobookCandidateSearch, AudiobookVectorRepository {
+    implements AudiobookCandidateSearch, AudiobookEnrichmentStore, AudiobookVectorRepository {
 
   private final QdrantClient client;
   private final QdrantPointMapper mapper;
@@ -71,7 +84,7 @@ public class QdrantAudiobookRepository
       return List.of();
     }
     validateDimension(queryVector);
-    initialize();
+    requireCollection();
     QueryPoints.Builder request = baseQuery(filters, limit);
     request.setUsing(QdrantPointMapper.DENSE_VECTOR).setQuery(denseQuery(queryVector));
     return query(request.build());
@@ -85,7 +98,7 @@ public class QdrantAudiobookRepository
     if (sparse.isEmpty() || limit <= 0) {
       return List.of();
     }
-    initialize();
+    requireCollection();
     QueryPoints.Builder request = baseQuery(filters, limit);
     request.setUsing(QdrantPointMapper.KEYWORD_VECTOR).setQuery(sparseQuery(sparse));
     return query(request.build());
@@ -103,7 +116,7 @@ public class QdrantAudiobookRepository
     if (sparse.isEmpty()) {
       return searchSemantic(queryVector, filters, limit);
     }
-    initialize();
+    requireCollection();
     int prefetchLimit = limit * 4;
     Filter filter = filter(filters);
     PrefetchQuery.Builder dense =
@@ -140,7 +153,7 @@ public class QdrantAudiobookRepository
     if (filters == null || !filters.hasConditions() || limit <= 0) {
       return List.of();
     }
-    initialize();
+    requireCollection();
     return query(baseQuery(filters, limit).build());
   }
 
@@ -171,30 +184,215 @@ public class QdrantAudiobookRepository
         "write audiobook vectors to Qdrant");
   }
 
+  /** Stores generated short descriptions without recalculating or rewriting the book vectors. */
+  @Override
+  public void updateShortDescriptions(List<ShortDescriptionUpdate> updates) throws IOException {
+    if (updates == null || updates.isEmpty()) {
+      return;
+    }
+    requireCollection();
+    List<PointsUpdateOperation> operations = new ArrayList<>();
+    for (ShortDescriptionUpdate update : updates) {
+      if (update != null && hasText(update.storageReference()) && hasText(update.description())) {
+        operations.add(
+            setMissingPayload(
+                pointId(update.storageReference()),
+                "short_description",
+                io.qdrant.client.ValueFactory.value(update.description())));
+      }
+    }
+    updatePayloads(operations);
+  }
+
+  /** Adds fake metadata only to fields absent from existing Qdrant payloads. */
+  @Override
+  public int enrichMissingMetadata(AudiobookMetadataEnricher metadataEnricher) throws IOException {
+    requireCollection();
+    createPayloadIndex("publicationYear", FieldType.FieldTypeInteger);
+    int updated = 0;
+    io.qdrant.client.grpc.Common.PointId offset = null;
+    while (true) {
+      ScrollPoints.Builder request =
+          ScrollPoints.newBuilder()
+              .setCollectionName(collection)
+              .setLimit(500)
+              .setWithPayload(enable(true));
+      if (offset != null) {
+        request.setOffset(offset);
+      }
+      ScrollResponse page = await(client.scrollAsync(request.build()), "read audiobook records");
+      List<PointsUpdateOperation> operations = new ArrayList<>();
+      for (RetrievedPoint point : page.getResultList()) {
+        AudiobookRecord existing = mapper.toRecord(point);
+        List<PointsUpdateOperation> missingFields =
+            missingMetadataUpdates(
+                point.getId(), point.getPayloadMap(), metadataEnricher.enrich(existing));
+        if (!missingFields.isEmpty()) {
+          operations.addAll(missingFields);
+          updated++;
+        }
+      }
+      updatePayloads(operations);
+      if (!page.hasNextPageOffset() || page.getResultCount() == 0) {
+        return updated;
+      }
+      offset = page.getNextPageOffset();
+    }
+  }
+
+  private List<PointsUpdateOperation> missingMetadataUpdates(
+      io.qdrant.client.grpc.Common.PointId pointId,
+      Map<String, io.qdrant.client.grpc.JsonWithInt.Value> existingPayload,
+      AudiobookRecord enriched) {
+    List<PointsUpdateOperation> operations = new ArrayList<>();
+    if (!existingPayload.containsKey("narrators")) {
+      operations.add(
+          setMissingPayload(
+              pointId,
+              "narrators",
+              io.qdrant.client.ValueFactory.list(
+                  enriched.narrators().stream()
+                      .map(io.qdrant.client.ValueFactory::value)
+                      .toList())));
+    }
+    if (!existingPayload.containsKey("language")) {
+      operations.add(
+          setMissingPayload(
+              pointId, "language", io.qdrant.client.ValueFactory.value(enriched.language())));
+    }
+    if (!existingPayload.containsKey("durationMinutes")) {
+      operations.add(
+          setMissingPayload(
+              pointId,
+              "durationMinutes",
+              io.qdrant.client.ValueFactory.value(enriched.durationMinutes().longValue())));
+    }
+    if (!existingPayload.containsKey("publicationYear")) {
+      operations.add(
+          setMissingPayload(
+              pointId,
+              "publicationYear",
+              io.qdrant.client.ValueFactory.value(enriched.publicationYear().longValue())));
+    }
+    return operations;
+  }
+
+  private PointsUpdateOperation setMissingPayload(
+      io.qdrant.client.grpc.Common.PointId pointId,
+      String field,
+      io.qdrant.client.grpc.JsonWithInt.Value value) {
+    PointsSelector selector =
+        PointsSelector.newBuilder()
+            .setFilter(Filter.newBuilder().addMust(hasId(pointId)).addMust(isEmpty(field)))
+            .build();
+    return PointsUpdateOperation.newBuilder()
+        .setSetPayload(
+            PointsUpdateOperation.SetPayload.newBuilder()
+                .putPayload(field, value)
+                .setPointsSelector(selector))
+        .build();
+  }
+
+  /** Loads Qdrant records that still need a generated short description. */
+  @Override
+  public List<StoredAudiobook> findRecordsWithoutShortDescription(int maximumRecords)
+      throws IOException {
+    if (maximumRecords <= 0) {
+      return List.of();
+    }
+    requireCollection();
+    createPayloadIndex("short_description", FieldType.FieldTypeKeyword);
+    List<StoredAudiobook> records = new ArrayList<>();
+    io.qdrant.client.grpc.Common.PointId offset = null;
+    while (records.size() < maximumRecords) {
+      ScrollPoints.Builder request =
+          ScrollPoints.newBuilder()
+              .setCollectionName(collection)
+              .setFilter(Filter.newBuilder().addMust(isEmpty("short_description")))
+              .setLimit(Math.min(500, maximumRecords - records.size()))
+              .setWithPayload(enable(true));
+      if (offset != null) {
+        request.setOffset(offset);
+      }
+      ScrollResponse page = await(client.scrollAsync(request.build()), "read audiobook records");
+      records.addAll(
+          page.getResultList().stream()
+              .map(
+                  point ->
+                      new StoredAudiobook(
+                          mapper.toRecord(point),
+                          Base64.getEncoder().encodeToString(point.getId().toByteArray())))
+              .toList());
+      if (!page.hasNextPageOffset() || page.getResultCount() == 0) {
+        break;
+      }
+      offset = page.getNextPageOffset();
+    }
+    return records;
+  }
+
+  private io.qdrant.client.grpc.Common.PointId pointId(String storageReference) throws IOException {
+    try {
+      return io.qdrant.client.grpc.Common.PointId.parseFrom(
+          Base64.getDecoder().decode(storageReference));
+    } catch (IllegalArgumentException exception) {
+      throw new IOException("Invalid Qdrant storage reference", exception);
+    }
+  }
+
+  private void updatePayloads(List<PointsUpdateOperation> operations) throws IOException {
+    if (operations.isEmpty()) {
+      return;
+    }
+    for (int start = 0; start < operations.size(); start += 100) {
+      List<PointsUpdateOperation> batch =
+          operations.subList(start, Math.min(start + 100, operations.size()));
+      await(client.batchUpdateAsync(collection, batch), "store audiobook short descriptions");
+    }
+  }
+
   /** Retrieves the stored vector for one favourite audiobook by its catalogue ID. */
   @Override
   public Optional<float[]> findEmbeddingByBookId(String bookId) throws IOException {
-    if (bookId == null || bookId.isBlank()) {
+    if (!hasText(bookId)) {
       return Optional.empty();
     }
-    initialize();
-    List<RetrievedPoint> points =
-        await(
-            client.retrieveAsync(collection, List.of(mapper.pointId(bookId)), false, true, null),
-            "retrieve an audiobook vector from Qdrant");
-    if (points.isEmpty() || !points.getFirst().hasVectors()) {
-      return Optional.empty();
+    return Optional.ofNullable(findEmbeddingsByBookIds(List.of(bookId)).get(bookId));
+  }
+
+  /** Retrieves many catalogue vectors in bounded gRPC calls for preference imports. */
+  @Override
+  public Map<String, float[]> findEmbeddingsByBookIds(Collection<String> bookIds)
+      throws IOException {
+    if (bookIds == null || bookIds.isEmpty()) {
+      return Map.of();
     }
-    var namedVectors = points.getFirst().getVectors().getVectors().getVectorsMap();
-    if (!namedVectors.containsKey(QdrantPointMapper.DENSE_VECTOR)) {
-      return Optional.empty();
+    List<String> ids = bookIds.stream().filter(this::hasText).distinct().toList();
+    if (ids.isEmpty()) {
+      return Map.of();
     }
-    List<Float> values = namedVectors.get(QdrantPointMapper.DENSE_VECTOR).getDense().getDataList();
-    float[] vector = new float[values.size()];
-    for (int index = 0; index < values.size(); index++) {
-      vector[index] = values.get(index);
+    requireCollection();
+    Map<String, float[]> vectors = new LinkedHashMap<>();
+    for (int start = 0; start < ids.size(); start += 100) {
+      List<String> batch = ids.subList(start, Math.min(start + 100, ids.size()));
+      Map<io.qdrant.client.grpc.Common.PointId, String> bookIdsByPoint = new HashMap<>();
+      for (String bookId : batch) {
+        bookIdsByPoint.put(mapper.pointId(bookId), bookId);
+      }
+      List<RetrievedPoint> points =
+          await(
+              client.retrieveAsync(
+                  collection, List.copyOf(bookIdsByPoint.keySet()), false, true, null),
+              "retrieve audiobook vectors from Qdrant");
+      for (RetrievedPoint point : points) {
+        float[] vector = denseVector(point);
+        String bookId = bookIdsByPoint.get(point.getId());
+        if (hasText(bookId) && vector != null) {
+          vectors.put(bookId, vector);
+        }
+      }
     }
-    return Optional.of(vector);
+    return vectors;
   }
 
   /** Creates named dense and sparse vectors plus indexes used by payload filters. */
@@ -210,6 +408,21 @@ public class QdrantAudiobookRepository
       boolean exists = await(client.collectionExistsAsync(collection), "check Qdrant collection");
       if (!exists) {
         createCollection();
+      }
+      initialized = true;
+    }
+  }
+
+  private void requireCollection() throws IOException {
+    if (initialized) {
+      return;
+    }
+    synchronized (initializationLock) {
+      if (initialized) {
+        return;
+      }
+      if (!await(client.collectionExistsAsync(collection), "check Qdrant collection")) {
+        throw new IOException("Qdrant collection does not exist: " + collection);
       }
       initialized = true;
     }
@@ -243,9 +456,11 @@ public class QdrantAudiobookRepository
     await(client.createCollectionAsync(request), "create hybrid Qdrant collection");
     createPayloadIndex("authors", FieldType.FieldTypeKeyword);
     createPayloadIndex("narrators", FieldType.FieldTypeKeyword);
+    createPayloadIndex("bookId", FieldType.FieldTypeKeyword);
     createPayloadIndex("language", FieldType.FieldTypeKeyword);
     createPayloadIndex("source", FieldType.FieldTypeKeyword);
     createPayloadIndex("durationMinutes", FieldType.FieldTypeInteger);
+    createPayloadIndex("publicationYear", FieldType.FieldTypeInteger);
   }
 
   /** Executes a universal Qdrant query and maps its fused score to the shared candidate type. */
@@ -294,13 +509,15 @@ public class QdrantAudiobookRepository
 
   /** Converts structured application filters into Qdrant payload conditions. */
   private Filter filter(AudiobookFilters filters) {
-    if (filters == null || !filters.hasConditions()) {
+    if (filters == null) {
       return null;
     }
     Filter.Builder builder = Filter.newBuilder();
     addConditions(builder, filters.mustInclude(), false);
     addConditions(builder, filters.mustNotInclude(), true);
-    return builder.build();
+    // RankingService excludes shown books after retrieval, so requests never need to create this
+    // index.
+    return builder.getMustCount() == 0 && builder.getMustNotCount() == 0 ? null : builder.build();
   }
 
   private void addConditions(
@@ -320,17 +537,33 @@ public class QdrantAudiobookRepository
     if (conditions.source() != null && !conditions.source().isBlank()) {
       addCondition(builder, matchKeyword("source", conditions.source()), excluded);
     }
-    if (conditions.minimumDurationMinutes() != null
-        || conditions.maximumDurationMinutes() != null) {
-      Range.Builder duration = Range.newBuilder();
-      if (conditions.minimumDurationMinutes() != null) {
-        duration.setGte(conditions.minimumDurationMinutes());
-      }
-      if (conditions.maximumDurationMinutes() != null) {
-        duration.setLte(conditions.maximumDurationMinutes());
-      }
-      addCondition(builder, range("durationMinutes", duration.build()), excluded);
+    addRangeCondition(
+        builder,
+        "durationMinutes",
+        conditions.minimumDurationMinutes(),
+        conditions.maximumDurationMinutes(),
+        excluded);
+    addRangeCondition(
+        builder,
+        "publicationYear",
+        conditions.minimumPublicationYear(),
+        conditions.maximumPublicationYear(),
+        excluded);
+  }
+
+  private void addRangeCondition(
+      Filter.Builder builder, String field, Integer minimum, Integer maximum, boolean excluded) {
+    if (minimum == null && maximum == null) {
+      return;
     }
+    Range.Builder range = Range.newBuilder();
+    if (minimum != null) {
+      range.setGte(minimum);
+    }
+    if (maximum != null) {
+      range.setLte(maximum);
+    }
+    addCondition(builder, range(field, range.build()), excluded);
   }
 
   private void addCondition(Filter.Builder builder, Condition condition, boolean excluded) {
@@ -373,6 +606,29 @@ public class QdrantAudiobookRepository
       values.add(value);
     }
     return values;
+  }
+
+  private float[] denseVector(RetrievedPoint point) {
+    if (point == null || !point.hasVectors()) {
+      return null;
+    }
+    var vectors = point.getVectors().getVectors().getVectorsMap();
+    if (!vectors.containsKey(QdrantPointMapper.DENSE_VECTOR)) {
+      return null;
+    }
+    List<Float> values = vectors.get(QdrantPointMapper.DENSE_VECTOR).getDense().getDataList();
+    if (values.isEmpty()) {
+      return null;
+    }
+    float[] vector = new float[values.size()];
+    for (int index = 0; index < values.size(); index++) {
+      vector[index] = values.get(index);
+    }
+    return vector;
+  }
+
+  private boolean hasText(String value) {
+    return value != null && !value.isBlank();
   }
 
   /** Converts asynchronous Qdrant failures into the repository's checked I/O contract. */

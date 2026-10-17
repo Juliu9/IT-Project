@@ -1,6 +1,7 @@
 package com.gen3.recommenderagent.domain.session;
 
 import static com.gen3.recommenderagent.common.ApplicationConstants.MAX_BOOK_COUNT;
+import static com.gen3.recommenderagent.common.ApplicationConstants.MAX_SHOWN_BOOKS;
 import static com.gen3.recommenderagent.common.BookCountPolicy.clampOrDefault;
 
 import java.time.Instant;
@@ -15,10 +16,16 @@ public class Session {
   private Instant createdAt;
   private Instant updatedAt;
   private Instant expiresAt;
+  private long version;
   private Integer bookCount = MAX_BOOK_COUNT;
   private List<String> shownBooks;
   private List<SessionRequest> requests = new ArrayList<>();
   private SessionPreferences preferences;
+
+  public boolean isAwaitingPersonalisedPreferences() {
+    return requests != null
+        && requests.stream().anyMatch(SessionRequest::isPreferenceClarificationRequired);
+  }
 
   public Session() {}
 
@@ -27,7 +34,7 @@ public class Session {
   }
 
   public void setShownBooks(List<String> shownBooks) {
-    this.shownBooks = shownBooks;
+    this.shownBooks = shownBooks == null ? null : new ArrayList<>(shownBooks);
   }
 
   public String getSessionId() {
@@ -70,6 +77,14 @@ public class Session {
     this.expiresAt = expiresAt;
   }
 
+  public long getVersion() {
+    return version;
+  }
+
+  public void setVersion(long version) {
+    this.version = version;
+  }
+
   public Integer getBookCount() {
     return bookCount;
   }
@@ -87,6 +102,14 @@ public class Session {
   }
 
   public void addRequest(SessionRequest request) {
+    if (request == null) {
+      return;
+    }
+    if (ConversationState.isSearchContext(request)) {
+      requests.removeIf(ConversationState::isSearchContext);
+    } else {
+      requests.removeIf(existing -> !ConversationState.isSearchContext(existing));
+    }
     this.requests.add(request);
     this.updatedAt = Instant.now();
   }
@@ -107,7 +130,13 @@ public class Session {
       bookIds.stream()
           .filter(bookId -> bookId != null && !bookId.isBlank())
           .filter(bookId -> !this.shownBooks.contains(bookId))
-          .forEach(this.shownBooks::add);
+          .forEach(
+              bookId -> {
+                if (this.shownBooks.size() == MAX_SHOWN_BOOKS) {
+                  this.shownBooks.removeFirst();
+                }
+                this.shownBooks.add(bookId);
+              });
     }
   }
 

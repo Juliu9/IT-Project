@@ -1,27 +1,23 @@
 package com.gen3.recommenderagent.ranker;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.gen3.recommenderagent.domain.session.Recommendation;
-import com.gen3.recommenderagent.ranker.strategy.HybridRankingStrategy;
-import com.gen3.recommenderagent.ranker.strategy.RelevanceRankingStrategy;
-import com.gen3.recommenderagent.ranker.strategy.SemanticQueryRankingStrategy;
-import com.gen3.recommenderagent.ranker.strategy.UserPreferenceRankingStrategy;
+import com.gen3.recommenderagent.ranker.scorer.CompositeScorer;
+import com.gen3.recommenderagent.ranker.scorer.RetrievalRelevanceScorer;
+import com.gen3.recommenderagent.ranker.scorer.ScoreResult;
+import com.gen3.recommenderagent.ranker.scorer.WeightedScorer;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class RankingServiceTest {
 
-  private final SemanticQueryRankingStrategy semanticQueryRankingStrategy =
-      new SemanticQueryRankingStrategy();
   private final RankingService rankingService =
       new RankingService(
-          new RelevanceRankingStrategy(),
-          new HybridRankingStrategy(
-              semanticQueryRankingStrategy, new UserPreferenceRankingStrategy()));
+          new CompositeScorer(List.of(new WeightedScorer(new RetrievalRelevanceScorer(), 1.0))));
 
   @Test
   void shouldPreserveCandidateOrderRemoveDuplicatesAndLimitResults() {
@@ -37,19 +33,15 @@ class RankingServiceTest {
     assertEquals(2, result.size());
     assertEquals("book-1", result.get(0).getBookId());
     assertEquals(1, result.get(0).getRank());
-    assertEquals(3.5, result.get(0).getScore());
+    assertEquals(1.0, result.get(0).getScore());
     assertEquals("book-2", result.get(1).getBookId());
     assertEquals(2, result.get(1).getRank());
-    assertNull(result.get(1).getScore());
+    assertEquals(0.0, result.get(1).getScore());
   }
 
   @Test
   void excludesShownBooksBeforeRanking() {
-    RankingContext context =
-        new RankingContext(
-            com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors.empty(),
-            null,
-            java.util.Set.of("book-1"));
+    RankingContext context = new RankingContext(null, Set.of("book-1"));
 
     List<Recommendation> result =
         rankingService.rank(
@@ -57,6 +49,43 @@ class RankingServiceTest {
 
     assertEquals(1, result.size());
     assertEquals("book-2", result.getFirst().getBookId());
+  }
+
+  @Test
+  void normalizesActiveScoresAndRanksByCompositeScore() {
+    RankingService service =
+        new RankingService(
+            new CompositeScorer(
+                List.of(
+                    new WeightedScorer(
+                        (candidate, context) ->
+                            ScoreResult.available(
+                                candidate.audiobook().id().equals("book-2") ? 1 : 0),
+                        1.0))));
+
+    List<Recommendation> result =
+        service.rank(
+            List.of(candidate("book-1", 9.0), candidate("book-2", 1.0)), 2, RankingContext.empty());
+
+    assertEquals("book-2", result.getFirst().getBookId());
+    assertEquals(1.0, result.getFirst().getScore());
+    assertEquals("book-1", result.getLast().getBookId());
+    assertEquals(0.0, result.getLast().getScore());
+  }
+
+  @Test
+  void searchScoresAreNormalizedWithinCurrentCandidateSet() {
+    RankingService service =
+        new RankingService(
+            new CompositeScorer(List.of(new WeightedScorer(new RetrievalRelevanceScorer(), 1.0))));
+
+    List<Recommendation> result =
+        service.rank(List.of(candidate("low", 2.0), candidate("high", 6.0)), 2);
+
+    assertEquals("high", result.getFirst().getBookId());
+    assertEquals(1.0, result.getFirst().getScore());
+    assertEquals("low", result.getLast().getBookId());
+    assertEquals(0.0, result.getLast().getScore());
   }
 
   private AudiobookCandidate candidate(String id, Double score) {

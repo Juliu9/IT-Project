@@ -12,6 +12,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class FakeAudiobookMetadataEnricher implements AudiobookMetadataEnricher {
 
+  private static final int FIRST_FAKE_PUBLICATION_YEAR = 1950;
+  private static final int FAKE_PUBLICATION_YEAR_COUNT = 76;
   private static final List<String> NARRATORS =
       List.of("Stephen Fry", "Julia Whelan", "Ray Porter", "Bahni Turpin", "Simon Vance");
   private static final List<String> LANGUAGES = List.of("English", "French", "Spanish");
@@ -32,6 +34,10 @@ public class FakeAudiobookMetadataEnricher implements AudiobookMetadataEnricher 
         record.durationMinutes() == null || record.durationMinutes() <= 0
             ? 240 + (seed % 721)
             : record.durationMinutes();
+    Integer publicationYear =
+        record.publicationYear() == null || record.publicationYear() <= 0
+            ? FIRST_FAKE_PUBLICATION_YEAR + (seed % FAKE_PUBLICATION_YEAR_COUNT)
+            : record.publicationYear();
 
     return new AudiobookRecord(
         record.id(),
@@ -41,6 +47,8 @@ public class FakeAudiobookMetadataEnricher implements AudiobookMetadataEnricher 
         record.description(),
         narrators,
         language,
-        duration);
+        duration,
+        publicationYear,
+        record.shortDescription());
   }
 }

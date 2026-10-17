@@ -2,18 +2,17 @@ package com.gen3.recommenderagent.integration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.gen3.recommenderagent.api.RequestExceptionHandler;
 import com.gen3.recommenderagent.api.RequestGateway;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
-import jakarta.servlet.ServletException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -60,7 +59,7 @@ class LiveIntegrationTest {
     registry.add("spring.ai.openai.api-key", () -> environment("OPENAI_API_KEY", "missing"));
     registry.add("qdrant.url", () -> environment("QDRANT_URL", "http://127.0.0.1:1"));
     registry.add("qdrant.grpc-port", () -> environment("QDRANT_GRPC_PORT", "6334"));
-    registry.add("qdrant.api-key", () -> environment("QDRANT_API", ""));
+    registry.add("qdrant.api-key", () -> environment("QDRANT_API_KEY", ""));
     registry.add("qdrant.collection", () -> environment("QDRANT_COLLECTION", "audiobooks_hybrid"));
     registry.add(
         "qdrant.user-preference-collection",
@@ -82,7 +81,10 @@ class LiveIntegrationTest {
     String sessionId = "full-live-" + UUID.randomUUID();
     String userId = "full-live-test-user";
 
-    MockMvc mockMvc = MockMvcBuilders.standaloneSetup(requestGateway).build();
+    MockMvc mockMvc =
+        MockMvcBuilders.standaloneSetup(requestGateway)
+            .setControllerAdvice(new RequestExceptionHandler())
+            .build();
 
     if (rawText.isBlank()) {
       assertBlankRequestRejected(mockMvc, sessionId, userId, rawText);
@@ -106,7 +108,7 @@ class LiveIntegrationTest {
 
     assertFalse(response.isBlank(), "The final response must not be blank");
 
-    Session savedSession = awaitSavedSession(sessionId, SESSION_TIMEOUT);
+    Session savedSession = awaitSavedSession(sessionId, userId, SESSION_TIMEOUT);
     assertNotNull(savedSession, "The completed request was not saved to Docker Redis");
     assertEquals(userId, savedSession.getUserId());
     assertFalse(savedSession.getRequests().isEmpty(), "The session contains no requests");
@@ -146,37 +148,19 @@ class LiveIntegrationTest {
 
   private void assertBlankRequestRejected(
       MockMvc mockMvc, String sessionId, String userId, String rawText) throws Exception {
-    String rejectionMessage;
-    if (rawText.isEmpty()) {
-      mockMvc
-          .perform(
-              post("/api/v1/recommendations")
-                  .header("X-Session-Id", sessionId)
-                  .header("X-User-Id", userId)
-                  .contentType(MediaType.TEXT_PLAIN)
-                  .content(rawText))
-          .andExpect(status().isBadRequest());
-      rejectionMessage = "Required request body is missing";
-    } else {
-      ServletException exception =
-          assertThrows(
-              ServletException.class,
-              () ->
-                  mockMvc.perform(
-                      post("/api/v1/recommendations")
-                          .header("X-Session-Id", sessionId)
-                          .header("X-User-Id", userId)
-                          .contentType(MediaType.TEXT_PLAIN)
-                          .content(rawText)));
-
-      IllegalArgumentException cause =
-          assertInstanceOf(IllegalArgumentException.class, exception.getCause());
-      assertEquals("Please enter your request", cause.getMessage());
-      rejectionMessage = cause.getMessage();
-    }
+    String rejectionMessage = "I didn't catch that. What would you like to listen to?";
+    mockMvc
+        .perform(
+            post("/api/v1/recommendations")
+                .header("X-Session-Id", sessionId)
+                .header("X-User-Id", userId)
+                .contentType(MediaType.TEXT_PLAIN)
+                .content(rawText))
+        .andExpect(status().isBadRequest())
+        .andExpect(content().string(rejectionMessage));
 
     assertNull(
-        sessionRepository.getSession(sessionId),
+        sessionRepository.getSession(sessionId, userId),
         "A blank request must not create or update a Redis session");
 
     System.out.println("\n=== Blank input integration result ===");
@@ -186,11 +170,11 @@ class LiveIntegrationTest {
     System.out.println("======================================\n");
   }
 
-  private Session awaitSavedSession(String sessionId, Duration timeout)
+  private Session awaitSavedSession(String sessionId, String userId, Duration timeout)
       throws InterruptedException {
     Instant deadline = Instant.now().plus(timeout);
     while (Instant.now().isBefore(deadline)) {
-      Session session = sessionRepository.getSession(sessionId);
+      Session session = sessionRepository.getSession(sessionId, userId);
       if (session != null) {
         return session;
       }

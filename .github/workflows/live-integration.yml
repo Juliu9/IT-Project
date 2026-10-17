@@ -34,7 +34,7 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           QDRANT_URL: ${{ secrets.QDRANT_URL }}
-          QDRANT_API: ${{ secrets.QDRANT_API }}
+          QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
         run: |
           if [ -z "$OPENAI_API_KEY" ]; then
             echo "::error::Missing GitHub Actions secret: OPENAI_API_KEY"
@@ -44,8 +44,8 @@ jobs:
             echo "::error::Missing GitHub Actions secret: QDRANT_URL"
             exit 1
           fi
-          if [ -z "$QDRANT_API" ]; then
-            echo "::error::Missing GitHub Actions secret: QDRANT_API"
+          if [ -z "$QDRANT_API_KEY" ]; then
+            echo "::error::Missing GitHub Actions secret: QDRANT_API_KEY"
             exit 1
           fi
 
@@ -53,7 +53,7 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           QDRANT_URL: ${{ secrets.QDRANT_URL }}
-          QDRANT_API: ${{ secrets.QDRANT_API }}
+          QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
           QDRANT_GRPC_PORT: "6334"
           QDRANT_COLLECTION: audiobooks_hybrid
           QDRANT_USER_PREFERENCE_COLLECTION: user

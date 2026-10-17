@@ -3,6 +3,7 @@ package com.gen3.recommenderagent.storage.audiobook.qdrant;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
 import java.net.URI;
+import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -23,10 +24,12 @@ public class QdrantConfig {
   public QdrantClient qdrantClient(
       @Value("${qdrant.url}") String qdrantUrl,
       @Value("${qdrant.grpc-port:6334}") int grpcPort,
-      @Value("${qdrant.api-key:}") String apiKey) {
+      @Value("${qdrant.api-key:}") String apiKey,
+      @Value("${qdrant.timeout:10s}") Duration timeout) {
     URI uri = parseUrl(qdrantUrl);
     boolean useTls = "https".equalsIgnoreCase(uri.getScheme());
-    QdrantGrpcClient.Builder builder = QdrantGrpcClient.newBuilder(uri.getHost(), grpcPort, useTls);
+    QdrantGrpcClient.Builder builder =
+        QdrantGrpcClient.newBuilder(uri.getHost(), grpcPort, useTls).withTimeout(timeout);
     if (apiKey != null && !apiKey.isBlank()) {
       builder.withApiKey(apiKey.trim());
     }

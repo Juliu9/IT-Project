@@ -26,6 +26,7 @@ class QdrantPointMapperTest {
 
     assertThat(first.getId()).isEqualTo(second.getId());
     assertThat(first.getPayloadMap().get("bookId").getStringValue()).isEqualTo("book-7");
+    assertThat(first.getPayloadMap()).doesNotContainKey("publicationYear");
     assertThat(
             first
                 .getVectors()
@@ -43,7 +44,17 @@ class QdrantPointMapperTest {
     PointStruct point =
         mapper.toPoint(
             new AudiobookEmbedding(
-                new AudiobookRecord("1", "src", "Title", List.of("Author"), "Summary"),
+                new AudiobookRecord(
+                    "1",
+                    "src",
+                    "Title",
+                    List.of("Author"),
+                    "Summary",
+                    List.of(),
+                    null,
+                    null,
+                    null,
+                    "A concise summary."),
                 new float[] {1.0f, 0.0f}));
     ScoredPoint result =
         ScoredPoint.newBuilder().setId(point.getId()).putAllPayload(point.getPayloadMap()).build();
@@ -53,5 +64,7 @@ class QdrantPointMapperTest {
     assertThat(record.id()).isEqualTo("1");
     assertThat(record.authors()).containsExactly("Author");
     assertThat(record.title()).isEqualTo("Title");
+    assertThat(record.publicationYear()).isNull();
+    assertThat(record.shortDescription()).isEqualTo("A concise summary.");
   }
 }
