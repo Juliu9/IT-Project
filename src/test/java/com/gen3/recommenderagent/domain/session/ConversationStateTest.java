@@ -38,18 +38,21 @@ class ConversationStateTest {
     preferences.setPositiveSemanticQuery(queryWithGenres("fantasy"));
     MustInclude defaults = new MustInclude();
     defaults.setLanguage("English");
+    defaults.setPublicationYear("before 2000");
     preferences.setMustInclude(defaults);
     session.setPreferences(preferences);
     SessionRequest request = request(Intent.RECOMMENDATION);
     request.setPositiveSemanticQuery(queryWithGenres("mystery"));
     MustInclude explicit = new MustInclude();
     explicit.setLanguage("French");
+    explicit.setPublicationYear("after 2020");
     request.setMustInclude(explicit);
 
     SessionRequest effective = conversationState.resolve(session, request);
 
     assertEquals(List.of("fantasy", "mystery"), effective.getPositiveSemanticQuery().getGenres());
     assertEquals("French", effective.getMustInclude().getLanguage());
+    assertEquals("after 2020", effective.getMustInclude().getPublicationYear());
     assertEquals(List.of("mystery"), request.getPositiveSemanticQuery().getGenres());
   }
 
