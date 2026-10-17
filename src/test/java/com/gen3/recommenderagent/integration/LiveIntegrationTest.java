@@ -43,7 +43,7 @@ import tools.jackson.databind.ObjectMapper;
 class LiveIntegrationTest {
 
   // Edit only this value when you want to try a different live request.
-  private static final String RAW_TEXT = "";
+  private static final String RAW_TEXT = "   ";
 
   private static final int REDIS_PORT = 6379;
   private static final Duration SESSION_TIMEOUT = Duration.ofSeconds(5);
