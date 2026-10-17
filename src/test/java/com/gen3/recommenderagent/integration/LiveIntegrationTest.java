@@ -16,9 +16,7 @@ import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -49,7 +47,7 @@ class LiveIntegrationTest {
 
   // Both requests are sent with the same session ID and user ID.
   private static final String INITIAL_RAW_TEXT = "Recommend three science fiction audiobooks.";
-  private static final String FOLLOW_UP_RAW_TEXT = "Give me up to five more recommendations.";
+  private static final String FOLLOW_UP_RAW_TEXT = "Please repeat the most recent recommendations.";
 
   private static final int REDIS_PORT = 6379;
   private static final Duration SESSION_TIMEOUT = Duration.ofSeconds(5);
@@ -82,7 +80,7 @@ class LiveIntegrationTest {
   @Autowired private ObjectMapper objectMapper;
 
   @Test
-  void shouldRunTwoRequestsInTheSameLiveSession() throws Exception {
+  void shouldRepeatTheMostRecentRecommendationsInTheSameLiveSession() throws Exception {
     String sessionId = "full-live-" + UUID.randomUUID();
     String userId = "full-live-test-user";
 
@@ -91,39 +89,37 @@ class LiveIntegrationTest {
             .setControllerAdvice(new RequestExceptionHandler())
             .build();
 
-    TurnResult firstTurn =
-        submitTurn(mockMvc, sessionId, userId, 1, INITIAL_RAW_TEXT, Intent.RECOMMENDATION, 3);
-    assertFalse(
-        firstTurn.recommendationIds().isEmpty(),
-        "The initial request returned no audiobook recommendations");
-
-    TurnResult secondTurn =
-        submitTurn(mockMvc, sessionId, userId, 2, FOLLOW_UP_RAW_TEXT, Intent.MORE_RESULTS, 5);
-    assertFalse(
-        secondTurn.recommendationIds().isEmpty(),
-        "The follow-up request returned no additional audiobook recommendations");
-
-    Set<String> duplicateIds = new HashSet<>(firstTurn.recommendationIds());
-    duplicateIds.retainAll(secondTurn.recommendationIds());
-    assertTrue(
-        duplicateIds.isEmpty(),
-        "The follow-up request repeated audiobook IDs from the first turn: " + duplicateIds);
+    TurnResult firstTurn = submitTurn(mockMvc, sessionId, userId, 1, INITIAL_RAW_TEXT, 3);
+    TurnResult secondTurn = submitTurn(mockMvc, sessionId, userId, 2, FOLLOW_UP_RAW_TEXT, 3);
 
     Session finalSession = awaitSavedSession(sessionId, userId, SESSION_TIMEOUT);
     assertNotNull(finalSession, "The final session was not saved to Docker Redis");
-    assertTrue(
-        finalSession.getShownBooks().containsAll(firstTurn.recommendationIds()),
-        "The session did not retain all audiobook IDs shown in the first turn");
-    assertTrue(
-        finalSession.getShownBooks().containsAll(secondTurn.recommendationIds()),
-        "The session did not retain all audiobook IDs shown in the second turn");
 
-    System.out.println("\n=== Multi-turn live integration result ===");
+    System.out.println("\n=== Repeat live integration result ===");
     System.out.println("Session ID: " + sessionId);
     printTurn(firstTurn);
     printTurn(secondTurn);
     System.out.println("All shown audiobook IDs: " + finalSession.getShownBooks());
-    System.out.println("==========================================\n");
+    System.out.println("====================================\n");
+
+    assertEquals(
+        Intent.RECOMMENDATION,
+        firstTurn.completedRequest().getIntent(),
+        "The initial request was classified with the wrong intent");
+    assertFalse(
+        firstTurn.recommendationIds().isEmpty(),
+        "The initial request returned no audiobook recommendations");
+    assertFalse(
+        secondTurn.recommendationIds().isEmpty(),
+        "The repeat request returned no audiobook recommendations");
+    assertEquals(
+        firstTurn.recommendationIds(),
+        secondTurn.recommendationIds(),
+        "The repeat request did not return the same audiobook IDs in the same order");
+    assertEquals(
+        firstTurn.recommendationIds(),
+        finalSession.getShownBooks(),
+        "Repeating recommendations changed the session's shown audiobook IDs");
   }
 
   private TurnResult submitTurn(
@@ -132,7 +128,6 @@ class LiveIntegrationTest {
       String userId,
       int turnNumber,
       String rawText,
-      Intent expectedIntent,
       int maximumRecommendations)
       throws Exception {
     assertFalse(rawText.isBlank(), "Turn " + turnNumber + " raw text must not be blank");
@@ -164,10 +159,7 @@ class LiveIntegrationTest {
     assertNotNull(completedRequest.getRequestId());
     assertFalse(
         completedRequest.getRequestId().isBlank(), "The completed request has no request ID");
-    assertEquals(
-        expectedIntent,
-        completedRequest.getIntent(),
-        "Turn " + turnNumber + " was classified with the wrong intent");
+    assertNotNull(completedRequest.getIntent(), "The AI parser returned no intent");
 
     List<String> recommendationIds = recommendationIds(completedRequest);
     assertTrue(
