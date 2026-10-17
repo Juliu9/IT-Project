@@ -4,6 +4,6 @@ package com.gen3.recommenderagent.storage.sessionrepository.redis;
 public class SessionLockLostException extends RuntimeException {
 
   public SessionLockLostException() {
-    super("The session could not be updated safely; please try again shortly.");
+    super("I couldn't save that request safely. Please try again in a moment.");
   }
 }

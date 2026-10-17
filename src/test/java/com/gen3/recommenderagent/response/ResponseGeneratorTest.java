@@ -1,6 +1,7 @@
 package com.gen3.recommenderagent.response;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -61,7 +62,7 @@ class ResponseGeneratorTest {
   }
 
   @Test
-  void shouldRejectRequestsForMoreThanFiveRecommendations() {
+  void shouldExplainTheLimitAndReturnFiveRecommendationsWhenCountIsExplicit() {
     AiResponseGenerator generator = new AiResponseGenerator(null);
 
     SessionRequest request = new SessionRequest();
@@ -82,8 +83,58 @@ class ResponseGeneratorTest {
     String response = generator.generate(recommendations, request);
 
     assertNotNull(response);
-    assertTrue(response.toLowerCase().contains("maximum of 5"));
-    assertTrue(response.toLowerCase().contains("recommendations"));
+    assertTrue(response.contains("up to 5"));
+    assertTrue(response.contains("Book1"));
+    assertTrue(response.contains("Book5"));
+    assertFalse(response.contains("Book6"));
+  }
+
+  @Test
+  void shouldIgnoreAnOversizedCountNotStatedByTheUser() {
+    AiResponseGenerator generator = new AiResponseGenerator(null);
+    SessionRequest request = new SessionRequest();
+    request.setIntent(Intent.RECOMMENDATION);
+    request.setRawText("fantasy");
+    request.setBookCount(10);
+
+    String response =
+        generator.generate(List.of(new Recommendation("book-101", 1, 0.91, "Book1")), request);
+
+    assertTrue(response.contains("Book1"));
+    assertFalse(response.contains("up to 5"));
+  }
+
+  @Test
+  void shouldRecognizeAnExplicitSpelledOutCount() {
+    AiResponseGenerator generator = new AiResponseGenerator(null);
+    SessionRequest request = new SessionRequest();
+    request.setIntent(Intent.RECOMMENDATION);
+    request.setRawText("Give me ten fantasy audiobooks");
+    request.setBookCount(10);
+
+    String response =
+        generator.generate(List.of(new Recommendation("book-101", 1, 0.91, "Book1")), request);
+
+    assertTrue(response.contains("up to 5"));
+    assertTrue(response.contains("Book1"));
+  }
+
+  @Test
+  void shouldGiveTheAiTheLimitNoticeAndActualRecommendationCount() {
+    AiResponseGenerator generator = new AiResponseGenerator(null);
+    SessionRequest request = new SessionRequest();
+    request.setIntent(Intent.RECOMMENDATION);
+    request.setRawText("Give me 10 recommendations");
+    request.setBookCount(10);
+
+    String prompt =
+        generator.compilePrompt(
+            List.of(new Recommendation("book-101", 1, 0.91, "Book1")),
+            request,
+            "I can give up to 5 recommendations at a time. ");
+
+    assertTrue(prompt.contains("Recommendation count: 1"));
+    assertTrue(prompt.contains("Limit notice: I can give up to 5 recommendations at a time."));
   }
 
   @Test
@@ -93,7 +144,7 @@ class ResponseGeneratorTest {
     String response = generator.generate(null, null);
 
     assertNotNull(response);
-    assertTrue(response.toLowerCase().contains("sorry"));
+    assertTrue(response.toLowerCase().contains("try again"));
   }
 
   @Test
@@ -104,6 +155,19 @@ class ResponseGeneratorTest {
     request.setBookCount(3);
 
     assertEquals("I'll show 3 recommendations at a time.", generator.generate(List.of(), request));
+  }
+
+  @Test
+  void shouldCapAnExplicitChangeCountRequest() {
+    AiResponseGenerator generator = new AiResponseGenerator(null);
+    SessionRequest request = new SessionRequest();
+    request.setIntent(Intent.CHANGE_COUNT);
+    request.setRawText("Show me 10 recommendations at a time");
+    request.setBookCount(10);
+
+    assertEquals(
+        "I can give up to 5 recommendations at a time. I'll show 5 recommendations at a time.",
+        generator.generate(List.of(), request));
   }
 
   @Test

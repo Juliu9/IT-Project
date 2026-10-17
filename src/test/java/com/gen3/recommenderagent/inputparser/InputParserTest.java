@@ -110,8 +110,7 @@ class InputParserTest {
     InvalidRequestException exception =
         assertThrows(InvalidRequestException.class, () -> parser.parse("   "));
 
-    assertEquals(
-        "I didn’t catch a request. What would you like to listen to?", exception.getMessage());
+    assertEquals("I didn't catch that. What would you like to listen to?", exception.getMessage());
     verifyNoInteractions(chatClient);
   }
 

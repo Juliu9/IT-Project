@@ -49,6 +49,7 @@ public class RequestExceptionHandler {
       CandidateRetrievalException exception) {
     return ResponseEntity.status(503)
         .contentType(new MediaType(MediaType.TEXT_PLAIN, StandardCharsets.UTF_8))
-        .body("Recommendations are temporarily unavailable. Please try again shortly.");
+        .body(
+            "I'm having trouble reaching the audiobook catalogue right now. Please try again in a moment.");
   }
 }

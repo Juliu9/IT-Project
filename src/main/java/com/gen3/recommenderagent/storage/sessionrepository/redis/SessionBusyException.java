@@ -4,6 +4,6 @@ package com.gen3.recommenderagent.storage.sessionrepository.redis;
 public class SessionBusyException extends RuntimeException {
 
   public SessionBusyException() {
-    super("Another request is already being processed for this session; please retry");
+    super("I'm still finishing your previous request. Please try again in a moment.");
   }
 }

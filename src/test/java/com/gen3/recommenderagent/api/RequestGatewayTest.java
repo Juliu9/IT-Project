@@ -48,8 +48,7 @@ class RequestGatewayTest {
   void returnsBadRequestForInvalidInput() throws Exception {
     when(inputParser.parse(null))
         .thenThrow(
-            new InvalidRequestException(
-                "I didn’t catch a request. What would you like to listen to?"));
+            new InvalidRequestException("I didn't catch that. What would you like to listen to?"));
     RequestGateway gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
     MockMvc mockMvc =
@@ -64,7 +63,7 @@ class RequestGatewayTest {
                 .header("X-User-Id", "user")
                 .content(""))
         .andExpect(status().isBadRequest())
-        .andExpect(content().string("I didn’t catch a request. What would you like to listen to?"));
+        .andExpect(content().string("I didn't catch that. What would you like to listen to?"));
 
     verify(telemetry).fail(null);
   }
@@ -92,7 +91,8 @@ class RequestGatewayTest {
         .andExpect(status().isServiceUnavailable())
         .andExpect(
             content()
-                .string("Recommendations are temporarily unavailable. Please try again shortly."));
+                .string(
+                    "I'm having trouble reaching the audiobook catalogue right now. Please try again in a moment."));
   }
 
   @Test

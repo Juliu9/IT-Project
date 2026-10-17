@@ -509,16 +509,15 @@ public class QdrantAudiobookRepository
 
   /** Converts structured application filters into Qdrant payload conditions. */
   private Filter filter(AudiobookFilters filters) {
-    if (filters == null || !filters.hasConditions()) {
+    if (filters == null) {
       return null;
     }
     Filter.Builder builder = Filter.newBuilder();
     addConditions(builder, filters.mustInclude(), false);
     addConditions(builder, filters.mustNotInclude(), true);
-    if (filters.excludedBookIds() != null && !filters.excludedBookIds().isEmpty()) {
-      builder.addMustNot(matchKeywords("bookId", filters.excludedBookIds()));
-    }
-    return builder.build();
+    // RankingService excludes shown books after retrieval, so requests never need to create this
+    // index.
+    return builder.getMustCount() == 0 && builder.getMustNotCount() == 0 ? null : builder.build();
   }
 
   private void addConditions(
