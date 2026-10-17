@@ -4,6 +4,6 @@ package com.gen3.recommenderagent.application.sessionservice;
 public class SessionCommitException extends RuntimeException {
 
   public SessionCommitException() {
-    super("The session could not be updated safely; please try again shortly.");
+    super("I couldn't save that request safely. Please try again in a moment.");
   }
 }

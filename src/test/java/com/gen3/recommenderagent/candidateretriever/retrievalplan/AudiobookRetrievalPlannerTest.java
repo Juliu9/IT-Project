@@ -6,6 +6,7 @@ import com.gen3.recommenderagent.domain.session.MustInclude;
 import com.gen3.recommenderagent.domain.session.MustNotInclude;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -23,9 +24,11 @@ class AudiobookRetrievalPlannerTest {
     filter.setNarrators(List.of("Stephen Fry"));
     filter.setLanguage("English");
     filter.setDuration("under 10 hours");
+    filter.setPublicationYear("after 2020");
     filter.setSource("NLS");
     MustNotInclude excluded = new MustNotInclude();
     excluded.setLanguage("French");
+    excluded.setPublicationYear("before 2000");
     excluded.setSource("Legacy");
     SessionRequest request = new SessionRequest();
     request.setRawText("More fantasy books with deserts narrated by Stephen Fry");
@@ -42,7 +45,9 @@ class AudiobookRetrievalPlannerTest {
     assertThat(plan.filters().mustInclude().language()).isEqualTo("English");
     assertThat(plan.filters().mustInclude().source()).isEqualTo("NLS");
     assertThat(plan.filters().mustInclude().maximumDurationMinutes()).isEqualTo(600);
+    assertThat(plan.filters().mustInclude().minimumPublicationYear()).isEqualTo(2020);
     assertThat(plan.filters().mustNotInclude().language()).isEqualTo("French");
+    assertThat(plan.filters().mustNotInclude().maximumPublicationYear()).isEqualTo(2000);
     assertThat(plan.filters().mustNotInclude().source()).isEqualTo("Legacy");
     assertThat(plan.filters().excludedBookIds()).containsExactly("already-shown");
   }
@@ -72,5 +77,19 @@ class AudiobookRetrievalPlannerTest {
     negativeAuthorOnly.setNegativeSemanticQuery(negativeAuthor);
     assertThat(planner.plan(10, negativeAuthorOnly, Set.of()).mode())
         .isEqualTo(RetrievalMode.SEMANTIC);
+  }
+
+  @Test
+  void treatsAnUnqualifiedPublicationYearAsAnExactYear() {
+    SessionRequest request = new SessionRequest();
+    MustInclude publicationYear = new MustInclude();
+    publicationYear.setPublicationYear("2020");
+    request.setMustInclude(publicationYear);
+
+    AudiobookFilterConditions conditions =
+        new AudiobookRetrievalPlanner().plan(10, request, Set.of()).filters().mustInclude();
+
+    assertThat(conditions.minimumPublicationYear()).isEqualTo(2020);
+    assertThat(conditions.maximumPublicationYear()).isEqualTo(2020);
   }
 }

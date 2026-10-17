@@ -48,7 +48,8 @@ class CandidateRetrievalServiceTest {
             vector,
             "desert",
             new AudiobookFilters(
-                new AudiobookFilterConditions(List.of(), List.of(), "English", null, null, null),
+                new AudiobookFilterConditions(
+                    List.of(), List.of(), "English", null, null, null, null, null),
                 AudiobookFilterConditions.empty(),
                 List.of()),
             5);

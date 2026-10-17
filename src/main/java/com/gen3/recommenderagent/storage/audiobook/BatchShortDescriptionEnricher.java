@@ -363,7 +363,10 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
   }
 
   private String getText(String path) throws IOException, InterruptedException {
-    HttpRequest request = authorizedRequest(path).GET().build();
+    return sendText(authorizedRequest(path).GET().build());
+  }
+
+  private String sendText(HttpRequest request) throws IOException, InterruptedException {
     HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
     if (response.statusCode() < 200 || response.statusCode() >= 300) {
       throw new IOException(
@@ -373,12 +376,7 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
   }
 
   private JsonNode sendJson(HttpRequest request) throws IOException, InterruptedException {
-    HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-    if (response.statusCode() < 200 || response.statusCode() >= 300) {
-      throw new IOException(
-          "OpenAI API returned " + response.statusCode() + ": " + response.body());
-    }
-    return mapper.readTree(response.body());
+    return mapper.readTree(sendText(request));
   }
 
   private HttpRequest.Builder authorizedRequest(String path) {

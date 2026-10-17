@@ -509,16 +509,15 @@ public class QdrantAudiobookRepository
 
   /** Converts structured application filters into Qdrant payload conditions. */
   private Filter filter(AudiobookFilters filters) {
-    if (filters == null || !filters.hasConditions()) {
+    if (filters == null) {
       return null;
     }
     Filter.Builder builder = Filter.newBuilder();
     addConditions(builder, filters.mustInclude(), false);
     addConditions(builder, filters.mustNotInclude(), true);
-    if (filters.excludedBookIds() != null && !filters.excludedBookIds().isEmpty()) {
-      builder.addMustNot(matchKeywords("bookId", filters.excludedBookIds()));
-    }
-    return builder.build();
+    // RankingService excludes shown books after retrieval, so requests never need to create this
+    // index.
+    return builder.getMustCount() == 0 && builder.getMustNotCount() == 0 ? null : builder.build();
   }
 
   private void addConditions(
@@ -538,17 +537,33 @@ public class QdrantAudiobookRepository
     if (conditions.source() != null && !conditions.source().isBlank()) {
       addCondition(builder, matchKeyword("source", conditions.source()), excluded);
     }
-    if (conditions.minimumDurationMinutes() != null
-        || conditions.maximumDurationMinutes() != null) {
-      Range.Builder duration = Range.newBuilder();
-      if (conditions.minimumDurationMinutes() != null) {
-        duration.setGte(conditions.minimumDurationMinutes());
-      }
-      if (conditions.maximumDurationMinutes() != null) {
-        duration.setLte(conditions.maximumDurationMinutes());
-      }
-      addCondition(builder, range("durationMinutes", duration.build()), excluded);
+    addRangeCondition(
+        builder,
+        "durationMinutes",
+        conditions.minimumDurationMinutes(),
+        conditions.maximumDurationMinutes(),
+        excluded);
+    addRangeCondition(
+        builder,
+        "publicationYear",
+        conditions.minimumPublicationYear(),
+        conditions.maximumPublicationYear(),
+        excluded);
+  }
+
+  private void addRangeCondition(
+      Filter.Builder builder, String field, Integer minimum, Integer maximum, boolean excluded) {
+    if (minimum == null && maximum == null) {
+      return;
     }
+    Range.Builder range = Range.newBuilder();
+    if (minimum != null) {
+      range.setGte(minimum);
+    }
+    if (maximum != null) {
+      range.setLte(maximum);
+    }
+    addCondition(builder, range(field, range.build()), excluded);
   }
 
   private void addCondition(Filter.Builder builder, Condition condition, boolean excluded) {

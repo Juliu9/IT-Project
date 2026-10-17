@@ -137,7 +137,8 @@ class PersonalisedRecommendationFlowTest {
 
     assertThat(first.getRecommendations()).isEmpty();
     assertThat(responseGenerator.generate(first.getRecommendations(), first))
-        .isEqualTo("What genres, authors, or narrators do you like?");
+        .isEqualTo(
+            "I'd love to find something you'll enjoy. What genres, authors, or narrators do you like?");
     verifyNoInteractions(books, embeddingModel, ranker);
     assertThat(sessions.getSession("session", "user").isAwaitingPersonalisedPreferences()).isTrue();
 

@@ -153,6 +153,10 @@ public final class ConversationState {
         preferred(
             base == null ? null : base.getDuration(),
             override == null ? null : override.getDuration()));
+    merged.setPublicationYear(
+        preferred(
+            base == null ? null : base.getPublicationYear(),
+            override == null ? null : override.getPublicationYear()));
     merged.setSource(
         preferred(
             base == null ? null : base.getSource(),
@@ -181,6 +185,10 @@ public final class ConversationState {
         preferred(
             base == null ? null : base.getDuration(),
             override == null ? null : override.getDuration()));
+    merged.setPublicationYear(
+        preferred(
+            base == null ? null : base.getPublicationYear(),
+            override == null ? null : override.getPublicationYear()));
     merged.setSource(
         preferred(
             base == null ? null : base.getSource(),

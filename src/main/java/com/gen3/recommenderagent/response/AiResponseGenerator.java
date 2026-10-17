@@ -8,6 +8,7 @@ import com.gen3.recommenderagent.observability.AiOperationObserver;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.openai.errors.OpenAIException;
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -16,6 +17,14 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class AiResponseGenerator implements ResponseGenerator {
+
+  private static final String PROCESSING_FALLBACK =
+      "I'm having a little trouble with that right now. Please try again in a moment.";
+  private static final Pattern EXPLICIT_OVERSIZED_COUNT =
+      Pattern.compile(
+          "\\b(?:[6-9]|[1-9]\\d+|six|seven|eight|nine|ten|eleven|twelve|dozen|"
+              + "thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\\b",
+          Pattern.CASE_INSENSITIVE);
 
   // Holds the AI
   private final ChatClient chatClient;
@@ -46,41 +55,36 @@ public class AiResponseGenerator implements ResponseGenerator {
     // if both inputs are missing, the method returns a polite error message instead
     // of crashing
     if (recommendations == null && currentRequest == null) {
-      return "I'm sorry, I couldn't process your request right now.";
+      return PROCESSING_FALLBACK;
     }
 
     if (currentRequest != null && currentRequest.isPreferenceClarificationRequired()) {
       RequestTelemetry.responseMode("PREFERENCE_CLARIFICATION");
-      return "What genres, authors, or narrators do you like?";
+      return "I'd love to find something you'll enjoy. What genres, authors, or narrators do you like?";
     }
 
-    if (currentRequest != null
-        && currentRequest.getBookCount() != null
-        && currentRequest.getBookCount() > MAX_BOOK_COUNT) {
-      return buildRecommendationLimitResponse(currentRequest);
-    }
-
+    String limitNotice = limitNotice(currentRequest);
     String actionResponse = generateActionResponse(currentRequest);
     if (actionResponse != null) {
       RequestTelemetry.responseMode("ACTION_RESPONSE");
-      return actionResponse;
+      return limitNotice + actionResponse;
     }
 
     // If there are no recommendations, it returns a fallback message
     if (recommendations == null || recommendations.isEmpty()) {
       RequestTelemetry.responseMode("NO_RESULTS");
-      return generateFallbackResponse(currentRequest);
+      return limitNotice + generateFallbackResponse(currentRequest);
     }
 
     // Builds a text summary of the request + top recommendation list to send to the
     // AI
     // model
-    String prompt = compilePrompt(recommendations, currentRequest);
+    String prompt = compilePrompt(recommendations, currentRequest, limitNotice);
 
     // If the AI call fails, don’t crash — fall back to a simple built-in response.
     if (chatClient == null) {
       RequestTelemetry.responseMode("FALLBACK");
-      return buildHumanReadableResponse(recommendations, currentRequest);
+      return limitNotice + buildHumanReadableResponse(recommendations, currentRequest);
     }
 
     try {
@@ -102,6 +106,8 @@ public class AiResponseGenerator implements ResponseGenerator {
                             - Clean up book titles by removing any weird catalog artifacts, symbols, or subtitle separators (for example, remove "$b" or colons).
                             - Use simple sentences with commas and periods to create natural breathing pauses for the text-to-speech engine.
                             - Avoid complex punctuation like em-dashes or semicolons.
+                            - Mention exactly the number of supplied recommendations; never say or imply a larger number.
+                            - If a limit notice is supplied, start with it verbatim, then continue naturally without repeating it.
                             """)
                       .user(prompt)
                       .call()
@@ -111,13 +117,13 @@ public class AiResponseGenerator implements ResponseGenerator {
       return aiResponse.getResult().getOutput().getText();
     } catch (OpenAIException exception) {
       RequestTelemetry.responseMode("FALLBACK");
-      return buildHumanReadableResponse(recommendations, currentRequest);
+      return limitNotice + buildHumanReadableResponse(recommendations, currentRequest);
     }
   }
 
   // Turns structure Java objects into a text prompt
-  private String compilePrompt(
-      List<Recommendation> recommendations, SessionRequest currentRequest) {
+  String compilePrompt(
+      List<Recommendation> recommendations, SessionRequest currentRequest, String limitNotice) {
     // Extracts the original user text if available
     String requestSummary =
         (currentRequest != null && currentRequest.getRawText() != null)
@@ -146,8 +152,13 @@ public class AiResponseGenerator implements ResponseGenerator {
 
     // Produces the final prompt string the AI sees
     return String.format(
-        "User request: %s. Intent: %s. Genres: %s. Recommendations: %s.",
-        requestSummary, intentSummary, genresSummary, recommendationsSummary);
+        "User request: %s. Intent: %s. Genres: %s. Recommendation count: %d. Limit notice: %s. Recommendations: %s.",
+        requestSummary,
+        intentSummary,
+        genresSummary,
+        topFive.size(),
+        limitNotice.isBlank() ? "none" : limitNotice.trim(),
+        recommendationsSummary);
   }
 
   // Turns one Reccomendation object into a readable text fragment
@@ -171,7 +182,7 @@ public class AiResponseGenerator implements ResponseGenerator {
   private String buildHumanReadableResponse(
       List<Recommendation> recommendations, SessionRequest currentRequest) {
     StringBuilder response = new StringBuilder();
-    response.append("Here are my recommendations");
+    response.append("Here are a few recommendations");
 
     if (currentRequest != null && currentRequest.getIntent() != null) {
       String intentName = currentRequest.getIntent().name().toLowerCase().replace("_", " ");
@@ -222,20 +233,6 @@ public class AiResponseGenerator implements ResponseGenerator {
     return response.toString().trim();
   }
 
-  private String buildRecommendationLimitResponse(SessionRequest currentRequest) {
-    if (currentRequest != null
-        && currentRequest.getRawText() != null
-        && !currentRequest.getRawText().isBlank()) {
-      return "I can only give a maximum of "
-          + MAX_BOOK_COUNT
-          + " recommendations at a time, so I can't fulfil that request for "
-          + currentRequest.getRawText()
-          + ".";
-    }
-
-    return "I can only give a maximum of " + MAX_BOOK_COUNT + " recommendations at a time.";
-  }
-
   private List<Recommendation> getTopRecommendations(List<Recommendation> recommendations) {
     if (recommendations == null || recommendations.isEmpty()) {
       return List.of();
@@ -248,41 +245,62 @@ public class AiResponseGenerator implements ResponseGenerator {
     return recommendations.subList(0, MAX_BOOK_COUNT);
   }
 
+  private String limitNotice(SessionRequest request) {
+    if (request == null
+        || request.getBookCount() == null
+        || request.getBookCount() <= MAX_BOOK_COUNT
+        || request.getRawText() == null
+        || !EXPLICIT_OVERSIZED_COUNT.matcher(request.getRawText()).find()) {
+      return "";
+    }
+    return "I can give up to " + MAX_BOOK_COUNT + " recommendations at a time. ";
+  }
+
   private String generateActionResponse(SessionRequest currentRequest) {
     if (currentRequest == null || currentRequest.getIntent() == null) {
       return null;
     }
 
     return switch (currentRequest.getIntent()) {
-      case CHANGE_COUNT ->
-          currentRequest.getBookCount() == null
-              ? "Tell me how many recommendations you would like at a time."
-              : "I'll show "
-                  + currentRequest.getBookCount()
-                  + " recommendation"
-                  + (currentRequest.getBookCount() == 1 ? "" : "s")
-                  + " at a time.";
-      case UPDATE_PREFERENCES -> "I've updated your preferences for this session.";
-      case CLEAR_HISTORY -> "I've cleared this session's recommendation history.";
+      case CHANGE_COUNT -> {
+        if (currentRequest.getBookCount() == null) {
+          yield "How many recommendations would you like at a time?";
+        }
+        int count = Math.clamp(currentRequest.getBookCount(), 1, MAX_BOOK_COUNT);
+        yield "I'll show " + count + " recommendation" + (count == 1 ? "" : "s") + " at a time.";
+      }
+      case UPDATE_PREFERENCES -> "Thanks, I've updated your preferences for this session.";
+      case CLEAR_HISTORY -> "All set, I've cleared this session's recommendation history.";
       case HELP ->
-          "I can recommend audiobooks, refine the current search, show more results, change "
-              + "the result count, update session preferences, or clear this session's history.";
+          "I can help you find audiobooks, refine a search, show more results, change the result "
+              + "count, update your preferences, or clear this session's history.";
       case UNKNOWN ->
-          "I'm not sure what you want me to do. Try asking for audiobook recommendations or help.";
+          "I'm not quite sure what you'd like to do. You can ask for audiobook recommendations or "
+              + "say help to hear what I can do.";
       case RECOMMENDATION, REFINE, MORE_RESULTS -> null;
     };
   }
 
   // Safe node output
   private String generateFallbackResponse(SessionRequest currentRequest) {
+    if (hasPublicationYearFilter(currentRequest)) {
+      return "Sorry, we don't have books from that time period.";
+    }
     if (currentRequest != null
         && currentRequest.getRawText() != null
         && !currentRequest.getRawText().isBlank()) {
-      return "Sorry, I couldn't find any recommendations for: "
+      return "I couldn't find a good match for "
           + currentRequest.getRawText()
-          + ". Please try a different request.";
+          + " just yet. Try a genre, author, narrator, or a different description.";
     }
 
-    return "I'm sorry, I couldn't process your request right now.";
+    return PROCESSING_FALLBACK;
+  }
+
+  private boolean hasPublicationYearFilter(SessionRequest request) {
+    return request != null
+        && request.getMustInclude() != null
+        && request.getMustInclude().getPublicationYear() != null
+        && !request.getMustInclude().getPublicationYear().isBlank();
   }
 }

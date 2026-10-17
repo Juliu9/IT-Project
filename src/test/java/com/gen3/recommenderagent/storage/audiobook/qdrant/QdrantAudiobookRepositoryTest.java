@@ -22,6 +22,7 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore;
 import com.google.common.util.concurrent.Futures;
 import io.qdrant.client.QdrantClient;
+import io.qdrant.client.grpc.Collections.CreateCollection;
 import io.qdrant.client.grpc.Points.CreateFieldIndexCollection;
 import io.qdrant.client.grpc.Points.DenseVector;
 import io.qdrant.client.grpc.Points.FieldType;
@@ -84,6 +85,8 @@ class QdrantAudiobookRepositoryTest {
     assertThat(candidates.getFirst().score()).isEqualTo(0.92, within(0.0001));
     assertThat(candidates.getFirst().embedding()).containsExactly(0.6f, 0.8f);
     verify(client, times(1)).collectionExistsAsync("audiobooks");
+    verify(client, never()).createCollectionAsync(any(CreateCollection.class));
+    verify(client, never()).createPayloadIndexAsync(any(CreateFieldIndexCollection.class), any());
   }
 
   /** Verifies a favourite book ID resolves to the unnamed dense vector stored in Qdrant. */
@@ -337,7 +340,7 @@ class QdrantAudiobookRepositoryTest {
   }
 
   @Test
-  void mapsSourceAndLanguageToQdrantMustAndMustNotConditions() throws Exception {
+  void mapsOnlyIndexedMetadataToQdrantConditions() throws Exception {
     QdrantClient client = mock(QdrantClient.class);
     SparseTextEncoder sparseEncoder = new Bm25SparseTextEncoder();
     when(client.collectionExistsAsync("audiobooks")).thenReturn(Futures.immediateFuture(true));
@@ -347,17 +350,20 @@ class QdrantAudiobookRepositoryTest {
             client, new QdrantPointMapper(sparseEncoder), sparseEncoder, "audiobooks", 2);
     AudiobookFilters filters =
         new AudiobookFilters(
-            new AudiobookFilterConditions(List.of(), List.of(), "English", "NLS", null, null),
-            new AudiobookFilterConditions(List.of(), List.of(), "French", "Legacy", null, null),
+            new AudiobookFilterConditions(
+                List.of(), List.of(), "English", "NLS", null, null, 2020, null),
+            new AudiobookFilterConditions(
+                List.of(), List.of(), "French", "Legacy", null, null, null, 2000),
             List.of("shown-1", "shown-2"));
 
     repository.searchByFilters(filters, 5);
 
     ArgumentCaptor<QueryPoints> request = ArgumentCaptor.forClass(QueryPoints.class);
     verify(client).queryAsync(request.capture());
-    assertThat(request.getValue().getFilter().getMustCount()).isEqualTo(2);
+    assertThat(request.getValue().getFilter().getMustCount()).isEqualTo(3);
     assertThat(request.getValue().getFilter().getMustNotCount()).isEqualTo(3);
     assertThat(request.getValue().getFilter().toString())
-        .contains("language", "English", "source", "NLS", "French", "Legacy", "bookId", "shown-1");
+        .contains("language", "English", "source", "NLS", "publicationYear", "French", "Legacy")
+        .doesNotContain("bookId", "shown-1");
   }
 }

@@ -31,8 +31,7 @@ public class AiInputParser implements InputParser {
   @Override
   public ResponseEntity<ChatResponse, SessionRequest> parse(String rawText) {
     if (rawText == null || rawText.isBlank()) {
-      throw new InvalidRequestException(
-          "I didn’t catch a request. What would you like to listen to?");
+      throw new InvalidRequestException("I didn't catch that. What would you like to listen to?");
     }
 
     var aiResponse =
@@ -49,8 +48,9 @@ public class AiInputParser implements InputParser {
                         UPDATE_PREFERENCES, CLEAR_HISTORY, HELP, or UNKNOWN. Use RECOMMENDATION
                         for a new search; do not choose a retrieval mode. Put desired and avoided
                         concepts in positiveSemanticQuery and negativeSemanticQuery. Use mustInclude
-                        and mustNotInclude only for exact author, narrator, language, duration, or
-                        source requirements. Put the requested count in bookCount.
+                        and mustNotInclude only for exact author, narrator, language, duration,
+                        publication year, or source requirements. Set bookCount only when the user explicitly requests
+                        a number of recommendations; otherwise leave it null.
 
                         Set personalised=true only when the user requests recommendations based on
                         their taste, favourites, or history. "Give me books I would like" is a

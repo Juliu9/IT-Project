@@ -9,6 +9,7 @@ public class MustNotInclude {
   private List<String> narrators;
   private String language;
   private String duration;
+  private String publicationYear;
   private String source;
 
   public MustNotInclude() {}
@@ -43,6 +44,14 @@ public class MustNotInclude {
 
   public void setDuration(String duration) {
     this.duration = duration;
+  }
+
+  public String getPublicationYear() {
+    return publicationYear;
+  }
+
+  public void setPublicationYear(String publicationYear) {
+    this.publicationYear = publicationYear;
   }
 
   public String getSource() {
