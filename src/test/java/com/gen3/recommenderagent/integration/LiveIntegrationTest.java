@@ -16,7 +16,9 @@ import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -32,13 +34,14 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import tools.jackson.databind.ObjectMapper;
 
-/** Live test for asking for a recommendation reason in a new session with no history. */
+/** Live two-turn test for an initial request followed by a request for more results. */
 @SpringBootTest
 @Testcontainers
 @Tag("external")
 class LiveIntegrationTest {
 
-  private static final String INITIAL_RAW_TEXT = "Why was that audiobook recommended?";
+  private static final String INITIAL_RAW_TEXT = "Recommend three science fiction audiobooks.";
+  private static final String FOLLOW_UP_RAW_TEXT = "Give me up to five more recommendations.";
   private static final int REDIS_PORT = 6379;
   private static final Duration SESSION_TIMEOUT = Duration.ofSeconds(5);
 
@@ -70,7 +73,7 @@ class LiveIntegrationTest {
   @Autowired private ObjectMapper objectMapper;
 
   @Test
-  void shouldNotInventAReasonWhenTheSessionHasNoRecommendationHistory() throws Exception {
+  void shouldReturnNewRecommendationsInTheSameLiveSession() throws Exception {
     String sessionId = "full-live-" + UUID.randomUUID();
     String userId = "full-live-test-user";
     MockMvc mockMvc =
@@ -78,26 +81,40 @@ class LiveIntegrationTest {
             .setControllerAdvice(new RequestExceptionHandler())
             .build();
 
-    TurnResult result = submitTurn(mockMvc, sessionId, userId, 1, INITIAL_RAW_TEXT, null, 5);
+    TurnResult firstTurn =
+        submitTurn(mockMvc, sessionId, userId, 1, INITIAL_RAW_TEXT, Intent.RECOMMENDATION, 3);
+    assertFalse(
+        firstTurn.recommendationIds().isEmpty(),
+        "The initial request returned no audiobook recommendations");
+
+    TurnResult secondTurn =
+        submitTurn(mockMvc, sessionId, userId, 2, FOLLOW_UP_RAW_TEXT, Intent.MORE_RESULTS, 5);
+    assertFalse(
+        secondTurn.recommendationIds().isEmpty(),
+        "The follow-up request returned no additional audiobook recommendations");
+
+    Set<String> duplicateIds = new HashSet<>(firstTurn.recommendationIds());
+    duplicateIds.retainAll(secondTurn.recommendationIds());
+    assertTrue(
+        duplicateIds.isEmpty(),
+        "The follow-up request repeated audiobook IDs from the first turn: " + duplicateIds);
 
     Session finalSession = awaitSavedSession(sessionId, userId, SESSION_TIMEOUT);
     assertNotNull(finalSession, "The final session was not saved to Docker Redis");
-    System.out.println("\n=== TC-08 no-prior-recommendation integration result ===");
-    System.out.println("Session ID: " + sessionId);
-    printTurn(result);
-    System.out.println("All shown audiobook IDs: " + finalSession.getShownBooks());
-    System.out.println("=======================================================\n");
+    assertTrue(
+        finalSession.getShownBooks().containsAll(firstTurn.recommendationIds()),
+        "The session did not retain all audiobook IDs shown in the first turn");
+    assertTrue(
+        finalSession.getShownBooks().containsAll(secondTurn.recommendationIds()),
+        "The session did not retain all audiobook IDs shown in the second turn");
 
-    assertTrue(
-        result.recommendationIds().isEmpty(),
-        "The system invented or returned a recommendation in a session with no history");
-    assertTrue(
-        explainsMissingRecommendationHistory(result.response()),
-        "The response did not clearly explain that there was no earlier recommendation to explain: "
-            + result.response());
-    assertTrue(
-        finalSession.getShownBooks() == null || finalSession.getShownBooks().isEmpty(),
-        "The request added shown books even though no recommendation history existed");
+    System.out.println("\n=== TC-05 multi-turn integration result ===");
+    System.out.println("Session ID: " + sessionId);
+    printTurn(firstTurn);
+    printTurn(secondTurn);
+    System.out.println("Duplicate audiobook IDs: " + duplicateIds);
+    System.out.println("All shown audiobook IDs: " + finalSession.getShownBooks());
+    System.out.println("===========================================\n");
   }
 
   private TurnResult submitTurn(
@@ -137,12 +154,10 @@ class LiveIntegrationTest {
     assertNotNull(completedRequest.getRequestId());
     assertFalse(
         completedRequest.getRequestId().isBlank(), "The completed request has no request ID");
-    if (expectedIntent != null) {
-      assertEquals(
-          expectedIntent,
-          completedRequest.getIntent(),
-          "Turn " + turnNumber + " was classified with the wrong intent");
-    }
+    assertEquals(
+        expectedIntent,
+        completedRequest.getIntent(),
+        "Turn " + turnNumber + " was classified with the wrong intent");
 
     List<String> recommendationIds = recommendationIds(completedRequest);
     assertTrue(
@@ -166,16 +181,6 @@ class LiveIntegrationTest {
         .map(Recommendation::getBookId)
         .filter(bookId -> bookId != null && !bookId.isBlank())
         .toList();
-  }
-
-  private boolean explainsMissingRecommendationHistory(String response) {
-    String normalized = response == null ? "" : response.toLowerCase();
-    return normalized.contains("no previous")
-        || normalized.contains("no earlier")
-        || normalized.contains("haven't recommended")
-        || normalized.contains("have not recommended")
-        || normalized.contains("nothing to explain")
-        || normalized.contains("no recommendation to explain");
   }
 
   private void printTurn(TurnResult turn) throws Exception {
