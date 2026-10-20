@@ -16,9 +16,7 @@ import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -34,14 +32,14 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import tools.jackson.databind.ObjectMapper;
 
-/** Live two-turn test for an initial request followed by a request for more results. */
+/** Live test that verifies each returned recommendation includes a usable reason. */
 @SpringBootTest
 @Testcontainers
 @Tag("external")
 class LiveIntegrationTest {
 
-  private static final String INITIAL_RAW_TEXT = "Recommend three science fiction audiobooks.";
-  private static final String FOLLOW_UP_RAW_TEXT = "Give me up to five more recommendations.";
+  private static final String INITIAL_RAW_TEXT =
+      "Recommend three science fiction audiobooks and briefly explain why each one suits my request.";
   private static final int REDIS_PORT = 6379;
   private static final Duration SESSION_TIMEOUT = Duration.ofSeconds(5);
 
@@ -73,7 +71,7 @@ class LiveIntegrationTest {
   @Autowired private ObjectMapper objectMapper;
 
   @Test
-  void shouldReturnNewRecommendationsInTheSameLiveSession() throws Exception {
+  void shouldReturnAReasonForEveryRecommendation() throws Exception {
     String sessionId = "full-live-" + UUID.randomUUID();
     String userId = "full-live-test-user";
     MockMvc mockMvc =
@@ -81,40 +79,35 @@ class LiveIntegrationTest {
             .setControllerAdvice(new RequestExceptionHandler())
             .build();
 
-    TurnResult firstTurn =
+    TurnResult result =
         submitTurn(mockMvc, sessionId, userId, 1, INITIAL_RAW_TEXT, Intent.RECOMMENDATION, 3);
     assertFalse(
-        firstTurn.recommendationIds().isEmpty(),
-        "The initial request returned no audiobook recommendations");
-
-    TurnResult secondTurn =
-        submitTurn(mockMvc, sessionId, userId, 2, FOLLOW_UP_RAW_TEXT, Intent.MORE_RESULTS, 5);
-    assertFalse(
-        secondTurn.recommendationIds().isEmpty(),
-        "The follow-up request returned no additional audiobook recommendations");
-
-    Set<String> duplicateIds = new HashSet<>(firstTurn.recommendationIds());
-    duplicateIds.retainAll(secondTurn.recommendationIds());
-    assertTrue(
-        duplicateIds.isEmpty(),
-        "The follow-up request repeated audiobook IDs from the first turn: " + duplicateIds);
+        result.recommendationIds().isEmpty(), "The request returned no audiobook recommendations");
+    result
+        .completedRequest()
+        .getRecommendations()
+        .forEach(
+            recommendation -> {
+              assertFalse(
+                  recommendation.getTitle() == null || recommendation.getTitle().isBlank(),
+                  "A recommendation has no title");
+              assertFalse(
+                  recommendation.getShortDescription() == null
+                      || recommendation.getShortDescription().isBlank(),
+                  "A recommendation has no reason or short description");
+            });
 
     Session finalSession = awaitSavedSession(sessionId, userId, SESSION_TIMEOUT);
     assertNotNull(finalSession, "The final session was not saved to Docker Redis");
     assertTrue(
-        finalSession.getShownBooks().containsAll(firstTurn.recommendationIds()),
-        "The session did not retain all audiobook IDs shown in the first turn");
-    assertTrue(
-        finalSession.getShownBooks().containsAll(secondTurn.recommendationIds()),
-        "The session did not retain all audiobook IDs shown in the second turn");
+        finalSession.getShownBooks().containsAll(result.recommendationIds()),
+        "The session did not retain all shown audiobook IDs");
 
-    System.out.println("\n=== TC-05 multi-turn integration result ===");
+    System.out.println("\n=== TC-07 recommendation-reason integration result ===");
     System.out.println("Session ID: " + sessionId);
-    printTurn(firstTurn);
-    printTurn(secondTurn);
-    System.out.println("Duplicate audiobook IDs: " + duplicateIds);
+    printTurn(result);
     System.out.println("All shown audiobook IDs: " + finalSession.getShownBooks());
-    System.out.println("===========================================\n");
+    System.out.println("===================================================\n");
   }
 
   private TurnResult submitTurn(
