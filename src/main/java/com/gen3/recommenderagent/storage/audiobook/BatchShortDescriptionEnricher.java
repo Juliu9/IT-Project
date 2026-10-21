@@ -284,10 +284,10 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
     for (AudiobookEnrichmentStore.StoredAudiobook book : books) {
       storageReferences.put(book.record().id(), book.storageReference());
     }
-    // Keep the persisted field name stable so batches submitted before this adapter boundary can
-    // still be imported. The values are now deliberately opaque to this workflow.
     mapper.writeValue(
-        manifest.toFile(), new StoredBatchManifest(submittedBatchId, storageReferences));
+        manifest.toFile(),
+        new StoredBatchManifest(
+            submittedBatchId, enrichmentStore.datasetIdentity(), storageReferences));
   }
 
   private BatchManifest readManifest() throws IOException {
@@ -299,6 +299,14 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
               + ". Import cannot safely identify the stored audiobooks.");
     }
     StoredBatchManifest stored = mapper.readValue(manifest.toFile(), StoredBatchManifest.class);
+    if (stored.origin() == null) {
+      throw new IllegalStateException(
+          "Legacy batch manifest has no database identity. Import is refused; the manifest is unchanged. Restore its originating configuration and recover the batch explicitly before submitting another.");
+    }
+    if (!stored.origin().equals(enrichmentStore.datasetIdentity())) {
+      throw new IllegalStateException(
+          "Batch database/dataset does not match the selected database. Restore its originating configuration before importing; the manifest is unchanged.");
+    }
     return new BatchManifest(stored.batchId(), stored.pointIds());
   }
 
@@ -306,7 +314,10 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
     return readManifest().storageReferences();
   }
 
-  private record StoredBatchManifest(String batchId, Map<String, String> pointIds) {}
+  private record StoredBatchManifest(
+      String batchId,
+      AudiobookEnrichmentStore.DatasetIdentity origin,
+      Map<String, String> pointIds) {}
 
   private record BatchManifest(String batchId, Map<String, String> storageReferences) {}
 

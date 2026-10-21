@@ -6,33 +6,135 @@ import static org.mockito.Mockito.mock;
 import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
+import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore;
+import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorRepository;
+import com.gen3.recommenderagent.storage.audiobook.qdrant.Bm25SparseTextEncoder;
+import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
+import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantConfig;
+import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantPointMapper;
+import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
+import com.gen3.recommenderagent.storage.audiobook.solr.SolrConfig;
+import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
+import com.gen3.recommenderagent.storage.user.qdrant.QdrantUserPreferenceMapper;
+import com.gen3.recommenderagent.storage.user.qdrant.QdrantUserPreferenceRepository;
+import io.qdrant.client.QdrantClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 class CandidateRetrieverConfigurationTest {
-
-  private final ApplicationContextRunner contextRunner =
+  private final ApplicationContextRunner runner =
       new ApplicationContextRunner()
-          .withUserConfiguration(CandidateRetrieverConfiguration.class)
+          .withUserConfiguration(
+              CandidateRetrieverConfiguration.class,
+              QdrantConfig.class,
+              QdrantAudiobookRepository.class,
+              QdrantPointMapper.class,
+              Bm25SparseTextEncoder.class,
+              QdrantUserPreferenceMapper.class,
+              QdrantUserPreferenceRepository.class,
+              SolrConfig.class,
+              SolrAudiobookRepository.class)
           .withBean(EmbeddingIndexer.class, () -> mock(EmbeddingIndexer.class))
           .withBean(AudiobookRetrievalPlanner.class, AudiobookRetrievalPlanner::new);
 
   @Test
-  void selectsQdrantByDefault() {
-    contextRunner
-        .withBean("qdrantAudiobookRepository", AudiobookCandidateSearch.class, () -> mockSearch())
-        .run(context -> assertThat(context).hasSingleBean(CandidateRetriever.class));
+  void selectsOnlyQdrantByDefault() {
+    runner
+        .withBean(QdrantClient.class, () -> mock(QdrantClient.class))
+        .run(
+            context -> {
+              assertThat(context)
+                  .hasNotFailed()
+                  .hasSingleBean(CandidateRetriever.class)
+                  .hasSingleBean(AudiobookCandidateSearch.class)
+                  .hasSingleBean(AudiobookVectorRepository.class)
+                  .hasSingleBean(AudiobookEnrichmentStore.class)
+                  .hasSingleBean(UserPreferenceVectorRepository.class)
+                  .doesNotHaveBean(SolrConfig.class)
+                  .doesNotHaveBean(SolrAudiobookRepository.class);
+            });
+  }
+
+  private ApplicationContextRunner replacement() {
+    return runner
+        .withPropertyValues("audiobook.database=other")
+        .withBean(AudiobookCandidateSearch.class, () -> mock(AudiobookCandidateSearch.class))
+        .withBean(AudiobookVectorRepository.class, () -> mock(AudiobookVectorRepository.class))
+        .withBean(
+            UserPreferenceVectorRepository.class, () -> mock(UserPreferenceVectorRepository.class));
   }
 
   @Test
-  void selectsSolrWhenConfigured() {
-    contextRunner
-        .withPropertyValues("audiobook.candidate-retriever=solr")
-        .withBean("solrAudiobookRepository", AudiobookCandidateSearch.class, () -> mockSearch())
-        .run(context -> assertThat(context).hasSingleBean(CandidateRetriever.class));
+  void completeReplacementNeedsNoQdrantOrSolrConnections() {
+    replacement()
+        .withBean(AudiobookEnrichmentStore.class, () -> mock(AudiobookEnrichmentStore.class))
+        .run(
+            context ->
+                assertThat(context)
+                    .hasNotFailed()
+                    .hasSingleBean(CandidateRetriever.class)
+                    .doesNotHaveBean(QdrantConfig.class)
+                    .doesNotHaveBean(QdrantClient.class)
+                    .doesNotHaveBean(QdrantAudiobookRepository.class)
+                    .doesNotHaveBean(QdrantUserPreferenceRepository.class)
+                    .doesNotHaveBean(SolrConfig.class)
+                    .doesNotHaveBean(SolrAudiobookRepository.class));
   }
 
-  private AudiobookCandidateSearch mockSearch() {
-    return mock(AudiobookCandidateSearch.class);
+  @Test
+  void incompleteReplacementFailsInsteadOfUsingQdrant() {
+    replacement().run(context -> assertThat(context).hasFailed());
+  }
+
+  @Test
+  void rejectsSolrAsAnIncompleteSoleDatabase() {
+    runner
+        .withPropertyValues("audiobook.database=solr")
+        .run(
+            context ->
+                assertThat(context.getStartupFailure())
+                    .hasMessageContaining(
+                        "Solr lacks vector lookup, enrichment, and user-preference adapters"));
+  }
+
+  @Test
+  void allowsBothAdaptersOnlyForAnExplicitNonWebMigration() {
+    runner
+        .withBean(QdrantClient.class, () -> mock(QdrantClient.class))
+        .withPropertyValues(
+            "audiobook.qdrant.migration.enabled=true",
+            "spring.main.web-application-type=none",
+            "solr.url=http://localhost:8983/solr",
+            "solr.username=",
+            "solr.password=",
+            "solr.collection=books",
+            "solr.vector-field=embedding")
+        .run(
+            context ->
+                assertThat(context)
+                    .hasNotFailed()
+                    .hasSingleBean(CandidateRetriever.class)
+                    .hasSingleBean(QdrantAudiobookRepository.class)
+                    .hasSingleBean(SolrAudiobookRepository.class));
+  }
+
+  @Test
+  void rejectsMigrationDuringNormalApplicationRun() {
+    runner
+        .withPropertyValues("audiobook.qdrant.migration.enabled=true")
+        .run(
+            context ->
+                assertThat(context.getStartupFailure())
+                    .hasMessageContaining("dedicated migration run"));
+  }
+
+  @Test
+  void rejectsSeparateLegacyDatabaseSelection() {
+    runner
+        .withPropertyValues("audiobook.candidate-retriever=solr")
+        .run(
+            context ->
+                assertThat(context.getStartupFailure())
+                    .hasMessageContaining("Replace audiobook.candidate-retriever"));
   }
 }

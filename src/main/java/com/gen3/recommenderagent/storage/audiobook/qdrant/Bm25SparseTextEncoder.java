@@ -7,6 +7,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Component;
  * <p>Qdrant supplies collection-level inverse document frequency through its IDF modifier. Token
  * hashes are deterministic, so catalogue and request terms always use the same sparse index.
  */
+@ConditionalOnProperty(name = "audiobook.database", havingValue = "qdrant", matchIfMissing = true)
 @Component
 public class Bm25SparseTextEncoder implements SparseTextEncoder {
 

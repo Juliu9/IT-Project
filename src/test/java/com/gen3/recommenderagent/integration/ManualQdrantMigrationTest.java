@@ -10,7 +10,9 @@ import org.springframework.boot.test.context.SpringBootTest;
  * <p>Spring runs {@code SolrToQdrantMigrator} while creating the context. The environment guard
  * keeps normal test runs disconnected from staging and Qdrant Cloud.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.NONE,
+    properties = "spring.main.web-application-type=none")
 @EnabledIfEnvironmentVariable(named = "RUN_QDRANT_MIGRATION", matches = "true")
 class ManualQdrantMigrationTest {
 

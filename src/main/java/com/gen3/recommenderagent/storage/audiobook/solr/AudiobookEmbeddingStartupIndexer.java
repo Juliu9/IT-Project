@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 
 /** Creates the Solr vector catalogue before the application accepts searches. */
 @Component
-@ConditionalOnProperty(name = "audiobook.candidate-retriever", havingValue = "solr")
+@ConditionalOnProperty(name = "audiobook.database", havingValue = "solr")
 public class AudiobookEmbeddingStartupIndexer implements ApplicationRunner {
 
   private static final Logger LOGGER =

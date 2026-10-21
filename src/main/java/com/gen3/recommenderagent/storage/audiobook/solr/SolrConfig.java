@@ -8,8 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@ConditionalOnExpression(
-    "'${audiobook.candidate-retriever:qdrant}' == 'solr' || '${audiobook.qdrant.migration.enabled:false}' == 'true'")
+@ConditionalOnExpression("'${audiobook.qdrant.migration.enabled:false}' == 'true'")
 public class SolrConfig {
 
   @Bean

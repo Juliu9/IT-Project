@@ -2,15 +2,13 @@ package com.gen3.recommenderagent.storage.audiobook;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore;
-import com.gen3.recommenderagent.storage.audiobook.qdrant.Bm25SparseTextEncoder;
-import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantPointMapper;
 import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Base64;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -47,9 +45,7 @@ class BatchShortDescriptionEnricherTest {
   void shouldPersistTheStorageReferencesSubmittedToOpenAi() throws Exception {
     Path directory = Files.createTempDirectory("short-description-test");
     BatchShortDescriptionEnricher enricher = enricher(directory);
-    QdrantPointMapper mapper = new QdrantPointMapper(new Bm25SparseTextEncoder());
-    var pointId = mapper.pointId("book-1");
-    String storageReference = Base64.getEncoder().encodeToString(pointId.toByteArray());
+    String storageReference = "opaque-row-1";
     var book =
         new AudiobookEnrichmentStore.StoredAudiobook(
             new AudiobookRecord("book-1", "source", "Title", List.of(), "Summary"),
@@ -70,11 +66,7 @@ class BatchShortDescriptionEnricherTest {
             List.of(
                 new AudiobookEnrichmentStore.StoredAudiobook(
                     new AudiobookRecord("book-1", "source", "Title", List.of(), "Summary"),
-                    Base64.getEncoder()
-                        .encodeToString(
-                            new QdrantPointMapper(new Bm25SparseTextEncoder())
-                                .pointId("book-1")
-                                .toByteArray()))),
+                    "opaque-row-1")),
             0);
 
     var body = request.path("body");
@@ -84,8 +76,11 @@ class BatchShortDescriptionEnricherTest {
   }
 
   private BatchShortDescriptionEnricher enricher(Path outputDirectory) {
+    AudiobookEnrichmentStore store = mock(AudiobookEnrichmentStore.class);
+    when(store.datasetIdentity())
+        .thenReturn(new AudiobookEnrichmentStore.DatasetIdentity("test-db", "books"));
     return new BatchShortDescriptionEnricher(
-        mock(AudiobookEnrichmentStore.class),
+        store,
         new ObjectMapper(),
         HttpClient.newHttpClient(),
         "test-key",

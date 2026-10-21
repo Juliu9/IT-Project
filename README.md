@@ -63,23 +63,52 @@ Only `OPENAI_API_KEY` is required. The defaults suit local Docker:
 | `QDRANT_API_KEY` | empty | Qdrant Cloud API key |
 | `QDRANT_COLLECTION` | `audiobooks_hybrid` | Audiobook collection |
 | `QDRANT_TIMEOUT` | `10s` | Maximum time for one Qdrant call |
-| `AUDIOBOOK_CANDIDATE_RETRIEVER` | `qdrant` | Set to `solr` for the legacy adapter |
+| `AUDIOBOOK_DATABASE` | `qdrant` | One database adapter set for search, vectors, preferences, and enrichment |
+| `EMBEDDING_DIMENSIONS` | `1536` | Shared embedding-model and vector-store dimension |
 | `QDRANT_MIGRATION_ENABLED` | `false` | Run the opt-in Solr-to-Qdrant migration |
 
 Qdrant stores dense and sparse vectors plus filterable metadata. Exact author, narrator, language,
-duration, and source constraints are applied as filters. Solr remains only for legacy retrieval,
-migration, and its integration tests.
+duration, and source constraints are applied as filters. Solr remains for explicit migration and its integration tests; it is not a complete selectable backend.
 
 `solr/vector-field-schema.xml` is a manual snippet for configuring an external Solr collection.
 It stays outside `src/` because the application does not load it or bundle it as a runtime
 resource. Apply its definitions to the target collection and match the vector dimensions to the
 configured embedding model.
 
+## Database selection and replacement
+
+`audiobook.database` in `application.properties` selects one database for the whole request flow;
+`qdrant` is the default. The former `audiobook.candidate-retriever` setting is rejected to prevent
+mixed backends. Selecting `solr` is rejected until its missing vector lookup, enrichment, and
+user-preference adapters are implemented.
+
+To add another database, register its implementations of `AudiobookCandidateSearch`,
+`AudiobookVectorRepository`, `AudiobookEnrichmentStore`, and `UserPreferenceVectorRepository`
+under the same selection setting. Selecting it disables all Qdrant clients and adapters. Missing
+implementations fail startup; they never fall back to Qdrant. Preserve semantic, keyword, hybrid,
+and filtered search and the existing write guarantees; report unsupported operations explicitly.
+Conversation and ranking code do not change. A change of selection does not copy any data.
+
+Qdrant field names, index types, vector schema, and filter translation live in
+`QdrantAudiobookSchema`, inside the adapter. Reads still require an existing collection without
+creating indexes; explicit indexing creates an absent collection. Existing collections are not
+automatically inspected or migrated.
+
+Solr-to-Qdrant migration is the sole two-database exception and requires a dedicated non-web run:
+
+```bash
+QDRANT_MIGRATION_ENABLED=true ./mvnw spring-boot:run \
+  -Dspring-boot.run.arguments="--spring.main.web-application-type=none --audiobook.database=qdrant"
+```
+
 ## Short book descriptions
 
 Recommendations use a stored, one-sentence `short_description` when it is available. Generate
 these descriptions offline with OpenAI's Batch API; normal requests never call AI for a summary.
-The job reads and updates Qdrant directly, without re-embedding books.
+The database-independent job reads `description` through the selected `AudiobookEnrichmentStore`,
+generates `shortDescription`, and uploads through that same adapter without re-embedding books.
+The adapter maps those domain fields to its database names (Qdrant uses `short_description`) and
+preserves existing short descriptions.
 
 Start with a small submission to check quality and spend:
 
@@ -89,9 +118,12 @@ export AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MAXIMUM_RECORDS=1000
 ./mvnw spring-boot:run
 ```
 
-The job records the Batch ID and exact Qdrant point IDs in
+The job records the Batch ID, backend/dataset identity, and opaque record references in
 `data/short-descriptions/short-description-batch.json`. Once OpenAI reports it as completed,
-import its output:
+import its output using the same backend, endpoint, and collection. A mismatched dataset or a legacy
+manifest without identity is rejected before provider calls or database writes, leaving the manifest
+intact. Legacy batches require explicit recovery with their original implementation/configuration;
+these manifests are never silently converted. Import the output:
 
 ```bash
 export AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MODE=import

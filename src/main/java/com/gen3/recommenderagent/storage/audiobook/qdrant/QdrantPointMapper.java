@@ -1,5 +1,15 @@
 package com.gen3.recommenderagent.storage.audiobook.qdrant;
 
+import static com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookSchema.AUTHORS;
+import static com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookSchema.BOOK_ID;
+import static com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookSchema.DESCRIPTION;
+import static com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookSchema.DURATION_MINUTES;
+import static com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookSchema.LANGUAGE;
+import static com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookSchema.NARRATORS;
+import static com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookSchema.PUBLICATION_YEAR;
+import static com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookSchema.SHORT_DESCRIPTION;
+import static com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookSchema.SOURCE;
+import static com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookSchema.TITLE;
 import static io.qdrant.client.PointIdFactory.id;
 import static io.qdrant.client.ValueFactory.list;
 import static io.qdrant.client.ValueFactory.value;
@@ -17,9 +27,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /** Converts database-independent audiobook records to and from Qdrant points. */
+@ConditionalOnProperty(name = "audiobook.database", havingValue = "qdrant", matchIfMissing = true)
 @Component
 public class QdrantPointMapper {
 
@@ -62,16 +74,16 @@ public class QdrantPointMapper {
 
   private AudiobookRecord toRecord(Map<String, Value> payload) {
     return new AudiobookRecord(
-        stringValue(payload, "bookId"),
-        stringValue(payload, "source"),
-        stringValue(payload, "title"),
-        listValue(payload.get("authors")),
-        stringValue(payload, "description"),
-        listValue(payload.get("narrators")),
-        stringValue(payload, "language"),
-        integerValue(payload.get("durationMinutes")),
-        integerValue(payload.get("publicationYear")),
-        stringValue(payload, "short_description"));
+        stringValue(payload, BOOK_ID),
+        stringValue(payload, SOURCE),
+        stringValue(payload, TITLE),
+        listValue(payload.get(AUTHORS)),
+        stringValue(payload, DESCRIPTION),
+        listValue(payload.get(NARRATORS)),
+        stringValue(payload, LANGUAGE),
+        integerValue(payload.get(DURATION_MINUTES)),
+        integerValue(payload.get(PUBLICATION_YEAR)),
+        stringValue(payload, SHORT_DESCRIPTION));
   }
 
   /** Extracts the normalized dense vector included in a similarity-search result. */
@@ -106,17 +118,17 @@ public class QdrantPointMapper {
   /** Converts catalogue fields into the metadata returned with Qdrant search results. */
   private Map<String, Value> payload(AudiobookRecord record) {
     Map<String, Value> payload = new LinkedHashMap<>();
-    put(payload, "bookId", record.id());
-    put(payload, "source", record.source());
-    put(payload, "title", record.title());
-    put(payload, "description", record.description());
-    put(payload, "short_description", record.shortDescription());
-    put(payload, "language", record.language());
+    put(payload, BOOK_ID, record.id());
+    put(payload, SOURCE, record.source());
+    put(payload, TITLE, record.title());
+    put(payload, DESCRIPTION, record.description());
+    put(payload, SHORT_DESCRIPTION, record.shortDescription());
+    put(payload, LANGUAGE, record.language());
     if (record.durationMinutes() != null) {
-      payload.put("durationMinutes", value(record.durationMinutes().longValue()));
+      payload.put(DURATION_MINUTES, value(record.durationMinutes().longValue()));
     }
     if (record.publicationYear() != null) {
-      payload.put("publicationYear", value(record.publicationYear().longValue()));
+      payload.put(PUBLICATION_YEAR, value(record.publicationYear().longValue()));
     }
     List<Value> authors =
         record.authors() == null
@@ -125,7 +137,7 @@ public class QdrantPointMapper {
                 .filter(author -> author != null)
                 .map(QdrantPointMapper::textValue)
                 .toList();
-    payload.put("authors", list(authors));
+    payload.put(AUTHORS, list(authors));
     List<Value> narrators =
         record.narrators() == null
             ? List.of()
@@ -133,7 +145,7 @@ public class QdrantPointMapper {
                 .filter(narrator -> narrator != null)
                 .map(QdrantPointMapper::textValue)
                 .toList();
-    payload.put("narrators", list(narrators));
+    payload.put(NARRATORS, list(narrators));
     return payload;
   }
 
