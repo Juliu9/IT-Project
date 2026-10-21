@@ -22,8 +22,6 @@ public interface AudiobookEnrichmentStore {
 
   void updateShortDescriptions(List<ShortDescriptionUpdate> updates) throws IOException;
 
-  int enrichMissingMetadata(AudiobookMetadataEnricher metadataEnricher) throws IOException;
-
   record StoredAudiobook(AudiobookRecord record, String storageReference) {}
 
   record ShortDescriptionUpdate(String storageReference, String description) {}

@@ -163,22 +163,6 @@ job owns manifests, database references, safe retries, and import validation. Ex
 without a provider field belong to OpenAI. The replacement adapter must be conditional on its
 configured name; do not switch provider while a batch is pending.
 
-## Fill missing catalogue metadata
-
-To add deterministic placeholder narrator, language, duration, and publication-year values to the
-Qdrant catalogue—without creating short descriptions or calling OpenAI—run:
-
-```bash
-export AUDIOBOOK_FAKE_METADATA_ENRICH_ON_STARTUP=true
-./mvnw spring-boot:run
-```
-
-The job scans the entire Qdrant collection in pages and only fills fields that are missing.
-Existing values are preserved, so it is safe to rerun. It runs only while the
-short-description batch mode is `disabled`. Normal requests only read the stored Qdrant payload,
-so these mock values are treated like ordinary catalogue data after enrichment. Unset the variable
-for normal application startup.
-
 ## Grafana Cloud logs
 
 The optional Alloy collector sends only structured `recommendation.completed` events to Grafana

@@ -1,9 +1,5 @@
 package com.gen3.recommenderagent.storage.audiobook.qdrant;
 
-import static com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookSchema.DURATION_MINUTES;
-import static com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookSchema.LANGUAGE;
-import static com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookSchema.NARRATORS;
-import static com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookSchema.PUBLICATION_YEAR;
 import static com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookSchema.SHORT_DESCRIPTION;
 import static io.qdrant.client.ConditionFactory.hasId;
 import static io.qdrant.client.ConditionFactory.isEmpty;
@@ -15,7 +11,6 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore;
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookMetadataEnricher;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorRepository;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Common.Filter;
@@ -227,79 +222,6 @@ public class QdrantAudiobookRepository
       }
     }
     updatePayloads(operations);
-  }
-
-  /** Adds fake metadata only to fields absent from existing Qdrant payloads. */
-  @Override
-  public int enrichMissingMetadata(AudiobookMetadataEnricher metadataEnricher) throws IOException {
-    requireCollection();
-    createPayloadIndex(PUBLICATION_YEAR);
-    int updated = 0;
-    io.qdrant.client.grpc.Common.PointId offset = null;
-    while (true) {
-      ScrollPoints.Builder request =
-          ScrollPoints.newBuilder()
-              .setCollectionName(collection)
-              .setLimit(500)
-              .setWithPayload(enable(true));
-      if (offset != null) {
-        request.setOffset(offset);
-      }
-      ScrollResponse page = await(client.scrollAsync(request.build()), "read audiobook records");
-      List<PointsUpdateOperation> operations = new ArrayList<>();
-      for (RetrievedPoint point : page.getResultList()) {
-        AudiobookRecord existing = mapper.toRecord(point);
-        List<PointsUpdateOperation> missingFields =
-            missingMetadataUpdates(
-                point.getId(), point.getPayloadMap(), metadataEnricher.enrich(existing));
-        if (!missingFields.isEmpty()) {
-          operations.addAll(missingFields);
-          updated++;
-        }
-      }
-      updatePayloads(operations);
-      if (!page.hasNextPageOffset() || page.getResultCount() == 0) {
-        return updated;
-      }
-      offset = page.getNextPageOffset();
-    }
-  }
-
-  private List<PointsUpdateOperation> missingMetadataUpdates(
-      io.qdrant.client.grpc.Common.PointId pointId,
-      Map<String, io.qdrant.client.grpc.JsonWithInt.Value> existingPayload,
-      AudiobookRecord enriched) {
-    List<PointsUpdateOperation> operations = new ArrayList<>();
-    if (!existingPayload.containsKey(NARRATORS)) {
-      operations.add(
-          setMissingPayload(
-              pointId,
-              NARRATORS,
-              io.qdrant.client.ValueFactory.list(
-                  enriched.narrators().stream()
-                      .map(io.qdrant.client.ValueFactory::value)
-                      .toList())));
-    }
-    if (!existingPayload.containsKey(LANGUAGE)) {
-      operations.add(
-          setMissingPayload(
-              pointId, LANGUAGE, io.qdrant.client.ValueFactory.value(enriched.language())));
-    }
-    if (!existingPayload.containsKey(DURATION_MINUTES)) {
-      operations.add(
-          setMissingPayload(
-              pointId,
-              DURATION_MINUTES,
-              io.qdrant.client.ValueFactory.value(enriched.durationMinutes().longValue())));
-    }
-    if (!existingPayload.containsKey(PUBLICATION_YEAR)) {
-      operations.add(
-          setMissingPayload(
-              pointId,
-              PUBLICATION_YEAR,
-              io.qdrant.client.ValueFactory.value(enriched.publicationYear().longValue())));
-    }
-    return operations;
   }
 
   private PointsUpdateOperation setMissingPayload(
