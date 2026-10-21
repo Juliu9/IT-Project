@@ -5,19 +5,21 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.openai.OpenAiShortDescriptionBatchProvider;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore;
+import com.gen3.recommenderagent.storage.audiobook.port.ShortDescriptionBatchProvider;
 import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import tools.jackson.databind.ObjectMapper;
 
 class BatchShortDescriptionEnricherTest {
 
   @Test
   void shouldReadCompletedBatchDescriptionsByBookId() throws Exception {
-    BatchShortDescriptionEnricher enricher = enricher(Path.of("target"));
 
     String output =
         """
@@ -26,19 +28,8 @@ class BatchShortDescriptionEnricherTest {
         {"response":{"status_code":400,"body":{}}}
         """;
 
-    assertThat(enricher.parseDescriptions(output))
+    assertThat(provider().parseDescriptions(output))
         .containsExactlyEntriesOf(java.util.Map.of("book-1", "A concise description."));
-  }
-
-  @Test
-  void trimsDescriptionsToTwentyWordsBeforeStoringThem() throws Exception {
-    BatchShortDescriptionEnricher enricher = enricher(Path.of("target"));
-    String output =
-        "{\"response\":{\"status_code\":200,\"body\":{\"choices\":[{\"message\":{\"content\":\"{\\\"book-1\\\":\\\"one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twenty-one\\\"}\"}}]}}}";
-
-    assertThat(enricher.parseDescriptions(output).get("book-1"))
-        .isEqualTo(
-            "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty");
   }
 
   @Test
@@ -60,14 +51,10 @@ class BatchShortDescriptionEnricherTest {
 
   @Test
   void shouldRequestTwentyWordShortDescriptions() {
-    BatchShortDescriptionEnricher enricher = enricher(Path.of("target"));
     var request =
-        enricher.batchRequest(
-            List.of(
-                new AudiobookEnrichmentStore.StoredAudiobook(
-                    new AudiobookRecord("book-1", "source", "Title", List.of(), "Summary"),
-                    "opaque-row-1")),
-            0);
+        provider()
+            .batchRequest(
+                List.of(new AudiobookRecord("book-1", "source", "Title", List.of(), "Summary")), 0);
 
     var body = request.path("body");
     assertThat(body.path("model").asText()).isEqualTo("gpt-4o-mini");
@@ -75,19 +62,67 @@ class BatchShortDescriptionEnricherTest {
     assertThat(body.path("messages").get(0).path("content").asText()).contains("at most 20 words");
   }
 
+  @Test
+  void selectingAReplacementProviderDoesNotRequireOpenAiCredentials() {
+    ShortDescriptionBatchProvider replacement = mock(ShortDescriptionBatchProvider.class);
+    new ApplicationContextRunner()
+        .withUserConfiguration(
+            BatchShortDescriptionEnricher.class, OpenAiShortDescriptionBatchProvider.class)
+        .withBean(ObjectMapper.class, ObjectMapper::new)
+        .withBean(AudiobookEnrichmentStore.class, () -> mock(AudiobookEnrichmentStore.class))
+        .withBean(ShortDescriptionBatchProvider.class, () -> replacement)
+        .withPropertyValues(
+            "audiobook.short-description.batch.mode=submit",
+            "audiobook.short-description.batch.provider=other")
+        .run(
+            context -> {
+              assertThat(context)
+                  .hasNotFailed()
+                  .hasSingleBean(BatchShortDescriptionEnricher.class)
+                  .doesNotHaveBean(OpenAiShortDescriptionBatchProvider.class);
+              assertThat(context.getBean(ShortDescriptionBatchProvider.class))
+                  .isSameAs(replacement);
+            });
+  }
+
+  @Test
+  void openAiBatchModelCanBeConfiguredIndependently() {
+    new ApplicationContextRunner()
+        .withUserConfiguration(OpenAiShortDescriptionBatchProvider.class)
+        .withBean(ObjectMapper.class, ObjectMapper::new)
+        .withPropertyValues(
+            "audiobook.short-description.batch.mode=submit",
+            "spring.ai.openai.api-key=unused",
+            "audiobook.short-description.batch.openai.model=batch-model")
+        .run(
+            context -> {
+              assertThat(context).hasNotFailed();
+              var request =
+                  context
+                      .getBean(OpenAiShortDescriptionBatchProvider.class)
+                      .batchRequest(
+                          List.of(
+                              new AudiobookRecord(
+                                  "book-1", "source", "Title", List.of(), "Summary")),
+                          0);
+              assertThat(request.path("body").path("model").asText()).isEqualTo("batch-model");
+            });
+  }
+
+  private OpenAiShortDescriptionBatchProvider provider() {
+    return new OpenAiShortDescriptionBatchProvider(
+        new ObjectMapper(),
+        HttpClient.newHttpClient(),
+        "test-key",
+        "https://example.test/v1",
+        "gpt-4o-mini");
+  }
+
   private BatchShortDescriptionEnricher enricher(Path outputDirectory) {
     AudiobookEnrichmentStore store = mock(AudiobookEnrichmentStore.class);
     when(store.datasetIdentity())
         .thenReturn(new AudiobookEnrichmentStore.DatasetIdentity("test-db", "books"));
     return new BatchShortDescriptionEnricher(
-        store,
-        new ObjectMapper(),
-        HttpClient.newHttpClient(),
-        "test-key",
-        "https://example.test/v1",
-        "disabled",
-        "",
-        outputDirectory,
-        1);
+        store, new ObjectMapper(), provider(), "disabled", "", outputDirectory, 1);
   }
 }

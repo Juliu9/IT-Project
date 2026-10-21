@@ -22,7 +22,8 @@ undo history or shown-book changes.
 
 Redis is the default session adapter (`SESSION_STORE=redis`). To replace it, register an
 implementation of `SessionRepository` and set `SESSION_STORE` to its backend name; this disables
-the Redis session adapter and its configuration. Request handling and conversation rules do not
+the Redis session adapter and Boot's Redis connections, templates, repositories, and health checks.
+Request handling and conversation rules do not
 need to change. The replacement must preserve cross-instance exclusion, single-attempt commits,
 the 24-hour sliding expiry, and the shared session error types. A cache offering only get/set
 operations is insufficient without additional coordination.
@@ -104,10 +105,21 @@ QDRANT_MIGRATION_ENABLED=true ./mvnw spring-boot:run \
   -Dspring-boot.run.arguments="--spring.main.web-application-type=none --audiobook.database=qdrant"
 ```
 
+## Chat models
+
+The parser and response generator have separate clients. Set `INPUT_PARSER_CHAT_MODEL` and
+`RESPONSE_GENERATOR_CHAT_MODEL` independently (properties `ai.input-parser.model` and
+`ai.response-generator.model`). A blank value inherits the configured provider's default;
+OpenAI's default is `gpt-4o-mini`, overridable with `OPENAI_CHAT_MODEL`.
+To use different providers, register a Spring AI `ChatClient` bean named `inputParserChatClient`
+or `responseGeneratorChatClient`; each replacement affects only its role. Model names must be
+supported by that client's provider.
+
 ## Short book descriptions
 
 Recommendations use a stored, one-sentence `short_description` when it is available. Generate
-these descriptions offline with OpenAI's Batch API; normal requests never call AI for a summary.
+these descriptions offline through a `ShortDescriptionBatchProvider`; OpenAI Batch is the default
+adapter. Normal requests never call AI for a summary.
 The database-independent job reads `description` through the selected `AudiobookEnrichmentStore`,
 generates `shortDescription`, and uploads through that same adapter without re-embedding books.
 The adapter maps those domain fields to its database names (Qdrant uses `short_description`) and
@@ -121,9 +133,9 @@ export AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MAXIMUM_RECORDS=1000
 ./mvnw spring-boot:run
 ```
 
-The job records the Batch ID, backend/dataset identity, and opaque record references in
+The job records the Batch ID, provider, backend/dataset identity, and opaque record references in
 `data/short-descriptions/short-description-batch.json`. Once OpenAI reports it as completed,
-import its output using the same backend, endpoint, and collection. A mismatched dataset or a legacy
+import its output using the same backend, endpoint, and collection. A mismatched provider or dataset, or a legacy
 manifest without identity is rejected before provider calls or database writes, leaving the manifest
 intact. Legacy batches require explicit recovery with their original implementation/configuration;
 these manifests are never silently converted. Import the output:
@@ -139,9 +151,17 @@ another submission until it is imported. An input-upload failure leaves no pendi
 submission can be retried normally. Once batch submission starts, an unknown outcome retains the
 manifest to prevent duplicate generation: reconcile the batch with the provider, then supply
 `AUDIOBOOK_SHORT_DESCRIPTION_BATCH_ID` to import it. Manifest updates are atomic so a failed
-write preserves the previous recovery data. Batch requests use
-`gpt-4o-mini`, group ten books per request, and ask for a spoiler-free sentence of at most 20
-words. Keep the default mode (`disabled`) for ordinary application startup.
+write preserves the previous recovery data. OpenAI batch requests default to `gpt-4o-mini`
+(`OPENAI_BATCH_MODEL`), group ten books per request, and ask for a spoiler-free sentence of at most
+20 words. The shared job enforces that word limit for every provider. Keep the default mode
+(`disabled`) for ordinary application startup.
+
+To replace OpenAI Batch, implement `ShortDescriptionBatchProvider`, register the adapter, and set
+`AUDIOBOOK_SHORT_DESCRIPTION_BATCH_PROVIDER` to its name. Its `upload` must only prepare input;
+`submit` starts generation, and `completedDescriptions` returns book IDs and descriptions. The
+job owns manifests, database references, safe retries, and import validation. Existing manifests
+without a provider field belong to OpenAI. The replacement adapter must be conditional on its
+configured name; do not switch provider while a batch is pending.
 
 ## Fill missing catalogue metadata
 

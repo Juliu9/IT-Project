@@ -12,10 +12,12 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.openai.OpenAiShortDescriptionBatchProvider;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore.DatasetIdentity;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore.ShortDescriptionUpdate;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore.StoredAudiobook;
+import com.gen3.recommenderagent.storage.audiobook.port.ShortDescriptionBatchProvider;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.net.http.HttpClient;
@@ -35,13 +37,79 @@ class BatchDescriptionLifecycleTest {
 
   private BatchShortDescriptionEnricher job(String mode, HttpClient client, String url) {
     return new BatchShortDescriptionEnricher(
-        store, mapper, client, "test-key", url, mode, "", directory, 1);
+        store,
+        mapper,
+        new OpenAiShortDescriptionBatchProvider(mapper, client, "test-key", url, "gpt-4o-mini"),
+        mode,
+        "",
+        directory,
+        1);
   }
 
   private StoredAudiobook book() {
     return new StoredAudiobook(
         new AudiobookRecord("book-1", "catalogue", "Title", List.of(), "A long description."),
         "opaque-database-row");
+  }
+
+  @Test
+  void replacementProviderUsesTheSameLifecycleAndSharedDescriptionRules() throws Exception {
+    when(store.datasetIdentity()).thenReturn(new DatasetIdentity("other", "catalogue-a"));
+    when(store.findRecordsWithoutShortDescription(1)).thenReturn(List.of(book()));
+    ShortDescriptionBatchProvider provider = mock(ShortDescriptionBatchProvider.class);
+    when(provider.id()).thenReturn("replacement");
+    when(provider.upload(List.of(book().record()), directory)).thenReturn("input-other");
+    when(provider.submit("input-other")).thenReturn("batch-other");
+    new BatchShortDescriptionEnricher(store, mapper, provider, "submit", "", directory, 1)
+        .run(new DefaultApplicationArguments());
+    when(provider.completedDescriptions("batch-other"))
+        .thenReturn(
+            java.util.Map.of(
+                "book-1",
+                    "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twenty-one",
+                "unknown-book", "Unrequested book."));
+    new BatchShortDescriptionEnricher(store, mapper, provider, "import", "", directory, 1)
+        .run(new DefaultApplicationArguments());
+    verify(store)
+        .updateShortDescriptions(
+            List.of(
+                new ShortDescriptionUpdate(
+                    "opaque-database-row",
+                    "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty")));
+    assertThat(directory.resolve("short-description-batch.json")).doesNotExist();
+  }
+
+  @Test
+  void refusesAChangedProviderBeforeCallingItOrWritingToTheDatabase() throws Exception {
+    when(store.datasetIdentity()).thenReturn(new DatasetIdentity("other", "catalogue-a"));
+    job("disabled", mock(HttpClient.class), "https://unused.test")
+        .writeManifest(
+            directory.resolve("short-description-batch.json"), "batch-1", List.of(book()));
+    ShortDescriptionBatchProvider replacement = mock(ShortDescriptionBatchProvider.class);
+    when(replacement.id()).thenReturn("replacement");
+    var job =
+        new BatchShortDescriptionEnricher(store, mapper, replacement, "import", "", directory, 1);
+    assertThatThrownBy(() -> job.run(new DefaultApplicationArguments()))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("provider does not match");
+    verify(replacement, never()).completedDescriptions(any());
+    verify(store, never()).updateShortDescriptions(any());
+    assertThat(directory.resolve("short-description-batch.json")).exists();
+  }
+
+  @Test
+  void readsExistingOpenAiManifestsWithoutAProviderField() throws Exception {
+    when(store.datasetIdentity()).thenReturn(new DatasetIdentity("other", "catalogue-a"));
+    Path manifest = directory.resolve("short-description-batch.json");
+    job("disabled", mock(HttpClient.class), "https://unused.test")
+        .writeManifest(manifest, "batch-1", List.of(book()));
+    var stored = (tools.jackson.databind.node.ObjectNode) mapper.readTree(manifest.toFile());
+    stored.remove("provider");
+    mapper.writeValue(manifest.toFile(), stored);
+    assertThat(
+            job("disabled", mock(HttpClient.class), "https://unused.test")
+                .pendingStorageReferences())
+        .containsEntry("book-1", "opaque-database-row");
   }
 
   @Test
@@ -213,9 +281,8 @@ class BatchDescriptionLifecycleTest {
         new BatchShortDescriptionEnricher(
             store,
             failingMapper,
-            mock(HttpClient.class),
-            "test-key",
-            "https://unused.test",
+            new OpenAiShortDescriptionBatchProvider(
+                mapper, mock(HttpClient.class), "test-key", "https://unused.test", "gpt-4o-mini"),
             "disabled",
             "",
             directory,

@@ -8,6 +8,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ResponseEntity;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -19,13 +20,14 @@ public class AiInputParser implements InputParser {
 
   @Autowired
   public AiInputParser(
-      ChatClient.Builder chatClientBuilder, AiOperationObserver aiOperationObserver) {
-    this.chatClient = chatClientBuilder.build();
+      @Qualifier("inputParserChatClient") ChatClient chatClient,
+      AiOperationObserver aiOperationObserver) {
+    this.chatClient = chatClient;
     this.aiOperationObserver = aiOperationObserver;
   }
 
   public AiInputParser(ChatClient.Builder chatClientBuilder) {
-    this(chatClientBuilder, AiOperationObserver.noop());
+    this(chatClientBuilder != null ? chatClientBuilder.build() : null, AiOperationObserver.noop());
   }
 
   @Override

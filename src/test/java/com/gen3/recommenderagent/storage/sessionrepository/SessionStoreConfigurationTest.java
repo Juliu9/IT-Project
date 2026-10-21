@@ -14,7 +14,10 @@ import com.gen3.recommenderagent.storage.sessionrepository.redis.RedisConfig;
 import com.gen3.recommenderagent.storage.sessionrepository.redis.RedisSessionRepository;
 import java.util.function.Function;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.data.redis.connection.ReactiveRedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -27,6 +30,48 @@ class SessionStoreConfigurationTest {
           .withUserConfiguration(
               RedisConfig.class, RedisSessionRepository.class, SessionTransitionService.class)
           .withBean(RecommendationWorkflow.class, () -> mock(RecommendationWorkflow.class));
+
+  @TestConfiguration(proxyBeanMethods = false)
+  @EnableAutoConfiguration
+  static class BootInfrastructure {}
+
+  private ApplicationContextRunner bootRunner() {
+    return runner
+        .withUserConfiguration(BootInfrastructure.class)
+        .withPropertyValues(
+            "spring.ai.openai.api-key=unused",
+            "spring.ai.model.chat=none",
+            "spring.ai.model.embedding=none");
+  }
+
+  @Test
+  void bootDoesNotCreateRedisInfrastructureForAReplacementStore() {
+    bootRunner()
+        .withPropertyValues("session.store=other")
+        .withBean(SessionRepository.class, () -> mock(SessionRepository.class))
+        .run(
+            context ->
+                assertThat(context)
+                    .hasNotFailed()
+                    .doesNotHaveBean(RedisConnectionFactory.class)
+                    .doesNotHaveBean(ReactiveRedisConnectionFactory.class)
+                    .doesNotHaveBean(RedisTemplate.class)
+                    .doesNotHaveBean(StringRedisTemplate.class)
+                    .doesNotHaveBean("redisHealthContributor")
+                    .doesNotHaveBean("redisReactiveHealthContributor"));
+  }
+
+  @Test
+  void bootStillCreatesTheDefaultRedisAdapterAndConnection() {
+    bootRunner()
+        .run(
+            context ->
+                assertThat(context)
+                    .hasNotFailed()
+                    .hasSingleBean(RedisConnectionFactory.class)
+                    .hasSingleBean(StringRedisTemplate.class)
+                    .hasSingleBean(RedisSessionRepository.class));
+  }
 
   @Test
   void usesRedisByDefault() {

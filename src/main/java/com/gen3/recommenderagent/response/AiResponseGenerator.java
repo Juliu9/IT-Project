@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -32,13 +33,14 @@ public class AiResponseGenerator implements ResponseGenerator {
 
   @Autowired
   public AiResponseGenerator(
-      ChatClient.Builder chatClientBuilder, AiOperationObserver aiOperationObserver) {
-    this.chatClient = (chatClientBuilder != null) ? chatClientBuilder.build() : null;
+      @Qualifier("responseGeneratorChatClient") ChatClient chatClient,
+      AiOperationObserver aiOperationObserver) {
+    this.chatClient = chatClient;
     this.aiOperationObserver = aiOperationObserver;
   }
 
   public AiResponseGenerator(ChatClient.Builder chatClientBuilder) {
-    this(chatClientBuilder, AiOperationObserver.noop());
+    this(chatClientBuilder != null ? chatClientBuilder.build() : null, AiOperationObserver.noop());
   }
 
   /**
