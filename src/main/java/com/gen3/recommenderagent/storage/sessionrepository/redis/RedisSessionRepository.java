@@ -2,7 +2,9 @@ package com.gen3.recommenderagent.storage.sessionrepository.redis;
 
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
+import com.gen3.recommenderagent.storage.sessionrepository.SessionBusyException;
 import com.gen3.recommenderagent.storage.sessionrepository.SessionCommitException;
+import com.gen3.recommenderagent.storage.sessionrepository.SessionLockLostException;
 import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
 import java.time.Duration;
 import java.time.Instant;
@@ -16,6 +18,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.RedisOperations;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -24,6 +27,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Repository;
 
+@ConditionalOnProperty(name = "session.store", havingValue = "redis", matchIfMissing = true)
 @Repository
 public class RedisSessionRepository implements SessionRepository {
 

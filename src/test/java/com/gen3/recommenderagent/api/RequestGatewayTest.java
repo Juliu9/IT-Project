@@ -101,8 +101,7 @@ class RequestGatewayTest {
     when(inputParser.parse("recommend science fiction"))
         .thenReturn(new org.springframework.ai.chat.client.ResponseEntity<>(null, parsedRequest));
     when(sessionTransitionService.process("session", "user", parsedRequest))
-        .thenThrow(
-            new com.gen3.recommenderagent.storage.sessionrepository.redis.SessionBusyException());
+        .thenThrow(new com.gen3.recommenderagent.storage.sessionrepository.SessionBusyException());
     RequestGateway gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
 

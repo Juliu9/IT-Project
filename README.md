@@ -17,6 +17,13 @@ Busy sessions return 409; rejected commits or lost locks return 503. Updates are
 automatically. Final response generation happens after commit, so a response failure does not
 undo history or shown-book changes.
 
+Redis is the default session adapter (`SESSION_STORE=redis`). To replace it, register an
+implementation of `SessionRepository` and set `SESSION_STORE` to its backend name; this disables
+the Redis session adapter and its configuration. Request handling and conversation rules do not
+need to change. The replacement must preserve cross-instance exclusion, single-attempt commits,
+the 24-hour sliding expiry, and the shared session error types. A cache offering only get/set
+operations is insufficient without additional coordination.
+
 Supported intents are `RECOMMENDATION`, `REFINE`, `MORE_RESULTS`, `CHANGE_COUNT`,
 `UPDATE_PREFERENCES`, `CLEAR_HISTORY`, `HELP`, and `UNKNOWN`.
 
@@ -62,6 +69,11 @@ Only `OPENAI_API_KEY` is required. The defaults suit local Docker:
 Qdrant stores dense and sparse vectors plus filterable metadata. Exact author, narrator, language,
 duration, and source constraints are applied as filters. Solr remains only for legacy retrieval,
 migration, and its integration tests.
+
+`solr/vector-field-schema.xml` is a manual snippet for configuring an external Solr collection.
+It stays outside `src/` because the application does not load it or bundle it as a runtime
+resource. Apply its definitions to the target collection and match the vector dimensions to the
+configured embedding model.
 
 ## Short book descriptions
 

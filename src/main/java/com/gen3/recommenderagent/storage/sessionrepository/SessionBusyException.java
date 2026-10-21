@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.storage.sessionrepository.redis;
+package com.gen3.recommenderagent.storage.sessionrepository;
 
 /** Signals that another request already owns the session update lock. */
 public class SessionBusyException extends RuntimeException {

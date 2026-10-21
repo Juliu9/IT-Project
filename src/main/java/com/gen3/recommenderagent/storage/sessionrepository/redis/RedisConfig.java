@@ -1,6 +1,7 @@
 package com.gen3.recommenderagent.storage.sessionrepository.redis;
 
 import com.gen3.recommenderagent.domain.session.Session;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -9,6 +10,7 @@ import org.springframework.data.redis.serializer.JacksonJsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 import tools.jackson.databind.ObjectMapper;
 
+@ConditionalOnProperty(name = "session.store", havingValue = "redis", matchIfMissing = true)
 @Configuration
 public class RedisConfig {
 

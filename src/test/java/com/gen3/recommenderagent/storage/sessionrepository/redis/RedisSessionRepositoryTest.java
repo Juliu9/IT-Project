@@ -13,6 +13,7 @@ import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.storage.sessionrepository.SessionBusyException;
 import com.gen3.recommenderagent.storage.sessionrepository.SessionCommitException;
 import java.time.Duration;
 import java.util.List;

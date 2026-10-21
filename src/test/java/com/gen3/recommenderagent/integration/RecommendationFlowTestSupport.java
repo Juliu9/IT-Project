@@ -1,8 +1,8 @@
 package com.gen3.recommenderagent.integration;
 
 import com.gen3.recommenderagent.domain.session.Session;
+import com.gen3.recommenderagent.storage.sessionrepository.SessionBusyException;
 import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
-import com.gen3.recommenderagent.storage.sessionrepository.redis.SessionBusyException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
