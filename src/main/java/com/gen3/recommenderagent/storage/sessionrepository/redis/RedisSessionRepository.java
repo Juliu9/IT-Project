@@ -1,6 +1,8 @@
 package com.gen3.recommenderagent.storage.sessionrepository.redis;
 
 import com.gen3.recommenderagent.domain.session.Session;
+import com.gen3.recommenderagent.observability.RequestTelemetry;
+import com.gen3.recommenderagent.storage.sessionrepository.SessionCommitException;
 import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
 import java.time.Duration;
 import java.time.Instant;
@@ -12,7 +14,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Supplier;
+import java.util.function.Function;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.RedisOperations;
@@ -49,7 +51,6 @@ public class RedisSessionRepository implements SessionRepository {
   private final Duration lockTtl;
   private final Duration lockRenewalInterval;
   private final ScheduledExecutorService lockRenewalExecutor;
-  private final ThreadLocal<LockOwnership> activeLock = new ThreadLocal<>();
 
   @Autowired
   public RedisSessionRepository(
@@ -72,28 +73,49 @@ public class RedisSessionRepository implements SessionRepository {
   }
 
   @Override
-  public Session getSession(String sessionId, String userId) {
-    return redisTemplate.opsForValue().get(sessionKey(sessionId, userId));
+  public <T> T update(String sessionId, String userId, Function<Session, T> change) {
+    return RequestTelemetry.measure(
+        "sessionLockMs",
+        () ->
+            withSessionLock(
+                sessionId,
+                userId,
+                lock -> {
+                  Session session =
+                      RequestTelemetry.measure("sessionLoadMs", () -> load(sessionId, userId));
+                  T result = change.apply(session);
+                  boolean saved =
+                      RequestTelemetry.measure("sessionWriteMs", () -> commit(session, lock));
+                  if (!saved) {
+                    throw new SessionCommitException();
+                  }
+                  return result;
+                }));
   }
 
-  @Override
-  public boolean updateSession(Session session) {
+  private Session load(String sessionId, String userId) {
+    Session session = redisTemplate.opsForValue().get(sessionKey(sessionId, userId));
+    if (session == null) {
+      session = new Session();
+      session.setSessionId(sessionId);
+      session.setUserId(userId);
+      session.setCreatedAt(Instant.now());
+    }
+    return session;
+  }
+
+  private boolean commit(Session session, LockOwnership lock) {
     String key = sessionKey(session.getSessionId(), session.getUserId());
-    LockOwnership lock = activeLock.get();
     return Boolean.TRUE.equals(
         redisTemplate.execute(
             new SessionCallback<Boolean>() {
               @Override
               public <K, V> Boolean execute(RedisOperations<K, V> operations) {
                 RedisOperations<String, Session> sessionOperations = sessionOperations(operations);
-                if (lock == null) {
-                  sessionOperations.watch(key);
-                } else {
-                  sessionOperations.watch(List.of(key, lock.key()));
-                  if (!lock.isOwnedBy(stringRedisTemplate)) {
-                    sessionOperations.unwatch();
-                    return false;
-                  }
+                sessionOperations.watch(List.of(key, lock.key()));
+                if (!lock.isOwnedBy(stringRedisTemplate)) {
+                  sessionOperations.unwatch();
+                  return false;
                 }
                 Session existing = sessionOperations.opsForValue().get(key);
                 if (existing == null
@@ -111,8 +133,8 @@ public class RedisSessionRepository implements SessionRepository {
             }));
   }
 
-  @Override
-  public <T> T withSessionLock(String sessionId, String userId, Supplier<T> operation) {
+  private <T> T withSessionLock(
+      String sessionId, String userId, Function<LockOwnership, T> operation) {
     String lockKey = sessionKey(sessionId, userId) + ":lock";
     String owner = UUID.randomUUID().toString();
     if (!Boolean.TRUE.equals(
@@ -128,14 +150,12 @@ public class RedisSessionRepository implements SessionRepository {
             lockRenewalInterval.toMillis(),
             TimeUnit.MILLISECONDS);
     try {
-      activeLock.set(lock);
-      T result = operation.get();
+      T result = operation.apply(lock);
       if (lockLost.get()) {
         throw new SessionLockLostException();
       }
       return result;
     } finally {
-      activeLock.remove();
       renewal.cancel(false);
       stringRedisTemplate.execute(RELEASE_LOCK, List.of(lockKey), owner);
     }

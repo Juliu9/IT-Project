@@ -1,14 +1,12 @@
 package com.gen3.recommenderagent.application;
 
-import com.gen3.recommenderagent.application.sessionservice.SessionCommitException;
-import com.gen3.recommenderagent.application.sessionservice.SessionService;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationState;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.engine.RecommendationWorkflow;
-import com.gen3.recommenderagent.observability.RequestTelemetry;
+import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -20,36 +18,26 @@ public class SessionTransitionService {
 
   private static final ConversationState CONVERSATION_STATE = new ConversationState();
 
-  private final SessionService sessionService;
+  private final SessionRepository sessions;
   private final RecommendationWorkflow recommendationWorkflow;
 
   public SessionTransitionService(
-      SessionService sessionService, RecommendationWorkflow recommendationWorkflow) {
-    this.sessionService = sessionService;
+      SessionRepository sessions, RecommendationWorkflow recommendationWorkflow) {
+    this.sessions = sessions;
     this.recommendationWorkflow = recommendationWorkflow;
   }
 
   public SessionRequest process(String sessionId, String userId, SessionRequest request) {
-    return RequestTelemetry.measure(
-        "sessionLockMs",
-        () ->
-            sessionService.withSessionLock(
-                sessionId, userId, () -> processLocked(sessionId, userId, request)));
+    return sessions.update(sessionId, userId, session -> apply(session, request));
   }
 
-  private SessionRequest processLocked(String sessionId, String userId, SessionRequest original) {
-    Session session =
-        RequestTelemetry.measure("sessionLoadMs", () -> sessionService.load(sessionId, userId));
+  private SessionRequest apply(Session session, SessionRequest original) {
     SessionRequest result = CONVERSATION_STATE.resolve(session, original);
     result.setRecommendations(
         CONVERSATION_STATE.isRecommendationIntent(result.getIntent())
             ? recommendationWorkflow.recommend(result, session)
             : List.of());
     applyTransition(session, result, originalIntent(original));
-    boolean saved = RequestTelemetry.measure("sessionWriteMs", () -> sessionService.save(session));
-    if (!saved) {
-      throw new SessionCommitException();
-    }
     return result;
   }
 

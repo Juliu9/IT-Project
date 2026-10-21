@@ -11,7 +11,6 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.application.sessionservice.DefaultSessionService;
 import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalService;
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectorService;
 import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlanner;
@@ -71,7 +70,7 @@ class PersonalisedRecommendationFlowTest {
             ranker,
             new SemanticQueryVectorService(indexer),
             users);
-    application = new SessionTransitionService(new DefaultSessionService(sessions), workflow);
+    application = new SessionTransitionService(sessions, workflow);
   }
 
   @Test
@@ -144,7 +143,9 @@ class PersonalisedRecommendationFlowTest {
 
     // Simulate a separate request reading the persisted session, as Redis does.
     JsonMapper mapper = JsonMapper.builder().build();
-    Session restored = mapper.readValue(mapper.writeValueAsString(session), Session.class);
+    Session restored =
+        mapper.readValue(
+            mapper.writeValueAsString(sessions.getSession("session", "user")), Session.class);
     sessions.updateSession(restored);
     SessionRequest answer = new SessionRequest();
     answer.setIntent(Intent.UPDATE_PREFERENCES);
@@ -157,6 +158,7 @@ class PersonalisedRecommendationFlowTest {
 
     assertThat(result.getIntent()).isEqualTo(Intent.RECOMMENDATION);
     assertThat(result.getRecommendations()).hasSize(1);
+    restored = sessions.getSession("session", "user");
     assertThat(restored.isAwaitingPersonalisedPreferences()).isFalse();
     assertThat(restored.getPreferences().getPositiveSemanticQuery().getGenres())
         .containsExactly("fantasy");
@@ -182,6 +184,7 @@ class PersonalisedRecommendationFlowTest {
     taste.setAuthors(List.of("Ursula Le Guin"));
     answer.setPositiveSemanticQuery(taste);
     process(answer);
+    session = sessions.getSession("session", "user");
 
     assertThat(session.getPreferences().getPositiveSemanticQuery().getGenres())
         .containsExactly("fantasy");

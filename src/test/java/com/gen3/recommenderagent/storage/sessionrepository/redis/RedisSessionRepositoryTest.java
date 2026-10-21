@@ -1,7 +1,6 @@
 package com.gen3.recommenderagent.storage.sessionrepository.redis;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -14,6 +13,7 @@ import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.storage.sessionrepository.SessionCommitException;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -45,6 +45,7 @@ class RedisSessionRepositoryTest {
       new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
 
   private RedisSessionRepository redisSessionCache;
+  private RedisTemplate<String, Session> redisTemplate;
 
   private LettuceConnectionFactory connectionFactory;
   private ScheduledExecutorService lockRenewalExecutor;
@@ -63,7 +64,7 @@ class RedisSessionRepositoryTest {
     JacksonJsonRedisSerializer<Session> serializer =
         new JacksonJsonRedisSerializer<>(Session.class);
 
-    RedisTemplate<String, Session> redisTemplate = new RedisTemplate<>();
+    redisTemplate = new RedisTemplate<>();
 
     redisTemplate.setConnectionFactory(connectionFactory);
 
@@ -88,6 +89,7 @@ class RedisSessionRepositoryTest {
   @AfterEach
   void closeLockRenewalExecutor() {
     lockRenewalExecutor.shutdownNow();
+    connectionFactory.destroy();
   }
 
   // ============================================================
@@ -99,9 +101,9 @@ class RedisSessionRepositoryTest {
 
     Session session = session("session-123");
 
-    redisSessionCache.updateSession(session);
+    write(session);
 
-    Session retrieved = redisSessionCache.getSession("session-123", USER_ID);
+    Session retrieved = read("session-123", USER_ID);
 
     assertNotNull(retrieved);
 
@@ -121,18 +123,17 @@ class RedisSessionRepositoryTest {
     assertThrows(
         SessionBusyException.class,
         () ->
-            redisSessionCache.withSessionLock(
+            redisSessionCache.update(
                 "session-lock-test",
                 USER_ID,
-                () ->
-                    redisSessionCache.withSessionLock(
-                        "session-lock-test", USER_ID, () -> "second")));
+                session ->
+                    redisSessionCache.update("session-lock-test", USER_ID, other -> "second")));
 
     assertEquals(
-        "first", redisSessionCache.withSessionLock("session-lock-test", USER_ID, () -> "first"));
+        "first", redisSessionCache.update("session-lock-test", USER_ID, session -> "first"));
 
     assertEquals(
-        "second", redisSessionCache.withSessionLock("session-lock-test", USER_ID, () -> "second"));
+        "second", redisSessionCache.update("session-lock-test", USER_ID, other -> "second"));
   }
 
   @Test
@@ -144,10 +145,10 @@ class RedisSessionRepositoryTest {
       Future<String> first =
           requestExecutor.submit(
               () ->
-                  redisSessionCache.withSessionLock(
+                  redisSessionCache.update(
                       "renewal-test",
                       USER_ID,
-                      () -> {
+                      session -> {
                         entered.countDown();
                         await(finish);
                         return "first";
@@ -157,7 +158,7 @@ class RedisSessionRepositoryTest {
 
       assertThrows(
           SessionBusyException.class,
-          () -> redisSessionCache.withSessionLock("renewal-test", USER_ID, () -> "second"));
+          () -> redisSessionCache.update("renewal-test", USER_ID, session -> "second"));
 
       finish.countDown();
       assertEquals("first", first.get(1, TimeUnit.SECONDS));
@@ -169,19 +170,19 @@ class RedisSessionRepositoryTest {
 
   @Test
   void doesNotCommitWhenTheLockOwnershipChanges() {
-    Session session = session("ownership-test");
-
-    boolean saved =
-        redisSessionCache.withSessionLock(
-            "ownership-test",
-            USER_ID,
-            () -> {
-              stringRedisTemplate.opsForValue().set(key("ownership-test") + ":lock", "other");
-              return redisSessionCache.updateSession(session);
-            });
-
-    assertFalse(saved);
-    assertNull(redisSessionCache.getSession("ownership-test", USER_ID));
+    assertThrows(
+        SessionCommitException.class,
+        () ->
+            redisSessionCache.update(
+                "ownership-test",
+                USER_ID,
+                session -> {
+                  session.setBookCount(3);
+                  stringRedisTemplate.opsForValue().set(key("ownership-test") + ":lock", "other");
+                  return "not committed";
+                }));
+    assertNull(read("ownership-test", USER_ID));
+    assertEquals("other", stringRedisTemplate.opsForValue().get(key("ownership-test") + ":lock"));
   }
 
   // ============================================================
@@ -197,9 +198,9 @@ class RedisSessionRepositoryTest {
 
     session.setRequests(List.of(request));
 
-    redisSessionCache.updateSession(session);
+    write(session);
 
-    Session retrieved = redisSessionCache.getSession("session-request-test", USER_ID);
+    Session retrieved = read("session-request-test", USER_ID);
 
     assertNotNull(retrieved);
 
@@ -213,9 +214,9 @@ class RedisSessionRepositoryTest {
     Session session = session("shown-book-ids-test");
     session.addRecommendationIds(List.of("book-1", "book-2"));
 
-    redisSessionCache.updateSession(session);
+    write(session);
 
-    Session retrieved = redisSessionCache.getSession("shown-book-ids-test", USER_ID);
+    Session retrieved = read("shown-book-ids-test", USER_ID);
     assertEquals(List.of("book-1", "book-2"), retrieved.getShownBooks());
   }
 
@@ -233,9 +234,9 @@ class RedisSessionRepositoryTest {
     preferences.setMustInclude(mustInclude);
     session.setPreferences(preferences);
 
-    redisSessionCache.updateSession(session);
+    write(session);
 
-    Session retrieved = redisSessionCache.getSession("session-preferences-test", USER_ID);
+    Session retrieved = read("session-preferences-test", USER_ID);
     assertNotNull(retrieved.getPreferences());
     assertEquals(
         List.of("fantasy"), retrieved.getPreferences().getPositiveSemanticQuery().getGenres());
@@ -267,9 +268,9 @@ class RedisSessionRepositoryTest {
 
     session.setRequests(List.of(request));
 
-    redisSessionCache.updateSession(session);
+    write(session);
 
-    Session retrieved = redisSessionCache.getSession("semanticQuery-test", USER_ID);
+    Session retrieved = read("semanticQuery-test", USER_ID);
 
     SemanticQuery retrievedSemanticQuery =
         retrieved.getRequests().get(0).getPositiveSemanticQuery();
@@ -303,9 +304,9 @@ class RedisSessionRepositoryTest {
 
     session.setRequests(List.of(request));
 
-    redisSessionCache.updateSession(session);
+    write(session);
 
-    Session retrieved = redisSessionCache.getSession("negative-query-test", USER_ID);
+    Session retrieved = read("negative-query-test", USER_ID);
 
     SemanticQuery retrievedQuery = retrieved.getRequests().get(0).getNegativeSemanticQuery();
 
@@ -340,9 +341,9 @@ class RedisSessionRepositoryTest {
 
     session.setRequests(List.of(request));
 
-    redisSessionCache.updateSession(session);
+    write(session);
 
-    Session retrieved = redisSessionCache.getSession("constraints-test", USER_ID);
+    Session retrieved = read("constraints-test", USER_ID);
 
     SessionRequest retrievedRequest = retrieved.getRequests().get(0);
     assertEquals(5, retrievedRequest.getBookCount());
@@ -375,9 +376,9 @@ class RedisSessionRepositoryTest {
 
     session.setRequests(List.of(request));
 
-    redisSessionCache.updateSession(session);
+    write(session);
 
-    Session retrieved = redisSessionCache.getSession("recommendations-test", USER_ID);
+    Session retrieved = read("recommendations-test", USER_ID);
 
     List<Recommendation> retrievedRecommendations =
         retrieved.getRequests().get(0).getRecommendations();
@@ -408,9 +409,9 @@ class RedisSessionRepositoryTest {
 
     session.setRequests(List.of(request));
 
-    redisSessionCache.updateSession(session);
+    write(session);
 
-    Session retrieved = redisSessionCache.getSession("null-test", USER_ID);
+    Session retrieved = read("null-test", USER_ID);
 
     SessionRequest retrievedRequest = retrieved.getRequests().get(0);
 
@@ -443,16 +444,16 @@ class RedisSessionRepositoryTest {
     session.setRequests(List.of(request));
 
     // First write
-    redisSessionCache.updateSession(session);
+    write(session);
 
     // Modify session
     semanticQuery.setTopics(List.of("WWI", "Vietnam War"));
 
     // Second write
-    redisSessionCache.updateSession(session);
+    write(session);
 
     // Retrieve
-    Session retrieved = redisSessionCache.getSession(sessionId, USER_ID);
+    Session retrieved = read(sessionId, USER_ID);
 
     assertNotNull(retrieved);
 
@@ -468,13 +469,11 @@ class RedisSessionRepositoryTest {
     Session second = session("shared-session");
     second.setUserId("user:two");
 
-    redisSessionCache.updateSession(first);
-    redisSessionCache.updateSession(second);
+    write(first);
+    write(second);
 
-    assertEquals(
-        "user:one", redisSessionCache.getSession("shared-session", "user:one").getUserId());
-    assertEquals(
-        "user:two", redisSessionCache.getSession("shared-session", "user:two").getUserId());
+    assertEquals("user:one", read("shared-session", "user:one").getUserId());
+    assertEquals("user:two", read("shared-session", "user:two").getUserId());
   }
 
   @Test
@@ -484,26 +483,119 @@ class RedisSessionRepositoryTest {
     Session second = session("b:c");
     second.setUserId("a");
 
-    redisSessionCache.updateSession(first);
-    redisSessionCache.updateSession(second);
+    write(first);
+    write(second);
 
-    assertEquals("a:b", redisSessionCache.getSession("c", "a:b").getUserId());
-    assertEquals("a", redisSessionCache.getSession("b:c", "a").getUserId());
+    assertEquals("a:b", read("c", "a:b").getUserId());
+    assertEquals("a", read("b:c", "a").getUserId());
   }
 
   @Test
   void rejectsAStaleSessionWrite() {
-    Session initial = session("concurrent-session");
-    assertTrue(redisSessionCache.updateSession(initial));
-    Session current = redisSessionCache.getSession("concurrent-session", USER_ID);
-    Session stale = redisSessionCache.getSession("concurrent-session", USER_ID);
+    redisSessionCache.update(
+        "concurrent-session",
+        USER_ID,
+        session -> {
+          session.setBookCount(1);
+          return null;
+        });
+    assertThrows(
+        SessionCommitException.class,
+        () ->
+            redisSessionCache.update(
+                "concurrent-session",
+                USER_ID,
+                session -> {
+                  Session external = read("concurrent-session", USER_ID);
+                  external.setVersion(external.getVersion() + 1);
+                  external.setBookCount(2);
+                  redisTemplate.opsForValue().set(key("concurrent-session"), external);
+                  session.setBookCount(3);
+                  return null;
+                }));
+    assertEquals(2, read("concurrent-session", USER_ID).getBookCount());
+  }
 
-    current.setBookCount(2);
-    assertTrue(redisSessionCache.updateSession(current));
-    stale.setBookCount(3);
-    assertFalse(redisSessionCache.updateSession(stale));
+  @Test
+  void failedChangeIsNotSavedAndReleasesTheLock() {
+    redisSessionCache.update(
+        "failed-change",
+        USER_ID,
+        session -> {
+          session.setBookCount(2);
+          return null;
+        });
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            redisSessionCache.update(
+                "failed-change",
+                USER_ID,
+                session -> {
+                  session.setBookCount(5);
+                  throw new IllegalArgumentException("failed change");
+                }));
+    assertEquals(2, read("failed-change", USER_ID).getBookCount());
+    assertEquals(2, redisSessionCache.update("failed-change", USER_ID, Session::getBookCount));
+  }
 
-    assertEquals(2, redisSessionCache.getSession("concurrent-session", USER_ID).getBookCount());
+  @Test
+  void createsSessionAndReturnsOnlyAfterCommit() {
+    String result =
+        redisSessionCache.update(
+            "created-session",
+            USER_ID,
+            session -> {
+              assertEquals("created-session", session.getSessionId());
+              assertEquals(USER_ID, session.getUserId());
+              assertNotNull(session.getCreatedAt());
+              assertEquals(0, session.getVersion());
+              session.setBookCount(4);
+              return "done";
+            });
+    assertEquals("done", result);
+    Session stored = read("created-session", USER_ID);
+    assertEquals(4, stored.getBookCount());
+    assertEquals(1, stored.getVersion());
+    assertNull(stringRedisTemplate.opsForValue().get(key("created-session") + ":lock"));
+  }
+
+  @Test
+  void anotherRepositoryInstanceCannotUpdateLockedSession() {
+    RedisSessionRepository second = new RedisSessionRepository(redisTemplate, stringRedisTemplate);
+    redisSessionCache.update(
+        "shared-lock",
+        USER_ID,
+        session -> {
+          assertThrows(
+              SessionBusyException.class,
+              () -> second.update("shared-lock", USER_ID, other -> null));
+          return null;
+        });
+    second.update(
+        "shared-lock",
+        USER_ID,
+        session -> {
+          session.setBookCount(3);
+          return null;
+        });
+    assertEquals(3, read("shared-lock", USER_ID).getBookCount());
+  }
+
+  private Session read(String sessionId, String userId) {
+    String storageKey = "session:" + userId.length() + ":" + userId + ":" + sessionId;
+    return redisTemplate.opsForValue().get(storageKey);
+  }
+
+  private void write(Session source) {
+    redisSessionCache.update(
+        source.getSessionId(),
+        source.getUserId(),
+        session -> {
+          org.springframework.beans.BeanUtils.copyProperties(
+              source, session, "version", "createdAt", "expiresAt");
+          return null;
+        });
   }
 
   private Session session(String sessionId) {

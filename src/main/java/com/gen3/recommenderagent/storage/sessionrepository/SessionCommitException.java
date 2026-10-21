@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.application.sessionservice;
+package com.gen3.recommenderagent.storage.sessionrepository;
 
 /** Signals that a completed session transition could not be committed safely. */
 public class SessionCommitException extends RuntimeException {

@@ -8,13 +8,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.application.sessionservice.SessionCommitException;
 import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalException;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.gen3.recommenderagent.response.ResponseGenerator;
+import com.gen3.recommenderagent.storage.sessionrepository.SessionCommitException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;

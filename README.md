@@ -10,6 +10,13 @@ and ranks candidates, retains a 24-hour Redis session, and returns a concise spo
 3. The ranker scores candidates and defensively excludes any book already shown in the session.
 4. Redis saves the request and up to 500 recent shown-book IDs under the `(userId, sessionId)` pair.
 
+Session changes use one `SessionRepository.update` operation: lock the `(userId, sessionId)`
+pair, load or create its session, apply the change once, commit, and release the lock. Redis
+checks lock ownership and session version before saving, and renews the lock for long updates.
+Busy sessions return 409; rejected commits or lost locks return 503. Updates are not retried
+automatically. Final response generation happens after commit, so a response failure does not
+undo history or shown-book changes.
+
 Supported intents are `RECOMMENDATION`, `REFINE`, `MORE_RESULTS`, `CHANGE_COUNT`,
 `UPDATE_PREFERENCES`, `CLEAR_HISTORY`, `HELP`, and `UNKNOWN`.
 

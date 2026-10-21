@@ -12,7 +12,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.gen3.recommenderagent.api.RequestGateway;
 import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.application.sessionservice.DefaultSessionService;
 import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalService;
 import com.gen3.recommenderagent.candidateretriever.CandidateRetriever;
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectorService;
@@ -104,7 +103,7 @@ class RecommendationFlowIntegrationTest {
     RecommendationFlowTestSupport.InMemorySessionRepository sessionRepository =
         new RecommendationFlowTestSupport.InMemorySessionRepository();
     SessionTransitionService applicationService =
-        new SessionTransitionService(new DefaultSessionService(sessionRepository), workflow);
+        new SessionTransitionService(sessionRepository, workflow);
 
     RequestGateway gateway =
         new RequestGateway(inputParser, applicationService, new AiResponseGenerator(null));
