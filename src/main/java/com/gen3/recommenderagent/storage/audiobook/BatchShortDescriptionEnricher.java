@@ -10,6 +10,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -134,13 +135,29 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
       return;
     }
 
-    writeManifest(manifest, "", validBooks);
+    // Uploads cannot create a generation batch, so upload failure is safe to retry.
     JsonNode uploaded = upload(input);
     ObjectNode request = mapper.createObjectNode();
     request.put("input_file_id", uploaded.required("id").asText());
     request.put("endpoint", "/v1/chat/completions");
     request.put("completion_window", "24h");
-    JsonNode batch = postJson("/batches", request);
+    // Once submission starts, an uncertain outcome must retain the record references.
+    writeManifest(manifest, "", validBooks);
+    JsonNode batch;
+    try {
+      batch = postJson("/batches", request);
+    } catch (IOException exception) {
+      throw new IOException(
+          "Batch submission may have been accepted. The pending manifest is retained. Reconcile the provider's batch ID and set AUDIOBOOK_SHORT_DESCRIPTION_BATCH_ID to import it before retrying.",
+          exception);
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      InterruptedException interrupted =
+          new InterruptedException(
+              "Batch submission was interrupted; its outcome is unknown. The pending manifest is retained. Reconcile the provider's batch ID before retrying.");
+      interrupted.initCause(exception);
+      throw interrupted;
+    }
     String submittedBatchId = batch.required("id").asText();
     writeManifest(manifest, submittedBatchId, validBooks);
     LOGGER.info(
@@ -284,10 +301,18 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
     for (AudiobookEnrichmentStore.StoredAudiobook book : books) {
       storageReferences.put(book.record().id(), book.storageReference());
     }
-    mapper.writeValue(
-        manifest.toFile(),
-        new StoredBatchManifest(
-            submittedBatchId, enrichmentStore.datasetIdentity(), storageReferences));
+    Path temporary =
+        Files.createTempFile(manifest.toAbsolutePath().getParent(), "batch-manifest-", ".tmp");
+    try {
+      mapper.writeValue(
+          temporary.toFile(),
+          new StoredBatchManifest(
+              submittedBatchId, enrichmentStore.datasetIdentity(), storageReferences));
+      Files.move(
+          temporary, manifest, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+    } finally {
+      Files.deleteIfExists(temporary);
+    }
   }
 
   private BatchManifest readManifest() throws IOException {

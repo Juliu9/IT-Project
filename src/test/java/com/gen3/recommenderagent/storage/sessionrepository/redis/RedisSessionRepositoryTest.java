@@ -5,6 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 
 import com.gen3.recommenderagent.domain.session.MustInclude;
 import com.gen3.recommenderagent.domain.session.MustNotInclude;
@@ -17,18 +23,24 @@ import com.gen3.recommenderagent.storage.sessionrepository.SessionBusyException;
 import com.gen3.recommenderagent.storage.sessionrepository.SessionCommitException;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.core.RedisOperations;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.SessionCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.serializer.JacksonJsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
@@ -82,8 +94,8 @@ class RedisSessionRepositoryTest {
         new RedisSessionRepository(
             redisTemplate,
             stringRedisTemplate,
-            Duration.ofMillis(200),
-            Duration.ofMillis(25),
+            Duration.ofSeconds(10),
+            Duration.ofSeconds(1),
             lockRenewalExecutor);
   }
 
@@ -139,6 +151,13 @@ class RedisSessionRepositoryTest {
 
   @Test
   void renewsTheLockForAStillRunningTransition() throws Exception {
+    redisSessionCache =
+        new RedisSessionRepository(
+            redisTemplate,
+            stringRedisTemplate,
+            Duration.ofMillis(200),
+            Duration.ofMillis(25),
+            lockRenewalExecutor);
     CountDownLatch entered = new CountDownLatch(1);
     CountDownLatch finish = new CountDownLatch(1);
     ExecutorService requestExecutor = Executors.newSingleThreadExecutor();
@@ -179,11 +198,11 @@ class RedisSessionRepositoryTest {
                 USER_ID,
                 session -> {
                   session.setBookCount(3);
-                  stringRedisTemplate.opsForValue().set(key("ownership-test") + ":lock", "other");
+                  stringRedisTemplate.opsForValue().set("lock:" + key("ownership-test"), "other");
                   return "not committed";
                 }));
     assertNull(read("ownership-test", USER_ID));
-    assertEquals("other", stringRedisTemplate.opsForValue().get(key("ownership-test") + ":lock"));
+    assertEquals("other", stringRedisTemplate.opsForValue().get("lock:" + key("ownership-test")));
   }
 
   // ============================================================
@@ -558,7 +577,7 @@ class RedisSessionRepositoryTest {
     Session stored = read("created-session", USER_ID);
     assertEquals(4, stored.getBookCount());
     assertEquals(1, stored.getVersion());
-    assertNull(stringRedisTemplate.opsForValue().get(key("created-session") + ":lock"));
+    assertNull(stringRedisTemplate.opsForValue().get("lock:" + key("created-session")));
   }
 
   @Test
@@ -581,6 +600,130 @@ class RedisSessionRepositoryTest {
           return null;
         });
     assertEquals(3, read("shared-lock", USER_ID).getBookCount());
+  }
+
+  @Test
+  void sessionIdsEndingInLockDoNotCollideWithOtherSessionLocks() {
+    redisSessionCache.update(
+        "collision:lock",
+        USER_ID,
+        session -> {
+          session.setBookCount(2);
+          return null;
+        });
+    redisSessionCache.update(
+        "collision",
+        USER_ID,
+        session -> {
+          session.setBookCount(3);
+          return null;
+        });
+    assertEquals(2, read("collision:lock", USER_ID).getBookCount());
+    assertEquals(3, read("collision", USER_ID).getBookCount());
+  }
+
+  @Test
+  void reportsFailedCommitWhenLockChangesAfterOwnershipCheck() {
+    RedisTemplate<String, Session> interruptedTemplate = spy(redisTemplate);
+    doAnswer(
+            invocation -> {
+              CompletableFuture.runAsync(
+                      () -> stringRedisTemplate.delete("lock:" + key("lost-before-exec")))
+                  .join();
+              return invocation.callRealMethod();
+            })
+        .when(interruptedTemplate)
+        .exec();
+    var repository =
+        new RedisSessionRepository(
+            interruptedTemplate,
+            stringRedisTemplate,
+            Duration.ofSeconds(10),
+            Duration.ofSeconds(1),
+            lockRenewalExecutor);
+
+    assertThrows(
+        SessionCommitException.class,
+        () -> repository.update("lost-before-exec", USER_ID, session -> "not committed"));
+    assertNull(read("lost-before-exec", USER_ID));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void renewalCannotInvalidateTheCommitTransaction() throws Exception {
+    CountDownLatch watched = new CountDownLatch(1);
+    CountDownLatch resume = new CountDownLatch(1);
+    RedisTemplate<String, Session> pausedTemplate = spy(redisTemplate);
+    doAnswer(
+            invocation -> {
+              SessionCallback<Boolean> callback = invocation.getArgument(0);
+              return redisTemplate.execute(
+                  new SessionCallback<Boolean>() {
+                    @Override
+                    public <K, V> Boolean execute(RedisOperations<K, V> operations) {
+                      RedisOperations<K, V> tracked = spy(operations);
+                      doAnswer(
+                              watch -> {
+                                watch.callRealMethod();
+                                watched.countDown();
+                                await(resume);
+                                return null;
+                              })
+                          .when(tracked)
+                          .watch(anyCollection());
+                      return callback.execute(tracked);
+                    }
+                  });
+            })
+        .when(pausedTemplate)
+        .execute(any(SessionCallback.class));
+    AtomicReference<Runnable> renewal = new AtomicReference<>();
+    ScheduledExecutorService scheduler = mock(ScheduledExecutorService.class);
+    doAnswer(
+            invocation -> {
+              renewal.set(invocation.getArgument(0));
+              return mock(ScheduledFuture.class);
+            })
+        .when(scheduler)
+        .scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class));
+    var repository =
+        new RedisSessionRepository(
+            pausedTemplate,
+            stringRedisTemplate,
+            Duration.ofSeconds(10),
+            Duration.ofSeconds(1),
+            scheduler);
+    ExecutorService threads = Executors.newFixedThreadPool(2);
+    try {
+      Future<String> update =
+          threads.submit(
+              () ->
+                  repository.update(
+                      "renew-during-commit",
+                      USER_ID,
+                      session -> {
+                        session.setBookCount(4);
+                        return "committed";
+                      }));
+      assertTrue(watched.await(5, TimeUnit.SECONDS));
+      CountDownLatch renewalStarted = new CountDownLatch(1);
+      Future<?> renewing =
+          threads.submit(
+              () -> {
+                renewalStarted.countDown();
+                renewal.get().run();
+              });
+      assertTrue(renewalStarted.await(5, TimeUnit.SECONDS));
+      // Renewal must wait until WATCH/EXEC finishes rather than modifying its watched key.
+      assertThrows(TimeoutException.class, () -> renewing.get(200, TimeUnit.MILLISECONDS));
+      resume.countDown();
+      assertEquals("committed", update.get(5, TimeUnit.SECONDS));
+      renewing.get(5, TimeUnit.SECONDS);
+      assertEquals(4, read("renew-during-commit", USER_ID).getBookCount());
+    } finally {
+      resume.countDown();
+      threads.shutdownNow();
+    }
   }
 
   private Session read(String sessionId, String userId) {
@@ -612,7 +755,7 @@ class RedisSessionRepositoryTest {
 
   private void await(CountDownLatch latch) {
     try {
-      if (!latch.await(1, TimeUnit.SECONDS)) {
+      if (!latch.await(5, TimeUnit.SECONDS)) {
         throw new IllegalStateException("Timed out waiting for the test transition");
       }
     } catch (InterruptedException exception) {

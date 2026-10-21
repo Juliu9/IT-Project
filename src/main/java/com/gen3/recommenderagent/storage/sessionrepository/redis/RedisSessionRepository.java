@@ -109,37 +109,44 @@ public class RedisSessionRepository implements SessionRepository {
   }
 
   private boolean commit(Session session, LockOwnership lock) {
-    String key = sessionKey(session.getSessionId(), session.getUserId());
-    return Boolean.TRUE.equals(
-        redisTemplate.execute(
-            new SessionCallback<Boolean>() {
-              @Override
-              public <K, V> Boolean execute(RedisOperations<K, V> operations) {
-                RedisOperations<String, Session> sessionOperations = sessionOperations(operations);
-                sessionOperations.watch(List.of(key, lock.key()));
-                if (!lock.isOwnedBy(stringRedisTemplate)) {
-                  sessionOperations.unwatch();
-                  return false;
+    // A successful renewal must not change the watched key before EXEC.
+    synchronized (lock) {
+      String key = sessionKey(session.getSessionId(), session.getUserId());
+      return Boolean.TRUE.equals(
+          redisTemplate.execute(
+              new SessionCallback<Boolean>() {
+                @Override
+                public <K, V> Boolean execute(RedisOperations<K, V> operations) {
+                  RedisOperations<String, Session> sessionOperations =
+                      sessionOperations(operations);
+                  sessionOperations.watch(List.of(key, lock.key()));
+                  if (!lock.isOwnedBy(stringRedisTemplate)) {
+                    sessionOperations.unwatch();
+                    return false;
+                  }
+                  Session existing = sessionOperations.opsForValue().get(key);
+                  if (existing == null
+                      ? session.getVersion() != 0
+                      : existing.getVersion() != session.getVersion()) {
+                    sessionOperations.unwatch();
+                    return false;
+                  }
+                  session.setExpiresAt(Instant.now().plus(SESSION_TTL));
+                  session.setVersion(session.getVersion() + 1);
+                  sessionOperations.multi();
+                  sessionOperations.opsForValue().set(key, session, SESSION_TTL);
+                  List<Object> results = sessionOperations.exec();
+                  return results != null
+                      && results.size() == 1
+                      && Boolean.TRUE.equals(results.getFirst());
                 }
-                Session existing = sessionOperations.opsForValue().get(key);
-                if (existing == null
-                    ? session.getVersion() != 0
-                    : existing.getVersion() != session.getVersion()) {
-                  sessionOperations.unwatch();
-                  return false;
-                }
-                session.setExpiresAt(Instant.now().plus(SESSION_TTL));
-                session.setVersion(session.getVersion() + 1);
-                sessionOperations.multi();
-                sessionOperations.opsForValue().set(key, session, SESSION_TTL);
-                return sessionOperations.exec() != null;
-              }
-            }));
+              }));
+    }
   }
 
   private <T> T withSessionLock(
       String sessionId, String userId, Function<LockOwnership, T> operation) {
-    String lockKey = sessionKey(sessionId, userId) + ":lock";
+    String lockKey = "lock:" + sessionKey(sessionId, userId);
     String owner = UUID.randomUUID().toString();
     if (!Boolean.TRUE.equals(
         stringRedisTemplate.opsForValue().setIfAbsent(lockKey, owner, lockTtl))) {
@@ -149,7 +156,7 @@ public class RedisSessionRepository implements SessionRepository {
     LockOwnership lock = new LockOwnership(lockKey, owner, lockLost);
     ScheduledFuture<?> renewal =
         lockRenewalExecutor.scheduleAtFixedRate(
-            () -> renew(lockKey, owner, lockLost),
+            () -> renew(lock),
             lockRenewalInterval.toMillis(),
             lockRenewalInterval.toMillis(),
             TimeUnit.MILLISECONDS);
@@ -165,16 +172,18 @@ public class RedisSessionRepository implements SessionRepository {
     }
   }
 
-  private void renew(String lockKey, String owner, AtomicBoolean lockLost) {
-    try {
-      Long renewed =
-          stringRedisTemplate.execute(
-              RENEW_LOCK, List.of(lockKey), owner, Long.toString(lockTtl.toMillis()));
-      if (renewed == null || renewed == 0) {
-        lockLost.set(true);
+  private void renew(LockOwnership lock) {
+    synchronized (lock) {
+      try {
+        Long renewed =
+            stringRedisTemplate.execute(
+                RENEW_LOCK, List.of(lock.key()), lock.owner(), Long.toString(lockTtl.toMillis()));
+        if (renewed == null || renewed == 0) {
+          lock.lost().set(true);
+        }
+      } catch (DataAccessException exception) {
+        lock.lost().set(true);
       }
-    } catch (DataAccessException exception) {
-      lockLost.set(true);
     }
   }
 

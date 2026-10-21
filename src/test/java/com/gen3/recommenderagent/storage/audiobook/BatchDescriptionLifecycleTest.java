@@ -3,8 +3,10 @@ package com.gen3.recommenderagent.storage.audiobook;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -96,6 +98,133 @@ class BatchDescriptionLifecycleTest {
       assertThat(directory.resolve("short-description-batch.json")).doesNotExist();
     } finally {
       server.stop(0);
+    }
+  }
+
+  @Test
+  void failedUploadCanBeResubmittedWithoutManualManifestRecovery() throws Exception {
+    when(store.datasetIdentity()).thenReturn(new DatasetIdentity("other", "catalogue-a"));
+    when(store.findRecordsWithoutShortDescription(1)).thenReturn(List.of(book()));
+    var uploads = new java.util.concurrent.atomic.AtomicInteger();
+    var submissions = new java.util.concurrent.atomic.AtomicInteger();
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext(
+        "/",
+        exchange -> {
+          exchange.getRequestBody().readAllBytes();
+          if (exchange.getRequestURI().getPath().equals("/files")
+              && uploads.incrementAndGet() == 1) {
+            exchange.sendResponseHeaders(500, -1);
+            exchange.close();
+            return;
+          }
+          String response;
+          if (exchange.getRequestURI().getPath().equals("/files")) {
+            response = "{\"id\":\"input-1\"}";
+          } else {
+            submissions.incrementAndGet();
+            response = "{\"id\":\"batch-1\"}";
+          }
+          byte[] body = response.getBytes(StandardCharsets.UTF_8);
+          exchange.sendResponseHeaders(200, body.length);
+          try (var stream = exchange.getResponseBody()) {
+            stream.write(body);
+          }
+        });
+    server.start();
+    try {
+      String url = "http://127.0.0.1:" + server.getAddress().getPort();
+      var submit = job("submit", HttpClient.newHttpClient(), url);
+      assertThatThrownBy(() -> submit.run(new DefaultApplicationArguments()))
+          .isInstanceOf(java.io.IOException.class);
+      assertThat(directory.resolve("short-description-batch.json")).doesNotExist();
+      assertThat(submissions.get()).isZero();
+      submit.run(new DefaultApplicationArguments());
+      assertThat(submissions.get()).isEqualTo(1);
+      assertThat(
+              mapper
+                  .readTree(directory.resolve("short-description-batch.json").toFile())
+                  .path("batchId")
+                  .asText())
+          .isEqualTo("batch-1");
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  @Test
+  void uncertainSubmissionKeepsItsManifestAndCannotBeBlindlyRetried() throws Exception {
+    when(store.datasetIdentity()).thenReturn(new DatasetIdentity("other", "catalogue-a"));
+    when(store.findRecordsWithoutShortDescription(1)).thenReturn(List.of(book()));
+    var submissions = new java.util.concurrent.atomic.AtomicInteger();
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext(
+        "/",
+        exchange -> {
+          exchange.getRequestBody().readAllBytes();
+          if (exchange.getRequestURI().getPath().equals("/files")) {
+            byte[] body = "{\"id\":\"input-1\"}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            try (var stream = exchange.getResponseBody()) {
+              stream.write(body);
+            }
+          } else {
+            submissions.incrementAndGet();
+            exchange.sendResponseHeaders(500, -1);
+            exchange.close();
+          }
+        });
+    server.start();
+    try {
+      var submit =
+          job(
+              "submit",
+              HttpClient.newHttpClient(),
+              "http://127.0.0.1:" + server.getAddress().getPort());
+      assertThatThrownBy(() -> submit.run(new DefaultApplicationArguments()))
+          .isInstanceOf(java.io.IOException.class);
+      assertThat(directory.resolve("short-description-batch.json")).exists();
+      assertThatThrownBy(() -> submit.run(new DefaultApplicationArguments()))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("still pending");
+      assertThat(submissions.get()).isEqualTo(1);
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  @Test
+  void failedManifestReplacementPreservesThePreviousRecoveryData() throws Exception {
+    when(store.datasetIdentity()).thenReturn(new DatasetIdentity("other", "catalogue-a"));
+    Path manifest = directory.resolve("short-description-batch.json");
+    job("disabled", mock(HttpClient.class), "https://unused.test")
+        .writeManifest(manifest, "", List.of(book()));
+    String previous = Files.readString(manifest);
+    ObjectMapper failingMapper = spy(new ObjectMapper());
+    doAnswer(
+            invocation -> {
+              java.io.File target = invocation.getArgument(0);
+              Files.writeString(target.toPath(), "{partial");
+              throw new java.io.IOException("simulated disk failure");
+            })
+        .when(failingMapper)
+        .writeValue(any(java.io.File.class), any());
+    var job =
+        new BatchShortDescriptionEnricher(
+            store,
+            failingMapper,
+            mock(HttpClient.class),
+            "test-key",
+            "https://unused.test",
+            "disabled",
+            "",
+            directory,
+            1);
+    assertThatThrownBy(() -> job.writeManifest(manifest, "batch-1", List.of(book())))
+        .isInstanceOf(java.io.IOException.class);
+    assertThat(Files.readString(manifest)).isEqualTo(previous);
+    try (var files = Files.list(directory)) {
+      assertThat(files.toList()).containsExactly(manifest);
     }
   }
 

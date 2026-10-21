@@ -14,7 +14,10 @@ Session changes use one `SessionRepository.update` operation: lock the `(userId,
 pair, load or create its session, apply the change once, commit, and release the lock. Redis
 checks lock ownership and session version before saving, and renews the lock for long updates.
 Busy sessions return 409; rejected commits or lost locks return 503. Updates are not retried
-automatically. Final response generation happens after commit, so a response failure does not
+automatically. Lock keys use a separate `lock:` namespace; existing session data keys are unchanged.
+When upgrading from the old lock-key scheme, drain and stop old instances and allow their leases
+to expire before serving traffic with the new version. Do not mix the two locking versions.
+Final response generation happens after commit, so a response failure does not
 undo history or shown-book changes.
 
 Redis is the default session adapter (`SESSION_STORE=redis`). To replace it, register an
@@ -132,7 +135,11 @@ export AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MODE=import
 
 For the remaining catalogue, submit up to 100,000 records at a time and repeat after each import;
 each submission selects the records still missing `short_description`. A pending manifest blocks
-another submission until it is imported. Batch requests use
+another submission until it is imported. An input-upload failure leaves no pending manifest, so
+submission can be retried normally. Once batch submission starts, an unknown outcome retains the
+manifest to prevent duplicate generation: reconcile the batch with the provider, then supply
+`AUDIOBOOK_SHORT_DESCRIPTION_BATCH_ID` to import it. Manifest updates are atomic so a failed
+write preserves the previous recovery data. Batch requests use
 `gpt-4o-mini`, group ten books per request, and ask for a spoiler-free sentence of at most 20
 words. Keep the default mode (`disabled`) for ordinary application startup.
 
