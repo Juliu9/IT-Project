@@ -16,6 +16,7 @@ import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectorService;
 import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.MustInclude;
+import com.gen3.recommenderagent.domain.session.MustNotInclude;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
@@ -240,6 +241,48 @@ class PersonalisedRecommendationFlowTest {
     assertThat(sessions.getSession("session", "user").isAwaitingPersonalisedPreferences())
         .isFalse();
     verifyNoInteractions(books, embeddingModel);
+  }
+
+  @Test
+  void knownUserBlendsBothSemanticPolaritiesAndPreservesBothExactFilterGroups() throws Exception {
+    when(users.findEmbeddingByUserId("user"))
+        .thenReturn(
+            Optional.of(new UserPreferenceEmbedding("user", new float[] {1, 0, 0}, new float[0])));
+    when(embeddingModel.embedForResponse(anyList()))
+        .thenReturn(
+            new EmbeddingResponse(
+                List.of(
+                    new Embedding(new float[] {0, 1, 0}, 0),
+                    new Embedding(new float[] {0, 0, 1}, 1))));
+    SessionRequest request = personalisedRequest();
+    SemanticQuery positive = new SemanticQuery();
+    positive.setTopics(List.of("deserts"));
+    SemanticQuery negative = new SemanticQuery();
+    negative.setGenres(List.of("romance"));
+    request.setPositiveSemanticQuery(positive);
+    request.setNegativeSemanticQuery(negative);
+    MustInclude include = new MustInclude();
+    include.setLanguage("English");
+    include.setDuration("at most 2 hours");
+    MustNotInclude exclude = new MustNotInclude();
+    exclude.setAuthors(List.of("Excluded Author"));
+    request.setMustInclude(include);
+    request.setMustNotInclude(exclude);
+
+    SessionRequest result = process(request);
+
+    ArgumentCaptor<float[]> vector = ArgumentCaptor.forClass(float[].class);
+    ArgumentCaptor<AudiobookFilters> filters = ArgumentCaptor.forClass(AudiobookFilters.class);
+    verify(books).searchSemantic(vector.capture(), filters.capture(), eq(50));
+    assertArrayEquals(
+        new float[] {0.4082483f, 0.4082483f, -0.8164966f}, vector.getValue(), 0.0001f);
+    assertThat(filters.getValue().mustInclude().language()).isEqualTo("English");
+    assertThat(filters.getValue().mustInclude().maximumDurationMinutes()).isEqualTo(120);
+    assertThat(filters.getValue().mustNotInclude().authors()).containsExactly("Excluded Author");
+    verify(embeddingModel).embedForResponse(List.of("Topics: deserts", "Genres: romance"));
+    assertThat(result.getPositiveSemanticQuery().getTopics()).containsExactly("deserts");
+    assertThat(result.getNegativeSemanticQuery().getGenres()).containsExactly("romance");
+    assertThat(result.getRecommendations()).hasSize(1);
   }
 
   private SessionRequest process(SessionRequest request) {

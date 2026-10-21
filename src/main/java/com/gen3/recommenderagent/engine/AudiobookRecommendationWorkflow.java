@@ -54,7 +54,7 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
   public List<Recommendation> recommend(SessionRequest request, Session session) {
     UserPreferenceEmbedding preferences = userPreferences(session).orElse(null);
     SemanticQueryVectors vectors =
-        RequestTelemetry.measure("embedMs", () -> retrievalVectors(request, session, preferences));
+        RequestTelemetry.measure("embedMs", () -> retrievalVectors(request, preferences));
     if (request != null && request.isPersonalised()) {
       boolean needsPreferences = vectors == null || vectors.isEmpty();
       request.setPreferenceClarificationRequired(needsPreferences);
@@ -75,7 +75,7 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
   }
 
   private SemanticQueryVectors retrievalVectors(
-      SessionRequest request, Session session, UserPreferenceEmbedding preferences) {
+      SessionRequest request, UserPreferenceEmbedding preferences) {
     if (request == null || !request.isPersonalised()) {
       return semanticQueryVectorService.create(request);
     }
@@ -84,7 +84,11 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
       addVector(positive, preferences.favouritesVector());
       addVector(positive, preferences.historyVector());
       float[] combined = VectorMath.directionalAverage(positive, List.of());
-      return new SemanticQueryVectors(List.of(combined), List.of());
+      SemanticQueryVectors current = semanticQueryVectorService.create(request);
+      List<float[]> blended = new ArrayList<>(current.positive());
+      // Treat stored taste as one signal, so it and the current query have equal shares.
+      blended.add(combined);
+      return new SemanticQueryVectors(blended, current.negative());
     }
     return semanticQueryVectorService.createPersonalised(request);
   }

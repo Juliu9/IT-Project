@@ -281,9 +281,9 @@ class QdrantAudiobookRepositoryTest {
     ArgumentCaptor<QueryPoints> request = ArgumentCaptor.forClass(QueryPoints.class);
     verify(client).queryAsync(request.capture());
     assertThat(request.getValue().getFilter().getMustCount()).isEqualTo(3);
-    assertThat(request.getValue().getFilter().getMustNotCount()).isEqualTo(3);
+    assertThat(request.getValue().getFilter().getMustNotCount()).isEqualTo(4);
     assertThat(request.getValue().getFilter().toString())
         .contains("language", "English", "source", "NLS", "publicationYear", "French", "Legacy")
-        .doesNotContain("bookId", "shown-1");
+        .contains("bookId", "shown-1", "shown-2");
   }
 }

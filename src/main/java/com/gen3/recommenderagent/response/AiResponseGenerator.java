@@ -6,10 +6,11 @@ import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
-import com.openai.errors.OpenAIException;
 import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +19,8 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class AiResponseGenerator implements ResponseGenerator {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(AiResponseGenerator.class);
 
   private static final String PROCESSING_FALLBACK =
       "I'm having a little trouble with that right now. Please try again in a moment.";
@@ -89,8 +92,9 @@ public class AiResponseGenerator implements ResponseGenerator {
       return limitNotice + buildHumanReadableResponse(recommendations, currentRequest);
     }
 
+    ChatResponse aiResponse;
     try {
-      ChatResponse aiResponse =
+      aiResponse =
           aiOperationObserver.observe(
               "generate_response",
               () ->
@@ -115,12 +119,24 @@ public class AiResponseGenerator implements ResponseGenerator {
                       .call()
                       .chatResponse(),
               AiOperationObserver.AiUsage::from);
-      RequestTelemetry.responseMode("AI");
-      return aiResponse.getResult().getOutput().getText();
-    } catch (OpenAIException exception) {
+    } catch (RuntimeException exception) {
+      LOGGER.warn(
+          "Response model failed; using built-in response. exception={}",
+          exception.getClass().getSimpleName());
       RequestTelemetry.responseMode("FALLBACK");
       return limitNotice + buildHumanReadableResponse(recommendations, currentRequest);
     }
+    if (aiResponse == null
+        || aiResponse.getResult() == null
+        || aiResponse.getResult().getOutput() == null
+        || aiResponse.getResult().getOutput().getText() == null
+        || aiResponse.getResult().getOutput().getText().isBlank()) {
+      LOGGER.warn("Response model returned no usable text; using built-in response");
+      RequestTelemetry.responseMode("FALLBACK");
+      return limitNotice + buildHumanReadableResponse(recommendations, currentRequest);
+    }
+    RequestTelemetry.responseMode("AI");
+    return aiResponse.getResult().getOutput().getText();
   }
 
   // Turns structure Java objects into a text prompt

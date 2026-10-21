@@ -68,7 +68,7 @@ public class AudiobookRetrievalPlanner {
     if (filter == null) {
       return AudiobookFilterConditions.empty();
     }
-    RangeBounds bounds = durationBounds(filter.getDuration());
+    DurationRange bounds = DurationRange.parse(filter.getDuration());
     RangeBounds years = yearBounds(filter.getPublicationYear());
     return new AudiobookFilterConditions(
         copy(filter.getAuthors()),
@@ -85,7 +85,7 @@ public class AudiobookRetrievalPlanner {
     if (filter == null) {
       return AudiobookFilterConditions.empty();
     }
-    RangeBounds bounds = durationBounds(filter.getDuration());
+    DurationRange bounds = DurationRange.parse(filter.getDuration());
     RangeBounds years = yearBounds(filter.getPublicationYear());
     return new AudiobookFilterConditions(
         copy(filter.getAuthors()),
@@ -96,26 +96,6 @@ public class AudiobookRetrievalPlanner {
         bounds.maximum(),
         years.minimum(),
         years.maximum());
-  }
-
-  /** Parses values such as "under 10 hours" and "more than 480 minutes". */
-  private RangeBounds durationBounds(String duration) {
-    if (!hasText(duration)) {
-      return RangeBounds.empty();
-    }
-    Matcher matcher = FIRST_NUMBER.matcher(duration);
-    if (!matcher.find()) {
-      return RangeBounds.empty();
-    }
-    int value = Integer.parseInt(matcher.group(1));
-    String normalized = duration.toLowerCase(Locale.ROOT);
-    int minutes = normalized.contains("hour") ? value * 60 : value;
-    boolean lowerBound =
-        normalized.contains("over")
-            || normalized.contains("more than")
-            || normalized.contains("at least")
-            || normalized.contains("minimum");
-    return lowerBound ? new RangeBounds(minutes, null) : new RangeBounds(null, minutes);
   }
 
   /** Parses values such as "after 2020" and "before 2000". */

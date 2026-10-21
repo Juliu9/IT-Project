@@ -80,8 +80,9 @@ final class QdrantAudiobookSchema {
     Filter.Builder builder = Filter.newBuilder();
     addConditions(builder, filters.mustInclude(), false);
     addConditions(builder, filters.mustNotInclude(), true);
-    // RankingService excludes shown books after retrieval, so requests never need to create this
-    // index.
+    if (!filters.excludedBookIds().isEmpty()) {
+      builder.addMustNot(matchKeywords(BOOK_ID, filters.excludedBookIds()));
+    }
     return builder.getMustCount() == 0 && builder.getMustNotCount() == 0 ? null : builder.build();
   }
 

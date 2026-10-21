@@ -10,6 +10,12 @@ and ranks candidates, retains a 24-hour Redis session, and returns a concise spo
 3. The ranker scores candidates and defensively excludes any book already shown in the session.
 4. Redis saves the request and up to 500 recent shown-book IDs under the `(userId, sessionId)` pair.
 
+Every search mode excludes those shown IDs inside Qdrant before selecting up to 50 candidates.
+Existing collections in Qdrant strict mode need a keyword payload index on `bookId`; new
+collections created by this adapter already include it. The ranker checks exclusions again.
+`MORE_RESULTS` reuses the previous search; clear history to
+make earlier books eligible again. Books outside the 500-ID window may reappear.
+
 Session changes use one `SessionRepository.update` operation: lock the `(userId, sessionId)`
 pair, load or create its session, apply the change once, commit, and release the lock. Redis
 checks lock ownership and session version before saving, and renews the lock for long updates.
@@ -34,6 +40,17 @@ Supported intents are `RECOMMENDATION`, `REFINE`, `MORE_RESULTS`, `CHANGE_COUNT`
 Personalised requests such as “Give me books I would like” use a stored Qdrant user vector when
 available. Otherwise, session preferences are used; if none exist, the service asks what the user
 likes. `REFINE` and `MORE_RESULTS` reuse the last search.
+
+For known users, retrieval combines one normalized stored-taste vector and the current positive
+semantic vector equally, then subtracts the negative semantic vector and normalizes the result.
+When a positive source is absent, the other contributes at full strength. Exact `MustInclude` and
+`MustNotInclude` constraints remain database filters; they are never relaxed to fill the count.
+The final ranker still applies its separately configured scoring weights.
+
+Duration filters support hours/minutes, decimals, mixed units (`1h 30m`), and ranges
+(`between 2 and 3 hours`). `under` and `over` are strict; `at most` and `at least` include the boundary.
+A bare duration is exact. Bounds account for the catalogue's whole-minute durations. Invalid,
+ambiguous, reversed, or unrepresentable ranges return 400 instead of silently losing the filter.
 
 ## Run locally
 
@@ -113,7 +130,9 @@ The parser and response generator have separate clients. Set `INPUT_PARSER_CHAT_
 OpenAI's default is `gpt-4o-mini`, overridable with `OPENAI_CHAT_MODEL`.
 To use different providers, register a Spring AI `ChatClient` bean named `inputParserChatClient`
 or `responseGeneratorChatClient`; each replacement affects only its role. Model names must be
-supported by that client's provider.
+supported by that client's provider. Provider failures and missing or blank response text use the
+built-in recommendation response; the already committed session is preserved. These failures
+are recorded in local logs.
 
 ## Short book descriptions
 
@@ -166,7 +185,10 @@ configured name; do not switch provider while a batch is pending.
 ## Grafana Cloud logs
 
 The optional Alloy collector sends only structured `recommendation.completed` events to Grafana
-Cloud; it excludes request text and session contents.
+Cloud; it excludes request text and session contents. Nonmatching log lines, malformed JSON,
+and summaries with missing, mistyped, or extra top-level fields are dropped before export. The
+allowlist follows the ten fields emitted by `RequestTelemetry`; update it if that event schema
+changes. Other application logs remain local.
 
 1. Create a Grafana Cloud access-policy token with `logs:write`, then create `.env` in the repo:
 

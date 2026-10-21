@@ -1,0 +1,109 @@
+package com.gen3.recommenderagent.candidateretriever.retrievalplan;
+
+import com.gen3.recommenderagent.inputparser.InvalidRequestException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/** Translates explicit duration expressions to inclusive bounds for whole-minute catalogue data. */
+record DurationRange(Integer minimum, Integer maximum) {
+  private static final String NUMBER = "(?:\\d+(?:\\.\\d+)?|\\.\\d+)";
+  private static final String UNIT = "(?:hours?|hrs?|h|minutes?|mins?|m)";
+  private static final Pattern TERM =
+      Pattern.compile("(" + NUMBER + ")\\s*(" + UNIT + ")(?![a-z])");
+  private static final Pattern QUANTITY = Pattern.compile("(" + NUMBER + ")\\s*(" + UNIT + ")");
+  private static final Pattern RANGE =
+      Pattern.compile(
+          "^(?:between\\s+(.+?)\\s+and\\s+(.+)|(?:from\\s+)?(.+?)\\s*(?:-|to)\\s*(.+))$");
+  private static final Pattern COMPARISON =
+      Pattern.compile(
+          "^(under|less than|below|over|more than|above|at most|no more than|up to|maximum(?: of)?|at least|no less than|minimum(?: of)?|exactly)\\s+(.+)$");
+
+  static DurationRange parse(String text) {
+    if (text == null || text.isBlank()) {
+      return new DurationRange(null, null);
+    }
+    String normalized = text.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
+    try {
+      Matcher range = RANGE.matcher(normalized);
+      if (range.matches()) {
+        String lower = range.group(1) != null ? range.group(1) : range.group(3);
+        String upper = range.group(2) != null ? range.group(2) : range.group(4);
+        Matcher upperQuantity = QUANTITY.matcher(upper);
+        if (lower.matches(NUMBER) && upperQuantity.matches()) {
+          lower += " " + upperQuantity.group(2);
+        }
+        return bounded(minutes(lower), minutes(upper));
+      }
+      Matcher comparison = COMPARISON.matcher(normalized);
+      String operator = comparison.matches() ? comparison.group(1) : "exactly";
+      BigDecimal value = minutes(comparison.matches() ? comparison.group(2) : normalized);
+      return switch (operator) {
+        case "under", "less than", "below" -> checked(null, whole(value, RoundingMode.CEILING) - 1);
+        case "over", "more than", "above" ->
+            checked(Math.addExact(whole(value, RoundingMode.FLOOR), 1), null);
+        case "at most", "no more than", "up to", "maximum", "maximum of" ->
+            checked(null, whole(value, RoundingMode.FLOOR));
+        case "at least", "no less than", "minimum", "minimum of" ->
+            checked(whole(value, RoundingMode.CEILING), null);
+        default -> bounded(value, value);
+      };
+    } catch (ArithmeticException | IllegalArgumentException exception) {
+      throw invalidDuration();
+    }
+  }
+
+  private static BigDecimal minutes(String text) {
+    Matcher terms = TERM.matcher(text);
+    BigDecimal total = BigDecimal.ZERO;
+    int end = 0;
+    boolean hoursSeen = false;
+    boolean minutesSeen = false;
+    while (terms.find()) {
+      String separator = text.substring(end, terms.start()).trim();
+      if (!separator.isEmpty() && !(end > 0 && separator.equals("and"))) {
+        throw invalidDuration();
+      }
+      boolean hours = terms.group(2).startsWith("h");
+      if ((hours && hoursSeen) || (!hours && minutesSeen)) {
+        throw invalidDuration();
+      }
+      hoursSeen |= hours;
+      minutesSeen |= !hours;
+      BigDecimal quantity = new BigDecimal(terms.group(1));
+      total = total.add(hours ? quantity.multiply(BigDecimal.valueOf(60)) : quantity);
+      end = terms.end();
+    }
+    if (end == 0
+        || !text.substring(end).isBlank()
+        || total.signum() <= 0
+        || total.compareTo(BigDecimal.valueOf(Integer.MAX_VALUE)) > 0) {
+      throw invalidDuration();
+    }
+    return total;
+  }
+
+  private static DurationRange bounded(BigDecimal minimum, BigDecimal maximum) {
+    return checked(whole(minimum, RoundingMode.CEILING), whole(maximum, RoundingMode.FLOOR));
+  }
+
+  private static int whole(BigDecimal value, RoundingMode rounding) {
+    return value.setScale(0, rounding).intValueExact();
+  }
+
+  private static DurationRange checked(Integer minimum, Integer maximum) {
+    if ((minimum != null && minimum < 1)
+        || (maximum != null && maximum < 1)
+        || (minimum != null && maximum != null && minimum > maximum)) {
+      throw invalidDuration();
+    }
+    return new DurationRange(minimum, maximum);
+  }
+
+  private static InvalidRequestException invalidDuration() {
+    return new InvalidRequestException(
+        "Please give a valid duration in hours or minutes, such as 'under 1.5 hours' or 'between 2 and 3 hours'.");
+  }
+}

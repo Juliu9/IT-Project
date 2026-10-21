@@ -44,7 +44,7 @@ class AudiobookRetrievalPlannerTest {
     assertThat(plan.filters().mustInclude().narrators()).containsExactly("Stephen Fry");
     assertThat(plan.filters().mustInclude().language()).isEqualTo("English");
     assertThat(plan.filters().mustInclude().source()).isEqualTo("NLS");
-    assertThat(plan.filters().mustInclude().maximumDurationMinutes()).isEqualTo(600);
+    assertThat(plan.filters().mustInclude().maximumDurationMinutes()).isEqualTo(599);
     assertThat(plan.filters().mustInclude().minimumPublicationYear()).isEqualTo(2020);
     assertThat(plan.filters().mustNotInclude().language()).isEqualTo("French");
     assertThat(plan.filters().mustNotInclude().maximumPublicationYear()).isEqualTo(2000);

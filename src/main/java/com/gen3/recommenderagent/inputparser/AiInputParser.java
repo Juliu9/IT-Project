@@ -51,7 +51,12 @@ public class AiInputParser implements InputParser {
                         for a new search; do not choose a retrieval mode. Put desired and avoided
                         concepts in positiveSemanticQuery and negativeSemanticQuery. Use mustInclude
                         and mustNotInclude only for exact author, narrator, language, duration,
-                        publication year, or source requirements. Set bookCount only when the user explicitly requests
+                        publication year, or source requirements. Preserve duration comparisons:
+                        use "under", "over", "at most", "at least", "exactly", or "between X and Y" with
+                        explicit hours or minutes. Keep decimal values and both range endpoints;
+                        for example, "under 1.5 hours" and "between 2 and 3 hours".
+                        Never convert a vague duration into an invented numeric limit.
+                        Set bookCount only when the user explicitly requests
                         a number of recommendations; otherwise leave it null.
 
                         Set personalised=true only when the user requests recommendations based on
