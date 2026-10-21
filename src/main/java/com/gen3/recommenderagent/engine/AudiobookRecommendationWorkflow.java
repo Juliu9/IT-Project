@@ -1,7 +1,6 @@
 package com.gen3.recommenderagent.engine;
 
-import static com.gen3.recommenderagent.common.BookCountPolicy.clamp;
-import static com.gen3.recommenderagent.common.BookCountPolicy.clampOrDefault;
+import static com.gen3.recommenderagent.common.ApplicationConstants.RECOMMENDATION_BATCH_SIZE;
 
 import com.gen3.recommenderagent.candidateretriever.CandidateRetriever;
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectorService;
@@ -70,8 +69,7 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
                 candidateRetriever.getCandidates(request, vectors, CANDIDATE_LIMIT, shownBookIds));
     RankingContext rankingContext = new RankingContext(preferences, shownBookIds);
     return RequestTelemetry.measure(
-        "rankMs",
-        () -> ranker.rank(candidates, resolveResultLimit(request, session), rankingContext));
+        "rankMs", () -> ranker.rank(candidates, RECOMMENDATION_BATCH_SIZE, rankingContext));
   }
 
   private SemanticQueryVectors retrievalVectors(
@@ -116,15 +114,5 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
       return Set.of();
     }
     return new HashSet<>(session.getShownBooks());
-  }
-
-  /** Applies the API's default and maximum result limits. */
-  private int resolveResultLimit(SessionRequest request, Session session) {
-    Integer requestedCount = request == null ? null : request.getBookCount();
-    if (requestedCount != null) {
-      return clamp(requestedCount);
-    }
-    Integer sessionCount = session == null ? null : session.getBookCount();
-    return clampOrDefault(sessionCount);
   }
 }

@@ -49,14 +49,14 @@ class AudiobookRecommendationWorkflowTest {
     when(retriever.getCandidates(request, vectors, 50, Set.of("already-shown")))
         .thenReturn(candidates);
     when(userPreferences.findEmbeddingByUserId("user-1")).thenReturn(Optional.of(preferences));
-    when(ranker.rank(anyList(), eq(3), any(RankingContext.class))).thenReturn(recommendations);
+    when(ranker.rank(anyList(), eq(20), any(RankingContext.class))).thenReturn(recommendations);
     AudiobookRecommendationWorkflow workflow =
         new AudiobookRecommendationWorkflow(retriever, ranker, vectorService, userPreferences);
 
     List<Recommendation> result = workflow.recommend(request, session);
 
     ArgumentCaptor<RankingContext> context = ArgumentCaptor.forClass(RankingContext.class);
-    verify(ranker).rank(eq(candidates), eq(3), context.capture());
+    verify(ranker).rank(eq(candidates), eq(20), context.capture());
     assertSame(recommendations, result);
     assertSame(preferences, context.getValue().userPreferences());
     assertEquals(java.util.Set.of("already-shown"), context.getValue().excludedBookIds());

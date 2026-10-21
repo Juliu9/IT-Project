@@ -2,7 +2,6 @@ package com.gen3.recommenderagent.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -40,7 +39,9 @@ class SessionTransitionServiceTest {
 
     SessionRequest result = service(sessions, workflow).process("session-1", "user-1", request);
 
-    assertSame(recommendations, result.getRecommendations());
+    assertEquals(
+        recommendations.stream().map(Recommendation::getBookId).toList(),
+        result.getRecommendations().stream().map(Recommendation::getBookId).toList());
     assertNotNull(result.getRequestId());
     assertNotNull(result.getCreatedAt());
     assertEquals(List.of("book-1", "book-2"), session.getShownBooks());

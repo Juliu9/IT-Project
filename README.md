@@ -16,6 +16,23 @@ collections created by this adapter already include it. The ranker checks exclus
 `MORE_RESULTS` reuses the previous search; clear history to
 make earlier books eligible again. Books outside the 500-ID window may reappear.
 
+Each search ranks up to 20 recommendations from those candidates. The session stores the
+unserved recommendations (ID, title, short description, and score), then serves up to five per
+request using the existing result-count rules. Plain “more” skips preference lookup, embedding,
+retrieval, and ranking while that queue has enough results. Parsing and response generation still
+run normally. A short cached tail is combined with a fresh batch when possible; the tail is
+excluded from the new retrieval too.
+
+New searches, refinements, preference changes, new criteria supplied with “more”, and clearing
+history discard the queue. Changing the result count or asking for help keeps it. Queue consumption
+and shown IDs commit together under the existing session lock and share its 24-hour sliding expiry;
+failed updates leave the saved queue untouched. There are no Redis-specific keys or database lookup
+requirements. Old sessions without a queue refill normally.
+
+Cached details are a snapshot of the catalogue when the batch was ranked. Catalogue edits or
+removals take effect for new batches; queued entries are not checked against the database on each
+page.
+
 Session changes use one `SessionRepository.update` operation: lock the `(userId, sessionId)`
 pair, load or create its session, apply the change once, commit, and release the lock. Redis
 checks lock ownership and session version before saving, and renews the lock for long updates.

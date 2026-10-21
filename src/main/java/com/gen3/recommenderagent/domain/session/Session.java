@@ -2,6 +2,7 @@ package com.gen3.recommenderagent.domain.session;
 
 import static com.gen3.recommenderagent.common.ApplicationConstants.MAX_BOOK_COUNT;
 import static com.gen3.recommenderagent.common.ApplicationConstants.MAX_SHOWN_BOOKS;
+import static com.gen3.recommenderagent.common.ApplicationConstants.RECOMMENDATION_BATCH_SIZE;
 import static com.gen3.recommenderagent.common.BookCountPolicy.clampOrDefault;
 
 import java.time.Instant;
@@ -21,6 +22,9 @@ public class Session {
   private List<String> shownBooks;
   private List<SessionRequest> requests = new ArrayList<>();
   private SessionPreferences preferences;
+  // shortcut: cached details are snapshots; validate the catalogue if live removals must take
+  // effect.
+  private List<Recommendation> pendingRecommendations = new ArrayList<>();
 
   public boolean isAwaitingPersonalisedPreferences() {
     return requests != null
@@ -122,6 +126,17 @@ public class Session {
     this.preferences = preferences;
   }
 
+  public List<Recommendation> getPendingRecommendations() {
+    return pendingRecommendations;
+  }
+
+  public void setPendingRecommendations(List<Recommendation> recommendations) {
+    pendingRecommendations =
+        recommendations == null
+            ? new ArrayList<>()
+            : new ArrayList<>(recommendations.stream().limit(RECOMMENDATION_BATCH_SIZE).toList());
+  }
+
   public void addRecommendationIds(List<String> bookIds) {
     if (this.shownBooks == null) {
       this.shownBooks = new ArrayList<>();
@@ -141,6 +156,7 @@ public class Session {
   }
 
   public void clearHistory() {
+    this.pendingRecommendations.clear();
     this.requests.clear();
     if (this.shownBooks != null) {
       this.shownBooks.clear();

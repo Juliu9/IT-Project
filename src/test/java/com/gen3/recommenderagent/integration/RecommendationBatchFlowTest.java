@@ -1,0 +1,187 @@
+package com.gen3.recommenderagent.integration;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.candidateretriever.CandidateRetriever;
+import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectorService;
+import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors;
+import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.MustInclude;
+import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.session.SemanticQuery;
+import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.engine.AudiobookRecommendationWorkflow;
+import com.gen3.recommenderagent.ranker.Ranker;
+import com.gen3.recommenderagent.ranker.RankingContext;
+import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.IntStream;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+
+class RecommendationBatchFlowTest {
+  private final CandidateRetriever retriever = mock(CandidateRetriever.class);
+  private final Ranker ranker = mock(Ranker.class);
+  private final SemanticQueryVectorService vectors = mock(SemanticQueryVectorService.class);
+  private final UserPreferenceVectorRepository users = mock(UserPreferenceVectorRepository.class);
+  private final RecommendationFlowTestSupport.InMemorySessionRepository sessions =
+      new RecommendationFlowTestSupport.InMemorySessionRepository();
+  private final SessionTransitionService service =
+      new SessionTransitionService(
+          sessions, new AudiobookRecommendationWorkflow(retriever, ranker, vectors, users));
+
+  RecommendationBatchFlowTest() throws Exception {
+    when(users.findEmbeddingByUserId("user")).thenReturn(Optional.empty());
+    when(vectors.create(any())).thenReturn(SemanticQueryVectors.empty());
+    when(retriever.getCandidates(any(), any(), eq(50), anySet())).thenReturn(List.of());
+    when(ranker.rank(anyList(), anyInt(), any(RankingContext.class)))
+        .thenReturn(batch(1, 20), batch(21, 20));
+  }
+
+  @Test
+  void firstTwentyResultsArePagedAcrossPersistedSessionUpdatesWithoutRepeatingHeavyWork()
+      throws Exception {
+    for (int page = 0; page < 4; page++) {
+      SessionRequest result =
+          process(request(page == 0 ? Intent.RECOMMENDATION : Intent.MORE_RESULTS));
+      assertIds(result, page * 5 + 1, 5);
+      assertThat(result.getRecommendations())
+          .extracting(Recommendation::getRank)
+          .containsExactly(1, 2, 3, 4, 5);
+      assertThat(sessions.getSession("session", "user").getShownBooks()).hasSize((page + 1) * 5);
+    }
+    verify(users).findEmbeddingByUserId("user");
+    verify(vectors).create(any());
+    verify(retriever).getCandidates(any(), any(), eq(50), eq(Set.of()));
+    verify(ranker).rank(anyList(), eq(20), any(RankingContext.class));
+    assertIds(process(request(Intent.MORE_RESULTS)), 21, 5);
+    verify(retriever)
+        .getCandidates(
+            any(),
+            any(),
+            eq(50),
+            eq(
+                IntStream.rangeClosed(1, 20)
+                    .mapToObj(i -> "book-" + i)
+                    .collect(java.util.stream.Collectors.toSet())));
+  }
+
+  @Test
+  void changingCountKeepsTheBatchAndPartialPagesRefillWithoutRepeatingTheTail() {
+    assertIds(process(request(Intent.RECOMMENDATION)), 1, 5);
+    SessionRequest count = request(Intent.CHANGE_COUNT);
+    count.setBookCount(3);
+    process(count);
+    assertIds(process(request(Intent.MORE_RESULTS)), 6, 3);
+    assertIds(process(request(Intent.MORE_RESULTS)), 9, 3);
+    assertIds(process(request(Intent.MORE_RESULTS)), 12, 3);
+    assertIds(process(request(Intent.MORE_RESULTS)), 15, 3);
+    count.setBookCount(5);
+    process(count);
+    assertIds(process(request(Intent.MORE_RESULTS)), 18, 5);
+    verify(ranker, times(2)).rank(anyList(), eq(20), any(RankingContext.class));
+    verify(retriever)
+        .getCandidates(
+            any(),
+            any(),
+            eq(50),
+            eq(
+                IntStream.rangeClosed(1, 20)
+                    .mapToObj(i -> "book-" + i)
+                    .collect(java.util.stream.Collectors.toSet())));
+  }
+
+  @ParameterizedTest
+  @EnumSource(
+      value = Intent.class,
+      names = {"RECOMMENDATION", "REFINE", "UPDATE_PREFERENCES", "CLEAR_HISTORY"})
+  void changedSearchStateDiscardsThePreviousBatch(Intent intent) {
+    process(request(Intent.RECOMMENDATION));
+    process(request(intent));
+    SessionRequest next =
+        process(
+            request(intent == Intent.CLEAR_HISTORY ? Intent.RECOMMENDATION : Intent.MORE_RESULTS));
+    // Searches consume a fresh first page immediately; preference/history actions do not.
+    assertIds(next, intent == Intent.RECOMMENDATION || intent == Intent.REFINE ? 26 : 21, 5);
+    verify(ranker, times(2)).rank(anyList(), eq(20), any(RankingContext.class));
+  }
+
+  @Test
+  void moreWithNewExactFiltersRetrievesAFreshBatch() {
+    process(request(Intent.RECOMMENDATION));
+    SessionRequest more = request(Intent.MORE_RESULTS);
+    MustInclude include = new MustInclude();
+    include.setLanguage("French");
+    more.setMustInclude(include);
+    assertIds(process(more), 21, 5);
+    verify(ranker, times(2)).rank(anyList(), eq(20), any(RankingContext.class));
+  }
+
+  @Test
+  void aFailedRefillDoesNotConsumeThePersistedTailOrShownIds() {
+    when(ranker.rank(anyList(), anyInt(), any(RankingContext.class)))
+        .thenReturn(batch(1, 7))
+        .thenThrow(new IllegalStateException("catalogue unavailable"));
+    process(request(Intent.RECOMMENDATION));
+    assertThatThrownBy(() -> process(request(Intent.MORE_RESULTS)))
+        .hasMessage("catalogue unavailable");
+    assertThat(sessions.getSession("session", "user").getShownBooks()).hasSize(5);
+    doReturn(batch(8, 20)).when(ranker).rank(anyList(), anyInt(), any(RankingContext.class));
+    assertIds(process(request(Intent.MORE_RESULTS)), 6, 5);
+  }
+
+  @Test
+  void helpKeepsTheBatchAndOversizedPageRequestsStillReturnAtMostFive() {
+    process(request(Intent.RECOMMENDATION));
+    process(request(Intent.HELP));
+    SessionRequest more = request(Intent.MORE_RESULTS);
+    more.setBookCount(100);
+    assertIds(process(more), 6, 5);
+    verify(ranker).rank(anyList(), eq(20), any(RankingContext.class));
+  }
+
+  private SessionRequest process(SessionRequest request) {
+    return service.process("session", "user", request);
+  }
+
+  private SessionRequest request(Intent intent) {
+    SessionRequest request = new SessionRequest();
+    request.setIntent(intent);
+    if (intent == Intent.RECOMMENDATION) {
+      SemanticQuery query = new SemanticQuery();
+      query.setGenres(List.of("fantasy"));
+      request.setPositiveSemanticQuery(query);
+    }
+    return request;
+  }
+
+  private List<Recommendation> batch(int start, int size) {
+    return IntStream.range(start, start + size)
+        .mapToObj(
+            i ->
+                new Recommendation("book-" + i, i - start + 1, 0.9, "Title " + i, "Short summary."))
+        .toList();
+  }
+
+  private void assertIds(SessionRequest request, int start, int size) {
+    assertThat(request.getRecommendations())
+        .extracting(Recommendation::getBookId)
+        .containsExactlyElementsOf(
+            IntStream.range(start, start + size).mapToObj(i -> "book-" + i).toList());
+  }
+}

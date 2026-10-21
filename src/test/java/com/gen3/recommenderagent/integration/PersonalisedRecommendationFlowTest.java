@@ -61,7 +61,7 @@ class PersonalisedRecommendationFlowTest {
     when(response.getResults()).thenReturn(List.of(new Embedding(new float[] {0, 2}, 0)));
     when(embeddingModel.embedForResponse(anyList())).thenReturn(response);
     when(books.searchSemantic(any(), any(), eq(50))).thenReturn(List.of());
-    when(ranker.rank(anyList(), eq(5), any(RankingContext.class)))
+    when(ranker.rank(anyList(), eq(20), any(RankingContext.class)))
         .thenReturn(List.of(new Recommendation("book", 1, 0.9, "A Book")));
     EmbeddingIndexer indexer = new EmbeddingIndexer(embeddingModel);
     AudiobookRecommendationWorkflow workflow =

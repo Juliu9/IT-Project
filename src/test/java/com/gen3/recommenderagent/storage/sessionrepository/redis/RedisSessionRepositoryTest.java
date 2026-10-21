@@ -11,7 +11,10 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.MustInclude;
 import com.gen3.recommenderagent.domain.session.MustNotInclude;
 import com.gen3.recommenderagent.domain.session.Recommendation;
@@ -19,8 +22,10 @@ import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.engine.RecommendationWorkflow;
 import com.gen3.recommenderagent.storage.sessionrepository.SessionBusyException;
 import com.gen3.recommenderagent.storage.sessionrepository.SessionCommitException;
+import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -33,6 +38,8 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -151,13 +158,22 @@ class RedisSessionRepositoryTest {
 
   @Test
   void renewsTheLockForAStillRunningTransition() throws Exception {
+    AtomicReference<Runnable> renewal = new AtomicReference<>();
+    ScheduledExecutorService scheduler = mock(ScheduledExecutorService.class);
+    doAnswer(
+            invocation -> {
+              renewal.set(invocation.getArgument(0));
+              return mock(ScheduledFuture.class);
+            })
+        .when(scheduler)
+        .scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class));
     redisSessionCache =
         new RedisSessionRepository(
             redisTemplate,
             stringRedisTemplate,
-            Duration.ofMillis(200),
-            Duration.ofMillis(25),
-            lockRenewalExecutor);
+            Duration.ofSeconds(30),
+            Duration.ofSeconds(1),
+            scheduler);
     CountDownLatch entered = new CountDownLatch(1);
     CountDownLatch finish = new CountDownLatch(1);
     ExecutorService requestExecutor = Executors.newSingleThreadExecutor();
@@ -173,15 +189,20 @@ class RedisSessionRepositoryTest {
                         await(finish);
                         return "first";
                       }));
-      assertTrue(entered.await(1, TimeUnit.SECONDS));
-      Thread.sleep(250);
+      assertTrue(entered.await(5, TimeUnit.SECONDS));
+      String lockKey = "lock:" + key("renewal-test");
+      stringRedisTemplate.expire(lockKey, Duration.ofSeconds(5));
+      renewal.get().run();
+      Long renewedTtl = stringRedisTemplate.getExpire(lockKey, TimeUnit.MILLISECONDS);
+      assertNotNull(renewedTtl);
+      assertTrue(renewedTtl > 10_000, "Renewal should restore the 30-second lease");
 
       assertThrows(
           SessionBusyException.class,
           () -> redisSessionCache.update("renewal-test", USER_ID, session -> "second"));
 
       finish.countDown();
-      assertEquals("first", first.get(1, TimeUnit.SECONDS));
+      assertEquals("first", first.get(5, TimeUnit.SECONDS));
     } finally {
       finish.countDown();
       requestExecutor.shutdownNow();
@@ -723,6 +744,95 @@ class RedisSessionRepositoryTest {
     } finally {
       resume.countDown();
       threads.shutdownNow();
+    }
+  }
+
+  @Test
+  void legacySessionsStartWithAnEmptyQueueAndNewQueuesAreBounded() {
+    stringRedisTemplate
+        .opsForValue()
+        .set(
+            key("legacy-batch"),
+            "{\"sessionId\":\"legacy-batch\",\"userId\":\"user-1\",\"bookCount\":5,\"version\":0,\"requests\":[]}");
+    redisSessionCache.update(
+        "legacy-batch",
+        USER_ID,
+        session -> {
+          assertTrue(session.getPendingRecommendations().isEmpty());
+          session.setPendingRecommendations(
+              IntStream.rangeClosed(1, 25)
+                  .mapToObj(i -> new Recommendation("legacy-" + i, i, 0.9, "Title " + i))
+                  .toList());
+          return null;
+        });
+    assertEquals(20, read("legacy-batch", USER_ID).getPendingRecommendations().size());
+  }
+
+  @Test
+  void cachedPagesPersistAndConcurrentRequestsCannotConsumeTheSamePage() throws Exception {
+    redisSessionCache.update(
+        "cached-pages",
+        USER_ID,
+        session -> {
+          session.setPendingRecommendations(
+              IntStream.rangeClosed(1, 20)
+                  .mapToObj(
+                      i ->
+                          new Recommendation("book-" + i, i, 0.9, "Title " + i, "A short summary."))
+                  .toList());
+          return null;
+        });
+    CountDownLatch consumed = new CountDownLatch(1);
+    CountDownLatch finish = new CountDownLatch(1);
+    SessionRepository paused =
+        new SessionRepository() {
+          @Override
+          public <T> T update(String id, String user, Function<Session, T> change) {
+            return redisSessionCache.update(
+                id,
+                user,
+                session -> {
+                  T result = change.apply(session);
+                  consumed.countDown();
+                  await(finish);
+                  return result;
+                });
+          }
+        };
+    RecommendationWorkflow workflow = mock(RecommendationWorkflow.class);
+    var first = new SessionTransitionService(paused, workflow);
+    var second =
+        new SessionTransitionService(
+            new RedisSessionRepository(redisTemplate, stringRedisTemplate), workflow);
+    ExecutorService worker = Executors.newSingleThreadExecutor();
+    try {
+      SessionRequest more = new SessionRequest();
+      more.setIntent(Intent.MORE_RESULTS);
+      Future<SessionRequest> firstPage =
+          worker.submit(() -> first.process("cached-pages", USER_ID, more));
+      assertTrue(consumed.await(5, TimeUnit.SECONDS));
+      assertThrows(SessionBusyException.class, () -> second.process("cached-pages", USER_ID, more));
+      finish.countDown();
+      assertEquals(
+          List.of("book-1", "book-2", "book-3", "book-4", "book-5"),
+          firstPage.get(5, TimeUnit.SECONDS).getRecommendations().stream()
+              .map(Recommendation::getBookId)
+              .toList());
+      Session saved = read("cached-pages", USER_ID);
+      assertEquals(15, saved.getPendingRecommendations().size());
+      assertEquals("book-6", saved.getPendingRecommendations().getFirst().getBookId());
+      assertEquals(
+          "A short summary.", saved.getPendingRecommendations().getFirst().getShortDescription());
+      assertEquals(
+          List.of("book-6", "book-7", "book-8", "book-9", "book-10"),
+          second.process("cached-pages", USER_ID, more).getRecommendations().stream()
+              .map(Recommendation::getBookId)
+              .toList());
+      assertEquals(10, read("cached-pages", USER_ID).getShownBooks().size());
+      verifyNoInteractions(workflow);
+    } finally {
+      finish.countDown();
+      worker.shutdownNow();
     }
   }
 
