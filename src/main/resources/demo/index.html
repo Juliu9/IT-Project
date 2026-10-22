@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audiobook Recommendation Agent</title>
+    <style>
+      :root { --blue: #2563eb; --blue-dark: #1d4ed8; --ink: #111827; --muted: #6b7280; --line: #e5e7eb; --page: #f6f7fb; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--page); color: var(--ink); font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      header { height: 72px; display: flex; align-items: center; padding: 0 40px; border-bottom: 1px solid var(--line); background: white; }
+      .brand { display: flex; gap: 12px; align-items: center; }
+      .logo { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 9px; background: var(--blue); color: white; font-weight: 700; }
+      .brand-name { font-size: 17px; font-weight: 700; }
+      .brand-subtitle { margin-top: 2px; color: var(--muted); font-size: 12px; }
+      main { max-width: 880px; margin: 0 auto; padding: 56px 24px 80px; }
+      .hero { margin: 0 auto 36px; max-width: 650px; text-align: center; }
+      h1 { margin: 0; font-size: clamp(29px, 5vw, 36px); letter-spacing: -.8px; }
+      .hero p { color: var(--muted); line-height: 1.6; }
+      .card { padding: 24px; border: 1px solid var(--line); border-radius: 14px; background: white; box-shadow: 0 8px 30px rgb(0 0 0 / 4%); }
+      .label { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px; font-weight: 600; }
+      .label span { color: var(--muted); font-size: 12px; font-weight: 400; }
+      textarea { width: 100%; min-height: 140px; resize: vertical; padding: 16px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); font: inherit; line-height: 1.6; }
+      textarea:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgb(37 99 235 / 10%); }
+      .actions { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-top: 14px; }
+      .examples { display: flex; flex-wrap: wrap; gap: 8px; }
+      .example { border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; background: #f9fafb; color: var(--muted); cursor: pointer; font: inherit; font-size: 12px; }
+      .example:hover { border-color: #c7d2fe; color: var(--blue); }
+      .submit { border: 0; border-radius: 9px; padding: 12px 20px; background: var(--blue); color: white; cursor: pointer; font: inherit; font-weight: 600; }
+      .submit:hover { background: var(--blue-dark); }
+      .submit:disabled { background: #9ca3af; cursor: wait; }
+      .message { display: none; margin-top: 20px; padding: 18px; border-radius: 10px; line-height: 1.65; white-space: pre-wrap; }
+      .result { border: 1px solid var(--line); background: white; }
+      .error { border: 1px solid #fecaca; background: #fef2f2; color: #b91c1c; }
+      .loading { color: var(--muted); text-align: center; }
+      .metrics { display: none; margin-top: 28px; }
+      .metrics-title { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+      .metrics-title h2 { margin: 0; font-size: 17px; }
+      .metrics-title span, .metric-detail { color: var(--muted); font-size: 12px; }
+      .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+      .metric-card { padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: white; }
+      .metric-card.total { border-color: #bfdbfe; background: #eff6ff; }
+      .metric-name { color: var(--muted); font-size: 12px; }
+      .metric-value { margin: 8px 0; font-size: 22px; font-weight: 700; }
+      details { margin-top: 25px; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: white; }
+      summary { display: flex; justify-content: space-between; padding: 18px 20px; cursor: pointer; font-size: 14px; font-weight: 600; }
+      summary::after { content: "+"; color: var(--muted); font-size: 18px; }
+      details[open] summary::after { content: "−"; }
+      .details-content { padding: 20px; border-top: 1px solid var(--line); }
+      .metadata-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+      .metadata { padding: 13px; border: 1px solid var(--line); border-radius: 9px; background: #f9fafb; }
+      .metadata-label { color: var(--muted); font-size: 11px; }
+      .metadata-value { margin-top: 5px; overflow-wrap: anywhere; font-size: 13px; font-weight: 600; }
+      pre { max-height: 360px; overflow: auto; margin: 10px 0 0; padding: 18px; border-radius: 9px; background: #111827; color: #e5e7eb; font-size: 12px; line-height: 1.6; white-space: pre-wrap; }
+      @media (max-width: 760px) { .metric-grid { grid-template-columns: repeat(2, 1fr); } }
+      footer { margin-top: 50px; color: var(--muted); font-size: 12px; text-align: center; }
+      @media (max-width: 620px) { header { padding: 0 20px; } main { padding-top: 36px; } .actions { align-items: stretch; flex-direction: column; } .submit { width: 100%; } .metric-grid { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <div class="logo">A</div>
+        <div><div class="brand-name">Audiobook Recommendation Agent</div><div class="brand-subtitle">Personalised discovery</div></div>
+      </div>
+    </header>
+    <main>
+      <section class="hero">
+        <h1>What would you like to listen to?</h1>
+        <p>Describe the audiobook you want and the recommendation agent will find a suitable next listen.</p>
+      </section>
+      <section class="card">
+        <div class="label"><label for="query">Your request</label><span>Natural language</span></div>
+        <textarea maxlength="10000" id="query" placeholder="e.g. I want a short mystery audiobook with a female narrator. Nothing too dark."></textarea>
+        <div class="actions">
+          <div class="examples">
+            <button class="example" type="button" data-example="Recommend fantasy audiobooks with a strong female protagonist.">Fantasy</button>
+            <button class="example" type="button" data-example="I want a mystery audiobook under ten hours that is not too dark.">Mystery</button>
+            <button class="example" type="button" data-example="Give me something similar to what I liked previously, but with more humour.">Personalised</button>
+          </div>
+          <button id="submit" class="submit" type="button">Get recommendations</button>
+        </div>
+      </section>
+      <div id="loading" class="message loading" role="status">Finding recommendations…</div>
+      <div id="error" class="message error" role="alert"></div>
+      <article id="result" class="message result" aria-live="polite"></article>
+      <section id="metrics" class="metrics" aria-label="Pipeline performance">
+        <div class="metrics-title"><h2>Pipeline Performance</h2><span>Processing &amp; AI usage</span></div>
+        <div class="metric-grid">
+          <div class="metric-card"><div class="metric-name">Input Parser</div><div class="metric-value"><span id="parse-ms">—</span> ms</div><div id="parse-tokens" class="metric-detail">— tokens</div></div>
+          <div class="metric-card"><div class="metric-name">Recommendation Engine</div><div class="metric-value"><span id="recommend-ms">—</span> ms</div><div id="embed-tokens" class="metric-detail">—</div></div>
+          <div class="metric-card"><div class="metric-name">Response Generator</div><div class="metric-value"><span id="response-ms">—</span> ms</div><div id="response-tokens" class="metric-detail">Usage unavailable</div></div>
+          <div class="metric-card total"><div class="metric-name">Total</div><div class="metric-value"><span id="total-ms">—</span> ms</div><div id="total-tokens" class="metric-detail">— tokens</div></div>
+        </div>
+      </section>
+      <details id="details">
+        <summary>Agent Processing Details</summary>
+        <div class="details-content">
+          <div class="metadata-grid">
+            <div class="metadata"><div class="metadata-label">Request ID</div><div id="request-id" class="metadata-value">—</div></div>
+            <div class="metadata"><div class="metadata-label">Intent</div><div id="intent" class="metadata-value">—</div></div>
+            <div class="metadata"><div class="metadata-label">Personalised</div><div id="personalised" class="metadata-value">—</div></div>
+          </div>
+          <div class="metadata-label">Session Request</div>
+          <pre id="session-request"></pre>
+        </div>
+      </details>
+      <footer>Recommendation Agent · Local demonstration environment</footer>
+    </main>
+    <script>
+      const identityKey = "audiobook-demo-identity";
+      let identity = sessionStorage.getItem(identityKey);
+      if (!identity) {
+        identity = crypto.randomUUID();
+        sessionStorage.setItem(identityKey, identity);
+      }
+      const query = document.getElementById("query");
+      const submit = document.getElementById("submit");
+      const loading = document.getElementById("loading");
+      const error = document.getElementById("error");
+      const result = document.getElementById("result");
+      const metrics = document.getElementById("metrics");
+      const details = document.getElementById("details");
+
+      document.querySelectorAll("[data-example]").forEach((button) => button.addEventListener("click", () => {
+        query.value = button.dataset.example;
+        query.focus();
+      }));
+
+      async function requestRecommendation() {
+        if (submit.disabled) return;
+        const text = query.value.trim();
+        error.style.display = "none";
+        result.style.display = "none";
+        metrics.style.display = "none";
+        details.style.display = "none";
+        submit.disabled = true;
+        submit.textContent = "Processing…";
+        loading.style.display = "block";
+        try {
+          const response = await fetch("/api/v1/recommendations/demo", {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=UTF-8", "X-Session-Id": identity, "X-User-Id": identity },
+            body: text
+          });
+          if (!response.ok) {
+            const message = await response.text();
+            throw new Error(message || `The server returned ${response.status}.`);
+          }
+          const payload = await response.json();
+          result.textContent = payload.response;
+          result.style.display = "block";
+          displayMetrics(payload.metrics);
+          displayRequest(payload.sessionRequest);
+        } catch (exception) {
+          error.textContent = exception instanceof TypeError
+            ? "Unable to connect to the Recommendation Agent. Make sure the server is running on port 8080."
+            : `Request failed: ${exception.message}`;
+          error.style.display = "block";
+        } finally {
+          loading.style.display = "none";
+          submit.disabled = false;
+          submit.textContent = "Get recommendations";
+        }
+      }
+
+      function displayMetrics(data) {
+        const number = (value) => value == null ? "—" : Number(value).toLocaleString();
+        const operations = data.operations ?? {};
+        const available = (operation) => operation.available && operation.promptTokens != null && operation.completionTokens != null;
+        const usage = (operation) => !operation ? "Not called" : !available(operation)
+          ? "Usage unavailable"
+          : `${number(operation.promptTokens)} input / ${number(operation.completionTokens)} output tokens`;
+        document.getElementById("parse-tokens").textContent = usage(operations.parse);
+        document.getElementById("response-tokens").textContent = usage(operations.generate_response);
+        document.getElementById("embed-tokens").textContent = `Query embedding: ${usage(operations.embed_query)}`;
+        document.getElementById("parse-ms").textContent = number(data.stages.parseMs);
+        document.getElementById("recommend-ms").textContent = number(data.stages.recommendMs);
+        document.getElementById("response-ms").textContent = number(data.stages.responseMs);
+        document.getElementById("total-ms").textContent = number(data.totalMs);
+        const calls = Object.values(operations);
+        document.getElementById("total-tokens").textContent = calls.every(available)
+          ? `${number(calls.reduce((sum, call) => sum + call.promptTokens + call.completionTokens, 0))} tokens (including embeddings)`
+          : "Usage unavailable for some calls";
+        metrics.style.display = "block";
+      }
+
+      function displayRequest(request) {
+        document.getElementById("personalised").textContent = request?.personalised ? "Yes" : "No";
+        document.getElementById("request-id").textContent = request?.requestId ?? "—";
+        document.getElementById("intent").textContent = request?.intent ?? "—";
+        document.getElementById("session-request").textContent = JSON.stringify(request ?? {}, null, 2);
+        details.style.display = "block";
+      }
+
+      details.style.display = "none";
+      submit.addEventListener("click", requestRecommendation);
+      query.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) requestRecommendation();
+      });
+    </script>
+  </body>
+</html>

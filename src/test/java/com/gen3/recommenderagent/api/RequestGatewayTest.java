@@ -32,6 +32,100 @@ class RequestGatewayTest {
   @Mock private RequestTelemetry telemetry;
 
   @Test
+  void standardApiDoesNotBuildOrCollectDemoMetrics() throws Exception {
+    var parsed = new SessionRequest();
+    when(inputParser.parse("more")).thenReturn(parsed);
+    when(sessionTransitionService.process("session", "user", parsed)).thenReturn(parsed);
+    when(responseGenerator.generate(null, parsed)).thenReturn("No more recommendations.");
+    var gateway =
+        new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
+    MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
+        .build()
+        .perform(
+            post("/api/v1/recommendations")
+                .header("X-Session-Id", "session")
+                .header("X-User-Id", "user")
+                .contentType("text/plain")
+                .content("more"))
+        .andExpect(status().isOk())
+        .andExpect(content().contentTypeCompatibleWith("text/plain"))
+        .andExpect(content().string("No more recommendations."));
+    var order =
+        org.mockito.Mockito.inOrder(
+            inputParser, sessionTransitionService, responseGenerator, telemetry);
+    order.verify(telemetry).start();
+    order.verify(inputParser).parse("more");
+    order.verify(sessionTransitionService).process("session", "user", parsed);
+    order.verify(responseGenerator).generate(null, parsed);
+    order.verify(telemetry).complete(parsed);
+    org.mockito.Mockito.verifyNoMoreInteractions(telemetry);
+  }
+
+  @Test
+  void demoUsesTheExistingPipelineAndReturnsResolvedDetailsWithMetrics() throws Exception {
+    SessionRequest parsed = new SessionRequest();
+    SessionRequest resolved = new SessionRequest();
+    resolved.setRequestId("request-1");
+    resolved.setPersonalised(true);
+    resolved.setIntent(com.gen3.recommenderagent.domain.Intent.MORE_RESULTS);
+    when(inputParser.parse("more"))
+        .thenAnswer(
+            invocation -> {
+              RequestTelemetry.ai(
+                  "parse",
+                  1,
+                  new com.gen3.recommenderagent.observability.AiOperationObserver.AiUsage(
+                      "parser", 10, 2, 12, true));
+              return parsed;
+            });
+    when(sessionTransitionService.process("session", "user", parsed)).thenReturn(resolved);
+    when(responseGenerator.generate(null, resolved)).thenReturn("No more recommendations.");
+    var realTelemetry = new RequestTelemetry(new tools.jackson.databind.ObjectMapper());
+    var gateway =
+        new RequestGateway(inputParser, sessionTransitionService, responseGenerator, realTelemetry);
+
+    MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
+        .build()
+        .perform(
+            post("/api/v1/recommendations/demo")
+                .header("X-Session-Id", "session")
+                .header("X-User-Id", "user")
+                .contentType("text/plain")
+                .content("more"))
+        .andExpect(status().isOk())
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.response")
+                .value("No more recommendations."))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                    "$.sessionRequest.requestId")
+                .value("request-1"))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                    "$.sessionRequest.personalised")
+                .value(true))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                    "$.metrics.stages.recommendMs")
+                .isNumber())
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                    "$.metrics.operations.parse.promptTokens")
+                .value(10));
+
+    MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
+        .build()
+        .perform(
+            post("/api/v1/recommendations")
+                .header("X-Session-Id", "session")
+                .header("X-User-Id", "user")
+                .contentType("text/plain")
+                .content("more"))
+        .andExpect(status().isOk())
+        .andExpect(content().string("No more recommendations."));
+  }
+
+  @Test
   void recordsFailureAndPreservesTheOriginalException() {
     IllegalArgumentException exception = new IllegalArgumentException("invalid request");
     when(inputParser.parse("bad request")).thenThrow(exception);
@@ -56,25 +150,29 @@ class RequestGatewayTest {
     RequestGateway gateway =
         new RequestGateway(realParser, sessionTransitionService, responseGenerator, telemetry);
     MockMvc mockMvc =
-        MockMvcBuilders.standaloneSetup(gateway)
+        MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
             .setControllerAdvice(new RequestExceptionHandler())
             .build();
 
-    mockMvc
-        .perform(
-            post("/api/v1/recommendations")
-                .header("X-Session-Id", "session")
-                .header("X-User-Id", "user")
-                .content(rawText == null ? "" : rawText))
-        .andExpect(status().isBadRequest())
-        .andExpect(content().string("I didn't catch that. What would you like to listen to?"));
-
-    verify(telemetry).fail(null);
+    for (String endpoint :
+        java.util.List.of("/api/v1/recommendations", "/api/v1/recommendations/demo")) {
+      mockMvc
+          .perform(
+              post(endpoint)
+                  .header("X-Session-Id", "session")
+                  .header("X-User-Id", "user")
+                  .content(rawText == null ? "" : rawText))
+          .andExpect(status().isBadRequest())
+          .andExpect(content().string("I didn't catch that. What would you like to listen to?"));
+    }
+    verify(telemetry, org.mockito.Mockito.times(2)).fail(null);
     verifyNoInteractions(model, sessionTransitionService, responseGenerator);
   }
 
-  @Test
-  void returnsServiceUnavailableWhenCandidateRetrievalFails() throws Exception {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"/api/v1/recommendations", "/api/v1/recommendations/demo"})
+  void returnsServiceUnavailableWhenCandidateRetrievalFails(String endpoint) throws Exception {
     SessionRequest parsedRequest = new SessionRequest();
     when(inputParser.parse("recommend science fiction")).thenReturn(parsedRequest);
     when(sessionTransitionService.process("session", "user", parsedRequest))
@@ -82,13 +180,13 @@ class RequestGatewayTest {
     RequestGateway gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
     MockMvc mockMvc =
-        MockMvcBuilders.standaloneSetup(gateway)
+        MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
             .setControllerAdvice(new RequestExceptionHandler())
             .build();
 
     mockMvc
         .perform(
-            post("/api/v1/recommendations")
+            post(endpoint)
                 .header("X-Session-Id", "session")
                 .header("X-User-Id", "user")
                 .content("recommend science fiction"))
@@ -99,8 +197,10 @@ class RequestGatewayTest {
                     "I'm having trouble reaching the audiobook catalogue right now. Please try again in a moment."));
   }
 
-  @Test
-  void returnsRetryAdviceWhenTheSessionIsBusy() throws Exception {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"/api/v1/recommendations", "/api/v1/recommendations/demo"})
+  void returnsRetryAdviceWhenTheSessionIsBusy(String endpoint) throws Exception {
     SessionRequest parsedRequest = new SessionRequest();
     when(inputParser.parse("recommend science fiction")).thenReturn(parsedRequest);
     when(sessionTransitionService.process("session", "user", parsedRequest))
@@ -108,11 +208,11 @@ class RequestGatewayTest {
     RequestGateway gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
 
-    MockMvcBuilders.standaloneSetup(gateway)
+    MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
         .setControllerAdvice(new RequestExceptionHandler())
         .build()
         .perform(
-            post("/api/v1/recommendations")
+            post(endpoint)
                 .header("X-Session-Id", "session")
                 .header("X-User-Id", "user")
                 .content("recommend science fiction"))
@@ -122,8 +222,10 @@ class RequestGatewayTest {
                 .string("Retry-After", "1"));
   }
 
-  @Test
-  void returnsServiceUnavailableWhenTheSessionCommitFails() throws Exception {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"/api/v1/recommendations", "/api/v1/recommendations/demo"})
+  void returnsServiceUnavailableWhenTheSessionCommitFails(String endpoint) throws Exception {
     SessionRequest parsedRequest = new SessionRequest();
     when(inputParser.parse("recommend science fiction")).thenReturn(parsedRequest);
     when(sessionTransitionService.process("session", "user", parsedRequest))
@@ -131,11 +233,11 @@ class RequestGatewayTest {
     RequestGateway gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
 
-    MockMvcBuilders.standaloneSetup(gateway)
+    MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
         .setControllerAdvice(new RequestExceptionHandler())
         .build()
         .perform(
-            post("/api/v1/recommendations")
+            post(endpoint)
                 .header("X-Session-Id", "session")
                 .header("X-User-Id", "user")
                 .content("recommend science fiction"))

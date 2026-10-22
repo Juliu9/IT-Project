@@ -138,10 +138,36 @@ export OPENAI_API_KEY="your-key"
 ./mvnw spring-boot:run
 ```
 
+The server is backend-only by default: the demo page and JSON demo endpoint are unavailable.
+For local development, the `dev` profile also loads an optional `.env` file from the working
+directory. Use Java properties syntax: no `export` prefix or surrounding quotes. For example:
+
+```properties
+OPENAI_API_KEY=your-key
+QDRANT_API_KEY=your-key
+```
+
+Existing environment variables take precedence. Missing `.env` files are allowed.
+Start with:
+
+```bash
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+```
+
+Keep this profile disabled in production. Open `http://localhost:8080/` to test the website. It shows the
+response, resolved request, stage timings, and token usage (including query embeddings).
+The browser tab keeps its conversation across reloads using session storage.
+The demo uses a generated user ID, so it has no imported user preference profile.
+The JSON demo endpoint is `POST /api/v1/recommendations/demo`; the existing endpoint still
+returns plain text. Demo metric collection is enabled only for `/demo` requests.
+Both use the same recommendation flow. Timings overlap in the detailed
+logs; the website measures the recommendation stage as a whole. Costs are not estimated.
+
 The server defaults to `http://localhost:8080`, Redis to `localhost:6379`, and Qdrant to
 `http://localhost:6333` with gRPC on port `6334`. Docker publishes these database ports on
-`127.0.0.1` only. Set credentials in your shell or IDE; the application does not automatically load
-a repository `.env` file.
+`127.0.0.1` only. Outside the `dev` profile, set credentials in your shell or IDE; `.env` is
+not automatically loaded. This import supplies application properties, not environment variables
+for Maven or every test. Keep `.env` local; it is ignored by Git.
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/recommendations \

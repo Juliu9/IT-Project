@@ -15,7 +15,7 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.RequestBodyAdviceAdapter;
 
 /** Bounds raw request allocation even when the sender does not provide Content-Length. */
-@ControllerAdvice(assignableTypes = RequestGateway.class)
+@ControllerAdvice(assignableTypes = {RequestGateway.class, DemoWebsite.class})
 public class RequestBodyLimit extends RequestBodyAdviceAdapter {
   private static final int MAX_BYTES = InputParser.MAX_REQUEST_CHARACTERS * 4;
 

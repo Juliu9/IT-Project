@@ -10,7 +10,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.response.ResponseGenerator;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -48,17 +47,19 @@ class RequestBodyLimitTest {
         .hasSize(40000);
   }
 
-  @Test
-  void endpointRejectsOversizedBodiesBeforeParsing() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"/api/v1/recommendations", "/api/v1/recommendations/demo"})
+  void endpointRejectsOversizedBodiesBeforeParsing(String endpoint) throws Exception {
     var parser = mock(InputParser.class);
     var transitions = mock(SessionTransitionService.class);
     var response = mock(ResponseGenerator.class);
+    var gateway = new RequestGateway(parser, transitions, response);
     var mvc =
-        MockMvcBuilders.standaloneSetup(new RequestGateway(parser, transitions, response))
+        MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
             .setControllerAdvice(new RequestBodyLimit(), new RequestExceptionHandler())
             .build();
     var request =
-        post("/api/v1/recommendations")
+        post(endpoint)
             .header("X-User-Id", "user")
             .header("X-Session-Id", "session")
             .contentType("text/plain")
