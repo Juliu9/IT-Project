@@ -19,6 +19,7 @@ import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectorService;
 import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectors;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.MustInclude;
+import com.gen3.recommenderagent.domain.session.MustNotInclude;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
@@ -119,6 +120,27 @@ class RecommendationBatchFlowTest {
     // Searches consume a fresh first page immediately; preference/history actions do not.
     assertIds(next, intent == Intent.RECOMMENDATION || intent == Intent.REFINE ? 26 : 21, 5);
     verify(ranker, times(2)).rank(anyList(), eq(20), any(RankingContext.class));
+  }
+
+  @Test
+  void moreWithEmptyParserCriteriaKeepsTheBatch() {
+    process(request(Intent.RECOMMENDATION));
+    SessionRequest more = request(Intent.MORE_RESULTS);
+    SemanticQuery empty = new SemanticQuery();
+    empty.setGenres(java.util.Arrays.asList(null, "", "  "));
+    more.setPositiveSemanticQuery(empty);
+    more.setNegativeSemanticQuery(new SemanticQuery());
+    MustInclude include = new MustInclude();
+    include.setLanguage("  ");
+    include.setAuthors(List.of());
+    more.setMustInclude(include);
+    MustNotInclude exclude = new MustNotInclude();
+    exclude.setSource("");
+    more.setMustNotInclude(exclude);
+    assertIds(process(more), 6, 5);
+    verify(vectors).create(any());
+    verify(retriever).getCandidates(any(), any(), eq(50), anySet());
+    verify(ranker).rank(anyList(), eq(20), any(RankingContext.class));
   }
 
   @Test

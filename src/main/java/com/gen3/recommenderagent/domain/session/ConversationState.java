@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Stream;
 
 /** Resolves an incoming request against the conversational state held by a session. */
 public final class ConversationState {
@@ -57,11 +58,51 @@ public final class ConversationState {
   public static boolean isSearchContext(SessionRequest request) {
     return request != null
         && request.getIntent() != Intent.UPDATE_PREFERENCES
-        && (request.isPersonalised()
-            || request.getPositiveSemanticQuery() != null
-            || request.getNegativeSemanticQuery() != null
-            || request.getMustInclude() != null
-            || request.getMustNotInclude() != null);
+        && hasSearchCriteria(request);
+  }
+
+  public static boolean hasSearchCriteria(SessionRequest request) {
+    if (request == null) {
+      return false;
+    }
+    MustInclude include = request.getMustInclude();
+    MustNotInclude exclude = request.getMustNotInclude();
+    return request.isPersonalised()
+        || hasQuery(request.getPositiveSemanticQuery())
+        || hasQuery(request.getNegativeSemanticQuery())
+        || (include != null
+            && (hasTerms(include.getAuthors())
+                || hasTerms(include.getNarrators())
+                || hasText(
+                    include.getLanguage(),
+                    include.getDuration(),
+                    include.getPublicationYear(),
+                    include.getSource())))
+        || (exclude != null
+            && (hasTerms(exclude.getAuthors())
+                || hasTerms(exclude.getNarrators())
+                || hasText(
+                    exclude.getLanguage(),
+                    exclude.getDuration(),
+                    exclude.getPublicationYear(),
+                    exclude.getSource())));
+  }
+
+  private static boolean hasQuery(SemanticQuery query) {
+    return query != null
+        && (hasTerms(query.getTopics())
+            || hasTerms(query.getGenres())
+            || hasTerms(query.getAuthors())
+            || hasTerms(query.getNarrators())
+            || hasTerms(query.getKeywords()));
+  }
+
+  private static boolean hasTerms(List<String> terms) {
+    return terms != null && terms.stream().anyMatch(value -> value != null && !value.isBlank());
+  }
+
+  private static boolean hasText(String... values) {
+    return Stream.of(values).anyMatch(value -> value != null && !value.isBlank());
   }
 
   private boolean acceptsPreferences(Intent intent) {

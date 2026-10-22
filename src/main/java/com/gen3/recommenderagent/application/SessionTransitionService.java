@@ -57,12 +57,7 @@ public class SessionTransitionService {
         || intent == Intent.REFINE
         || intent == Intent.UPDATE_PREFERENCES
         || intent == Intent.CLEAR_HISTORY
-        || (request != null
-            && (request.isPersonalised()
-                || request.getPositiveSemanticQuery() != null
-                || request.getNegativeSemanticQuery() != null
-                || request.getMustInclude() != null
-                || request.getMustNotInclude() != null));
+        || ConversationState.hasSearchCriteria(request);
   }
 
   private List<Recommendation> recommendationPage(SessionRequest request, Session session) {
