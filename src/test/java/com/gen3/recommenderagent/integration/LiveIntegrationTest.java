@@ -41,7 +41,8 @@ import tools.jackson.databind.ObjectMapper;
 @Tag("external")
 class LiveIntegrationTest {
 
-  private static final String INITIAL_RAW_TEXT = "I prefer English science fiction audiobooks.";
+  private static final String INITIAL_RAW_TEXT =
+      "Please update my preferences to English-language science fiction. Do not recommend anything yet.";
   private static final String FOLLOW_UP_RAW_TEXT =
       "Recommend up to five audiobooks based on my preferences.";
   private static final int REDIS_PORT = 6379;
