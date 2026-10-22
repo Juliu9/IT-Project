@@ -3,8 +3,8 @@ package com.gen3.userpreferencejob;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.gen3.recommenderagent.storage.user.model.UserFavourite;
-import com.gen3.recommenderagent.storage.user.model.UserHistory;
+import com.gen3.userpreferencejob.model.UserFavourite;
+import com.gen3.userpreferencejob.model.UserHistory;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

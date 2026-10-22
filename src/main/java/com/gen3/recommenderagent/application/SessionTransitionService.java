@@ -1,15 +1,14 @@
 package com.gen3.recommenderagent.application;
 
-import static com.gen3.recommenderagent.common.BookCountPolicy.clampOrDefault;
+import static com.gen3.recommenderagent.domain.RecommendationPolicy.clampOrDefault;
 
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationState;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
-import com.gen3.recommenderagent.engine.RecommendationWorkflow;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
-import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
+import com.gen3.recommenderagent.storage.session.SessionRepository;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;

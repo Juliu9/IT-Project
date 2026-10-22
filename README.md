@@ -88,6 +88,10 @@ Unsupported or reversed expressions return 400.
 
 Requirements: Java 21, Docker Compose, and an OpenAI API key.
 
+The local Qdrant image is now 1.19.1. Before reusing a volume created by 1.15.x,
+back it up and follow Qdrant's consecutive-minor-version upgrade procedure;
+do not point 1.19.1 directly at an old 1.15.x volume. Test containers use fresh storage.
+
 ```bash
 docker compose up -d
 export OPENAI_API_KEY="your-key"
@@ -129,6 +133,10 @@ resource. Apply its definitions to the target collection and match the vector di
 configured embedding model.
 
 ## Database selection and replacement
+
+Local Docker and Qdrant integration tests use server 1.19.1 with Java client 1.18.0.
+Vector readers use the current dense-vector response format; legacy flattened responses are not supported.
+
 
 `audiobook.database` in `application.properties` selects one database for the whole request flow;
 `qdrant` is the default. The former `audiobook.candidate-retriever` setting is rejected to prevent
@@ -369,3 +377,26 @@ can still update exact filters. A semantic reply to a taste-clarification questi
 Solr summary imports read current IDs, summaries, and versions in batches of at most 500,
 then apply bounded, version-checked updates. A failed later batch retains the manifest;
 retrying preserves summaries already written.
+
+## Source layout
+
+The recommendation server is under `com.gen3.recommenderagent`:
+
+| Package | Responsibility |
+| --- | --- |
+| `api` | HTTP requests and error responses |
+| `application` | Session transitions, recommendation workflow and chat-client wiring |
+| `domain` | Intents, recommendation policy and conversational session models |
+| `inputparser` / `response` | Structured request parsing and response wording |
+| `embedding` | QueryEmbeddingService, positive/negative query vectors and shared vector math |
+| `retrieval` / `retrieval.plan` | Candidate search execution, retrieval plans and filter parsing |
+| `ranker` / `ranker.scorer` | Candidate ranking and scoring rules |
+| `storage.audiobook` / `storage.user` | Storage contracts, models and database adapters |
+| `storage.session` | Session contract, commit errors and Redis adapter |
+| `observability` | Request timing and AI usage telemetry |
+
+The sibling maintenance packages remain separate runnable jobs. CSV interaction records
+(`UserFavourite` and `UserHistory`) belong to `userpreferencejob.model`.
+Catalogue embedding generation remains in `embeddingjob`; the query embedding module
+only embeds live search criteria. `RecommendationPolicy` owns the existing limits
+and result-count clamping rules.

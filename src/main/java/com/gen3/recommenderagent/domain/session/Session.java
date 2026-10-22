@@ -1,9 +1,9 @@
 package com.gen3.recommenderagent.domain.session;
 
-import static com.gen3.recommenderagent.common.ApplicationConstants.MAX_BOOK_COUNT;
-import static com.gen3.recommenderagent.common.ApplicationConstants.MAX_SHOWN_BOOKS;
-import static com.gen3.recommenderagent.common.ApplicationConstants.RECOMMENDATION_BATCH_SIZE;
-import static com.gen3.recommenderagent.common.BookCountPolicy.clampOrDefault;
+import static com.gen3.recommenderagent.domain.RecommendationPolicy.MAX_BOOK_COUNT;
+import static com.gen3.recommenderagent.domain.RecommendationPolicy.MAX_SHOWN_BOOKS;
+import static com.gen3.recommenderagent.domain.RecommendationPolicy.RECOMMENDATION_BATCH_SIZE;
+import static com.gen3.recommenderagent.domain.RecommendationPolicy.clampOrDefault;
 
 import java.time.Instant;
 import java.util.ArrayList;

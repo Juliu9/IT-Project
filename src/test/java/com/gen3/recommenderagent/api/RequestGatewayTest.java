@@ -8,13 +8,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalException;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.gen3.recommenderagent.response.ResponseGenerator;
-import com.gen3.recommenderagent.storage.sessionrepository.SessionCommitException;
+import com.gen3.recommenderagent.retrieval.CandidateRetrievalException;
+import com.gen3.recommenderagent.storage.session.SessionCommitException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -101,7 +101,7 @@ class RequestGatewayTest {
     when(inputParser.parse("recommend science fiction"))
         .thenReturn(new org.springframework.ai.chat.client.ResponseEntity<>(null, parsedRequest));
     when(sessionTransitionService.process("session", "user", parsedRequest))
-        .thenThrow(new com.gen3.recommenderagent.storage.sessionrepository.SessionBusyException());
+        .thenThrow(new com.gen3.recommenderagent.storage.session.SessionBusyException());
     RequestGateway gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
 

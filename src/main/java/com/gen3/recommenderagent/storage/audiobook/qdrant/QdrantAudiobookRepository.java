@@ -441,7 +441,7 @@ public class QdrantAudiobookRepository
       return null;
     }
     var dense = vectors.get(QdrantPointMapper.DENSE_VECTOR);
-    List<Float> values = dense.hasDense() ? dense.getDense().getDataList() : dense.getDataList();
+    List<Float> values = dense.getDense().getDataList();
     if (values.isEmpty()) {
       return null;
     }

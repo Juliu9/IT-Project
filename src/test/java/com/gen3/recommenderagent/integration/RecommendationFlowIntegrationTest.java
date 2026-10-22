@@ -11,16 +11,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.gen3.recommenderagent.api.RequestGateway;
+import com.gen3.recommenderagent.application.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalService;
-import com.gen3.recommenderagent.candidateretriever.CandidateRetriever;
-import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectorService;
-import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
-import com.gen3.recommenderagent.engine.AudiobookRecommendationWorkflow;
+import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.ranker.RankingService;
 import com.gen3.recommenderagent.ranker.scorer.CompositeScorer;
@@ -29,6 +26,9 @@ import com.gen3.recommenderagent.ranker.scorer.RetrievalRelevanceScorer;
 import com.gen3.recommenderagent.ranker.scorer.UserPreferenceScorer;
 import com.gen3.recommenderagent.ranker.scorer.WeightedScorer;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
+import com.gen3.recommenderagent.retrieval.CandidateRetrievalService;
+import com.gen3.recommenderagent.retrieval.CandidateRetriever;
+import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.testsupport.SolrContainerTestSupport;
 import java.util.List;
@@ -79,8 +79,8 @@ class RecommendationFlowIntegrationTest {
 
     SolrAudiobookRepository repository =
         new SolrAudiobookRepository(solrClient, SolrContainerTestSupport.COLLECTION);
-    com.gen3.recommenderagent.embedding.EmbeddingIndexer embeddingIndexer =
-        mock(com.gen3.recommenderagent.embedding.EmbeddingIndexer.class);
+    com.gen3.recommenderagent.embedding.QueryEmbeddingService embeddingIndexer =
+        mock(com.gen3.recommenderagent.embedding.QueryEmbeddingService.class);
     when(embeddingIndexer.embedSemanticQueries(anyList()))
         .thenReturn(List.of(new float[0], new float[0]));
     CandidateRetriever candidateRetriever =

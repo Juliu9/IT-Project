@@ -1,6 +1,6 @@
 package com.gen3.userpreferencejob;
 
-import com.gen3.recommenderagent.storage.user.model.UserFavourite;
+import com.gen3.userpreferencejob.model.UserFavourite;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.Files;

@@ -1,0 +1,61 @@
+@startuml
+!pragma layout smetana
+title Audiobook recommendations — system overview
+left to right direction
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam defaultFontName SansSerif
+skinparam ArrowColor #475569
+skinparam packageStyle rectangle
+skinparam wrapWidth 180
+
+actor User
+package "recommenderagent — live requests" {
+  component "RequestGateway\nCoordinates the request" as Gateway #DBEAFE
+  component "AiInputParser\nText → intent + criteria" as Parser #DBEAFE
+  component "SessionTransitionService\nResolves context and selects a page" as Session #DBEAFE
+  component "AudiobookRecommendationWorkflow\nBuilds a new recommendation batch" as Workflow #DCFCE7
+  component "CandidateRetrievalService\nSelects and executes search" as Retrieval #DCFCE7
+  component "RankingService\nRanks up to 20 recommendations" as Ranking #DCFCE7
+  component "AiResponseGenerator\nExplains the selected books" as Response #DBEAFE
+  component "Database adapter\nCurrent runtime: Qdrant" as Adapter #FEF3C7
+  component "SessionRepository adapter\nCurrent runtime: Redis" as SessionStore #FEF3C7
+}
+database "Qdrant\nCatalogue + book vectors\nUser preference vectors" as Qdrant
+database "Redis\nSearch context + last page\nPending recommendations + shown IDs" as Redis
+
+User -right-> Gateway : request / response
+Gateway --> Parser : 1. Parse
+Gateway --> Session : 2. Apply session transition
+Session --> SessionStore : lock / load / commit / release
+SessionStore --> Redis
+Session --> Workflow : only when a new batch is needed
+Workflow --> Adapter : load user preferences
+Workflow --> Retrieval : retrieve up to 50 candidates
+Retrieval --> Adapter : semantic / keyword / hybrid / filters
+Adapter --> Qdrant
+Workflow --> Ranking : rank candidates
+Gateway --> Response : 3. Generate response after commit
+
+note bottom of Session
+  MORE: use pending recommendations first.
+  REPEAT: reuse the last search outcome.
+  MORE without a previous search: ask for criteria.
+  These paths can skip retrieval and ranking.
+end note
+note bottom of Adapter
+  Runtime code depends on storage interfaces.
+  application.properties selects the adapter.
+  Solr currently supports maintenance jobs;
+  it is not yet a complete runtime backend.
+end note
+legend bottom
+  Blue: request handling
+  Green: fresh recommendation batch
+  Yellow: replaceable storage adapters
+  AI providers: parser chat, response chat and query embeddings
+  Response pages: up to 5 recommendations
+  Arrows: calls or data access, not inheritance
+endlegend
+@enduml

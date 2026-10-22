@@ -1,6 +1,6 @@
 package com.gen3.recommenderagent.response;
 
-import static com.gen3.recommenderagent.common.ApplicationConstants.MAX_BOOK_COUNT;
+import static com.gen3.recommenderagent.domain.RecommendationPolicy.MAX_BOOK_COUNT;
 
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Recommendation;

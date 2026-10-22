@@ -20,7 +20,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class QdrantShownBookExclusionTest {
   @Container
   static GenericContainer<?> server =
-      new GenericContainer<>("qdrant/qdrant:v1.15.4").withExposedPorts(6334);
+      new GenericContainer<>("qdrant/qdrant:v1.19.1").withExposedPorts(6334);
 
   @Test
   void catalogueOperationsUsePayloadBookIdsAndPreserveExistingPointIds() throws Exception {
@@ -129,8 +129,8 @@ class QdrantShownBookExclusionTest {
           client.retrieveAsync("embedding-job", List.of(id), true, true, null).get().getFirst();
       assertThat(result.getPayloadMap()).isEqualTo(point.getPayloadMap());
       var dense = result.getVectors().getVectors().getVectorsMap().get("dense");
-      assertThat(dense.hasDense() ? dense.getDense().getDataList() : dense.getDataList())
-          .containsExactly(0.6f, 0.8f);
+      assertThat(dense.hasDense()).isTrue();
+      assertThat(dense.getDense().getDataList()).containsExactly(0.6f, 0.8f);
       assertThat(result.getVectors().getVectors().getVectorsMap()).containsKey("keywords");
       org.mockito.Mockito.verify(model).embed(org.mockito.ArgumentMatchers.anyList());
     }
@@ -186,8 +186,8 @@ class QdrantShownBookExclusionTest {
       assertThat(stored.getPayloadMap().get("short_description").getStringValue())
           .isEqualTo("Existing summary");
       var dense = stored.getVectors().getVectors().getVectorsMap().get("dense");
-      assertThat(dense.hasDense() ? dense.getDense().getDataList() : dense.getDataList())
-          .containsExactly(2f, 3f);
+      assertThat(dense.hasDense()).isTrue();
+      assertThat(dense.getDense().getDataList()).containsExactly(2f, 3f);
       assertThat(stored.getVectors().getVectors().getVectorsMap()).doesNotContainKey("keywords");
       assertThat(noVector.getVectors().getVectors().getVectorsMap()).isEmpty();
       assertThat(

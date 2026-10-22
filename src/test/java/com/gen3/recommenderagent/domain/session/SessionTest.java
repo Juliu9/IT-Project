@@ -1,6 +1,6 @@
 package com.gen3.recommenderagent.domain.session;
 
-import static com.gen3.recommenderagent.common.ApplicationConstants.MAX_BOOK_COUNT;
+import static com.gen3.recommenderagent.domain.RecommendationPolicy.MAX_BOOK_COUNT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;

@@ -10,10 +10,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.gen3.recommenderagent.application.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalService;
-import com.gen3.recommenderagent.candidateretriever.SemanticQueryVectorService;
-import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.MustInclude;
 import com.gen3.recommenderagent.domain.session.MustNotInclude;
@@ -22,11 +20,13 @@ import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
-import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
-import com.gen3.recommenderagent.engine.AudiobookRecommendationWorkflow;
+import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
+import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.ranker.Ranker;
 import com.gen3.recommenderagent.ranker.RankingContext;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
+import com.gen3.recommenderagent.retrieval.CandidateRetrievalService;
+import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
@@ -63,7 +63,7 @@ class PersonalisedRecommendationFlowTest {
     when(books.searchSemantic(any(), any(), eq(50))).thenReturn(List.of());
     when(ranker.rank(anyList(), eq(20), any(RankingContext.class)))
         .thenReturn(List.of(new Recommendation("book", 1, 0.9, "A Book")));
-    EmbeddingIndexer indexer = new EmbeddingIndexer(embeddingModel);
+    QueryEmbeddingService indexer = new QueryEmbeddingService(embeddingModel);
     AudiobookRecommendationWorkflow workflow =
         new AudiobookRecommendationWorkflow(
             new CandidateRetrievalService(

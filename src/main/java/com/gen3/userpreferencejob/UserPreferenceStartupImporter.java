@@ -1,7 +1,7 @@
 package com.gen3.userpreferencejob;
 
-import com.gen3.recommenderagent.storage.user.model.UserFavourite;
-import com.gen3.recommenderagent.storage.user.model.UserHistory;
+import com.gen3.userpreferencejob.model.UserFavourite;
+import com.gen3.userpreferencejob.model.UserHistory;
 import java.nio.file.Path;
 import java.util.List;
 import org.slf4j.Logger;
