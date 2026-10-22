@@ -1,7 +1,5 @@
 package com.gen3.recommenderagent.ranker;
 
-import static com.gen3.recommenderagent.common.BookCountPolicy.clamp;
-
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.ranker.scorer.CompositeScorer;
 import com.gen3.recommenderagent.ranker.scorer.ScoreResult;
@@ -41,7 +39,7 @@ public class RankingService implements Ranker {
       return List.of();
     }
 
-    int limit = clamp(requestedLimit);
+    int limit = Math.max(1, requestedLimit);
     Set<String> seenBookIds = new HashSet<>();
     List<AudiobookCandidate> eligible =
         candidates.stream()

@@ -11,6 +11,7 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 class RankingServiceTest {
@@ -86,6 +87,16 @@ class RankingServiceTest {
     assertEquals(1.0, result.getFirst().getScore());
     assertEquals("low", result.getLast().getBookId());
     assertEquals(0.0, result.getLast().getScore());
+  }
+
+  @Test
+  void ranksAnInternalBatchLargerThanTheApiPageSize() {
+    var candidates =
+        IntStream.rangeClosed(1, 25).mapToObj(i -> candidate("book-" + i, 100.0 - i)).toList();
+    List<Recommendation> result = rankingService.rank(candidates, 20);
+    assertEquals(20, result.size());
+    assertEquals("book-1", result.getFirst().getBookId());
+    assertEquals("book-20", result.getLast().getBookId());
   }
 
   private AudiobookCandidate candidate(String id, Double score) {

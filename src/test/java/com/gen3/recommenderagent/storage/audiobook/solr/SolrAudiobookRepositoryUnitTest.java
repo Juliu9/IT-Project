@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookSearchPage;
 import java.util.List;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
@@ -21,6 +20,67 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 class SolrAudiobookRepositoryUnitTest {
+
+  @Test
+  void embeddingJobUsesAtomicVectorUpdatesWithoutReplacingMetadata() throws Exception {
+    SolrClient client = mock(SolrClient.class);
+    var repository = new SolrAudiobookRepository(client, "books", "embedding", 2);
+    var record =
+        new com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord(
+            "book", "s", "Title", List.of(), "Description");
+    new com.gen3.embeddingjob.store.SolrEmbeddingStore(repository)
+        .updateEmbeddings(
+            List.of(
+                new com.gen3.embeddingjob.store.AudiobookEmbeddingStore.Update(
+                    "book",
+                    new com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding(
+                        record, new float[] {0.6f, 0.8f}))));
+    var documents = ArgumentCaptor.forClass(java.util.Collection.class);
+    verify(client).add(org.mockito.ArgumentMatchers.eq("books"), documents.capture());
+    var document =
+        (org.apache.solr.common.SolrInputDocument) documents.getValue().iterator().next();
+    assertEquals(
+        java.util.Set.of("id", "embedding"),
+        document.getFieldNames().stream().collect(java.util.stream.Collectors.toSet()));
+    assertEquals(java.util.Map.of("set", List.of(0.6f, 0.8f)), document.getFieldValue("embedding"));
+    verify(client).commit("books");
+  }
+
+  @Test
+  void readsExistingVectorsAndSummariesIncludingRecordsWithNoVector() throws Exception {
+    SolrClient client = mock(SolrClient.class);
+    QueryResponse response = mock(QueryResponse.class);
+    SolrDocument first = new SolrDocument();
+    first.setField("id", "one");
+    first.setField("title", "Title");
+    first.setField("short_description", "Stored summary");
+    first.setField("stored_vector", List.of(2.0f, 3.0f));
+    SolrDocument second = new SolrDocument();
+    second.setField("id", "two");
+    SolrDocumentList documents = new SolrDocumentList();
+    documents.add(first);
+    documents.add(second);
+    when(response.getResults()).thenReturn(documents);
+    when(client.query(
+            org.mockito.ArgumentMatchers.eq("books"),
+            org.mockito.ArgumentMatchers.any(SolrQuery.class),
+            org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST)))
+        .thenReturn(response);
+    var records =
+        new SolrAudiobookRepository(client, "books", "stored_vector", 2).findStoredBooks(0, 2);
+    org.junit.jupiter.api.Assertions.assertArrayEquals(
+        new float[] {2, 3}, records.getFirst().vector());
+    assertEquals("Stored summary", records.getFirst().record().shortDescription());
+    org.junit.jupiter.api.Assertions.assertNull(records.getLast().vector());
+    var query = ArgumentCaptor.forClass(SolrQuery.class);
+    verify(client)
+        .query(
+            org.mockito.ArgumentMatchers.eq("books"),
+            query.capture(),
+            org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST));
+    org.junit.jupiter.api.Assertions.assertTrue(
+        query.getValue().getFields().contains("stored_vector"));
+  }
 
   @Test
   void shouldQueryConfiguredCollectionAndOnlyRequestApiFields() throws Exception {
@@ -75,15 +135,14 @@ class SolrAudiobookRepositoryUnitTest {
             org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST)))
         .thenReturn(response);
 
-    AudiobookSearchPage page =
-        new SolrAudiobookRepository(client, "combinedbooks").searchBooks("mystery", 5);
+    var candidates =
+        new SolrAudiobookRepository(client, "combinedbooks").searchKeyword("mystery", null, 5);
+    var record = candidates.getFirst().audiobook();
 
-    assertEquals(7, page.totalItems());
-    assertEquals("book-1", page.records().getFirst().id());
-    assertEquals(
-        java.util.List.of("Author One", "Author Two"), page.records().getFirst().authors());
-    assertEquals(2024, page.records().getFirst().publicationYear());
-    assertEquals("A brief description.", page.records().getFirst().shortDescription());
+    assertEquals("book-1", record.id());
+    assertEquals(java.util.List.of("Author One", "Author Two"), record.authors());
+    assertEquals(2024, record.publicationYear());
+    assertEquals("A brief description.", record.shortDescription());
   }
 
   @Test

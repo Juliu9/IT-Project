@@ -59,8 +59,7 @@ public class RequestGateway {
     SessionRequest currentRequest = null;
     boolean completed = false;
     try {
-      currentRequest =
-          RequestTelemetry.measure("parseMs", () -> inputParser.parse(rawText).entity());
+      currentRequest = RequestTelemetry.measure("parseMs", () -> inputParser.parse(rawText));
       SessionRequest result = sessionTransitionService.process(sessionId, userId, currentRequest);
       String response =
           RequestTelemetry.measure(

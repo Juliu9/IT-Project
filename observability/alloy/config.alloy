@@ -12,32 +12,40 @@ loki.source.file "recommender_agent" {
 loki.process "recommendation_events" {
   forward_to = [loki.write.grafana_cloud.receiver]
 
+  stage.regex {
+    expression = ".* (?P<event_json>\\{\\\"event\\\":\\\"recommendation.completed\\\".*\\})$"
+  }
+
+  stage.json {
+    source         = "event_json"
+    drop_malformed = true
+    expressions = {
+      outcome = "outcome",
+      backend = "retrieval.backend",
+      valid_summary = "length(keys(@)) == `10` && contains(keys(@), 'requestId') && (type(requestId) == 'string' || type(requestId) == 'null') && event == 'recommendation.completed' && (outcome == 'SUCCESS' || outcome == 'FAILURE') && type(durationMs) == 'number' && type(intent) == 'string' && type(responseMode) == 'string' && type(stages) == 'object' && type(retrieval) == 'object' && type(ai) == 'object' && type(recommendationCount) == 'number'",
+    }
+  }
+
+  stage.labels {
+    values = {
+      outcome       = "",
+      backend       = "",
+      valid_summary = "",
+    }
+  }
+
+  // Nonmatching lines and incomplete summaries must never reach the cloud writer.
   stage.match {
-    selector = "{service=\"recommender-agent\"} |~ \"recommendation.completed\""
-    action   = "keep"
+    selector = "{service=\"recommender-agent\", valid_summary!=\"true\"}"
+    action   = "drop"
+  }
 
-    stage.regex {
-      expression = ".* (?P<event_json>\\{\\\"event\\\":\\\"recommendation.completed\\\".*\\})$"
-    }
+  stage.label_drop {
+    values = ["valid_summary"]
+  }
 
-    stage.json {
-      source = "event_json"
-      expressions = {
-        outcome = "outcome",
-        backend = "retrieval.backend",
-      }
-    }
-
-    stage.labels {
-      values = {
-        outcome = "",
-        backend = "",
-      }
-    }
-
-    stage.output {
-      source = "event_json"
-    }
+  stage.output {
+    source = "event_json"
   }
 }
 

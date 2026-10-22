@@ -12,8 +12,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+@ConditionalOnProperty(name = "audiobook.database", havingValue = "qdrant", matchIfMissing = true)
 @Component
 public class QdrantUserPreferenceMapper {
 

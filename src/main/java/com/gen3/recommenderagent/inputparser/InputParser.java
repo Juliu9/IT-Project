@@ -1,10 +1,9 @@
 package com.gen3.recommenderagent.inputparser;
 
 import com.gen3.recommenderagent.domain.session.SessionRequest;
-import org.springframework.ai.chat.client.ResponseEntity;
-import org.springframework.ai.chat.model.ChatResponse;
 
 public interface InputParser {
+  int MAX_REQUEST_CHARACTERS = 10000;
 
-  ResponseEntity<ChatResponse, SessionRequest> parse(String rawText);
+  SessionRequest parse(String rawText);
 }
