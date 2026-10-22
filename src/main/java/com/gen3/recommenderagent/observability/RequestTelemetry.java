@@ -27,7 +27,11 @@ public class RequestTelemetry {
   }
 
   public void start() {
-    CURRENT.set(new RequestState());
+    CURRENT.set(new RequestState(false));
+  }
+
+  public void startDemo() {
+    CURRENT.set(new RequestState(true));
   }
 
   public static <T> T measure(String stage, Supplier<T> action) {
@@ -70,6 +74,18 @@ public class RequestTelemetry {
     if (state == null) {
       return;
     }
+    if (state.operations != null) {
+      state.operations.merge(
+          operation,
+          usage,
+          (previous, next) ->
+              new AiOperationObserver.AiUsage(
+                  next.model(),
+                  value(previous.promptTokens()) + value(next.promptTokens()),
+                  value(previous.completionTokens()) + value(next.completionTokens()),
+                  value(previous.totalTokens()) + value(next.totalTokens()),
+                  previous.available() && next.available()));
+    }
     state.aiCalls++;
     state.aiAttempts += attempts;
     state.usageAvailable &= usage.available();
@@ -85,6 +101,23 @@ public class RequestTelemetry {
       state.ai.put("outputTokens", state.outputTokens);
     }
   }
+
+  public Snapshot snapshot() {
+    RequestState state = CURRENT.get();
+    return state == null
+        ? new Snapshot(0, Map.of(), Map.of(), Map.of())
+        : new Snapshot(
+            state.durationMillis(),
+            Map.copyOf(state.stages),
+            state.operations == null ? Map.of() : Map.copyOf(state.operations),
+            Map.copyOf(state.retrieval));
+  }
+
+  public record Snapshot(
+      long totalMs,
+      Map<String, Long> stages,
+      Map<String, AiOperationObserver.AiUsage> operations,
+      Map<String, Object> retrieval) {}
 
   public void complete(SessionRequest request) {
     finish(request, "SUCCESS");
@@ -134,6 +167,12 @@ public class RequestTelemetry {
 
   private static final class RequestState {
     private final Instant startedAt = Instant.now();
+    private final Map<String, AiOperationObserver.AiUsage> operations;
+
+    private RequestState(boolean demo) {
+      operations = demo ? new LinkedHashMap<>() : null;
+    }
+
     private final Map<String, Long> stages = new LinkedHashMap<>();
     private final Map<String, Object> retrieval = new LinkedHashMap<>();
     private final Map<String, Object> ai = new LinkedHashMap<>();

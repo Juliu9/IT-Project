@@ -5,6 +5,7 @@ import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.gen3.recommenderagent.response.ResponseGenerator;
+import java.util.function.BiFunction;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -53,22 +54,58 @@ public class RequestGateway {
       @RequestHeader("X-Session-Id") String sessionId,
       @RequestHeader("X-User-Id") String userId,
       @RequestBody(required = false) String rawText) {
+    return process(sessionId, userId, rawText, false, (response, request) -> response);
+  }
+
+  public DemoResponse handleDemoRequest(
+      @RequestHeader("X-Session-Id") String sessionId,
+      @RequestHeader("X-User-Id") String userId,
+      @RequestBody(required = false) String rawText) {
+    return process(
+        sessionId,
+        userId,
+        rawText,
+        true,
+        (response, request) ->
+            new DemoResponse(response, request, telemetry == null ? null : telemetry.snapshot()));
+  }
+
+  public record DemoResponse(
+      String response, SessionRequest sessionRequest, RequestTelemetry.Snapshot metrics) {}
+
+  private <T> T process(
+      String sessionId,
+      String userId,
+      String rawText,
+      boolean demo,
+      BiFunction<String, SessionRequest, T> formatResponse) {
     if (telemetry != null) {
-      telemetry.start();
+      if (demo) {
+        telemetry.startDemo();
+      } else {
+        telemetry.start();
+      }
     }
     SessionRequest currentRequest = null;
     boolean completed = false;
     try {
       currentRequest = RequestTelemetry.measure("parseMs", () -> inputParser.parse(rawText));
-      SessionRequest result = sessionTransitionService.process(sessionId, userId, currentRequest);
+      SessionRequest parsedRequest = currentRequest;
+      SessionRequest result =
+          demo
+              ? RequestTelemetry.measure(
+                  "recommendMs",
+                  () -> sessionTransitionService.process(sessionId, userId, parsedRequest))
+              : sessionTransitionService.process(sessionId, userId, parsedRequest);
       String response =
           RequestTelemetry.measure(
               "responseMs", () -> responseGenerator.generate(result.getRecommendations(), result));
+      T payload = formatResponse.apply(response, result);
       if (telemetry != null) {
         telemetry.complete(result);
       }
       completed = true;
-      return response;
+      return payload;
     } finally {
       if (telemetry != null && !completed) {
         telemetry.fail(currentRequest);
