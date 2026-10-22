@@ -62,8 +62,8 @@ deactivate Transition
 Sessions -> Sessions : Commit session if lock and version still match\nRelease lock
 Sessions --> Transition : Return only after successful commit
 deactivate Sessions
-Transition --> Gateway : Selected page + resolved ConversationOutcome
-Gateway -> Response : Generate wording using resolved outcome and context
+Transition --> Gateway : Selected page + resolved ConversationDecision
+Gateway -> Response : Generate wording using resolved decision and context
 note over Response
   Chat model for book explanations.
   Built-in wording for actions, clarification,

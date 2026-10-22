@@ -2,7 +2,7 @@ package com.gen3.recommenderagent.response;
 
 import static com.gen3.recommenderagent.domain.RecommendationPolicy.MAX_BOOK_COUNT;
 
-import com.gen3.recommenderagent.domain.session.ConversationOutcome;
+import com.gen3.recommenderagent.domain.session.ConversationDecision;
 import com.gen3.recommenderagent.domain.session.ConversationState;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
@@ -66,28 +66,28 @@ public class AiResponseGenerator implements ResponseGenerator {
       return PROCESSING_FALLBACK;
     }
 
-    var outcome =
-        currentRequest != null && currentRequest.getOutcome() != null
-            ? currentRequest.getOutcome()
-            : ConversationState.outcomeFor(recommendations, currentRequest);
-    if (outcome == ConversationOutcome.SEARCH_CLARIFICATION) {
+    var decision =
+        currentRequest != null && currentRequest.getDecision() != null
+            ? currentRequest.getDecision()
+            : ConversationState.decisionFor(recommendations, currentRequest);
+    if (decision == ConversationDecision.SEARCH_CLARIFICATION) {
       RequestTelemetry.responseMode("SEARCH_CLARIFICATION");
       return "What kind of audiobook would you like?";
     }
-    if (outcome == ConversationOutcome.PREFERENCE_CLARIFICATION) {
+    if (decision == ConversationDecision.PREFERENCE_CLARIFICATION) {
       RequestTelemetry.responseMode("PREFERENCE_CLARIFICATION");
       return "I'd love to find something you'll enjoy. What genres, authors, or narrators do you like?";
     }
     String limitNotice = limitNotice(currentRequest);
-    String fixedResponse = generateOutcomeResponse(outcome, currentRequest);
+    String fixedResponse = generateOutcomeResponse(decision, currentRequest);
     if (fixedResponse != null) {
       boolean noResults =
-          switch (outcome) {
+          switch (decision) {
             case NO_MORE_RESULTS, NOTHING_TO_REPEAT, NO_MATCHES -> true;
             default -> false;
           };
       RequestTelemetry.responseMode(noResults ? "NO_RESULTS" : "ACTION_RESPONSE");
-      return switch (outcome) {
+      return switch (decision) {
         case NO_MORE_RESULTS, NOTHING_TO_REPEAT -> fixedResponse;
         default -> limitNotice + fixedResponse;
       };
@@ -337,8 +337,8 @@ public class AiResponseGenerator implements ResponseGenerator {
   }
 
   private String generateOutcomeResponse(
-      ConversationOutcome outcome, SessionRequest currentRequest) {
-    return switch (outcome) {
+      ConversationDecision decision, SessionRequest currentRequest) {
+    return switch (decision) {
       case COUNT_CLARIFICATION -> "How many recommendations would you like at a time?";
       case COUNT_CHANGED -> {
         int count = Math.clamp(currentRequest.getBookCount(), 1, MAX_BOOK_COUNT);

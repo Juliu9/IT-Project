@@ -16,11 +16,11 @@ import org.junit.jupiter.api.Test;
 class ResponseGeneratorTest {
 
   @Test
-  void usesTheResolvedOutcomeWithoutReinterpretingIntent() {
+  void usesTheResolvedDecisionWithoutReinterpretingIntent() {
     var request = new SessionRequest();
     request.setIntent(Intent.HELP);
-    request.setOutcome(
-        com.gen3.recommenderagent.domain.session.ConversationOutcome.NO_MORE_RESULTS);
+    request.setDecision(
+        com.gen3.recommenderagent.domain.session.ConversationDecision.NO_MORE_RESULTS);
     var generator = new AiResponseGenerator(null);
     assertEquals(
         "There are no more audiobooks matching your current search. Try changing your criteria.",

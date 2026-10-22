@@ -10,12 +10,13 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
 
-/** Resolves an incoming request against the conversational state held by a session. */
+/** Conversation policy applied before and after recommendation work in the same session update. */
 public final class ConversationState {
 
   /** Resolves context and invalidates an obsolete queue before recommendation work begins. */
   public SessionRequest begin(Session session, SessionRequest original) {
     SessionRequest request = resolve(session, original);
+    // Invalidation uses the original action because clarification replies can become searches.
     if (request.getIntent() != Intent.REPEAT
         && !request.isSearchClarificationRequired()
         && invalidatesBatch(original)) {
@@ -30,6 +31,7 @@ public final class ConversationState {
 
   /** Records the completed transition and resolves wording-independent response policy. */
   public void finish(Session session, SessionRequest request, SessionRequest original) {
+    // Repeating or asking for search criteria must not replace the retained search.
     if (request.getIntent() == Intent.REPEAT || request.isSearchClarificationRequired()) {
       if (request.isSearchClarificationRequired()) {
         request.setRecommendations(List.of());
@@ -43,11 +45,12 @@ public final class ConversationState {
           request.getIntent() == Intent.MORE_RESULTS && request.getRecommendations().isEmpty());
       applyTransition(session, request, originalIntent(original));
     }
-    request.setOutcome(outcomeFor(request.getRecommendations(), request));
+    request.setDecision(decisionFor(request.getRecommendations(), request));
   }
 
   /** Shared eligibility rule for parsed inputs and restored conversation requests. */
   public static SessionRequest normalizeInput(SessionRequest request) {
+    // Control intents may carry exact filters, but cannot introduce new semantic preferences.
     if (!acceptsSemanticInformation(request.getIntent())) {
       request.setPositiveSemanticQuery(null);
       request.setNegativeSemanticQuery(null);
@@ -60,29 +63,30 @@ public final class ConversationState {
     return intent == Intent.RECOMMENDATION || intent == Intent.REFINE;
   }
 
-  public static ConversationOutcome outcomeFor(
+  public static ConversationDecision decisionFor(
       List<Recommendation> recommendations, SessionRequest request) {
     if (recommendations == null && request == null) {
-      return ConversationOutcome.UNAVAILABLE;
+      return ConversationDecision.UNAVAILABLE;
     }
+    // Clarification outranks actions; actions outrank empty-result messages.
     if (request != null) {
       if (request.isSearchClarificationRequired()) {
-        return ConversationOutcome.SEARCH_CLARIFICATION;
+        return ConversationDecision.SEARCH_CLARIFICATION;
       }
       if (request.isPreferenceClarificationRequired()) {
-        return ConversationOutcome.PREFERENCE_CLARIFICATION;
+        return ConversationDecision.PREFERENCE_CLARIFICATION;
       }
       if (request.getIntent() != null) {
-        ConversationOutcome action =
+        ConversationDecision action =
             switch (request.getIntent()) {
               case CHANGE_COUNT ->
                   request.getBookCount() == null
-                      ? ConversationOutcome.COUNT_CLARIFICATION
-                      : ConversationOutcome.COUNT_CHANGED;
-              case UPDATE_PREFERENCES -> ConversationOutcome.PREFERENCES_UPDATED;
-              case CLEAR_HISTORY -> ConversationOutcome.HISTORY_CLEARED;
-              case HELP -> ConversationOutcome.HELP;
-              case UNKNOWN -> ConversationOutcome.UNKNOWN;
+                      ? ConversationDecision.COUNT_CLARIFICATION
+                      : ConversationDecision.COUNT_CHANGED;
+              case UPDATE_PREFERENCES -> ConversationDecision.PREFERENCES_UPDATED;
+              case CLEAR_HISTORY -> ConversationDecision.HISTORY_CLEARED;
+              case HELP -> ConversationDecision.HELP;
+              case UNKNOWN -> ConversationDecision.UNKNOWN;
               case RECOMMENDATION, REFINE, MORE_RESULTS, REPEAT -> null;
             };
         if (action != null) {
@@ -93,14 +97,14 @@ public final class ConversationState {
     if (recommendations == null || recommendations.isEmpty()) {
       if (request != null
           && (request.isNoMoreRecommendations() || request.getIntent() == Intent.MORE_RESULTS)) {
-        return ConversationOutcome.NO_MORE_RESULTS;
+        return ConversationDecision.NO_MORE_RESULTS;
       }
       if (request != null && request.getIntent() == Intent.REPEAT) {
-        return ConversationOutcome.NOTHING_TO_REPEAT;
+        return ConversationDecision.NOTHING_TO_REPEAT;
       }
-      return ConversationOutcome.NO_MATCHES;
+      return ConversationDecision.NO_MATCHES;
     }
-    return ConversationOutcome.RECOMMENDATIONS;
+    return ConversationDecision.RECOMMENDATIONS;
   }
 
   static boolean awaitingPreferences(Session session) {
@@ -113,6 +117,7 @@ public final class ConversationState {
     if (request == null) {
       return;
     }
+    // Keep one search and one non-search entry so actions do not erase follow-up context.
     boolean search = isSearchContext(request);
     session.getRequests().removeIf(existing -> isSearchContext(existing) == search);
     session.getRequests().add(request);
@@ -134,6 +139,7 @@ public final class ConversationState {
   }
 
   private void applyTransition(Session session, SessionRequest request, Intent originalIntent) {
+    // Persist a taste reply before history replacement removes the pending clarification.
     if (originalIntent == Intent.UPDATE_PREFERENCES
         || (originalIntent == Intent.REFINE && awaitingPreferences(session))) {
       session.setPreferences(mergedPreferences(session, request));
@@ -170,6 +176,7 @@ public final class ConversationState {
         .toList();
   }
 
+  // Persist only reusable context; raw text and the temporary decision stay out of history.
   private SessionRequest historyEntry(SessionRequest request) {
     SessionRequest entry = new SessionRequest();
     entry.setRequestId(request.getRequestId());
@@ -197,6 +204,7 @@ public final class ConversationState {
       applyPreviousSearch(effective, session);
       return effective;
     }
+    // Check before preference handling: MORE cannot invent a first search.
     if (effective.getIntent() == Intent.MORE_RESULTS
         && (session.getRequests() == null
             || session.getRequests().stream()
@@ -439,6 +447,7 @@ public final class ConversationState {
     return merged;
   }
 
+  // Resolution must not mutate parser input or the saved criteria used by later requests.
   private SessionRequest copyOf(SessionRequest source) {
     SessionRequest copy = new SessionRequest();
     copy.setIntent(Intent.UNKNOWN);

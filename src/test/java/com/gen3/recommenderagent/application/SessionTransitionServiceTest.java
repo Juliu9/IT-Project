@@ -42,8 +42,8 @@ class SessionTransitionServiceTest {
         recommendations.stream().map(Recommendation::getBookId).toList(),
         result.getRecommendations().stream().map(Recommendation::getBookId).toList());
     assertEquals(
-        com.gen3.recommenderagent.domain.session.ConversationOutcome.RECOMMENDATIONS,
-        result.getOutcome());
+        com.gen3.recommenderagent.domain.session.ConversationDecision.RECOMMENDATIONS,
+        result.getDecision());
     verify(sessions).update(eq("session-1"), eq("user-1"), any());
     assertNotNull(result.getRequestId());
     assertNotNull(result.getCreatedAt());
@@ -65,8 +65,8 @@ class SessionTransitionServiceTest {
     SessionRequest result = service(sessions, workflow).process("session-2", "user-2", request);
 
     assertEquals(
-        com.gen3.recommenderagent.domain.session.ConversationOutcome.COUNT_CHANGED,
-        result.getOutcome());
+        com.gen3.recommenderagent.domain.session.ConversationDecision.COUNT_CHANGED,
+        result.getDecision());
     verify(sessions).update(eq("session-2"), eq("user-2"), any());
     assertEquals(2, session.getBookCount());
     assertEquals(List.of(), result.getRecommendations());

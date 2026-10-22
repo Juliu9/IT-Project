@@ -7,15 +7,15 @@ import java.util.List;
 
 public class SessionRequest {
 
-  @JsonIgnore private ConversationOutcome outcome;
+  @JsonIgnore private ConversationDecision decision;
 
   @JsonIgnore
-  public ConversationOutcome getOutcome() {
-    return outcome;
+  public ConversationDecision getDecision() {
+    return decision;
   }
 
-  public void setOutcome(ConversationOutcome outcome) {
-    this.outcome = outcome;
+  public void setDecision(ConversationDecision decision) {
+    this.decision = decision;
   }
 
   private String requestId;

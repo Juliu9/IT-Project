@@ -406,14 +406,14 @@ and result-count clamping rules.
 
 `SessionTransitionService.process` remains the entry point for a single session transition.
 `ConversationState` owns semantic eligibility, context inheritance, pending-batch invalidation,
-preference/count updates, history retention and the resolved conversation outcome.
+preference/count updates, history retention and the resolved conversation decision.
 The transition implementation retains cached paging, retrieval and timing inside one
 `SessionRepository.update`; response generation still follows a successful commit.
 
-`ConversationOutcome` is temporary and excluded from session JSON. Existing session fields
+`ConversationDecision` is temporary and excluded from session JSON. Existing session fields
 and recommendation details remain unchanged, so no Redis migration is required.
 The response implementation consumes this outcome for wording. Direct callers without a
-resolved outcome use the same conversation-policy classifier; there is no second intent policy.
+resolved decision use the same conversation-policy classifier; there is no second intent policy.
 
 Control intents still discard new semantic criteria while retaining exact filters. MORE with
 new exact filters invalidates its pending batch, and semantic taste replies use REFINE.

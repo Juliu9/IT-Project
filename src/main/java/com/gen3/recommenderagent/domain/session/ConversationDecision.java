@@ -1,7 +1,7 @@
 package com.gen3.recommenderagent.domain.session;
 
-/** Resolved conversation result, independent of response wording and stored session data. */
-public enum ConversationOutcome {
+/** Policy decision about the next conversational action, independent of response wording. */
+public enum ConversationDecision {
   UNAVAILABLE,
   SEARCH_CLARIFICATION,
   PREFERENCE_CLARIFICATION,

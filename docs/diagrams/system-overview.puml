@@ -40,7 +40,7 @@ Gateway --> Response : 3. Generate response after commit
 
 note bottom of Session
   ConversationState owns conversation policy.
-  The result carries a temporary ConversationOutcome.
+  The result carries a temporary ConversationDecision.
   MORE: use pending recommendations first.
   REPEAT: reuse the last search outcome.
   MORE without a previous search: ask for criteria.
