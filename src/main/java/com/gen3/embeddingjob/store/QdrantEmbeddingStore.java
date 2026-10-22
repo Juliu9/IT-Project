@@ -2,7 +2,7 @@ package com.gen3.embeddingjob.store;
 
 import static io.qdrant.client.WithPayloadSelectorFactory.enable;
 
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore.StoredAudiobook;
+import com.gen3.recommenderagent.storage.audiobook.model.StoredAudiobook;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantPointMapper;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Points.ScrollPoints;

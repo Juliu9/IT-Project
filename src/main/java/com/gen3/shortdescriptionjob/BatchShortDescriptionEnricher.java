@@ -1,7 +1,8 @@
-package com.gen3.recommenderagent.storage.audiobook;
+package com.gen3.shortdescriptionjob;
 
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore;
-import com.gen3.recommenderagent.storage.audiobook.port.ShortDescriptionBatchProvider;
+import com.gen3.recommenderagent.storage.audiobook.model.StoredAudiobook;
+import com.gen3.shortdescriptionjob.provider.ShortDescriptionBatchProvider;
+import com.gen3.shortdescriptionjob.store.AudiobookEnrichmentStore;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -80,10 +81,10 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
               + manifest
               + ". Import it before submitting another batch.");
     }
-    List<AudiobookEnrichmentStore.StoredAudiobook> books =
+    List<StoredAudiobook> books =
         enrichmentStore.findRecordsWithoutShortDescription(maximumRecords);
     Files.createDirectories(outputDirectory);
-    List<AudiobookEnrichmentStore.StoredAudiobook> validBooks = validBooks(books);
+    List<StoredAudiobook> validBooks = validBooks(books);
     int records = validBooks.size();
     if (records == 0) {
       LOGGER.info("No audiobook descriptions were available for short-description enrichment");
@@ -92,9 +93,7 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
 
     // Uploads cannot create a generation batch, so upload failure is safe to retry.
     String inputId =
-        provider.upload(
-            validBooks.stream().map(AudiobookEnrichmentStore.StoredAudiobook::record).toList(),
-            outputDirectory);
+        provider.upload(validBooks.stream().map(StoredAudiobook::record).toList(), outputDirectory);
     // Once submission starts, an uncertain outcome must retain the record references.
     writeManifest(manifest, "", validBooks);
     String submittedBatchId;
@@ -119,8 +118,7 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
         records);
   }
 
-  private List<AudiobookEnrichmentStore.StoredAudiobook> validBooks(
-      List<AudiobookEnrichmentStore.StoredAudiobook> records) {
+  private List<StoredAudiobook> validBooks(List<StoredAudiobook> records) {
     return records.stream()
         .filter(
             record ->
@@ -162,11 +160,10 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
     return outputDirectory.resolve("short-description-batch.json");
   }
 
-  void writeManifest(
-      Path manifest, String submittedBatchId, List<AudiobookEnrichmentStore.StoredAudiobook> books)
+  void writeManifest(Path manifest, String submittedBatchId, List<StoredAudiobook> books)
       throws IOException {
     Map<String, String> storageReferences = new LinkedHashMap<>();
-    for (AudiobookEnrichmentStore.StoredAudiobook book : books) {
+    for (StoredAudiobook book : books) {
       storageReferences.put(book.record().id(), book.storageReference());
     }
     Path temporary =

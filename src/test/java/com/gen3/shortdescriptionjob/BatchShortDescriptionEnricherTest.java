@@ -1,13 +1,14 @@
-package com.gen3.recommenderagent.storage.audiobook;
+package com.gen3.shortdescriptionjob;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.openai.OpenAiShortDescriptionBatchProvider;
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore;
-import com.gen3.recommenderagent.storage.audiobook.port.ShortDescriptionBatchProvider;
+import com.gen3.recommenderagent.storage.audiobook.model.StoredAudiobook;
+import com.gen3.shortdescriptionjob.provider.OpenAiShortDescriptionBatchProvider;
+import com.gen3.shortdescriptionjob.provider.ShortDescriptionBatchProvider;
+import com.gen3.shortdescriptionjob.store.AudiobookEnrichmentStore;
 import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -38,7 +39,7 @@ class BatchShortDescriptionEnricherTest {
     BatchShortDescriptionEnricher enricher = enricher(directory);
     String storageReference = "opaque-row-1";
     var book =
-        new AudiobookEnrichmentStore.StoredAudiobook(
+        new StoredAudiobook(
             new AudiobookRecord("book-1", "source", "Title", List.of(), "Summary"),
             storageReference);
 

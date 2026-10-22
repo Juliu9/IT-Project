@@ -1,0 +1,89 @@
+package com.gen3.shortdescriptionjob.store;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
+
+import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
+import java.util.List;
+import java.util.Map;
+import org.apache.solr.client.solrj.SolrClient;
+import org.apache.solr.common.SolrDocument;
+import org.apache.solr.common.SolrInputDocument;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+
+class SolrShortDescriptionStoreTest {
+  private final SolrClient client = mock(SolrClient.class);
+  private final SolrAudiobookRepository catalogue = mock(SolrAudiobookRepository.class);
+  private final SolrShortDescriptionStore store =
+      new SolrShortDescriptionStore(
+          client, catalogue, "books", "https://user:secret@example.com/solr");
+
+  @Test
+  void readsOnlyMissingSummariesAndKeepsStorageReferences() throws Exception {
+    var missing = new AudiobookRecord("one", "s", "Title", List.of(), "Description");
+    var present =
+        new AudiobookRecord(
+            "two",
+            "s",
+            "Title",
+            List.of(),
+            "Description",
+            List.of(),
+            "en",
+            60,
+            2020,
+            "Existing summary");
+    when(catalogue.findAllBooks(0, 500)).thenReturn(List.of(missing, present));
+    assertThat(store.findRecordsWithoutShortDescription(10))
+        .hasSize(1)
+        .first()
+        .extracting(book -> book.storageReference())
+        .isEqualTo("one");
+    assertThat(store.datasetIdentity().dataset()).isEqualTo("https://example.com:443/solr/books");
+  }
+
+  @Test
+  void writesOnlyTheSummaryWithAnOptimisticVersionCheckAndPreservesExistingSummaries()
+      throws Exception {
+    var missing = new SolrDocument();
+    missing.setField("_version_", 123L);
+    var present = new SolrDocument();
+    present.setField("short_description", "Keep this");
+    when(client.getById("books", "missing")).thenReturn(missing);
+    when(client.getById("books", "present")).thenReturn(present);
+    store.updateShortDescriptions(
+        List.of(
+            new AudiobookEnrichmentStore.ShortDescriptionUpdate("missing", "Generated"),
+            new AudiobookEnrichmentStore.ShortDescriptionUpdate("present", "Replacement")));
+    var documents = ArgumentCaptor.forClass(java.util.Collection.class);
+    verify(client).add(eq("books"), documents.capture());
+    assertThat(documents.getValue()).hasSize(1);
+    var document = (SolrInputDocument) documents.getValue().iterator().next();
+    assertThat(document.getFieldNames())
+        .containsExactlyInAnyOrder("id", "_version_", "short_description");
+    assertThat(document.getFieldValue("_version_")).isEqualTo(123L);
+    assertThat(document.getFieldValue("short_description")).isEqualTo(Map.of("set", "Generated"));
+    verify(client).commit("books");
+  }
+
+  @Test
+  void refusesUnsafeUpdatesWhenTheVersionIsMissing() throws Exception {
+    when(client.getById("books", "id")).thenReturn(new SolrDocument());
+    assertThatThrownBy(
+            () ->
+                store.updateShortDescriptions(
+                    List.of(
+                        new AudiobookEnrichmentStore.ShortDescriptionUpdate("id", "Generated"))))
+        .isInstanceOf(java.io.IOException.class)
+        .hasMessageContaining("_version_");
+    verify(client).getById("books", "id");
+    verifyNoMoreInteractions(client);
+  }
+}

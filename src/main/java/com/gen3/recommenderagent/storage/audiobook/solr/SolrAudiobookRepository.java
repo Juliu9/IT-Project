@@ -33,7 +33,7 @@ import org.springframework.stereotype.Repository;
 /** Implements audiobook keyword, vector, catalogue, and indexing operations with Solr. */
 @Repository
 @ConditionalOnExpression(
-    "'${audiobook.qdrant.migration.enabled:false}' == 'true' or ('${audiobook.embedding-index.enabled:false}' == 'true' and '${audiobook.database:qdrant}' == 'solr')")
+    "'${audiobook.qdrant.migration.enabled:false}' == 'true' or ('${audiobook.embedding-index.enabled:false}' == 'true' and '${audiobook.database:qdrant}' == 'solr') or ('${audiobook.short-description.batch.mode:disabled}' != 'disabled' and '${audiobook.database:qdrant}' == 'solr')")
 public class SolrAudiobookRepository
     implements AudiobookCatalogueRepository, AudiobookCandidateSearch, AudiobookVectorIndexer {
 

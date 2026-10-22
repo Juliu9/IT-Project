@@ -3,7 +3,6 @@ package com.gen3.recommenderagent.candidateretriever;
 import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorRepository;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,10 +22,15 @@ public class CandidateRetrieverConfiguration {
         throw new IllegalArgumentException(
             "Run embedding indexing with the dedicated EmbeddingIndexApplication entry point");
       }
+      if (!"disabled"
+          .equals(environment.getProperty("audiobook.short-description.batch.mode", "disabled"))) {
+        throw new IllegalArgumentException(
+            "Run short-description generation with the dedicated ShortDescriptionApplication entry point");
+      }
       String backend = environment.getProperty("audiobook.database", "qdrant");
       if (backend.isBlank() || "solr".equals(backend)) {
         throw new IllegalArgumentException(
-            "audiobook.database must select a complete database adapter set. Solr lacks vector lookup, enrichment, and user-preference adapters.");
+            "audiobook.database must select a complete database adapter set. Solr lacks vector lookup and user-preference adapters.");
       }
       if (environment.containsProperty("audiobook.candidate-retriever")) {
         throw new IllegalArgumentException(
@@ -46,7 +50,6 @@ public class CandidateRetrieverConfiguration {
       @Value("${audiobook.database:qdrant}") String backend,
       AudiobookCandidateSearch candidateSearch,
       AudiobookVectorRepository vectors,
-      AudiobookEnrichmentStore enrichment,
       UserPreferenceVectorRepository preferences,
       EmbeddingIndexer embeddingIndexer,
       AudiobookRetrievalPlanner retrievalPlanner) {

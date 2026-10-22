@@ -1,7 +1,7 @@
 package com.gen3.embeddingjob.store;
 
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore.StoredAudiobook;
+import com.gen3.recommenderagent.storage.audiobook.model.StoredAudiobook;
 import java.io.IOException;
 import java.util.List;
 

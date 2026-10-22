@@ -52,6 +52,11 @@ public class EmbeddingIndexApplication {
         throw new IllegalArgumentException(
             "Explicitly enable audiobook.embedding-index.enabled to run this job");
       }
+      if (!"disabled"
+          .equals(environment.getProperty("audiobook.short-description.batch.mode", "disabled"))) {
+        throw new IllegalArgumentException(
+            "Run embedding indexing separately from short-description generation");
+      }
       String database = environment.getProperty("audiobook.database", "qdrant");
       if (database.isBlank()) {
         throw new IllegalArgumentException("Select a database adapter for embedding indexing");

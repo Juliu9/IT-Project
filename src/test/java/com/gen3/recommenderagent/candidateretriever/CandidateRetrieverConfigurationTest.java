@@ -6,7 +6,6 @@ import static org.mockito.Mockito.mock;
 import com.gen3.recommenderagent.candidateretriever.retrievalplan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorRepository;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.Bm25SparseTextEncoder;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
@@ -17,6 +16,7 @@ import com.gen3.recommenderagent.storage.audiobook.solr.SolrConfig;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
 import com.gen3.recommenderagent.storage.user.qdrant.QdrantUserPreferenceMapper;
 import com.gen3.recommenderagent.storage.user.qdrant.QdrantUserPreferenceRepository;
+import com.gen3.shortdescriptionjob.store.AudiobookEnrichmentStore;
 import io.qdrant.client.QdrantClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -36,6 +36,19 @@ class CandidateRetrieverConfigurationTest {
               SolrAudiobookRepository.class)
           .withBean(EmbeddingIndexer.class, () -> mock(EmbeddingIndexer.class))
           .withBean(AudiobookRetrievalPlanner.class, AudiobookRetrievalPlanner::new);
+
+  @Test
+  void rejectsShortDescriptionJobModesOnTheRecommendationServer() {
+    runner
+        .withPropertyValues("audiobook.short-description.batch.mode=submit")
+        .run(
+            context ->
+                assertThat(context)
+                    .hasFailed()
+                    .getFailure()
+                    .hasMessage(
+                        "Run short-description generation with the dedicated ShortDescriptionApplication entry point"));
+  }
 
   @Test
   void rejectsEmbeddingJobFlagsOnTheRecommendationServer() {
@@ -61,7 +74,7 @@ class CandidateRetrieverConfigurationTest {
                   .hasSingleBean(CandidateRetriever.class)
                   .hasSingleBean(AudiobookCandidateSearch.class)
                   .hasSingleBean(AudiobookVectorRepository.class)
-                  .hasSingleBean(AudiobookEnrichmentStore.class)
+                  .doesNotHaveBean(AudiobookEnrichmentStore.class)
                   .hasSingleBean(UserPreferenceVectorRepository.class)
                   .doesNotHaveBean(SolrConfig.class)
                   .doesNotHaveBean(SolrAudiobookRepository.class);
@@ -80,7 +93,6 @@ class CandidateRetrieverConfigurationTest {
   @Test
   void completeReplacementNeedsNoQdrantOrSolrConnections() {
     replacement()
-        .withBean(AudiobookEnrichmentStore.class, () -> mock(AudiobookEnrichmentStore.class))
         .run(
             context ->
                 assertThat(context)
@@ -96,7 +108,11 @@ class CandidateRetrieverConfigurationTest {
 
   @Test
   void incompleteReplacementFailsInsteadOfUsingQdrant() {
-    replacement().run(context -> assertThat(context).hasFailed());
+    runner
+        .withPropertyValues("audiobook.database=other")
+        .withBean(AudiobookCandidateSearch.class, () -> mock(AudiobookCandidateSearch.class))
+        .withBean(AudiobookVectorRepository.class, () -> mock(AudiobookVectorRepository.class))
+        .run(context -> assertThat(context).hasFailed());
   }
 
   @Test
@@ -106,8 +122,7 @@ class CandidateRetrieverConfigurationTest {
         .run(
             context ->
                 assertThat(context.getStartupFailure())
-                    .hasMessageContaining(
-                        "Solr lacks vector lookup, enrichment, and user-preference adapters"));
+                    .hasMessageContaining("Solr lacks vector lookup and user-preference adapters"));
   }
 
   @Test

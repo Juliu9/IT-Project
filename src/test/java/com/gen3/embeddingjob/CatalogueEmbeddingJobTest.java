@@ -13,7 +13,7 @@ import static org.mockito.Mockito.when;
 
 import com.gen3.embeddingjob.store.AudiobookEmbeddingStore;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore.StoredAudiobook;
+import com.gen3.recommenderagent.storage.audiobook.model.StoredAudiobook;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;

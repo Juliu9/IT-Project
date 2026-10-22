@@ -1,7 +1,6 @@
-package com.gen3.recommenderagent.storage.audiobook.openai;
+package com.gen3.shortdescriptionjob.provider;
 
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.port.ShortDescriptionBatchProvider;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;

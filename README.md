@@ -132,11 +132,11 @@ configured embedding model.
 
 `audiobook.database` in `application.properties` selects one database for the whole request flow;
 `qdrant` is the default. The former `audiobook.candidate-retriever` setting is rejected to prevent
-mixed backends. Selecting `solr` is rejected until its missing vector lookup, enrichment, and
-user-preference adapters are implemented.
+mixed backends. The recommendation server still rejects `solr` until its missing vector lookup
+and user-preference adapters are implemented; both maintenance jobs can select Solr independently.
 
 To add another database, register its implementations of `AudiobookCandidateSearch`,
-`AudiobookVectorRepository`, `AudiobookEnrichmentStore`, and `UserPreferenceVectorRepository`
+`AudiobookVectorRepository` and `UserPreferenceVectorRepository`
 under the same selection setting. Selecting it disables all Qdrant clients and adapters. Missing
 implementations fail startup; they never fall back to Qdrant. Preserve semantic, keyword, hybrid,
 and filtered search and the existing write guarantees; report unsupported operations explicitly.
@@ -225,13 +225,26 @@ generates `shortDescription`, and uploads through that same adapter without re-e
 The adapter maps those domain fields to its database names (Qdrant uses `short_description`) and
 preserves existing short descriptions.
 
+All short-description orchestration, provider transport, and summary-specific database adapters live
+under `com.gen3.shortdescriptionjob`. The normal server never loads this job, even when explicitly
+configured: it rejects enabled summary modes and directs you to the maintenance entry point.
+Choose `AUDIOBOOK_DATABASE=solr` or `qdrant`; only that database is connected. This job uses neither
+Redis nor embedding generation and does not require a complete recommendation backend.
+
 Start with a small submission to check quality and spend:
 
 ```bash
-export AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MODE=submit
-export AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MAXIMUM_RECORDS=1000
-./mvnw spring-boot:run
+AUDIOBOOK_DATABASE=solr AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MODE=submit \
+AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MAXIMUM_RECORDS=1000 \
+./mvnw spring-boot:run \
+  -Dapplication.main-class=com.gen3.shortdescriptionjob.ShortDescriptionApplication
 ```
+
+Solr requires a stored, single-valued `short_description` field (for example, type `string`) and
+the standard `_version_` field. It updates only `short_description`, checks `_version_` to reject concurrent changes,
+and preserves existing summaries. On a conflict, the manifest is retained; retry import to apply
+remaining results. Qdrant retains its conditional missing-only payload updates. Neither adapter
+rewrites book vectors. Run one submission/import process at a time and retain its output directory.
 
 The job records the Batch ID, provider, backend/dataset identity, and opaque record references in
 `data/short-descriptions/short-description-batch.json`. Once OpenAI reports it as completed,
@@ -241,8 +254,9 @@ intact. Legacy batches require explicit recovery with their original implementat
 these manifests are never silently converted. Import the output:
 
 ```bash
-export AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MODE=import
-./mvnw spring-boot:run
+AUDIOBOOK_DATABASE=solr AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MODE=import \
+./mvnw spring-boot:run \
+  -Dapplication.main-class=com.gen3.shortdescriptionjob.ShortDescriptionApplication
 ```
 
 For the remaining catalogue, submit up to 100,000 records at a time and repeat after each import;

@@ -18,7 +18,8 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore;
+import com.gen3.recommenderagent.storage.audiobook.model.StoredAudiobook;
+import com.gen3.shortdescriptionjob.store.AudiobookEnrichmentStore;
 import com.google.common.util.concurrent.Futures;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Collections.CreateCollection;
@@ -160,8 +161,10 @@ class QdrantAudiobookRepositoryTest {
     QdrantAudiobookRepository repository =
         new QdrantAudiobookRepository(client, mapper, sparseEncoder, "audiobooks", 2);
 
-    List<AudiobookEnrichmentStore.StoredAudiobook> records =
-        repository.findRecordsWithoutShortDescription(10);
+    List<StoredAudiobook> records =
+        new com.gen3.shortdescriptionjob.store.QdrantShortDescriptionStore(
+                client, mapper, "audiobooks")
+            .findRecordsWithoutShortDescription(10);
 
     assertThat(records).hasSize(1);
     assertThat(records.getFirst().record().id()).isEqualTo("book-3");
@@ -188,11 +191,12 @@ class QdrantAudiobookRepositoryTest {
     QdrantAudiobookRepository repository =
         new QdrantAudiobookRepository(client, mapper, sparseEncoder, "audiobooks", 2);
 
-    repository.updateShortDescriptions(
-        List.of(
-            new AudiobookEnrichmentStore.ShortDescriptionUpdate(
-                Base64.getEncoder().encodeToString(mapper.pointId("book-3").toByteArray()),
-                "A short description.")));
+    new com.gen3.shortdescriptionjob.store.QdrantShortDescriptionStore(client, mapper, "audiobooks")
+        .updateShortDescriptions(
+            List.of(
+                new AudiobookEnrichmentStore.ShortDescriptionUpdate(
+                    Base64.getEncoder().encodeToString(mapper.pointId("book-3").toByteArray()),
+                    "A short description.")));
 
     ArgumentCaptor<List<io.qdrant.client.grpc.Points.PointsUpdateOperation>> operations =
         ArgumentCaptor.forClass(List.class);

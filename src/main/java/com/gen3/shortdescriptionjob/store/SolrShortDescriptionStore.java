@@ -1,0 +1,123 @@
+package com.gen3.shortdescriptionjob.store;
+
+import com.gen3.recommenderagent.storage.audiobook.model.StoredAudiobook;
+import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
+import java.io.IOException;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import org.apache.solr.client.solrj.SolrClient;
+import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.common.SolrInputDocument;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Component;
+
+/**
+ * Selects missing summaries and applies version-checked updates without replacing catalogue data.
+ */
+@Component
+@ConditionalOnProperty(name = "audiobook.database", havingValue = "solr")
+public class SolrShortDescriptionStore implements AudiobookEnrichmentStore {
+  private final SolrClient client;
+  private final SolrAudiobookRepository catalogue;
+  private final String collection;
+  private final String endpoint;
+
+  public SolrShortDescriptionStore(
+      SolrClient client,
+      SolrAudiobookRepository catalogue,
+      @Value("${solr.collection}") String collection,
+      @Value("${solr.url}") String endpoint) {
+    this.client = client;
+    this.catalogue = catalogue;
+    this.collection = collection;
+    this.endpoint = endpoint;
+  }
+
+  @Override
+  public DatasetIdentity datasetIdentity() {
+    URI uri = URI.create(endpoint);
+    int port =
+        uri.getPort() < 0 ? ("https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80) : uri.getPort();
+    return new DatasetIdentity(
+        "solr",
+        uri.getScheme().toLowerCase(Locale.ROOT)
+            + "://"
+            + uri.getHost().toLowerCase(Locale.ROOT)
+            + ":"
+            + port
+            + uri.getPath().replaceAll("/+$", "")
+            + "/"
+            + collection);
+  }
+
+  @Override
+  public List<StoredAudiobook> findRecordsWithoutShortDescription(int maximumRecords)
+      throws IOException {
+    List<StoredAudiobook> missing = new ArrayList<>();
+    int offset = 0;
+    while (missing.size() < maximumRecords) {
+      var page = catalogue.findAllBooks(offset, 500);
+      for (var book : page) {
+        if (book.shortDescription() == null || book.shortDescription().isBlank()) {
+          missing.add(new StoredAudiobook(book, book.id()));
+          if (missing.size() == maximumRecords) {
+            break;
+          }
+        }
+      }
+      offset += page.size();
+      if (page.size() < 500) {
+        break;
+      }
+    }
+    return missing;
+  }
+
+  @Override
+  public void updateShortDescriptions(List<ShortDescriptionUpdate> updates) throws IOException {
+    if (updates == null || updates.isEmpty()) {
+      return;
+    }
+    try {
+      List<SolrInputDocument> documents = new ArrayList<>();
+      for (var update : updates) {
+        if (update == null
+            || update.storageReference() == null
+            || update.storageReference().isBlank()
+            || update.description() == null
+            || update.description().isBlank()) {
+          continue;
+        }
+        var current = client.getById(collection, update.storageReference());
+        if (current == null) {
+          continue;
+        }
+        Object description = current.getFieldValue("short_description");
+        if (description != null && !description.toString().isBlank()) {
+          continue;
+        }
+        Object version = current.getFieldValue("_version_");
+        if (!(version instanceof Number)) {
+          throw new IOException("Solr must return _version_ for safe summary updates");
+        }
+        SolrInputDocument document = new SolrInputDocument();
+        document.addField("id", update.storageReference());
+        document.addField("_version_", version);
+        document.addField("short_description", Map.of("set", update.description()));
+        documents.add(document);
+      }
+      if (!documents.isEmpty()) {
+        client.add(collection, documents);
+        client.commit(collection);
+      }
+    } catch (SolrServerException exception) {
+      throw new IOException(
+          "Could not safely update Solr short descriptions; retain the batch manifest and retry",
+          exception);
+    }
+  }
+}
