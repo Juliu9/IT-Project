@@ -11,14 +11,15 @@ import com.gen3.recommenderagent.api.RequestExceptionHandler;
 import com.gen3.recommenderagent.api.RequestGateway;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
+import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
+import java.util.Locale;
 import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -34,14 +35,15 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import tools.jackson.databind.ObjectMapper;
 
-/** Live two-turn test for an initial request followed by a request for more results. */
+/** Live two-turn test for updating preferences and requesting personalised recommendations. */
 @SpringBootTest
 @Testcontainers
 @Tag("external")
 class LiveIntegrationTest {
 
-  private static final String INITIAL_RAW_TEXT = "Recommend three science fiction audiobooks.";
-  private static final String FOLLOW_UP_RAW_TEXT = "Give me up to five more recommendations.";
+  private static final String INITIAL_RAW_TEXT = "I prefer English science fiction audiobooks.";
+  private static final String FOLLOW_UP_RAW_TEXT =
+      "Recommend up to five audiobooks based on my preferences.";
   private static final int REDIS_PORT = 6379;
   private static final Duration SESSION_TIMEOUT = Duration.ofSeconds(5);
 
@@ -73,7 +75,7 @@ class LiveIntegrationTest {
   @Autowired private ObjectMapper objectMapper;
 
   @Test
-  void shouldReturnNewRecommendationsInTheSameLiveSession() throws Exception {
+  void shouldUseUpdatedPreferencesForRecommendationsInTheSameLiveSession() throws Exception {
     String sessionId = "full-live-" + UUID.randomUUID();
     String userId = "full-live-test-user";
     MockMvc mockMvc =
@@ -82,39 +84,88 @@ class LiveIntegrationTest {
             .build();
 
     TurnResult firstTurn =
-        submitTurn(mockMvc, sessionId, userId, 1, INITIAL_RAW_TEXT, Intent.RECOMMENDATION, 3);
-    assertFalse(
+        submitTurn(mockMvc, sessionId, userId, 1, INITIAL_RAW_TEXT, Intent.UPDATE_PREFERENCES, 0);
+    assertTrue(
         firstTurn.recommendationIds().isEmpty(),
-        "The initial request returned no audiobook recommendations");
+        "Updating preferences unexpectedly returned audiobook recommendations");
+
+    Session preferenceSession = awaitSavedSession(sessionId, userId, SESSION_TIMEOUT);
+    assertNotNull(preferenceSession, "The updated preferences were not saved to Docker Redis");
+    assertSavedEnglishScienceFictionPreferences(preferenceSession);
 
     TurnResult secondTurn =
-        submitTurn(mockMvc, sessionId, userId, 2, FOLLOW_UP_RAW_TEXT, Intent.MORE_RESULTS, 5);
+        submitTurn(mockMvc, sessionId, userId, 2, FOLLOW_UP_RAW_TEXT, Intent.RECOMMENDATION, 5);
     assertFalse(
         secondTurn.recommendationIds().isEmpty(),
-        "The follow-up request returned no additional audiobook recommendations");
-
-    Set<String> duplicateIds = new HashSet<>(firstTurn.recommendationIds());
-    duplicateIds.retainAll(secondTurn.recommendationIds());
+        "The personalised request returned no audiobook recommendations");
     assertTrue(
-        duplicateIds.isEmpty(),
-        "The follow-up request repeated audiobook IDs from the first turn: " + duplicateIds);
+        secondTurn.completedRequest().isPersonalised(),
+        "The recommendation request was not marked as personalised");
+    assertRequestUsesEnglishScienceFictionPreferences(secondTurn.completedRequest());
+    assertTrue(
+        secondTurn.completedRequest().getRecommendations().stream()
+            .allMatch(
+                recommendation ->
+                    recommendation.getShortDescription() != null
+                        && !recommendation.getShortDescription().isBlank()),
+        "At least one recommendation has no reason");
 
     Session finalSession = awaitSavedSession(sessionId, userId, SESSION_TIMEOUT);
     assertNotNull(finalSession, "The final session was not saved to Docker Redis");
     assertTrue(
-        finalSession.getShownBooks().containsAll(firstTurn.recommendationIds()),
-        "The session did not retain all audiobook IDs shown in the first turn");
-    assertTrue(
         finalSession.getShownBooks().containsAll(secondTurn.recommendationIds()),
-        "The session did not retain all audiobook IDs shown in the second turn");
+        "The session did not retain all recommended audiobook IDs");
 
-    System.out.println("\n=== TC-05 multi-turn integration result ===");
+    System.out.println("\n=== TC-01 personalised recommendation integration result ===");
     System.out.println("Session ID: " + sessionId);
     printTurn(firstTurn);
     printTurn(secondTurn);
-    System.out.println("Duplicate audiobook IDs: " + duplicateIds);
+    System.out.println("Saved session preferences:");
+    System.out.println(
+        objectMapper
+            .writerWithDefaultPrettyPrinter()
+            .writeValueAsString(finalSession.getPreferences()));
     System.out.println("All shown audiobook IDs: " + finalSession.getShownBooks());
-    System.out.println("===========================================\n");
+    System.out.println("=========================================================\n");
+  }
+
+  private void assertSavedEnglishScienceFictionPreferences(Session session) {
+    SessionPreferences preferences = session.getPreferences();
+    assertNotNull(preferences, "The session contains no saved preferences");
+    assertTrue(
+        hasEnglishLanguage(preferences), "The saved session preferences do not contain English");
+    assertTrue(
+        hasScienceFiction(preferences.getPositiveSemanticQuery()),
+        "The saved session preferences do not contain science fiction");
+  }
+
+  private void assertRequestUsesEnglishScienceFictionPreferences(SessionRequest request) {
+    assertNotNull(request.getMustInclude(), "The personalised request has no exact filters");
+    assertTrue(
+        "english".equalsIgnoreCase(request.getMustInclude().getLanguage()),
+        "The personalised request did not use the saved English preference");
+    assertTrue(
+        hasScienceFiction(request.getPositiveSemanticQuery()),
+        "The personalised request did not use the saved science-fiction preference");
+  }
+
+  private boolean hasEnglishLanguage(SessionPreferences preferences) {
+    return preferences.getMustInclude() != null
+        && "english".equalsIgnoreCase(preferences.getMustInclude().getLanguage());
+  }
+
+  private boolean hasScienceFiction(SemanticQuery query) {
+    if (query == null) {
+      return false;
+    }
+    String values =
+        java.util.stream.Stream.of(query.getGenres(), query.getTopics(), query.getKeywords())
+            .filter(list -> list != null)
+            .flatMap(List::stream)
+            .filter(value -> value != null)
+            .map(value -> value.toLowerCase(Locale.ROOT))
+            .reduce("", (left, right) -> left + " " + right);
+    return values.contains("science") && values.contains("fiction");
   }
 
   private TurnResult submitTurn(
