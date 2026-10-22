@@ -8,7 +8,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@ConditionalOnExpression("'${audiobook.qdrant.migration.enabled:false}' == 'true'")
+@ConditionalOnExpression(
+    "'${audiobook.qdrant.migration.enabled:false}' == 'true' or ('${audiobook.embedding-index.enabled:false}' == 'true' and '${audiobook.database:qdrant}' == 'solr')")
 public class SolrConfig {
 
   @Bean

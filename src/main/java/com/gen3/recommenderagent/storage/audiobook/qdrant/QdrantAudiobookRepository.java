@@ -10,6 +10,7 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
+import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEmbeddingStore;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorRepository;
 import io.qdrant.client.QdrantClient;
@@ -51,7 +52,10 @@ import org.springframework.stereotype.Repository;
 @Primary
 @Repository
 public class QdrantAudiobookRepository
-    implements AudiobookCandidateSearch, AudiobookEnrichmentStore, AudiobookVectorRepository {
+    implements AudiobookCandidateSearch,
+        AudiobookEnrichmentStore,
+        AudiobookVectorRepository,
+        AudiobookEmbeddingStore {
 
   private final QdrantClient client;
   private final QdrantPointMapper mapper;
@@ -273,6 +277,51 @@ public class QdrantAudiobookRepository
                 .putPayload(field, value)
                 .setPointsSelector(selector))
         .build();
+  }
+
+  @Override
+  public Page embeddingPage(String cursor, int limit) throws IOException {
+    requireCollection();
+    var request =
+        ScrollPoints.newBuilder()
+            .setCollectionName(collection)
+            .setLimit(limit)
+            .setWithPayload(enable(true));
+    if (cursor != null) {
+      request.setOffset(pointId(cursor));
+    }
+    var page = await(client.scrollAsync(request.build()), "read catalogue for embedding indexing");
+    return new Page(
+        page.getResultList().stream()
+            .map(
+                point ->
+                    new StoredAudiobook(
+                        mapper.toRecord(point),
+                        Base64.getEncoder().encodeToString(point.getId().toByteArray())))
+            .toList(),
+        page.hasNextPageOffset()
+            ? Base64.getEncoder().encodeToString(page.getNextPageOffset().toByteArray())
+            : null);
+  }
+
+  @Override
+  public void updateEmbeddings(List<Update> updates) throws IOException {
+    if (updates.isEmpty()) {
+      return;
+    }
+    requireCollection();
+    var request =
+        io.qdrant.client.grpc.Points.UpdatePointVectors.newBuilder()
+            .setCollectionName(collection)
+            .setWait(true);
+    for (Update update : updates) {
+      validateDimension(update.embedding().vector());
+      request.addPoints(
+          io.qdrant.client.grpc.Points.PointVectors.newBuilder()
+              .setId(pointId(update.storageReference()))
+              .setVectors(mapper.toPoint(update.embedding()).getVectors()));
+    }
+    await(client.updateVectorsAsync(request.build()), "update existing catalogue vectors");
   }
 
   /** Loads Qdrant records that still need a generated short description. */

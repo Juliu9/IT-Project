@@ -38,6 +38,19 @@ class CandidateRetrieverConfigurationTest {
           .withBean(AudiobookRetrievalPlanner.class, AudiobookRetrievalPlanner::new);
 
   @Test
+  void rejectsEmbeddingJobFlagsOnTheRecommendationServer() {
+    runner
+        .withPropertyValues("audiobook.embedding-index.enabled=true")
+        .run(
+            context ->
+                assertThat(context)
+                    .hasFailed()
+                    .getFailure()
+                    .hasMessage(
+                        "Run embedding indexing with the dedicated EmbeddingIndexApplication entry point"));
+  }
+
+  @Test
   void selectsOnlyQdrantByDefault() {
     runner
         .withBean(QdrantClient.class, () -> mock(QdrantClient.class))

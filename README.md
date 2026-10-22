@@ -147,6 +147,40 @@ Qdrant field names, index types, vector schema, and filter translation live in
 creating indexes; explicit indexing creates an absent collection. Existing collections are not
 automatically inspected or migrated.
 
+## Catalogue embedding maintenance
+
+Book-vector generation is disabled by default and runs only in a separate, non-web process.
+Choose the database containing the existing records with `AUDIOBOOK_DATABASE=solr` or `qdrant`.
+The same selected adapter reads the records and updates their vectors; neither migration nor
+normal request handling starts this job. Query embeddings used by normal searches are unchanged.
+
+For example, index up to 100 existing Solr records:
+
+```bash
+AUDIOBOOK_EMBEDDING_INDEX_ENABLED=true AUDIOBOOK_DATABASE=solr \
+./mvnw spring-boot:run \
+  -Dapplication.main-class=com.gen3.embeddingjob.EmbeddingIndexApplication \
+  -Dspring-boot.run.arguments="--audiobook.embedding-index.maximum-records=100"
+```
+
+Replace `solr` with `qdrant` to index the records already in Qdrant. Only the selected database
+client is loaded; the job does not need Redis or the recommendation backend's user-preference
+adapters. OpenAI credentials and the selected database connection settings are still required.
+The Solr collection must have the configured stored vector field, or Qdrant must have the
+configured named-vector schema, matching `embedding.dimensions`.
+
+`audiobook.embedding-index.page-size` defaults to 100. `maximum-records=0` processes the full
+catalogue. This explicitly regenerates existing dense vectors, incurs embedding-provider cost,
+and also builds Qdrant keyword vectors. Updates preserve record IDs, metadata, custom fields,
+and short descriptions. Blank records are skipped. Failed pages are not written if embedding
+fails; earlier completed pages remain saved. Rerunning starts at the beginning, so use a stable
+catalogue and run one indexing job at a time. The process closes its clients and exits when done.
+
+The former `solr.embedding-index-on-startup` and `solr.embedding-index-page-size` settings are
+replaced by this database-independent job. Enabling the new flag on the normal server is rejected;
+use the dedicated entry point. Migration and indexing cannot run together. Another database can
+implement `AudiobookEmbeddingStore` and register its adapter for the selected database.
+
 Solr-to-Qdrant migration is the sole two-database exception and requires a dedicated non-web run.
 It copies the supported catalogue fields, existing short descriptions, and the configured stored
 Solr dense-vector field. It never calls an embedding or summary model, normalizes existing vectors,
@@ -154,7 +188,8 @@ or generates sparse keyword vectors. Records without vectors are copied with no 
 need a separate opt-in indexing step before vector search can find them. Existing destination
 records are skipped so reruns preserve their summaries and vectors. The record limit counts source
 records read, including skipped destination records. Source vector dimensions must match Qdrant.
-This does not add a Qdrant indexing job or complete the selectable Solr backend.
+The embedding job above indexes these copied records. This does not complete the selectable
+Solr recommendation backend.
 
 Run against a stable source catalogue and avoid concurrent writes to the destination during migration:
 

@@ -23,6 +23,30 @@ import org.mockito.ArgumentCaptor;
 class SolrAudiobookRepositoryUnitTest {
 
   @Test
+  void embeddingJobUsesAtomicVectorUpdatesWithoutReplacingMetadata() throws Exception {
+    SolrClient client = mock(SolrClient.class);
+    var repository = new SolrAudiobookRepository(client, "books", "embedding", 2);
+    var record =
+        new com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord(
+            "book", "s", "Title", List.of(), "Description");
+    repository.updateEmbeddings(
+        List.of(
+            new com.gen3.recommenderagent.storage.audiobook.port.AudiobookEmbeddingStore.Update(
+                "book",
+                new com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding(
+                    record, new float[] {0.6f, 0.8f}))));
+    var documents = ArgumentCaptor.forClass(java.util.Collection.class);
+    verify(client).add(org.mockito.ArgumentMatchers.eq("books"), documents.capture());
+    var document =
+        (org.apache.solr.common.SolrInputDocument) documents.getValue().iterator().next();
+    assertEquals(
+        java.util.Set.of("id", "embedding"),
+        document.getFieldNames().stream().collect(java.util.stream.Collectors.toSet()));
+    assertEquals(java.util.Map.of("set", List.of(0.6f, 0.8f)), document.getFieldValue("embedding"));
+    verify(client).commit("books");
+  }
+
+  @Test
   void readsExistingVectorsAndSummariesIncludingRecordsWithNoVector() throws Exception {
     SolrClient client = mock(SolrClient.class);
     QueryResponse response = mock(QueryResponse.class);

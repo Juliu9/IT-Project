@@ -23,6 +23,53 @@ class QdrantShownBookExclusionTest {
       new GenericContainer<>("qdrant/qdrant:v1.15.4").withExposedPorts(6334);
 
   @Test
+  void embeddingJobUpdatesVectorsAtOriginalPointIdsWithoutReplacingAnyPayload() throws Exception {
+    try (QdrantClient client =
+        new QdrantClient(
+            QdrantGrpcClient.newBuilder(server.getHost(), server.getMappedPort(6334), false)
+                .build())) {
+      var encoder = new Bm25SparseTextEncoder();
+      var mapper = new QdrantPointMapper(encoder);
+      var repository = new QdrantAudiobookRepository(client, mapper, encoder, "embedding-job", 2);
+      repository.initialize();
+      var id = io.qdrant.client.PointIdFactory.id(java.util.UUID.randomUUID());
+      var record =
+          new AudiobookRecord(
+              "job-book",
+              "source",
+              "Title",
+              List.of("Author"),
+              "Description",
+              List.of(),
+              "English",
+              60,
+              2020,
+              "Keep this summary");
+      var point =
+          mapper.toStoredPoint(new AudiobookEmbedding(record, null)).toBuilder()
+              .setId(id)
+              .putPayload(
+                  "client_custom_field", io.qdrant.client.ValueFactory.value("Keep this too"))
+              .build();
+      client.upsertAsync("embedding-job", List.of(point)).get();
+      var model = org.mockito.Mockito.mock(org.springframework.ai.embedding.EmbeddingModel.class);
+      org.mockito.Mockito.when(model.embed(org.mockito.ArgumentMatchers.anyList()))
+          .thenReturn(List.of(new float[] {3, 4}));
+      new com.gen3.recommenderagent.embedding.CatalogueEmbeddingJob(
+              repository, new com.gen3.recommenderagent.embedding.EmbeddingIndexer(model), 1, 0)
+          .run();
+      var result =
+          client.retrieveAsync("embedding-job", List.of(id), true, true, null).get().getFirst();
+      assertThat(result.getPayloadMap()).isEqualTo(point.getPayloadMap());
+      var dense = result.getVectors().getVectors().getVectorsMap().get("dense");
+      assertThat(dense.hasDense() ? dense.getDense().getDataList() : dense.getDataList())
+          .containsExactly(0.6f, 0.8f);
+      assertThat(result.getVectors().getVectors().getVectorsMap()).containsKey("keywords");
+      org.mockito.Mockito.verify(model).embed(org.mockito.ArgumentMatchers.anyList());
+    }
+  }
+
+  @Test
   void migrationCopiesOnlyStoredDataAndPreservesDestinationRecordsOnReruns() throws Exception {
     try (QdrantClient client =
         new QdrantClient(

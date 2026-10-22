@@ -8,6 +8,7 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookSearchPage;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCatalogueRepository;
+import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEmbeddingStore;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorIndexer;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -32,9 +33,13 @@ import org.springframework.stereotype.Repository;
 
 /** Implements audiobook keyword, vector, catalogue, and indexing operations with Solr. */
 @Repository
-@ConditionalOnExpression("'${audiobook.qdrant.migration.enabled:false}' == 'true'")
+@ConditionalOnExpression(
+    "'${audiobook.qdrant.migration.enabled:false}' == 'true' or ('${audiobook.embedding-index.enabled:false}' == 'true' and '${audiobook.database:qdrant}' == 'solr')")
 public class SolrAudiobookRepository
-    implements AudiobookCatalogueRepository, AudiobookCandidateSearch, AudiobookVectorIndexer {
+    implements AudiobookCatalogueRepository,
+        AudiobookCandidateSearch,
+        AudiobookVectorIndexer,
+        AudiobookEmbeddingStore {
 
   private static final double KEYWORD_WEIGHT = 0.4;
   private static final double VECTOR_WEIGHT = 0.6;
@@ -239,6 +244,25 @@ public class SolrAudiobookRepository
     } catch (SolrServerException exception) {
       throw new IOException("Could not store audiobook embedding in Solr", exception);
     }
+  }
+
+  @Override
+  public Page embeddingPage(String cursor, int limit) throws IOException {
+    int offset = cursor == null ? 0 : Integer.parseInt(cursor);
+    var records = findAllBooks(offset, limit);
+    return new Page(
+        records.stream()
+            .map(
+                record ->
+                    new com.gen3.recommenderagent.storage.audiobook.port.AudiobookEnrichmentStore
+                        .StoredAudiobook(record, record.id()))
+            .toList(),
+        records.size() < limit ? null : Integer.toString(offset + records.size()));
+  }
+
+  @Override
+  public void updateEmbeddings(List<Update> updates) throws IOException {
+    indexEmbeddings(updates.stream().map(Update::embedding).toList());
   }
 
   /** Reads the complete catalogue in deterministic pages for the startup importer. */

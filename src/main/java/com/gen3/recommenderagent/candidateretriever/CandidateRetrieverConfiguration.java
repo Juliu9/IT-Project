@@ -19,6 +19,10 @@ public class CandidateRetrieverConfiguration {
   @Bean
   static BeanFactoryPostProcessor validateDatabaseSelection(Environment environment) {
     return factory -> {
+      if (environment.getProperty("audiobook.embedding-index.enabled", Boolean.class, false)) {
+        throw new IllegalArgumentException(
+            "Run embedding indexing with the dedicated EmbeddingIndexApplication entry point");
+      }
       String backend = environment.getProperty("audiobook.database", "qdrant");
       if (backend.isBlank() || "solr".equals(backend)) {
         throw new IllegalArgumentException(

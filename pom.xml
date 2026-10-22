@@ -31,6 +31,7 @@
 
     <properties>
         <java.version>21</java.version>
+        <application.main-class>com.gen3.recommenderagent.RecommenderAgentApplication</application.main-class>
         <spring-ai.version>2.0.1</spring-ai.version>
 
         <!-- Code quality -->
@@ -199,6 +200,9 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>${application.main-class}</mainClass>
+                </configuration>
             </plugin>
 
 
