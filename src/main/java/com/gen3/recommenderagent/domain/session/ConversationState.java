@@ -16,6 +16,20 @@ public final class ConversationState {
     if (session == null) {
       return effective;
     }
+    if (effective.getIntent() == Intent.REPEAT) {
+      effective.setRecommendations(List.of());
+      applyPreviousSearch(effective, session);
+      return effective;
+    }
+    if (effective.getIntent() == Intent.MORE_RESULTS
+        && (session.getRequests() == null
+            || session.getRequests().stream()
+                .noneMatch(
+                    previous ->
+                        previous != null && isRecommendationIntent(previous.getIntent())))) {
+      effective.setSearchClarificationRequired(true);
+      return effective;
+    }
     if (session.isAwaitingPersonalisedPreferences() && acceptsPreferences(effective.getIntent())) {
       applyPreferences(effective, session);
       effective.setIntent(Intent.RECOMMENDATION);
@@ -58,7 +72,10 @@ public final class ConversationState {
   public static boolean isSearchContext(SessionRequest request) {
     return request != null
         && request.getIntent() != Intent.UPDATE_PREFERENCES
-        && hasSearchCriteria(request);
+        && (hasSearchCriteria(request)
+            || request.getIntent() == Intent.RECOMMENDATION
+            || request.getIntent() == Intent.REFINE
+            || request.getIntent() == Intent.MORE_RESULTS);
   }
 
   public static boolean hasSearchCriteria(SessionRequest request) {
@@ -120,8 +137,15 @@ public final class ConversationState {
     }
     for (int index = requests.size() - 1; index >= 0; index--) {
       SessionRequest previous = requests.get(index);
-      if (isSearchContext(previous)) {
+      boolean repeat = target.getIntent() == Intent.REPEAT;
+      if (isSearchContext(previous)
+          && (!repeat
+              || (previous.getRecommendations() != null
+                  && !previous.getRecommendations().isEmpty()))) {
         merge(previous, target);
+        if (repeat) {
+          target.setRecommendations(new ArrayList<>(previous.getRecommendations()));
+        }
         return;
       }
     }

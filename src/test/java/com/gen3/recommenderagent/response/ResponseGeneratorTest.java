@@ -16,6 +16,40 @@ import org.junit.jupiter.api.Test;
 class ResponseGeneratorTest {
 
   @Test
+  void followUpPromptContainsResolvedCriteriaAndNoSearchAsksForOne() {
+    AiResponseGenerator generator = new AiResponseGenerator(null);
+    SessionRequest request = new SessionRequest();
+    request.setIntent(Intent.MORE_RESULTS);
+    request.setRawText("more please");
+    SemanticQuery query = new SemanticQuery();
+    query.setTopics(List.of("expeditions"));
+    query.setAuthors(List.of("Agatha Christie"));
+    request.setPositiveSemanticQuery(query);
+    SemanticQuery avoided = new SemanticQuery();
+    avoided.setKeywords(List.of("violence"));
+    request.setNegativeSemanticQuery(avoided);
+    MustInclude filter = new MustInclude();
+    filter.setLanguage("English");
+    filter.setDuration("under 3 hours");
+    request.setMustInclude(filter);
+    String prompt =
+        generator.compilePrompt(
+            List.of(new Recommendation("id", 1, 0.9, "Title", "An expedition.")), request, "");
+    for (String value :
+        List.of(
+            "expeditions",
+            "Agatha Christie",
+            "violence",
+            "English",
+            "under 3 hours",
+            "An expedition.")) {
+      assertTrue(prompt.contains(value));
+    }
+    request.setSearchClarificationRequired(true);
+    assertEquals("What kind of audiobook would you like?", generator.generate(List.of(), request));
+  }
+
+  @Test
   void repeatRendersThePreviousBooksOrExplainsThatThereAreNone() {
     AiResponseGenerator generator = new AiResponseGenerator(null);
     SessionRequest request = new SessionRequest();

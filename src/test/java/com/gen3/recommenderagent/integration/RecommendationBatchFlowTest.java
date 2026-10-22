@@ -55,6 +55,53 @@ class RecommendationBatchFlowTest {
   }
 
   @Test
+  void moreRequiresAPreviousSearchEvenAfterOtherSessionActions() {
+    assertThat(process(request(Intent.MORE_RESULTS)).isSearchClarificationRequired()).isTrue();
+    process(request(Intent.HELP));
+    SessionRequest preferences = request(Intent.UPDATE_PREFERENCES);
+    SemanticQuery tastes = new SemanticQuery();
+    tastes.setGenres(List.of("romance"));
+    preferences.setPositiveSemanticQuery(tastes);
+    process(preferences);
+    assertThat(process(request(Intent.MORE_RESULTS)).isSearchClarificationRequired()).isTrue();
+    org.mockito.Mockito.verifyNoInteractions(ranker, retriever, vectors, users);
+    process(request(Intent.RECOMMENDATION));
+    process(request(Intent.CLEAR_HISTORY));
+    assertThat(process(request(Intent.MORE_RESULTS)).isSearchClarificationRequired()).isTrue();
+    verify(ranker).rank(anyList(), eq(20), any(RankingContext.class));
+  }
+
+  @Test
+  void moreAndRepeatRestoreDetailedSearchContextWithoutHeavyWork() {
+    SessionRequest search = request(Intent.RECOMMENDATION);
+    search.getPositiveSemanticQuery().setTopics(List.of("expeditions"));
+    SemanticQuery avoid = new SemanticQuery();
+    avoid.setKeywords(List.of("violence"));
+    search.setNegativeSemanticQuery(avoid);
+    MustInclude include = new MustInclude();
+    include.setLanguage("English");
+    search.setMustInclude(include);
+    process(search);
+    SessionRequest more = process(request(Intent.MORE_RESULTS));
+    SessionRequest repeat = process(request(Intent.REPEAT));
+    for (SessionRequest result : List.of(more, repeat)) {
+      assertThat(result.getPositiveSemanticQuery().getTopics()).containsExactly("expeditions");
+      assertThat(result.getNegativeSemanticQuery().getKeywords()).containsExactly("violence");
+      assertThat(result.getMustInclude().getLanguage()).isEqualTo("English");
+      assertIds(result, 6, 5);
+    }
+    verify(ranker).rank(anyList(), eq(20), any(RankingContext.class));
+  }
+
+  @Test
+  void anEmptyPreviousSearchStillAllowsMore() {
+    when(ranker.rank(anyList(), anyInt(), any(RankingContext.class))).thenReturn(List.of());
+    process(request(Intent.RECOMMENDATION));
+    assertThat(process(request(Intent.MORE_RESULTS)).isSearchClarificationRequired()).isFalse();
+    verify(ranker, times(2)).rank(anyList(), eq(20), any(RankingContext.class));
+  }
+
+  @Test
   void repeatReturnsTheLastPageWithoutConsumingOrInvalidatingTheBatch() {
     assertIds(process(request(Intent.RECOMMENDATION)), 1, 5);
     process(request(Intent.HELP));

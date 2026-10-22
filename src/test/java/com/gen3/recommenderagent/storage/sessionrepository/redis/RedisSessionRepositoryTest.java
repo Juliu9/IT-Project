@@ -774,6 +774,9 @@ class RedisSessionRepositoryTest {
         "cached-pages",
         USER_ID,
         session -> {
+          SessionRequest previous = new SessionRequest();
+          previous.setIntent(Intent.RECOMMENDATION);
+          session.addRequest(previous);
           session.setPendingRecommendations(
               IntStream.rangeClosed(1, 20)
                   .mapToObj(

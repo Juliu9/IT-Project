@@ -45,9 +45,9 @@ class AudiobookRetrievalPlannerTest {
     assertThat(plan.filters().mustInclude().language()).isEqualTo("English");
     assertThat(plan.filters().mustInclude().source()).isEqualTo("NLS");
     assertThat(plan.filters().mustInclude().maximumDurationMinutes()).isEqualTo(599);
-    assertThat(plan.filters().mustInclude().minimumPublicationYear()).isEqualTo(2020);
+    assertThat(plan.filters().mustInclude().minimumPublicationYear()).isEqualTo(2021);
     assertThat(plan.filters().mustNotInclude().language()).isEqualTo("French");
-    assertThat(plan.filters().mustNotInclude().maximumPublicationYear()).isEqualTo(2000);
+    assertThat(plan.filters().mustNotInclude().maximumPublicationYear()).isEqualTo(1999);
     assertThat(plan.filters().mustNotInclude().source()).isEqualTo("Legacy");
     assertThat(plan.filters().excludedBookIds()).containsExactly("already-shown");
   }
@@ -77,6 +77,46 @@ class AudiobookRetrievalPlannerTest {
     negativeAuthorOnly.setNegativeSemanticQuery(negativeAuthor);
     assertThat(planner.plan(10, negativeAuthorOnly, Set.of()).mode())
         .isEqualTo(RetrievalMode.SEMANTIC);
+  }
+
+  @Test
+  void authorAndNarratorPreferencesSelectSemanticRetrieval() {
+    for (boolean author : List.of(true, false)) {
+      SemanticQuery query = new SemanticQuery();
+      if (author) {
+        query.setAuthors(List.of("Agatha Christie"));
+      } else {
+        query.setNarrators(List.of("Stephen Fry"));
+      }
+      SessionRequest request = new SessionRequest();
+      request.setPositiveSemanticQuery(query);
+      assertThat(new AudiobookRetrievalPlanner().plan(50, request, Set.of()).mode())
+          .isEqualTo(RetrievalMode.SEMANTIC);
+    }
+  }
+
+  @Test
+  void preservesYearRangesAndInclusiveComparisonsAndRejectsInvalidYears() {
+    SessionRequest request = new SessionRequest();
+    MustInclude filter = new MustInclude();
+    request.setMustInclude(filter);
+    var planner = new AudiobookRetrievalPlanner();
+    filter.setPublicationYear("between 2000 and 2010");
+    var range = planner.plan(50, request, Set.of()).filters().mustInclude();
+    assertThat(range.minimumPublicationYear()).isEqualTo(2000);
+    assertThat(range.maximumPublicationYear()).isEqualTo(2010);
+    filter.setPublicationYear("at least 2020");
+    assertThat(planner.plan(50, request, Set.of()).filters().mustInclude().minimumPublicationYear())
+        .isEqualTo(2020);
+    filter.setPublicationYear("at most 2020");
+    assertThat(planner.plan(50, request, Set.of()).filters().mustInclude().maximumPublicationYear())
+        .isEqualTo(2020);
+    for (String invalid :
+        List.of("between 2010 and 2000", "recent", "999999999999999", "2000 or 2010")) {
+      filter.setPublicationYear(invalid);
+      org.assertj.core.api.Assertions.assertThatThrownBy(() -> planner.plan(50, request, Set.of()))
+          .isInstanceOf(com.gen3.recommenderagent.inputparser.InvalidRequestException.class);
+    }
   }
 
   @Test

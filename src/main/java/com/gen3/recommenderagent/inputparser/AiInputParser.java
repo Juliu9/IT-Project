@@ -56,6 +56,8 @@ public class AiInputParser implements InputParser {
                         explicit hours or minutes. Keep decimal values and both range endpoints;
                         for example, "under 1.5 hours" and "between 2 and 3 hours".
                         Never convert a vague duration into an invented numeric limit.
+                        Preserve publication year comparisons as "after", "before", "at least",
+                        "at most", "exactly", or "between YYYY and YYYY". Keep both range endpoints.
                         Set bookCount only when the user explicitly requests
                         a number of recommendations; otherwise leave it null.
                         Use REPEAT for requests to show the last recommendations again, such as

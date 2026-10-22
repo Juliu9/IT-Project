@@ -4,6 +4,7 @@ import com.gen3.recommenderagent.domain.session.MustInclude;
 import com.gen3.recommenderagent.domain.session.MustNotInclude;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import java.util.ArrayList;
@@ -18,7 +19,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class AudiobookRetrievalPlanner {
 
-  private static final Pattern FIRST_NUMBER = Pattern.compile("(\\d+)");
+  private static final Pattern YEAR_RANGE =
+      Pattern.compile("^(?:between (\\d{4}) and (\\d{4})|(?:from )?(\\d{4}) *(?:-|to) *(\\d{4}))$");
+  private static final Pattern YEAR_COMPARISON =
+      Pattern.compile(
+          "^(?:(after|before|from|since|newer than|older than|over|under|more than|less than|at least|at most|minimum(?: of)?|maximum(?: of)?|up to|exactly) )?(\\d{4})$");
 
   /** Separates semantic text, lexical terms, and exact payload constraints. */
   public AudiobookRetrievalPlan plan(
@@ -103,34 +108,30 @@ public class AudiobookRetrievalPlanner {
     if (!hasText(publicationYear)) {
       return RangeBounds.empty();
     }
-    Matcher matcher = FIRST_NUMBER.matcher(publicationYear);
-    if (!matcher.find()) {
-      return RangeBounds.empty();
+    String normalized = publicationYear.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
+    Matcher range = YEAR_RANGE.matcher(normalized);
+    if (range.matches()) {
+      int lower = Integer.parseInt(range.group(1) != null ? range.group(1) : range.group(3));
+      int upper = Integer.parseInt(range.group(2) != null ? range.group(2) : range.group(4));
+      if (lower <= upper) {
+        return new RangeBounds(lower, upper);
+      }
+    } else {
+      Matcher comparison = YEAR_COMPARISON.matcher(normalized);
+      if (comparison.matches()) {
+        int year = Integer.parseInt(comparison.group(2));
+        String operator = comparison.group(1) == null ? "exactly" : comparison.group(1);
+        return switch (operator) {
+          case "after", "newer than", "over", "more than" -> new RangeBounds(year + 1, null);
+          case "before", "older than", "under", "less than" -> new RangeBounds(null, year - 1);
+          case "from", "since", "at least", "minimum", "minimum of" -> new RangeBounds(year, null);
+          case "at most", "maximum", "maximum of", "up to" -> new RangeBounds(null, year);
+          default -> new RangeBounds(year, year);
+        };
+      }
     }
-    int year = Integer.parseInt(matcher.group(1));
-    String normalized = publicationYear.toLowerCase(Locale.ROOT);
-    boolean lowerBound =
-        normalized.contains("after")
-            || normalized.contains("from")
-            || normalized.contains("since")
-            || normalized.contains("newer")
-            || normalized.contains("over")
-            || normalized.contains("more than")
-            || normalized.contains("at least")
-            || normalized.contains("minimum");
-    boolean upperBound =
-        normalized.contains("before")
-            || normalized.contains("older")
-            || normalized.contains("under")
-            || normalized.contains("less than")
-            || normalized.contains("maximum");
-    if (lowerBound) {
-      return new RangeBounds(year, null);
-    }
-    if (upperBound) {
-      return new RangeBounds(null, year);
-    }
-    return new RangeBounds(year, year);
+    throw new InvalidRequestException(
+        "Please specify a publication year, comparison, or valid year range.");
   }
 
   /** Adds nonblank parsed terms to the lexical query. */
@@ -144,7 +145,9 @@ public class AudiobookRetrievalPlanner {
     return query != null
         && (hasValues(query.getTopics())
             || hasValues(query.getGenres())
-            || hasValues(query.getKeywords()));
+            || hasValues(query.getKeywords())
+            || hasValues(query.getAuthors())
+            || hasValues(query.getNarrators()));
   }
 
   private boolean hasNegativeSemanticContent(SemanticQuery query) {

@@ -13,12 +13,17 @@ and ranks candidates, retains a 24-hour Redis session, and returns a concise spo
 Every search mode excludes those shown IDs inside Qdrant before selecting up to 50 candidates.
 Existing collections in Qdrant strict mode need a keyword payload index on `bookId`; new
 collections created by this adapter already include it. The ranker checks exclusions again.
-`MORE_RESULTS` reuses the previous search; clear history to
+`MORE_RESULTS` reuses the previous search. Without a previous search it asks what the user wants,
+without embedding or retrieval. A previous search with no matches still counts. Clear history to
 make earlier books eligible again. Books outside the 500-ID window may reappear.
+
+Author-only and narrator-only semantic preferences select semantic retrieval; exact names in
+`MustInclude` and `MustNotInclude` remain database filters.
 
 `REPEAT` (for example, “show those again”) returns the most recent recommendation page
 from session history without consuming pending results or rerunning retrieval. After clearing
-history, there is nothing to repeat. Response wording is generated normally.
+history, there is nothing to repeat. Response wording is generated normally. Both “more” and
+“repeat” supply the saved search criteria to the response generator so it can explain the fit.
 
 Each search ranks up to 20 recommendations from those candidates. The session stores the
 unserved recommendations (ID, title, short description, and score), then serves up to five per
@@ -55,7 +60,7 @@ need to change. The replacement must preserve cross-instance exclusion, single-a
 the 24-hour sliding expiry, and the shared session error types. A cache offering only get/set
 operations is insufficient without additional coordination.
 
-Supported intents are `RECOMMENDATION`, `REFINE`, `MORE_RESULTS`, `CHANGE_COUNT`,
+Supported intents are `RECOMMENDATION`, `REFINE`, `MORE_RESULTS`, `REPEAT`, `CHANGE_COUNT`,
 `UPDATE_PREFERENCES`, `CLEAR_HISTORY`, `HELP`, and `UNKNOWN`.
 
 Personalised requests such as “Give me books I would like” use a stored Qdrant user vector when
@@ -72,6 +77,10 @@ Duration filters support hours/minutes, decimals, mixed units (`1h 30m`), and ra
 (`between 2 and 3 hours`). `under` and `over` are strict; `at most` and `at least` include the boundary.
 A bare duration is exact. Bounds account for the catalogue's whole-minute durations. Invalid,
 ambiguous, reversed, or unrepresentable ranges return 400 instead of silently losing the filter.
+
+Publication-year filters accept exact four-digit years, strict `after`/`before` comparisons,
+inclusive `at least`/`at most` comparisons, and inclusive ranges such as `between 2000 and 2010`.
+Unsupported or reversed expressions return 400.
 
 ## Run locally
 

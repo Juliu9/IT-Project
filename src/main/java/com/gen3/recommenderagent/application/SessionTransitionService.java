@@ -41,9 +41,13 @@ public class SessionTransitionService {
   private SessionRequest apply(Session session, SessionRequest original) {
     SessionRequest result = CONVERSATION_STATE.resolve(session, original);
     if (result.getIntent() == Intent.REPEAT) {
-      result.setRecommendations(previousRecommendations(session));
       complete(result);
       RequestTelemetry.retrieval("SESSION_REPEAT", result.getRecommendations().size());
+      return result;
+    }
+    if (result.isSearchClarificationRequired()) {
+      result.setRecommendations(List.of());
+      complete(result);
       return result;
     }
     if (invalidatesBatch(original)) {
@@ -55,19 +59,6 @@ public class SessionTransitionService {
             : List.of());
     applyTransition(session, result, originalIntent(original));
     return result;
-  }
-
-  private List<Recommendation> previousRecommendations(Session session) {
-    List<SessionRequest> history = session.getRequests();
-    if (history != null) {
-      for (int index = history.size() - 1; index >= 0; index--) {
-        List<Recommendation> recommendations = history.get(index).getRecommendations();
-        if (recommendations != null && !recommendations.isEmpty()) {
-          return List.copyOf(recommendations);
-        }
-      }
-    }
-    return List.of();
   }
 
   private boolean invalidatesBatch(SessionRequest request) {

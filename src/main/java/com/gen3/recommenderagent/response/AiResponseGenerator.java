@@ -4,6 +4,7 @@ import static com.gen3.recommenderagent.common.ApplicationConstants.MAX_BOOK_COU
 
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
@@ -64,6 +65,10 @@ public class AiResponseGenerator implements ResponseGenerator {
       return PROCESSING_FALLBACK;
     }
 
+    if (currentRequest != null && currentRequest.isSearchClarificationRequired()) {
+      RequestTelemetry.responseMode("SEARCH_CLARIFICATION");
+      return "What kind of audiobook would you like?";
+    }
     if (currentRequest != null && currentRequest.isPreferenceClarificationRequired()) {
       RequestTelemetry.responseMode("PREFERENCE_CLARIFICATION");
       return "I'd love to find something you'll enjoy. What genres, authors, or narrators do you like?";
@@ -177,14 +182,60 @@ public class AiResponseGenerator implements ResponseGenerator {
         topFive.stream().map(this::formatRecommendationForPrompt).collect(Collectors.joining("; "));
 
     // Produces the final prompt string the AI sees
+    return resolvedCriteria(currentRequest)
+        + String.format(
+            "User request: %s. Intent: %s. Genres: %s. Recommendation count: %d. Limit notice: %s. Recommendations: %s.",
+            requestSummary,
+            intentSummary,
+            genresSummary,
+            topFive.size(),
+            limitNotice.isBlank() ? "none" : limitNotice.trim(),
+            recommendationsSummary);
+  }
+
+  private String resolvedCriteria(SessionRequest request) {
+    if (request == null) {
+      return "";
+    }
+    var include = request.getMustInclude();
+    var exclude = request.getMustNotInclude();
     return String.format(
-        "User request: %s. Intent: %s. Genres: %s. Recommendation count: %d. Limit notice: %s. Recommendations: %s.",
-        requestSummary,
-        intentSummary,
-        genresSummary,
-        topFive.size(),
-        limitNotice.isBlank() ? "none" : limitNotice.trim(),
-        recommendationsSummary);
+        "Resolved search: personalised=%s. Desired: %s. Avoided: %s. Must include: %s. Must exclude: %s. ",
+        request.isPersonalised(),
+        semanticSummary(request.getPositiveSemanticQuery()),
+        semanticSummary(request.getNegativeSemanticQuery()),
+        include == null
+            ? "none"
+            : String.format(
+                "authors=%s, narrators=%s, language=%s, duration=%s, publicationYear=%s, source=%s",
+                include.getAuthors(),
+                include.getNarrators(),
+                include.getLanguage(),
+                include.getDuration(),
+                include.getPublicationYear(),
+                include.getSource()),
+        exclude == null
+            ? "none"
+            : String.format(
+                "authors=%s, narrators=%s, language=%s, duration=%s, publicationYear=%s, source=%s",
+                exclude.getAuthors(),
+                exclude.getNarrators(),
+                exclude.getLanguage(),
+                exclude.getDuration(),
+                exclude.getPublicationYear(),
+                exclude.getSource()));
+  }
+
+  private String semanticSummary(SemanticQuery query) {
+    return query == null
+        ? "none"
+        : String.format(
+            "topics=%s, genres=%s, keywords=%s, authors=%s, narrators=%s",
+            query.getTopics(),
+            query.getGenres(),
+            query.getKeywords(),
+            query.getAuthors(),
+            query.getNarrators());
   }
 
   // Turns one Reccomendation object into a readable text fragment

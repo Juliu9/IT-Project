@@ -20,6 +20,15 @@ public class SessionRequest {
   private Integer bookCount;
   private boolean personalised;
   private boolean preferenceClarificationRequired;
+  private boolean searchClarificationRequired;
+
+  public boolean isSearchClarificationRequired() {
+    return searchClarificationRequired;
+  }
+
+  public void setSearchClarificationRequired(boolean required) {
+    searchClarificationRequired = required;
+  }
 
   public boolean isPersonalised() {
     return personalised;
