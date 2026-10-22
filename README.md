@@ -4,6 +4,8 @@ A Spring Boot service that turns natural-language requests into audiobook recomm
 It understands search criteria and follow-up requests, retrieves and ranks books, and returns a
 concise response explaining why the books fit.
 
+[Request flow](#how-the-recommender-agent-works) · [Structure](#repository-structure) · [Run locally](#run-locally) · [Commands](#important-commands) · [Notes](#important-notes)
+
 ## High-level concepts
 
 1. **Parse:** A chat model identifies the intent, desired and avoided concepts, exact filters,
@@ -52,9 +54,9 @@ for preferences.
 personalised retrieval, it also blends available stored favourite/history vectors with the current
 query. Without stored vectors, it uses the supplied or saved preferences.
 
-`AudiobookRetrievalPlanner` builds the exact filters and chooses semantic, keyword, hybrid,
-or filter-only retrieval from the searchable content. `CandidateRetrievalService` executes the
-plan through the selected database adapter. Positive vectors point toward desired concepts;
+`AudiobookRetrievalPlanner` builds exact filters and selects a retrieval plan.
+`CandidateRetrievalService` executes semantic, keyword, hybrid, or filter-only searches through
+the selected database adapter. Positive vectors point toward desired concepts;
 negative vectors steer away from avoided concepts. Exact filters remain mandatory.
 
 Qdrant excludes recently shown book IDs before selecting up to **50 candidates**. This leaves
@@ -72,13 +74,14 @@ its ID, title, short description, and score, so cached pages do not need another
 
 | Follow-up | Behavior |
 | --- | --- |
-| “More please” | Consume the next cached page; skip preference lookup, embedding, retrieval, and ranking when enough items remain. Refill when needed, combining any cached tail with fresh results. |
-| “Repeat those” | Reuse the last recommendation page without consuming the cache or retrieving books. An empty “more” outcome is also repeated. |
-| Refine the search or start a new one | Discard the pending batch and retrieve using the resolved criteria. |
+| “More please” | Serve the next cached page; refill when short, keeping the cached tail. |
+| “Repeat those” | Reuse the last page or empty “more” outcome; leave the queue untouched. |
+| Refine or start a search | Discard the queue and retrieve using resolved criteria. |
 | Change the result count or ask for help | Keep the pending batch. |
-| Clear history | Clear shown IDs, search history, and pending recommendations; keep saved preferences and the result-count setting. |
+| Clear history | Clear search history, shown IDs, and the queue; keep preferences and result count. |
 
-Short “more” pages are allowed. If none remain, the response explicitly says there are no more
+A full cached page skips preference lookup, embedding, retrieval, and ranking. Parsing and response
+generation still run. Short “more” pages are allowed. If none remain, the response explicitly says there are no more
 matches for the current search. New exact filters supplied with “more”, or preference updates,
 also invalidate the pending batch.
 
@@ -136,8 +139,9 @@ export OPENAI_API_KEY="your-key"
 ```
 
 The server defaults to `http://localhost:8080`, Redis to `localhost:6379`, and Qdrant to
-`http://localhost:6333` with gRPC on port `6334`. Set credentials in your shell or IDE;
-the application does not automatically load a repository `.env` file.
+`http://localhost:6333` with gRPC on port `6334`. Docker publishes these database ports on
+`127.0.0.1` only. Set credentials in your shell or IDE; the application does not automatically load
+a repository `.env` file.
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/recommendations \
@@ -151,19 +155,28 @@ Reuse the same user and session IDs for follow-ups such as “more please” and
 
 ## Important commands
 
-Run formatting checks, build checks, unit tests, and local container integration tests
-without calling live AI services. Docker must be available:
+### Local verification
+
+Run formatting/build checks, unit tests, and container integration tests without live AI calls.
+Docker must be available:
 
 ```bash
 OPENAI_API_KEY=ci-placeholder ./mvnw clean verify -DexcludedGroups=external
 ```
 
-Run the entire suite, including live integration tests, with valid `OPENAI_API_KEY`,
+### Entire test suite
+
+Run live integration tests as well, with valid `OPENAI_API_KEY`,
 `QDRANT_URL`, and `QDRANT_API_KEY` values and Redis available locally:
 
 ```bash
 ./mvnw clean verify
 ```
+
+The live recommendation test requires actual saved recommendations and their titles in the response;
+a nonblank fallback alone does not pass. Blank-input and no-match behavior are checked separately.
+
+### Formatting and maintenance
 
 Apply Java formatting:
 

@@ -70,6 +70,10 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
       importCompletedBatch();
       return;
     }
+    if ("recover".equalsIgnoreCase(mode)) {
+      recoverFailedBatch();
+      return;
+    }
     throw new IllegalArgumentException("Unknown audiobook.short-description.batch.mode: " + mode);
   }
 
@@ -132,15 +136,7 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
 
   private void importCompletedBatch() throws IOException, InterruptedException {
     BatchManifest manifest = readManifest();
-    String importedBatchId = hasText(batchId) ? batchId : manifest.batchId();
-    if (!hasText(importedBatchId)) {
-      throw new IllegalArgumentException(
-          "audiobook.short-description.batch.id is required because the pending manifest has no batch ID");
-    }
-    if (hasText(manifest.batchId()) && !manifest.batchId().equals(importedBatchId)) {
-      throw new IllegalArgumentException(
-          "Configured batch ID does not match the pending short-description batch");
-    }
+    String importedBatchId = resolvedBatchId(manifest);
     Map<String, String> descriptions = provider.completedDescriptions(importedBatchId);
     List<AudiobookEnrichmentStore.ShortDescriptionUpdate> updates =
         descriptions.entrySet().stream()
@@ -157,6 +153,33 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
     enrichmentStore.updateShortDescriptions(updates);
     Files.delete(manifestPath());
     LOGGER.info("Imported {} generated short audiobook descriptions", updates.size());
+  }
+
+  private String resolvedBatchId(BatchManifest manifest) {
+    String resolvedId = hasText(batchId) ? batchId : manifest.batchId();
+    if (!hasText(resolvedId)) {
+      throw new IllegalArgumentException(
+          "audiobook.short-description.batch.id is required because the pending manifest has no batch ID");
+    }
+    if (hasText(manifest.batchId()) && !manifest.batchId().equals(resolvedId)) {
+      throw new IllegalArgumentException(
+          "Configured batch ID does not match the pending short-description batch");
+    }
+    return resolvedId;
+  }
+
+  private void recoverFailedBatch() throws IOException, InterruptedException {
+    BatchManifest manifest = readManifest();
+    String recoveredBatchId = resolvedBatchId(manifest);
+    provider.verifyTerminalFailure(recoveredBatchId);
+    Path archived =
+        outputDirectory.resolve(
+            "short-description-batch-recovered-" + java.util.UUID.randomUUID() + ".json");
+    Files.move(manifestPath(), archived, StandardCopyOption.ATOMIC_MOVE);
+    LOGGER.info(
+        "Recovered terminal batch {}. Pending manifest archived at {}; submission can be retried",
+        recoveredBatchId,
+        archived);
   }
 
   private Path manifestPath() {

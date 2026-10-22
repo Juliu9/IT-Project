@@ -67,6 +67,74 @@ class BatchDescriptionLifecycleTest {
   }
 
   @Test
+  void recoveryArchivesTheManifestAndAllowsResubmission() throws Exception {
+    when(store.datasetIdentity()).thenReturn(new DatasetIdentity("other", "catalogue-a"));
+    var provider = mock(ShortDescriptionBatchProvider.class);
+    when(provider.id()).thenReturn("openai");
+    var recover =
+        new BatchShortDescriptionEnricher(store, mapper, provider, "recover", "", directory, 1);
+    Path pending = directory.resolve("short-description-batch.json");
+    recover.writeManifest(pending, "batch-1", List.of(book()));
+    String original = Files.readString(pending);
+    recover.run(new DefaultApplicationArguments());
+    verify(provider).verifyTerminalFailure("batch-1");
+    assertThat(pending).doesNotExist();
+    try (var files = Files.list(directory)) {
+      var archives = files.toList();
+      assertThat(archives).hasSize(1);
+      assertThat(archives.getFirst().getFileName().toString())
+          .startsWith("short-description-batch-recovered-");
+      assertThat(Files.readString(archives.getFirst())).isEqualTo(original);
+    }
+    verify(store, never()).updateShortDescriptions(any());
+    when(store.findRecordsWithoutShortDescription(1)).thenReturn(List.of(book()));
+    when(provider.upload(List.of(book().record()), directory)).thenReturn("input-2");
+    when(provider.submit("input-2")).thenReturn("batch-2");
+    new BatchShortDescriptionEnricher(store, mapper, provider, "submit", "", directory, 1)
+        .run(new DefaultApplicationArguments());
+    assertThat(mapper.readTree(pending.toFile()).path("batchId").asText()).isEqualTo("batch-2");
+  }
+
+  @Test
+  void rejectedRecoveryPreservesThePendingManifest() throws Exception {
+    when(store.datasetIdentity()).thenReturn(new DatasetIdentity("other", "catalogue-a"));
+    var provider = mock(ShortDescriptionBatchProvider.class);
+    when(provider.id()).thenReturn("openai");
+    org.mockito.Mockito.doThrow(new java.io.IOException("status unavailable"))
+        .when(provider)
+        .verifyTerminalFailure("batch-1");
+    var recover =
+        new BatchShortDescriptionEnricher(store, mapper, provider, "recover", "", directory, 1);
+    Path pending = directory.resolve("short-description-batch.json");
+    recover.writeManifest(pending, "batch-1", List.of(book()));
+    String original = Files.readString(pending);
+    assertThatThrownBy(() -> recover.run(new DefaultApplicationArguments()))
+        .isInstanceOf(java.io.IOException.class);
+    assertThat(Files.readString(pending)).isEqualTo(original);
+    try (var files = Files.list(directory)) {
+      assertThat(files.toList()).containsExactly(pending);
+    }
+    verify(store, never()).updateShortDescriptions(any());
+  }
+
+  @Test
+  void recoveryDoesNotAllowChangingThePendingBatchId() throws Exception {
+    when(store.datasetIdentity()).thenReturn(new DatasetIdentity("other", "catalogue-a"));
+    var provider = mock(ShortDescriptionBatchProvider.class);
+    when(provider.id()).thenReturn("openai");
+    var recover =
+        new BatchShortDescriptionEnricher(
+            store, mapper, provider, "recover", "another", directory, 1);
+    Path pending = directory.resolve("short-description-batch.json");
+    recover.writeManifest(pending, "batch-1", List.of(book()));
+    assertThatThrownBy(() -> recover.run(new DefaultApplicationArguments()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("does not match");
+    verify(provider, never()).verifyTerminalFailure(any());
+    assertThat(pending).exists();
+  }
+
+  @Test
   void replacementProviderUsesTheSameLifecycleAndSharedDescriptionRules() throws Exception {
     when(store.datasetIdentity()).thenReturn(new DatasetIdentity("other", "catalogue-a"));
     when(store.findRecordsWithoutShortDescription(1)).thenReturn(List.of(book()));

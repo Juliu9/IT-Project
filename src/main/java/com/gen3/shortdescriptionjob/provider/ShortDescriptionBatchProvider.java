@@ -19,7 +19,12 @@ public interface ShortDescriptionBatchProvider {
    */
   String submit(String inputId) throws IOException, InterruptedException;
 
-  /** Return descriptions keyed by book ID; throw if the batch is not completed. */
+  /** Refuse recovery unless generation has permanently failed, expired, or been cancelled. */
+  default void verifyTerminalFailure(String batchId) throws IOException, InterruptedException {
+    throw new UnsupportedOperationException("This provider does not support batch recovery");
+  }
+
+  /** Return descriptions keyed by book ID; may wait until completion. */
   Map<String, String> completedDescriptions(String batchId)
       throws IOException, InterruptedException;
 }

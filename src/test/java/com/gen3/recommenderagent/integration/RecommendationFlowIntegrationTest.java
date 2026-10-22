@@ -70,42 +70,8 @@ class RecommendationFlowIntegrationTest {
   void shouldRunRecommendationFlowAcrossTeamComponents() throws Exception {
     String rawText = "Recommend three science fiction audiobooks.";
 
-    InputParser inputParser = mock(InputParser.class);
-    SessionRequest parsedRequest = parsedRequest(rawText);
-    when(inputParser.parse(rawText)).thenReturn(parsedRequest);
-
-    SolrAudiobookRepository repository =
-        new SolrAudiobookRepository(solrClient, SolrContainerTestSupport.COLLECTION);
-    com.gen3.recommenderagent.embedding.QueryEmbeddingService embeddingIndexer =
-        mock(com.gen3.recommenderagent.embedding.QueryEmbeddingService.class);
-    when(embeddingIndexer.embedSemanticQueries(anyList()))
-        .thenReturn(List.of(new float[0], new float[0]));
-    CandidateRetriever candidateRetriever =
-        new CandidateRetrievalService(
-            "solr", repository, embeddingIndexer, new AudiobookRetrievalPlanner());
-    RankingService rankingService =
-        new RankingService(
-            new CompositeScorer(
-                List.of(
-                    new WeightedScorer(new RetrievalRelevanceScorer(), 1.0),
-                    new WeightedScorer(new UserPreferenceScorer(scoringProperties()), 1.0))));
-    com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository userPreferences =
-        mock(com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository.class);
-    AudiobookRecommendationWorkflow workflow =
-        new AudiobookRecommendationWorkflow(
-            candidateRetriever,
-            rankingService,
-            new SemanticQueryVectorService(embeddingIndexer),
-            userPreferences);
-    RecommendationFlowTestSupport.InMemorySessionRepository sessionRepository =
-        new RecommendationFlowTestSupport.InMemorySessionRepository();
-    SessionTransitionService applicationService =
-        new SessionTransitionService(sessionRepository, workflow);
-
-    RequestGateway gateway =
-        new RequestGateway(inputParser, applicationService, new AiResponseGenerator(null));
-
-    MockMvc mockMvc = MockMvcBuilders.standaloneSetup(gateway).build();
+    var sessionRepository = new RecommendationFlowTestSupport.InMemorySessionRepository();
+    MockMvc mockMvc = recommendationEndpoint(rawText, parsedRequest(rawText), sessionRepository);
 
     String response =
         mockMvc
@@ -138,6 +104,74 @@ class RecommendationFlowIntegrationTest {
     assertFalse(returnedBookIds.contains("book-404"));
     assertFalse(response.contains("book-404"));
     returnedBookIds.forEach(bookId -> assertTrue(response.contains(bookId)));
+  }
+
+  @Test
+  void returnsTheNoMatchesFallbackWhenTheCatalogueHasNoEligibleBooks() throws Exception {
+    String rawText = "Recommend science fiction from a missing source";
+    var request = parsedRequest(rawText);
+    var include = new com.gen3.recommenderagent.domain.session.MustInclude();
+    include.setSource("missing-test-source");
+    request.setMustInclude(include);
+    var sessions = new RecommendationFlowTestSupport.InMemorySessionRepository();
+    var endpoint = recommendationEndpoint(rawText, request, sessions);
+    endpoint
+        .perform(
+            post("/api/v1/recommendations")
+                .header("X-Session-Id", "no-matches")
+                .header("X-User-Id", "user-1")
+                .contentType(MediaType.TEXT_PLAIN)
+                .content(rawText))
+        .andExpect(status().isOk())
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                .string(
+                    "I couldn't find a good match for "
+                        + rawText
+                        + " just yet. Try a genre, author, narrator, or a different description."));
+    var saved = sessions.getSession("no-matches", "user-1");
+    assertNotNull(saved);
+    assertTrue(saved.getRequests().getFirst().getRecommendations().isEmpty());
+    assertTrue(saved.getPendingRecommendations().isEmpty());
+  }
+
+  private MockMvc recommendationEndpoint(
+      String rawText,
+      SessionRequest parsedRequest,
+      RecommendationFlowTestSupport.InMemorySessionRepository sessionRepository) {
+    InputParser inputParser = mock(InputParser.class);
+    when(inputParser.parse(rawText)).thenReturn(parsedRequest);
+
+    SolrAudiobookRepository repository =
+        new SolrAudiobookRepository(solrClient, SolrContainerTestSupport.COLLECTION);
+    com.gen3.recommenderagent.embedding.QueryEmbeddingService embeddingIndexer =
+        mock(com.gen3.recommenderagent.embedding.QueryEmbeddingService.class);
+    when(embeddingIndexer.embedSemanticQueries(anyList()))
+        .thenReturn(List.of(new float[0], new float[0]));
+    CandidateRetriever candidateRetriever =
+        new CandidateRetrievalService(
+            "solr", repository, embeddingIndexer, new AudiobookRetrievalPlanner());
+    RankingService rankingService =
+        new RankingService(
+            new CompositeScorer(
+                List.of(
+                    new WeightedScorer(new RetrievalRelevanceScorer(), 1.0),
+                    new WeightedScorer(new UserPreferenceScorer(scoringProperties()), 1.0))));
+    com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository userPreferences =
+        mock(com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository.class);
+    AudiobookRecommendationWorkflow workflow =
+        new AudiobookRecommendationWorkflow(
+            candidateRetriever,
+            rankingService,
+            new SemanticQueryVectorService(embeddingIndexer),
+            userPreferences);
+    SessionTransitionService applicationService =
+        new SessionTransitionService(sessionRepository, workflow);
+
+    RequestGateway gateway =
+        new RequestGateway(inputParser, applicationService, new AiResponseGenerator(null));
+
+    return MockMvcBuilders.standaloneSetup(gateway).build();
   }
 
   private RankingScoringProperties scoringProperties() {

@@ -63,6 +63,43 @@ class OpenAiBatchProgressTest {
     verify(client).send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"failed", "expired", "cancelled"})
+  void recoveryAcceptsOnlyTerminalFailures(String status) throws Exception {
+    var client = mock(HttpClient.class);
+    var response = reply("{\"status\":\"" + status + "\"}");
+    when(client.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(response);
+    new OpenAiShortDescriptionBatchProvider(
+            new ObjectMapper(), client, "key", "https://example.test", "model")
+        .verifyTerminalFailure("batch-1");
+    verify(client).send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "in_progress",
+        "validating",
+        "finalizing",
+        "cancelling",
+        "completed",
+        "unknown",
+        ""
+      })
+  void recoveryRefusesActiveCompletedOrUnknownBatches(String status) throws Exception {
+    var client = mock(HttpClient.class);
+    var response = reply("{\"status\":\"" + status + "\"}");
+    when(client.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(response);
+    var provider =
+        new OpenAiShortDescriptionBatchProvider(
+            new ObjectMapper(), client, "key", "https://example.test", "model");
+    assertThatThrownBy(() -> provider.verifyTerminalFailure("batch-1"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("recovery requires");
+  }
+
   private HttpResponse<String> reply(String body) {
     HttpResponse<String> response = mock(HttpResponse.class);
     when(response.statusCode()).thenReturn(200);

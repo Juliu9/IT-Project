@@ -54,9 +54,9 @@ public class ShortDescriptionApplication {
         throw new IllegalArgumentException("Run user-preference import separately");
       }
       String mode = environment.getProperty("audiobook.short-description.batch.mode", "disabled");
-      if (!"submit".equals(mode) && !"import".equals(mode)) {
+      if (!"submit".equals(mode) && !"import".equals(mode) && !"recover".equals(mode)) {
         throw new IllegalArgumentException(
-            "Explicitly select short-description batch mode submit or import");
+            "Explicitly select short-description batch mode submit, import, or recover");
       }
       if (environment.getProperty("audiobook.qdrant.migration.enabled", Boolean.class, false)
           || environment.getProperty("audiobook.embedding-index.enabled", Boolean.class, false)) {

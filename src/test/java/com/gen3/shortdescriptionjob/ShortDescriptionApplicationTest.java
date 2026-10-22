@@ -25,13 +25,26 @@ class ShortDescriptionApplicationTest {
               "solr.password=");
 
   @Test
-  void requiresExplicitSubmitOrImport() {
+  void requiresExplicitMaintenanceMode() {
     runner.run(
         context ->
             assertThat(context)
                 .hasFailed()
                 .getFailure()
-                .hasMessage("Explicitly select short-description batch mode submit or import"));
+                .hasMessage(
+                    "Explicitly select short-description batch mode submit, import, or recover"));
+  }
+
+  @Test
+  void acceptsExplicitRecoveryMode() {
+    runner
+        .withPropertyValues(
+            "audiobook.short-description.batch.mode=recover", "audiobook.database=solr")
+        .run(
+            context ->
+                assertThat(context)
+                    .hasNotFailed()
+                    .hasSingleBean(BatchShortDescriptionEnricher.class));
   }
 
   @Test

@@ -110,6 +110,19 @@ public class OpenAiShortDescriptionBatchProvider implements ShortDescriptionBatc
   }
 
   @Override
+  public void verifyTerminalFailure(String batchId) throws IOException, InterruptedException {
+    String status = getJson("/batches/" + batchId).path("status").asText();
+    if (!List.of("failed", "expired", "cancelled").contains(status)) {
+      throw new IllegalStateException(
+          "Batch "
+              + batchId
+              + " is "
+              + status
+              + "; recovery requires failed, expired, or cancelled status");
+    }
+  }
+
+  @Override
   public Map<String, String> completedDescriptions(String batchId)
       throws IOException, InterruptedException {
     long deadline = System.nanoTime() + Duration.ofHours(24).toNanos();

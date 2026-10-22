@@ -56,6 +56,7 @@ public class AiOperationObserver {
       logCompletion(current, usageExtractor.apply(response));
       return response;
     } catch (RuntimeException exception) {
+      RequestTelemetry.ai(operation, current.attempts(), AiUsage.unavailable());
       LOGGER.warn(
           "ai.operation.failed operation={} attempts={} durationMs={} lastAttemptDurationMs={}"
               + " exception={}",

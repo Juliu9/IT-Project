@@ -1,17 +1,23 @@
 # System diagrams
 
-These views explain the current system instead of listing every Java member.
+[README](../../README.md) · [Architecture](../architecture.md) · [Maintenance](../maintenance.md)
 
-- [System overview](system-overview.svg) ([PlantUML source](system-overview.puml)): request pipeline and replaceable storage adapters.
-- [Request sequence](recommendation-flow.svg) ([PlantUML source](recommendation-flow.puml)): session locking, cached MORE, REPEAT, retrieval and commit ordering.
-- [Maintenance jobs](maintenance-jobs.svg) ([PlantUML source](maintenance-jobs.puml)): the four separate jobs and their shared dependencies.
+These diagrams show responsibilities and execution order rather than every Java member.
 
-Open the .puml files with a PlantUML renderer. The Java-to-PlantUML parser is not required:
-these files already contain PlantUML source. The overview and job view use PlantUML's
-Smetana layout engine, so they do not require Graphviz.
+| View | What it explains | Files |
+| --- | --- | --- |
+| System overview | Request pipeline and replaceable storage adapters | [SVG](system-overview.svg) · [PlantUML](system-overview.puml) |
+| Request sequence | Session locking, cached MORE, REPEAT, retrieval, and commit ordering | [SVG](recommendation-flow.svg) · [PlantUML](recommendation-flow.puml) |
+| Maintenance jobs | Four separate jobs and their shared dependencies | [SVG](maintenance-jobs.svg) · [PlantUML](maintenance-jobs.puml) |
 
-Labels name the important production classes. Framework wiring, getters, setters,
-exceptions and implementation helpers are intentionally omitted.
+## View and edit
 
-Runtime orchestration classes live in `application`; query-vector code lives in `embedding`,
-search execution and plans in `retrieval`, and session adapters in `storage.session`.
+Open SVG files directly, or open `.puml` files with a PlantUML renderer. The Java-to-PlantUML parser
+plugin is unnecessary: the source files already contain PlantUML. The overview and maintenance
+views use Smetana layout and do not require Graphviz.
+
+Labels use production class names. Wiring, getters/setters, exceptions, and implementation helpers
+are omitted. Runtime orchestration lives in `application`, query vectors in `embedding`, search
+execution/plans in `retrieval`, and session adapters in `storage.session`.
+
+When changing the architecture, update the affected `.puml` source and regenerate its SVG.
