@@ -16,6 +16,18 @@ import org.junit.jupiter.api.Test;
 class ResponseGeneratorTest {
 
   @Test
+  void emptyMoreAndItsRepeatExplicitlySayThereAreNoMoreMatches() {
+    AiResponseGenerator generator = new AiResponseGenerator(null);
+    SessionRequest request = new SessionRequest();
+    request.setIntent(Intent.MORE_RESULTS);
+    String more = generator.generate(List.of(), request);
+    assertTrue(more.startsWith("There are no more audiobooks matching your current search."));
+    request.setIntent(Intent.REPEAT);
+    request.setNoMoreRecommendations(true);
+    assertEquals(more, generator.generate(List.of(), request));
+  }
+
+  @Test
   void followUpPromptContainsResolvedCriteriaAndNoSearchAsksForOne() {
     AiResponseGenerator generator = new AiResponseGenerator(null);
     SessionRequest request = new SessionRequest();

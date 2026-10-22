@@ -84,6 +84,11 @@ public class AiResponseGenerator implements ResponseGenerator {
     // If there are no recommendations, it returns a fallback message
     if (recommendations == null || recommendations.isEmpty()) {
       RequestTelemetry.responseMode("NO_RESULTS");
+      if (currentRequest != null
+          && (currentRequest.isNoMoreRecommendations()
+              || currentRequest.getIntent() == Intent.MORE_RESULTS)) {
+        return "There are no more audiobooks matching your current search. Try changing your criteria.";
+      }
       if (currentRequest != null && currentRequest.getIntent() == Intent.REPEAT) {
         return "There are no previous recommendations to repeat. Ask me for audiobooks first.";
       }

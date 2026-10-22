@@ -57,6 +57,8 @@ public class SessionTransitionService {
         CONVERSATION_STATE.isRecommendationIntent(result.getIntent())
             ? recommendationPage(result, session)
             : List.of());
+    result.setNoMoreRecommendations(
+        result.getIntent() == Intent.MORE_RESULTS && result.getRecommendations().isEmpty());
     applyTransition(session, result, originalIntent(original));
     return result;
   }
@@ -161,6 +163,7 @@ public class SessionTransitionService {
     entry.setMustNotInclude(request.getMustNotInclude());
     entry.setBookCount(request.getBookCount());
     entry.setRecommendations(request.getRecommendations());
+    entry.setNoMoreRecommendations(request.isNoMoreRecommendations());
     return entry;
   }
 }

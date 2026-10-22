@@ -21,6 +21,15 @@ public class SessionRequest {
   private boolean personalised;
   private boolean preferenceClarificationRequired;
   private boolean searchClarificationRequired;
+  private boolean noMoreRecommendations;
+
+  public boolean isNoMoreRecommendations() {
+    return noMoreRecommendations;
+  }
+
+  public void setNoMoreRecommendations(boolean exhausted) {
+    noMoreRecommendations = exhausted;
+  }
 
   public boolean isSearchClarificationRequired() {
     return searchClarificationRequired;

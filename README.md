@@ -22,7 +22,9 @@ Author-only and narrator-only semantic preferences select semantic retrieval; ex
 
 `REPEAT` (for example, “show those again”) returns the most recent recommendation page
 from session history without consuming pending results or rerunning retrieval. After clearing
-history, there is nothing to repeat. Response wording is generated normally. Both “more” and
+history, there is nothing to repeat. Short “more” pages are allowed; an empty “more” explicitly
+says there are no further matches, and “repeat” preserves that empty outcome instead of returning
+older books. Response wording is generated normally. Both “more” and
 “repeat” supply the saved search criteria to the response generator so it can explain the fit.
 
 Each search ranks up to 20 recommendations from those candidates. The session stores the

@@ -138,13 +138,17 @@ public final class ConversationState {
     for (int index = requests.size() - 1; index >= 0; index--) {
       SessionRequest previous = requests.get(index);
       boolean repeat = target.getIntent() == Intent.REPEAT;
-      if (isSearchContext(previous)
-          && (!repeat
-              || (previous.getRecommendations() != null
-                  && !previous.getRecommendations().isEmpty()))) {
+      if (isSearchContext(previous)) {
         merge(previous, target);
         if (repeat) {
-          target.setRecommendations(new ArrayList<>(previous.getRecommendations()));
+          target.setRecommendations(
+              previous.getRecommendations() == null
+                  ? List.of()
+                  : new ArrayList<>(previous.getRecommendations()));
+          target.setNoMoreRecommendations(
+              previous.isNoMoreRecommendations()
+                  || (previous.getIntent() == Intent.MORE_RESULTS
+                      && target.getRecommendations().isEmpty()));
         }
         return;
       }

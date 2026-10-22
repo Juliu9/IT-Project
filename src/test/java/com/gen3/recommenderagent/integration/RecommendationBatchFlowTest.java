@@ -55,6 +55,27 @@ class RecommendationBatchFlowTest {
   }
 
   @Test
+  void shortMorePagesAreAllowedAndRepeatKeepsTheLatestEmptyOutcome() {
+    when(ranker.rank(anyList(), anyInt(), any(RankingContext.class)))
+        .thenReturn(batch(1, 7), List.of());
+    assertIds(process(request(Intent.RECOMMENDATION)), 1, 5);
+    SessionRequest shortPage = process(request(Intent.MORE_RESULTS));
+    assertIds(shortPage, 6, 2);
+    assertThat(shortPage.isNoMoreRecommendations()).isFalse();
+    assertIds(process(request(Intent.REPEAT)), 6, 2);
+    SessionRequest exhausted = process(request(Intent.MORE_RESULTS));
+    assertThat(exhausted.getRecommendations()).isEmpty();
+    assertThat(exhausted.isNoMoreRecommendations()).isTrue();
+    process(request(Intent.HELP));
+    for (int i = 0; i < 2; i++) {
+      SessionRequest repeat = process(request(Intent.REPEAT));
+      assertThat(repeat.getRecommendations()).isEmpty();
+      assertThat(repeat.isNoMoreRecommendations()).isTrue();
+    }
+    verify(ranker, times(3)).rank(anyList(), eq(20), any(RankingContext.class));
+  }
+
+  @Test
   void moreRequiresAPreviousSearchEvenAfterOtherSessionActions() {
     assertThat(process(request(Intent.MORE_RESULTS)).isSearchClarificationRequired()).isTrue();
     process(request(Intent.HELP));
