@@ -62,11 +62,16 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
       }
     }
     Set<String> shownBookIds = shownBooks(session);
+    long retrievalStartedAt = System.nanoTime();
     var candidates =
         RequestTelemetry.measure(
             "retrieveMs",
             () ->
                 candidateRetriever.getCandidates(request, vectors, CANDIDATE_LIMIT, shownBookIds));
+    LOGGER.info(
+        "candidate.retrieval.completed durationMs={} candidateCount={}",
+        (System.nanoTime() - retrievalStartedAt) / 1_000_000,
+        candidates.size());
     RankingContext rankingContext = new RankingContext(preferences, shownBookIds);
     return RequestTelemetry.measure(
         "rankMs", () -> ranker.rank(candidates, RECOMMENDATION_BATCH_SIZE, rankingContext));
