@@ -17,7 +17,6 @@ import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.response.ResponseGenerator;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.chat.client.ResponseEntity;
 
 class SessionUpdateFlowTest {
 
@@ -27,7 +26,7 @@ class SessionUpdateFlowTest {
     InputParser parser = mock(InputParser.class);
     SessionRequest request = new SessionRequest();
     request.setIntent(Intent.RECOMMENDATION);
-    when(parser.parse("recommend a book")).thenReturn(new ResponseEntity<>(null, request));
+    when(parser.parse("recommend a book")).thenReturn(request);
     RecommendationWorkflow workflow = mock(RecommendationWorkflow.class);
     when(workflow.recommend(any(), any()))
         .thenReturn(List.of(new Recommendation("book-1", 1, 0.9, "First")));

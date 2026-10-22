@@ -38,8 +38,6 @@ import org.apache.solr.client.solrj.SolrClient;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.chat.client.ResponseEntity;
-import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -74,8 +72,7 @@ class RecommendationFlowIntegrationTest {
 
     InputParser inputParser = mock(InputParser.class);
     SessionRequest parsedRequest = parsedRequest(rawText);
-    when(inputParser.parse(rawText))
-        .thenReturn(new ResponseEntity<ChatResponse, SessionRequest>(null, parsedRequest));
+    when(inputParser.parse(rawText)).thenReturn(parsedRequest);
 
     SolrAudiobookRepository repository =
         new SolrAudiobookRepository(solrClient, SolrContainerTestSupport.COLLECTION);

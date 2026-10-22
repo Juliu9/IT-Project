@@ -71,8 +71,7 @@ class RequestGatewayTest {
   @Test
   void returnsServiceUnavailableWhenCandidateRetrievalFails() throws Exception {
     SessionRequest parsedRequest = new SessionRequest();
-    when(inputParser.parse("recommend science fiction"))
-        .thenReturn(new org.springframework.ai.chat.client.ResponseEntity<>(null, parsedRequest));
+    when(inputParser.parse("recommend science fiction")).thenReturn(parsedRequest);
     when(sessionTransitionService.process("session", "user", parsedRequest))
         .thenThrow(new CandidateRetrievalException("Qdrant", new RuntimeException("timed out")));
     RequestGateway gateway =
@@ -98,8 +97,7 @@ class RequestGatewayTest {
   @Test
   void returnsRetryAdviceWhenTheSessionIsBusy() throws Exception {
     SessionRequest parsedRequest = new SessionRequest();
-    when(inputParser.parse("recommend science fiction"))
-        .thenReturn(new org.springframework.ai.chat.client.ResponseEntity<>(null, parsedRequest));
+    when(inputParser.parse("recommend science fiction")).thenReturn(parsedRequest);
     when(sessionTransitionService.process("session", "user", parsedRequest))
         .thenThrow(new com.gen3.recommenderagent.storage.session.SessionBusyException());
     RequestGateway gateway =
@@ -122,8 +120,7 @@ class RequestGatewayTest {
   @Test
   void returnsServiceUnavailableWhenTheSessionCommitFails() throws Exception {
     SessionRequest parsedRequest = new SessionRequest();
-    when(inputParser.parse("recommend science fiction"))
-        .thenReturn(new org.springframework.ai.chat.client.ResponseEntity<>(null, parsedRequest));
+    when(inputParser.parse("recommend science fiction")).thenReturn(parsedRequest);
     when(sessionTransitionService.process("session", "user", parsedRequest))
         .thenThrow(new SessionCommitException());
     RequestGateway gateway =

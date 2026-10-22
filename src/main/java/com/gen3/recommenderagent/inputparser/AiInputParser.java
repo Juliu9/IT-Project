@@ -6,8 +6,6 @@ import com.gen3.recommenderagent.observability.AiOperationObserver;
 import java.security.SecureRandom;
 import java.util.UUID;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.ResponseEntity;
-import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
@@ -32,7 +30,7 @@ public class AiInputParser implements InputParser {
   }
 
   @Override
-  public ResponseEntity<ChatResponse, SessionRequest> parse(String rawText) {
+  public SessionRequest parse(String rawText) {
     if (rawText == null || rawText.isBlank()) {
       throw new InvalidRequestException("I didn't catch that. What would you like to listen to?");
     }
@@ -97,7 +95,7 @@ public class AiInputParser implements InputParser {
     request.setRequestId(createUuidV7().toString());
     request.setRawText(rawText);
 
-    return new ResponseEntity<>(aiResponse.response(), request);
+    return request;
   }
 
   private UUID createUuidV7() {

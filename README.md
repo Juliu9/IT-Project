@@ -418,3 +418,7 @@ resolved outcome use the same conversation-policy classifier; there is no second
 Control intents still discard new semantic criteria while retaining exact filters. MORE with
 new exact filters invalidates its pending batch, and semantic taste replies use REFINE.
 This refactor preserves the existing clarification, history-retention and response-precedence rules.
+
+
+The parser interface returns `SessionRequest` directly. Provider responses and token usage stay
+inside the parser implementation; the request pipeline does not depend on Spring AI response types.

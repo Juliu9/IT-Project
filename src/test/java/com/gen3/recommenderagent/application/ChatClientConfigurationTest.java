@@ -52,7 +52,7 @@ class ChatClientConfigurationTest {
         .run(
             context -> {
               assertThat(context).hasNotFailed();
-              var parsed = context.getBean(AiInputParser.class).parse("Find an audiobook").entity();
+              var parsed = context.getBean(AiInputParser.class).parse("Find an audiobook");
               assertThat(parsed.getIntent()).isEqualTo(Intent.RECOMMENDATION);
               Recommendation recommendation = new Recommendation();
               recommendation.setTitle("Book");
