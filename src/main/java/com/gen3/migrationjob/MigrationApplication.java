@@ -7,9 +7,11 @@ import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.env.Environment;
 
 @Configuration(proxyBeanMethods = false)
+@PropertySource("classpath:non-generative-jobs.properties")
 @EnableAutoConfiguration(
     exclude = {
       org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration.class,
@@ -30,7 +32,6 @@ public class MigrationApplication {
     try (var context =
         new SpringApplicationBuilder(MigrationApplication.class)
             .web(WebApplicationType.NONE)
-            .properties("spring.ai.model.embedding=none", "spring.ai.model.chat=none")
             .run(args)) {
       // Close database clients when the maintenance runner finishes.
     }

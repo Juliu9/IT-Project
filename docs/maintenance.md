@@ -5,6 +5,8 @@
 These are separate, non-web processes. **Normal server startup rejects enabled maintenance flags.**
 Run one job at a time against a stable catalogue, with one writer. Configure credentials and
 connections in the shell or IDE. AI generation incurs provider charges.
+Migration and preference import need no AI credentials. Their launchers, and the summary launcher,
+disable unused Spring AI models; the summary provider handles its own transport and credentials.
 
 | Job | Databases | AI generation | Changes |
 | --- | --- | --- | --- |

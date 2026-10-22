@@ -12,8 +12,7 @@ class UserPreferenceApplicationTest {
       new ApplicationContextRunner()
           .withUserConfiguration(UserPreferenceApplication.class)
           .withPropertyValues(
-              "spring.ai.model.embedding=none",
-              "spring.ai.model.chat=none",
+              "spring.ai.openai.api-key=",
               "user.preferences.favourites-csv-path=",
               "user.preferences.history-csv-path=")
           .withBean(QdrantClient.class, () -> mock(QdrantClient.class));
@@ -33,6 +32,9 @@ class UserPreferenceApplicationTest {
             context ->
                 assertThat(context)
                     .hasNotFailed()
+                    .doesNotHaveBean(org.springframework.ai.chat.model.ChatModel.class)
+                    .doesNotHaveBean(org.springframework.ai.embedding.EmbeddingModel.class)
+                    .doesNotHaveBean(org.springframework.ai.openai.OpenAiAudioSpeechModel.class)
                     .hasSingleBean(UserPreferenceStartupImporter.class)
                     .hasSingleBean(UserPreferenceAggregatorService.class)
                     .doesNotHaveBean(com.gen3.recommenderagent.api.RequestGateway.class)

@@ -14,8 +14,7 @@ class MigrationApplicationTest {
       new ApplicationContextRunner()
           .withUserConfiguration(MigrationApplication.class)
           .withPropertyValues(
-              "spring.ai.model.embedding=none",
-              "spring.ai.model.chat=none",
+              "spring.ai.openai.api-key=",
               "solr.url=http://localhost:8983/solr",
               "solr.collection=books",
               "solr.username=",
@@ -37,6 +36,9 @@ class MigrationApplicationTest {
             context ->
                 assertThat(context)
                     .hasNotFailed()
+                    .doesNotHaveBean(org.springframework.ai.chat.model.ChatModel.class)
+                    .doesNotHaveBean(org.springframework.ai.embedding.EmbeddingModel.class)
+                    .doesNotHaveBean(org.springframework.ai.openai.OpenAiAudioSpeechModel.class)
                     .hasSingleBean(SolrToQdrantMigrator.class)
                     .hasSingleBean(SolrAudiobookRepository.class)
                     .hasSingleBean(QdrantAudiobookRepository.class)
