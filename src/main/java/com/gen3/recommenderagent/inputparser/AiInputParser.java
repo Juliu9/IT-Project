@@ -1,5 +1,6 @@
 package com.gen3.recommenderagent.inputparser;
 
+import com.gen3.recommenderagent.domain.session.ConversationState;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
 import java.security.SecureRandom;
@@ -86,11 +87,10 @@ public class AiInputParser implements InputParser {
 
     SessionRequest request = new SessionRequest();
     request.setIntent(parsed.getIntent());
-    if (parsed.getIntent() != null && parsed.getIntent().acceptsSemanticInformation()) {
-      request.setPersonalised(parsed.isPersonalised());
-      request.setPositiveSemanticQuery(parsed.getPositiveSemanticQuery());
-      request.setNegativeSemanticQuery(parsed.getNegativeSemanticQuery());
-    }
+    request.setPersonalised(parsed.isPersonalised());
+    request.setPositiveSemanticQuery(parsed.getPositiveSemanticQuery());
+    request.setNegativeSemanticQuery(parsed.getNegativeSemanticQuery());
+    ConversationState.normalizeInput(request);
     request.setMustInclude(parsed.getMustInclude());
     request.setMustNotInclude(parsed.getMustNotInclude());
     request.setBookCount(parsed.getBookCount());

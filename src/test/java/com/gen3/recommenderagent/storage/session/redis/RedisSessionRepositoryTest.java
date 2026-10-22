@@ -817,7 +817,7 @@ class RedisSessionRepositoryTest {
         session -> {
           SessionRequest previous = new SessionRequest();
           previous.setIntent(Intent.RECOMMENDATION);
-          session.addRequest(previous);
+          session.getRequests().add(previous);
           session.setPendingRecommendations(
               IntStream.rangeClosed(1, 20)
                   .mapToObj(

@@ -11,8 +11,4 @@ public enum Intent {
   CLEAR_HISTORY,
   HELP,
   UNKNOWN;
-
-  public boolean acceptsSemanticInformation() {
-    return this == RECOMMENDATION || this == REFINE;
-  }
 }

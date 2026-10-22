@@ -14,7 +14,7 @@ actor User
 package "recommenderagent — live requests" {
   component "RequestGateway\nCoordinates the request" as Gateway #DBEAFE
   component "AiInputParser\nText → intent + criteria" as Parser #DBEAFE
-  component "SessionTransitionService\nResolves context and selects a page" as Session #DBEAFE
+  component "SessionTransitionService\nCoordinates paging and retrieval" as Session #DBEAFE
   component "AudiobookRecommendationWorkflow\nBuilds a new recommendation batch" as Workflow #DCFCE7
   component "CandidateRetrievalService\nSelects and executes search" as Retrieval #DCFCE7
   component "RankingService\nRanks up to 20 recommendations" as Ranking #DCFCE7
@@ -39,6 +39,8 @@ Workflow --> Ranking : rank candidates
 Gateway --> Response : 3. Generate response after commit
 
 note bottom of Session
+  ConversationState owns conversation policy.
+  The result carries a temporary ConversationOutcome.
   MORE: use pending recommendations first.
   REPEAT: reuse the last search outcome.
   MORE without a previous search: ask for criteria.

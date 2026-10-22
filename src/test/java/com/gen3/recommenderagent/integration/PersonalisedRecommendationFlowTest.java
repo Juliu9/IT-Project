@@ -177,7 +177,7 @@ class PersonalisedRecommendationFlowTest {
     session.getPreferences().setPositiveSemanticQuery(earlier);
     SessionRequest pending = personalisedRequest();
     pending.setPreferenceClarificationRequired(true);
-    session.addRequest(pending);
+    session.getRequests().add(pending);
     sessions.updateSession(session);
     SessionRequest answer = new SessionRequest();
     answer.setIntent(Intent.REFINE);

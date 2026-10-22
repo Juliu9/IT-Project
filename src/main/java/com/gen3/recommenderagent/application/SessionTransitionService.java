@@ -9,12 +9,10 @@ import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.gen3.recommenderagent.storage.session.SessionRepository;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.IntStream;
 import org.springframework.stereotype.Service;
 
@@ -38,42 +36,15 @@ public class SessionTransitionService {
   }
 
   private SessionRequest apply(Session session, SessionRequest original) {
-    SessionRequest result = CONVERSATION_STATE.resolve(session, original);
-    if (result.getIntent() == Intent.REPEAT) {
-      complete(result);
+    SessionRequest result = CONVERSATION_STATE.begin(session, original);
+    if (CONVERSATION_STATE.needsRecommendations(result)) {
+      result.setRecommendations(recommendationPage(result, session));
+    }
+    CONVERSATION_STATE.finish(session, result, original);
+    if (original != null && original.getIntent() == Intent.REPEAT) {
       RequestTelemetry.retrieval("SESSION_REPEAT", result.getRecommendations().size());
-      return result;
     }
-    if (result.isSearchClarificationRequired()) {
-      result.setRecommendations(List.of());
-      complete(result);
-      return result;
-    }
-    if (invalidatesBatch(original)) {
-      session.setPendingRecommendations(List.of());
-    }
-    result.setRecommendations(
-        CONVERSATION_STATE.isRecommendationIntent(result.getIntent())
-            ? recommendationPage(result, session)
-            : List.of());
-    result.setNoMoreRecommendations(
-        result.getIntent() == Intent.MORE_RESULTS && result.getRecommendations().isEmpty());
-    applyTransition(session, result, originalIntent(original));
     return result;
-  }
-
-  private boolean invalidatesBatch(SessionRequest request) {
-    Intent intent = originalIntent(request);
-    SessionRequest filters = new SessionRequest();
-    if (request != null) {
-      filters.setMustInclude(request.getMustInclude());
-      filters.setMustNotInclude(request.getMustNotInclude());
-    }
-    return intent == Intent.RECOMMENDATION
-        || intent == Intent.REFINE
-        || intent == Intent.UPDATE_PREFERENCES
-        || intent == Intent.CLEAR_HISTORY
-        || (intent == Intent.MORE_RESULTS && ConversationState.hasSearchCriteria(filters));
   }
 
   private List<Recommendation> recommendationPage(SessionRequest request, Session session) {
@@ -118,57 +89,11 @@ public class SessionTransitionService {
     return page;
   }
 
-  private void applyTransition(Session session, SessionRequest request, Intent originalIntent) {
-    if (originalIntent == Intent.UPDATE_PREFERENCES
-        || (originalIntent == Intent.REFINE && session.isAwaitingPersonalisedPreferences())) {
-      session.setPreferences(CONVERSATION_STATE.mergedPreferences(session, request));
-    }
-    if (originalIntent == Intent.CHANGE_COUNT) {
-      session.setBookCount(CONVERSATION_STATE.resolveBookCount(request, session));
-    }
-    if (originalIntent == Intent.CLEAR_HISTORY) {
-      session.clearHistory();
-    }
-    complete(request);
-    session.addRecommendationIds(recommendationIds(request.getRecommendations()));
-    session.addRequest(historyEntry(request));
-  }
-
-  private void complete(SessionRequest request) {
-    if (request.getRequestId() == null) {
-      request.setRequestId(UUID.randomUUID().toString());
-    }
-    if (request.getCreatedAt() == null) {
-      request.setCreatedAt(Instant.now());
-    }
-  }
-
-  private Intent originalIntent(SessionRequest request) {
-    return request == null || request.getIntent() == null ? Intent.UNKNOWN : request.getIntent();
-  }
-
   private List<String> recommendationIds(List<Recommendation> recommendations) {
     return recommendations.stream()
         .filter(recommendation -> recommendation != null)
         .map(Recommendation::getBookId)
         .filter(bookId -> bookId != null && !bookId.isBlank())
         .toList();
-  }
-
-  private SessionRequest historyEntry(SessionRequest request) {
-    SessionRequest entry = new SessionRequest();
-    entry.setRequestId(request.getRequestId());
-    entry.setCreatedAt(request.getCreatedAt());
-    entry.setIntent(request.getIntent());
-    entry.setPersonalised(request.isPersonalised());
-    entry.setPreferenceClarificationRequired(request.isPreferenceClarificationRequired());
-    entry.setPositiveSemanticQuery(request.getPositiveSemanticQuery());
-    entry.setNegativeSemanticQuery(request.getNegativeSemanticQuery());
-    entry.setMustInclude(request.getMustInclude());
-    entry.setMustNotInclude(request.getMustNotInclude());
-    entry.setBookCount(request.getBookCount());
-    entry.setRecommendations(request.getRecommendations());
-    entry.setNoMoreRecommendations(request.isNoMoreRecommendations());
-    return entry;
   }
 }

@@ -37,7 +37,7 @@ alt REPEAT
 else MORE with no previous search
   Transition -> Transition : Mark search clarification required\nDo not retrieve candidates
 else Recommendation, refinement, or MORE
-  Transition -> Transition : Resolve saved context and preferences\nDiscard stale queue if search changed
+  Transition -> Transition : ConversationState resolves context and preferences\nDiscard stale queue if search changed
   Transition -> Transition : Take pending recommendations, up to requested count
   opt Page still needs books
     Transition -> Workflow : Build fresh batch, excluding shown IDs and cached tail
@@ -52,7 +52,7 @@ else Recommendation, refinement, or MORE
     deactivate Workflow
     Transition -> Transition : Fill page from new queue\nReturn fewer if necessary
   end
-  Transition -> Transition : Record page and shown IDs\nEmpty MORE = no further matches
+  Transition -> Transition : ConversationState records the page and resolves outcome\nEmpty MORE = no further matches
 else Count, preference, history, help or unknown action
   Transition -> Transition : Apply the relevant session action\nNo candidate retrieval
 end
@@ -62,8 +62,8 @@ deactivate Transition
 Sessions -> Sessions : Commit session if lock and version still match\nRelease lock
 Sessions --> Transition : Return only after successful commit
 deactivate Sessions
-Transition --> Gateway : Selected page or action outcome
-Gateway -> Response : Generate wording using resolved context
+Transition --> Gateway : Selected page + resolved ConversationOutcome
+Gateway -> Response : Generate wording using resolved outcome and context
 note over Response
   Chat model for book explanations.
   Built-in wording for actions, clarification,

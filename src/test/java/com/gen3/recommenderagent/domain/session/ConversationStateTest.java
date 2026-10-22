@@ -21,8 +21,8 @@ class ConversationStateTest {
   @MethodSource("followUpIntents")
   void resolvesFollowUpsFromTheLatestRetainedSearch(Intent intent) {
     Session session = new Session();
-    session.addRequest(searchRequest(Intent.RECOMMENDATION, "fantasy"));
-    session.addRequest(searchRequest(Intent.RECOMMENDATION, "history"));
+    ConversationState.retainRequest(session, searchRequest(Intent.RECOMMENDATION, "fantasy"));
+    ConversationState.retainRequest(session, searchRequest(Intent.RECOMMENDATION, "history"));
     SessionRequest request = request(intent);
 
     SessionRequest effective = conversationState.resolve(session, request);
@@ -62,7 +62,7 @@ class ConversationStateTest {
     SessionRequest pending = request(Intent.UNKNOWN);
     pending.setPersonalised(true);
     pending.setPreferenceClarificationRequired(true);
-    session.addRequest(pending);
+    ConversationState.retainRequest(session, pending);
     SessionRequest reply = request(Intent.REFINE);
     reply.setPositiveSemanticQuery(queryWithGenres("fantasy"));
 
@@ -82,7 +82,7 @@ class ConversationStateTest {
     SessionRequest pending = request(Intent.UNKNOWN);
     pending.setPersonalised(true);
     pending.setPreferenceClarificationRequired(true);
-    session.addRequest(pending);
+    ConversationState.retainRequest(session, pending);
 
     SessionRequest help = conversationState.resolve(session, request(Intent.HELP));
     SessionRequest recommendation =
@@ -121,8 +121,8 @@ class ConversationStateTest {
   @Test
   void helpWithCriteriaDoesNotReplaceTheRetainedSearch() {
     var session = new Session();
-    session.addRequest(searchRequest(Intent.RECOMMENDATION, "romance"));
-    session.addRequest(searchRequest(Intent.HELP, "horror"));
+    ConversationState.retainRequest(session, searchRequest(Intent.RECOMMENDATION, "romance"));
+    ConversationState.retainRequest(session, searchRequest(Intent.HELP, "horror"));
     var effective = conversationState.resolve(session, request(Intent.MORE_RESULTS));
     assertEquals(List.of("romance"), effective.getPositiveSemanticQuery().getTopics());
   }
@@ -153,5 +153,32 @@ class ConversationStateTest {
     SemanticQuery query = new SemanticQuery();
     query.setGenres(List.of(genre));
     return query;
+  }
+
+  @Test
+  void keepsOnlyTheLatestSearchAndLatestNonSearchRequest() {
+    Session session = new Session();
+    SessionRequest firstSearch = searchRequest(Intent.RECOMMENDATION, "fantasy");
+    SessionRequest help = new SessionRequest();
+    SessionRequest latestSearch = searchRequest(Intent.RECOMMENDATION, "history");
+
+    ConversationState.retainRequest(session, firstSearch);
+    ConversationState.retainRequest(session, help);
+    ConversationState.retainRequest(session, latestSearch);
+
+    assertEquals(List.of(help, latestSearch), session.getRequests());
+  }
+
+  @Test
+  void derivesPendingPersonalisedPreferencesFromRetainedRequests() {
+    Session session = new Session();
+    SessionRequest pending = new SessionRequest();
+    pending.setPreferenceClarificationRequired(true);
+
+    ConversationState.retainRequest(session, pending);
+    assertTrue(session.isAwaitingPersonalisedPreferences());
+
+    session.clearHistory();
+    assertFalse(session.isAwaitingPersonalisedPreferences());
   }
 }

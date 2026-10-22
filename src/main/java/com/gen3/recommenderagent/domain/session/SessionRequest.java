@@ -1,10 +1,22 @@
 package com.gen3.recommenderagent.domain.session;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.gen3.recommenderagent.domain.Intent;
 import java.time.Instant;
 import java.util.List;
 
 public class SessionRequest {
+
+  @JsonIgnore private ConversationOutcome outcome;
+
+  @JsonIgnore
+  public ConversationOutcome getOutcome() {
+    return outcome;
+  }
+
+  public void setOutcome(ConversationOutcome outcome) {
+    this.outcome = outcome;
+  }
 
   private String requestId;
   private String rawText;

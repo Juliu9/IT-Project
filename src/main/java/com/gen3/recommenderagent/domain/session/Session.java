@@ -27,8 +27,7 @@ public class Session {
   private List<Recommendation> pendingRecommendations = new ArrayList<>();
 
   public boolean isAwaitingPersonalisedPreferences() {
-    return requests != null
-        && requests.stream().anyMatch(SessionRequest::isPreferenceClarificationRequired);
+    return ConversationState.awaitingPreferences(this);
   }
 
   public Session() {}
@@ -103,19 +102,6 @@ public class Session {
 
   public void setRequests(List<SessionRequest> requests) {
     this.requests = requests;
-  }
-
-  public void addRequest(SessionRequest request) {
-    if (request == null) {
-      return;
-    }
-    if (ConversationState.isSearchContext(request)) {
-      requests.removeIf(ConversationState::isSearchContext);
-    } else {
-      requests.removeIf(existing -> !ConversationState.isSearchContext(existing));
-    }
-    this.requests.add(request);
-    this.updatedAt = Instant.now();
   }
 
   public SessionPreferences getPreferences() {

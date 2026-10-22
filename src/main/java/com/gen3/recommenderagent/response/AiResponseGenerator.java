@@ -2,7 +2,8 @@ package com.gen3.recommenderagent.response;
 
 import static com.gen3.recommenderagent.domain.RecommendationPolicy.MAX_BOOK_COUNT;
 
-import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.ConversationOutcome;
+import com.gen3.recommenderagent.domain.session.ConversationState;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
@@ -65,34 +66,31 @@ public class AiResponseGenerator implements ResponseGenerator {
       return PROCESSING_FALLBACK;
     }
 
-    if (currentRequest != null && currentRequest.isSearchClarificationRequired()) {
+    var outcome =
+        currentRequest != null && currentRequest.getOutcome() != null
+            ? currentRequest.getOutcome()
+            : ConversationState.outcomeFor(recommendations, currentRequest);
+    if (outcome == ConversationOutcome.SEARCH_CLARIFICATION) {
       RequestTelemetry.responseMode("SEARCH_CLARIFICATION");
       return "What kind of audiobook would you like?";
     }
-    if (currentRequest != null && currentRequest.isPreferenceClarificationRequired()) {
+    if (outcome == ConversationOutcome.PREFERENCE_CLARIFICATION) {
       RequestTelemetry.responseMode("PREFERENCE_CLARIFICATION");
       return "I'd love to find something you'll enjoy. What genres, authors, or narrators do you like?";
     }
-
     String limitNotice = limitNotice(currentRequest);
-    String actionResponse = generateActionResponse(currentRequest);
-    if (actionResponse != null) {
-      RequestTelemetry.responseMode("ACTION_RESPONSE");
-      return limitNotice + actionResponse;
-    }
-
-    // If there are no recommendations, it returns a fallback message
-    if (recommendations == null || recommendations.isEmpty()) {
-      RequestTelemetry.responseMode("NO_RESULTS");
-      if (currentRequest != null
-          && (currentRequest.isNoMoreRecommendations()
-              || currentRequest.getIntent() == Intent.MORE_RESULTS)) {
-        return "There are no more audiobooks matching your current search. Try changing your criteria.";
-      }
-      if (currentRequest != null && currentRequest.getIntent() == Intent.REPEAT) {
-        return "There are no previous recommendations to repeat. Ask me for audiobooks first.";
-      }
-      return limitNotice + generateFallbackResponse(currentRequest);
+    String fixedResponse = generateOutcomeResponse(outcome, currentRequest);
+    if (fixedResponse != null) {
+      boolean noResults =
+          switch (outcome) {
+            case NO_MORE_RESULTS, NOTHING_TO_REPEAT, NO_MATCHES -> true;
+            default -> false;
+          };
+      RequestTelemetry.responseMode(noResults ? "NO_RESULTS" : "ACTION_RESPONSE");
+      return switch (outcome) {
+        case NO_MORE_RESULTS, NOTHING_TO_REPEAT -> fixedResponse;
+        default -> limitNotice + fixedResponse;
+      };
     }
 
     // Builds a text summary of the request + top recommendation list to send to the
@@ -338,28 +336,29 @@ public class AiResponseGenerator implements ResponseGenerator {
     return "I can give up to " + MAX_BOOK_COUNT + " recommendations at a time. ";
   }
 
-  private String generateActionResponse(SessionRequest currentRequest) {
-    if (currentRequest == null || currentRequest.getIntent() == null) {
-      return null;
-    }
-
-    return switch (currentRequest.getIntent()) {
-      case CHANGE_COUNT -> {
-        if (currentRequest.getBookCount() == null) {
-          yield "How many recommendations would you like at a time?";
-        }
+  private String generateOutcomeResponse(
+      ConversationOutcome outcome, SessionRequest currentRequest) {
+    return switch (outcome) {
+      case COUNT_CLARIFICATION -> "How many recommendations would you like at a time?";
+      case COUNT_CHANGED -> {
         int count = Math.clamp(currentRequest.getBookCount(), 1, MAX_BOOK_COUNT);
         yield "I'll show " + count + " recommendation" + (count == 1 ? "" : "s") + " at a time.";
       }
-      case UPDATE_PREFERENCES -> "Thanks, I've updated your preferences for this session.";
-      case CLEAR_HISTORY -> "All set, I've cleared this session's recommendation history.";
+      case PREFERENCES_UPDATED -> "Thanks, I've updated your preferences for this session.";
+      case HISTORY_CLEARED -> "All set, I've cleared this session's recommendation history.";
       case HELP ->
           "I can help you find audiobooks, refine a search, show more results, repeat the last recommendations, change the result "
               + "count, update your preferences, or clear this session's history.";
       case UNKNOWN ->
           "I'm not quite sure what you'd like to do. You can ask for audiobook recommendations or "
               + "say help to hear what I can do.";
-      case RECOMMENDATION, REFINE, MORE_RESULTS, REPEAT -> null;
+      case NO_MORE_RESULTS ->
+          "There are no more audiobooks matching your current search. Try changing your criteria.";
+      case NOTHING_TO_REPEAT ->
+          "There are no previous recommendations to repeat. Ask me for audiobooks first.";
+      case NO_MATCHES -> generateFallbackResponse(currentRequest);
+      case UNAVAILABLE -> PROCESSING_FALLBACK;
+      case SEARCH_CLARIFICATION, PREFERENCE_CLARIFICATION, RECOMMENDATIONS -> null;
     };
   }
 
