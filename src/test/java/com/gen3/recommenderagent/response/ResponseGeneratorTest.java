@@ -16,6 +16,20 @@ import org.junit.jupiter.api.Test;
 class ResponseGeneratorTest {
 
   @Test
+  void repeatRendersThePreviousBooksOrExplainsThatThereAreNone() {
+    AiResponseGenerator generator = new AiResponseGenerator(null);
+    SessionRequest request = new SessionRequest();
+    request.setIntent(Intent.REPEAT);
+    assertEquals(
+        "There are no previous recommendations to repeat. Ask me for audiobooks first.",
+        generator.generate(List.of(), request));
+    String response =
+        generator.generate(
+            List.of(new Recommendation("book-101", 1, 0.9, "Previous book")), request);
+    assertTrue(response.contains("book-101"));
+  }
+
+  @Test
   void shouldBuildAHumanReadableRecommendationMessage() {
     AiResponseGenerator generator = new AiResponseGenerator(null);
 

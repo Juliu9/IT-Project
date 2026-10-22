@@ -46,7 +46,7 @@ public class AiInputParser implements InputParser {
                         """
                         Extract the user's audiobook request using only stated information.
 
-                        Set intent to RECOMMENDATION, REFINE, MORE_RESULTS, CHANGE_COUNT,
+                        Set intent to RECOMMENDATION, REFINE, MORE_RESULTS, REPEAT, CHANGE_COUNT,
                         UPDATE_PREFERENCES, CLEAR_HISTORY, HELP, or UNKNOWN. Use RECOMMENDATION
                         for a new search; do not choose a retrieval mode. Put desired and avoided
                         concepts in positiveSemanticQuery and negativeSemanticQuery. Use mustInclude
@@ -58,6 +58,8 @@ public class AiInputParser implements InputParser {
                         Never convert a vague duration into an invented numeric limit.
                         Set bookCount only when the user explicitly requests
                         a number of recommendations; otherwise leave it null.
+                        Use REPEAT for requests to show the last recommendations again, such as
+                        "repeat those" or "show those again". MORE_RESULTS asks for different books.
 
                         Set personalised=true only when the user requests recommendations based on
                         their taste, favourites, or history. "Give me books I would like" is a

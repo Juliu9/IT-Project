@@ -55,6 +55,28 @@ class RecommendationBatchFlowTest {
   }
 
   @Test
+  void repeatReturnsTheLastPageWithoutConsumingOrInvalidatingTheBatch() {
+    assertIds(process(request(Intent.RECOMMENDATION)), 1, 5);
+    process(request(Intent.HELP));
+    assertIds(process(request(Intent.REPEAT)), 1, 5);
+    assertIds(process(request(Intent.REPEAT)), 1, 5);
+    assertThat(sessions.getSession("session", "user").getShownBooks()).hasSize(5);
+    assertIds(process(request(Intent.MORE_RESULTS)), 6, 5);
+    assertIds(process(request(Intent.REPEAT)), 6, 5);
+    verify(ranker).rank(anyList(), eq(20), any(RankingContext.class));
+    verify(vectors).create(any());
+  }
+
+  @Test
+  void repeatWithoutHistoryOrAfterClearingReturnsNoRecommendations() {
+    assertThat(process(request(Intent.REPEAT)).getRecommendations()).isEmpty();
+    process(request(Intent.RECOMMENDATION));
+    process(request(Intent.CLEAR_HISTORY));
+    assertThat(process(request(Intent.REPEAT)).getRecommendations()).isEmpty();
+    verify(ranker).rank(anyList(), eq(20), any(RankingContext.class));
+  }
+
+  @Test
   void firstTwentyResultsArePagedAcrossPersistedSessionUpdatesWithoutRepeatingHeavyWork()
       throws Exception {
     for (int page = 0; page < 4; page++) {

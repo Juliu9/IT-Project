@@ -2,6 +2,7 @@ package com.gen3.recommenderagent.response;
 
 import static com.gen3.recommenderagent.common.ApplicationConstants.MAX_BOOK_COUNT;
 
+import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
@@ -78,6 +79,9 @@ public class AiResponseGenerator implements ResponseGenerator {
     // If there are no recommendations, it returns a fallback message
     if (recommendations == null || recommendations.isEmpty()) {
       RequestTelemetry.responseMode("NO_RESULTS");
+      if (currentRequest != null && currentRequest.getIntent() == Intent.REPEAT) {
+        return "There are no previous recommendations to repeat. Ask me for audiobooks first.";
+      }
       return limitNotice + generateFallbackResponse(currentRequest);
     }
 
@@ -290,12 +294,12 @@ public class AiResponseGenerator implements ResponseGenerator {
       case UPDATE_PREFERENCES -> "Thanks, I've updated your preferences for this session.";
       case CLEAR_HISTORY -> "All set, I've cleared this session's recommendation history.";
       case HELP ->
-          "I can help you find audiobooks, refine a search, show more results, change the result "
+          "I can help you find audiobooks, refine a search, show more results, repeat the last recommendations, change the result "
               + "count, update your preferences, or clear this session's history.";
       case UNKNOWN ->
           "I'm not quite sure what you'd like to do. You can ask for audiobook recommendations or "
               + "say help to hear what I can do.";
-      case RECOMMENDATION, REFINE, MORE_RESULTS -> null;
+      case RECOMMENDATION, REFINE, MORE_RESULTS, REPEAT -> null;
     };
   }
 

@@ -16,6 +16,10 @@ collections created by this adapter already include it. The ranker checks exclus
 `MORE_RESULTS` reuses the previous search; clear history to
 make earlier books eligible again. Books outside the 500-ID window may reappear.
 
+`REPEAT` (for example, “show those again”) returns the most recent recommendation page
+from session history without consuming pending results or rerunning retrieval. After clearing
+history, there is nothing to repeat. Response wording is generated normally.
+
 Each search ranks up to 20 recommendations from those candidates. The session stores the
 unserved recommendations (ID, title, short description, and score), then serves up to five per
 request using the existing result-count rules. Plain “more” skips preference lookup, embedding,
