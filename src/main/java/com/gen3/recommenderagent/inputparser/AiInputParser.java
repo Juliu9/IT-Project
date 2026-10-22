@@ -66,8 +66,11 @@ public class AiInputParser implements InputParser {
                         Set personalised=true only when the user requests recommendations based on
                         their taste, favourites, or history. "Give me books I would like" is a
                         personalised RECOMMENDATION with no invented criteria. Statements of taste,
-                        including short answers such as "fantasy", are UPDATE_PREFERENCES; keep
+                        including short answers such as "fantasy", are REFINE; keep
                         liked authors and narrators semantic unless an exact match is required.
+                        Only RECOMMENDATION and REFINE may contain positiveSemanticQuery,
+                        negativeSemanticQuery, or personalised=true. Leave these empty for all
+                        other intents. Use REFINE for a follow-up that supplies semantic criteria.
                         Do not invent values or report contradictions.
                         """)
                     .user(rawText)
@@ -83,9 +86,11 @@ public class AiInputParser implements InputParser {
 
     SessionRequest request = new SessionRequest();
     request.setIntent(parsed.getIntent());
-    request.setPersonalised(parsed.isPersonalised());
-    request.setPositiveSemanticQuery(parsed.getPositiveSemanticQuery());
-    request.setNegativeSemanticQuery(parsed.getNegativeSemanticQuery());
+    if (parsed.getIntent() != null && parsed.getIntent().acceptsSemanticInformation()) {
+      request.setPersonalised(parsed.isPersonalised());
+      request.setPositiveSemanticQuery(parsed.getPositiveSemanticQuery());
+      request.setNegativeSemanticQuery(parsed.getNegativeSemanticQuery());
+    }
     request.setMustInclude(parsed.getMustInclude());
     request.setMustNotInclude(parsed.getMustNotInclude());
     request.setBookCount(parsed.getBookCount());

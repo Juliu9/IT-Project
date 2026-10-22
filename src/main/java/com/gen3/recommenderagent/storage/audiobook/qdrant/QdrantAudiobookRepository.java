@@ -25,7 +25,6 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -146,7 +145,7 @@ public class QdrantAudiobookRepository
     return query(baseQuery(filters, limit).build());
   }
 
-  /** Upserts one audiobook point, using a deterministic point ID for safe reruns. */
+  /** Upserts one audiobook, preserving the existing point ID matched by bookId. */
   @Override
   public void indexEmbedding(AudiobookRecord record, float[] vector) throws IOException {
     indexEmbeddings(List.of(new AudiobookEmbedding(record, vector)));
@@ -167,10 +166,21 @@ public class QdrantAudiobookRepository
       return;
     }
     valid.forEach(item -> validateDimension(item.vector()));
+    validateUniqueBookIds(valid);
     initialize();
-    await(
-        client.upsertAsync(collection, valid.stream().map(mapper::toPoint).toList()),
-        "write audiobook vectors to Qdrant");
+    var existing =
+        findRecordsByBookIds(valid.stream().map(item -> item.record().id()).toList(), false);
+    requireAvailablePointIds(valid, existing);
+    var points =
+        valid.stream()
+            .map(
+                item -> {
+                  var point = mapper.toPoint(item);
+                  var stored = existing.get(item.record().id());
+                  return stored == null ? point : point.toBuilder().setId(stored.getId()).build();
+                })
+            .toList();
+    await(client.upsertAsync(collection, points), "write audiobook vectors to Qdrant");
   }
 
   /** Copies existing source data, leaving existing destination records untouched on reruns. */
@@ -188,18 +198,14 @@ public class QdrantAudiobookRepository
         }
       }
     }
+    validateUniqueBookIds(records);
     initialize();
-    var ids = records.stream().map(record -> mapper.pointId(record.record().id())).toList();
     var existing =
-        await(
-                client.retrieveAsync(collection, ids, false, false, null),
-                "check destination records before migration")
-            .stream()
-            .map(RetrievedPoint::getId)
-            .collect(java.util.stream.Collectors.toSet());
+        findRecordsByBookIds(records.stream().map(record -> record.record().id()).toList(), false);
+    requireAvailablePointIds(records, existing);
     var points =
         records.stream()
-            .filter(record -> !existing.contains(mapper.pointId(record.record().id())))
+            .filter(record -> !existing.containsKey(record.record().id()))
             .map(mapper::toStoredPoint)
             .toList();
     if (!points.isEmpty()) {
@@ -230,26 +236,83 @@ public class QdrantAudiobookRepository
     }
     requireCollection();
     Map<String, float[]> vectors = new LinkedHashMap<>();
-    for (int start = 0; start < ids.size(); start += 100) {
-      List<String> batch = ids.subList(start, Math.min(start + 100, ids.size()));
-      Map<io.qdrant.client.grpc.Common.PointId, String> bookIdsByPoint = new HashMap<>();
-      for (String bookId : batch) {
-        bookIdsByPoint.put(mapper.pointId(bookId), bookId);
-      }
-      List<RetrievedPoint> points =
-          await(
-              client.retrieveAsync(
-                  collection, List.copyOf(bookIdsByPoint.keySet()), false, true, null),
-              "retrieve audiobook vectors from Qdrant");
-      for (RetrievedPoint point : points) {
-        float[] vector = denseVector(point);
-        String bookId = bookIdsByPoint.get(point.getId());
-        if (hasText(bookId) && vector != null) {
-          vectors.put(bookId, vector);
-        }
+    for (var entry : findRecordsByBookIds(ids, true).entrySet()) {
+      float[] vector = denseVector(entry.getValue());
+      if (vector != null) {
+        vectors.put(entry.getKey(), vector);
       }
     }
     return vectors;
+  }
+
+  private void requireAvailablePointIds(
+      List<AudiobookEmbedding> incoming, Map<String, RetrievedPoint> existing) throws IOException {
+    var ids =
+        incoming.stream()
+            .filter(item -> !existing.containsKey(item.record().id()))
+            .map(item -> mapper.pointId(item.record().id()))
+            .toList();
+    for (int start = 0; start < ids.size(); start += 100) {
+      var occupied =
+          await(
+              client.retrieveAsync(
+                  collection,
+                  ids.subList(start, Math.min(start + 100, ids.size())),
+                  false,
+                  false,
+                  null),
+              "check new Qdrant point IDs");
+      if (!occupied.isEmpty()) {
+        throw new IOException(
+            "A generated point ID is already occupied; existing records were not overwritten");
+      }
+    }
+  }
+
+  private void validateUniqueBookIds(List<AudiobookEmbedding> records) throws IOException {
+    var ids = new java.util.HashSet<String>();
+    for (var record : records) {
+      String id = record.record().id();
+      if (!hasText(id) || !ids.add(id)) {
+        throw new IOException("Missing or duplicate bookId in input batch: " + id);
+      }
+    }
+  }
+
+  /** Book IDs are catalogue keys; existing Qdrant point IDs are opaque. */
+  private Map<String, RetrievedPoint> findRecordsByBookIds(List<String> ids, boolean withVectors)
+      throws IOException {
+    Map<String, RetrievedPoint> records = new LinkedHashMap<>();
+    for (int start = 0; start < ids.size(); start += 100) {
+      var batch = ids.subList(start, Math.min(start + 100, ids.size()));
+      var request =
+          io.qdrant.client.grpc.Points.ScrollPoints.newBuilder()
+              .setCollectionName(collection)
+              .setFilter(
+                  Filter.newBuilder()
+                      .addMust(
+                          io.qdrant.client.ConditionFactory.matchKeywords(
+                              QdrantAudiobookSchema.BOOK_ID, batch)))
+              .setLimit(100)
+              .setWithPayload(enable(true))
+              .setWithVectors(io.qdrant.client.WithVectorsSelectorFactory.enable(withVectors));
+      while (true) {
+        var page =
+            await(client.scrollAsync(request.build()), "resolve catalogue book IDs in Qdrant");
+        for (var point : page.getResultList()) {
+          String bookId = point.getPayloadMap().get(QdrantAudiobookSchema.BOOK_ID).getStringValue();
+          if (records.putIfAbsent(bookId, point) != null) {
+            throw new IOException(
+                "Duplicate bookId in Qdrant collection " + collection + ": " + bookId);
+          }
+        }
+        if (!page.hasNextPageOffset()) {
+          break;
+        }
+        request.setOffset(page.getNextPageOffset());
+      }
+    }
+    return records;
   }
 
   /** Creates named dense and sparse vectors plus indexes used by payload filters. */
@@ -377,7 +440,8 @@ public class QdrantAudiobookRepository
     if (!vectors.containsKey(QdrantPointMapper.DENSE_VECTOR)) {
       return null;
     }
-    List<Float> values = vectors.get(QdrantPointMapper.DENSE_VECTOR).getDense().getDataList();
+    var dense = vectors.get(QdrantPointMapper.DENSE_VECTOR);
+    List<Float> values = dense.hasDense() ? dense.getDense().getDataList() : dense.getDataList();
     if (values.isEmpty()) {
       return null;
     }

@@ -29,13 +29,6 @@ public class AudiobookEmbeddingIndexer {
         .collect(Collectors.joining("\n"));
   }
 
-  /** Returns the normalized vector used for indexing and semantic retrieval. */
-  public float[] embedAudiobook(AudiobookRecord book) {
-    String text = buildAudiobookText(book);
-
-    return text.isBlank() ? new float[0] : VectorMath.normalize(model.embed(text));
-  }
-
   /**
    * Embeds a batch of audiobook records.
    *

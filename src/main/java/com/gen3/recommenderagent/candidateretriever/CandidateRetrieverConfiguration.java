@@ -36,11 +36,13 @@ public class CandidateRetrieverConfiguration {
         throw new IllegalArgumentException(
             "Replace audiobook.candidate-retriever with audiobook.database; separate database selections are no longer supported.");
       }
-      if (environment.getProperty("audiobook.qdrant.migration.enabled", Boolean.class, false)
-          && (!"qdrant".equals(backend)
-              || !"none".equals(environment.getProperty("spring.main.web-application-type")))) {
+      if (environment.getProperty("audiobook.qdrant.migration.enabled", Boolean.class, false)) {
         throw new IllegalArgumentException(
-            "Solr-to-Qdrant migration requires audiobook.database=qdrant and spring.main.web-application-type=none for a dedicated migration run.");
+            "Use the dedicated migration run entry point MigrationApplication");
+      }
+      if (environment.getProperty("user.preferences.import-on-startup", Boolean.class, false)) {
+        throw new IllegalArgumentException(
+            "Use the dedicated UserPreferenceApplication entry point");
       }
     };
   }

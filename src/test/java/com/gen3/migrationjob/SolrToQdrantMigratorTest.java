@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.storage.audiobook.solr.migration;
+package com.gen3.migrationjob;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;

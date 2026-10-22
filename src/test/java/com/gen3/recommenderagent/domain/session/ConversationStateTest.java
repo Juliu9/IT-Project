@@ -63,7 +63,7 @@ class ConversationStateTest {
     pending.setPersonalised(true);
     pending.setPreferenceClarificationRequired(true);
     session.addRequest(pending);
-    SessionRequest reply = request(Intent.UPDATE_PREFERENCES);
+    SessionRequest reply = request(Intent.REFINE);
     reply.setPositiveSemanticQuery(queryWithGenres("fantasy"));
 
     SessionRequest effective = conversationState.resolve(session, reply);
@@ -72,7 +72,7 @@ class ConversationStateTest {
     assertTrue(effective.isPersonalised());
     assertEquals(List.of("fantasy"), effective.getPositiveSemanticQuery().getGenres());
     assertNull(session.getPreferences());
-    assertEquals(Intent.UPDATE_PREFERENCES, reply.getIntent());
+    assertEquals(Intent.REFINE, reply.getIntent());
   }
 
   @Test
@@ -93,6 +93,38 @@ class ConversationStateTest {
     assertEquals(3, recommendation.getBookCount());
     assertEquals(3, session.getBookCount());
     assertFalse(ConversationState.isSearchContext(request(Intent.UPDATE_PREFERENCES)));
+  }
+
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = Intent.class,
+      names = {
+        "MORE_RESULTS",
+        "REPEAT",
+        "CHANGE_COUNT",
+        "UPDATE_PREFERENCES",
+        "CLEAR_HISTORY",
+        "HELP",
+        "UNKNOWN"
+      })
+  void ignoresNewSemanticInformationOnControlIntents(Intent intent) {
+    var incoming = request(intent);
+    incoming.setPositiveSemanticQuery(queryWithGenres("horror"));
+    incoming.setNegativeSemanticQuery(queryWithGenres("romance"));
+    incoming.setPersonalised(true);
+    var effective = conversationState.resolve(new Session(), incoming);
+    assertNull(effective.getPositiveSemanticQuery());
+    assertNull(effective.getNegativeSemanticQuery());
+    assertFalse(effective.isPersonalised());
+  }
+
+  @Test
+  void helpWithCriteriaDoesNotReplaceTheRetainedSearch() {
+    var session = new Session();
+    session.addRequest(searchRequest(Intent.RECOMMENDATION, "romance"));
+    session.addRequest(searchRequest(Intent.HELP, "horror"));
+    var effective = conversationState.resolve(session, request(Intent.MORE_RESULTS));
+    assertEquals(List.of("romance"), effective.getPositiveSemanticQuery().getTopics());
   }
 
   private static Stream<Arguments> followUpIntents() {

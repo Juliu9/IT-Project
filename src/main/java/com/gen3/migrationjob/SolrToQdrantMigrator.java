@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.storage.audiobook.solr.migration;
+package com.gen3.migrationjob;
 
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
@@ -6,7 +6,6 @@ import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -27,8 +26,8 @@ public class SolrToQdrantMigrator implements ApplicationRunner {
 
   /** Creates an opt-in, paginated migration from the retained Solr adapter to Qdrant. */
   public SolrToQdrantMigrator(
-      @Qualifier("solrAudiobookRepository") SolrAudiobookRepository source,
-      @Qualifier("qdrantAudiobookRepository") QdrantAudiobookRepository destination,
+      SolrAudiobookRepository source,
+      QdrantAudiobookRepository destination,
       @Value("${audiobook.qdrant.migration.batch-size:100}") int batchSize,
       @Value("${audiobook.qdrant.migration.max-records:0}") int maximumRecords) {
     this.source = source;

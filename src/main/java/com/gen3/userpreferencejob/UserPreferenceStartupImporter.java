@@ -1,6 +1,5 @@
-package com.gen3.recommenderagent.storage.user.importer;
+package com.gen3.userpreferencejob;
 
-import com.gen3.recommenderagent.storage.user.UserPreferenceAggregatorService;
 import com.gen3.recommenderagent.storage.user.model.UserFavourite;
 import com.gen3.recommenderagent.storage.user.model.UserHistory;
 import java.nio.file.Path;
@@ -47,6 +46,7 @@ public class UserPreferenceStartupImporter implements ApplicationRunner {
 
     aggregatorService.aggregateAndSave(favourites, history);
 
-    LOGGER.info("Successfully aggregated and saved user preference vectors to Qdrant.");
+    LOGGER.info(
+        "Successfully aggregated and saved user preference vectors to the selected database.");
   }
 }

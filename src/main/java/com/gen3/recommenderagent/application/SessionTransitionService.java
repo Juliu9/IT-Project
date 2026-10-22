@@ -65,11 +65,16 @@ public class SessionTransitionService {
 
   private boolean invalidatesBatch(SessionRequest request) {
     Intent intent = originalIntent(request);
+    SessionRequest filters = new SessionRequest();
+    if (request != null) {
+      filters.setMustInclude(request.getMustInclude());
+      filters.setMustNotInclude(request.getMustNotInclude());
+    }
     return intent == Intent.RECOMMENDATION
         || intent == Intent.REFINE
         || intent == Intent.UPDATE_PREFERENCES
         || intent == Intent.CLEAR_HISTORY
-        || ConversationState.hasSearchCriteria(request);
+        || (intent == Intent.MORE_RESULTS && ConversationState.hasSearchCriteria(filters));
   }
 
   private List<Recommendation> recommendationPage(SessionRequest request, Session session) {
@@ -115,7 +120,8 @@ public class SessionTransitionService {
   }
 
   private void applyTransition(Session session, SessionRequest request, Intent originalIntent) {
-    if (originalIntent == Intent.UPDATE_PREFERENCES) {
+    if (originalIntent == Intent.UPDATE_PREFERENCES
+        || (originalIntent == Intent.REFINE && session.isAwaitingPersonalisedPreferences())) {
       session.setPreferences(CONVERSATION_STATE.mergedPreferences(session, request));
     }
     if (originalIntent == Intent.CHANGE_COUNT) {

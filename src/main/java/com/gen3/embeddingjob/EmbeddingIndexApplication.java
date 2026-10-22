@@ -48,6 +48,9 @@ public class EmbeddingIndexApplication {
   @Bean
   static BeanFactoryPostProcessor validateJob(Environment environment) {
     return factory -> {
+      if (environment.getProperty("user.preferences.import-on-startup", Boolean.class, false)) {
+        throw new IllegalArgumentException("Run user-preference import separately");
+      }
       if (!environment.getProperty("audiobook.embedding-index.enabled", Boolean.class, false)) {
         throw new IllegalArgumentException(
             "Explicitly enable audiobook.embedding-index.enabled to run this job");

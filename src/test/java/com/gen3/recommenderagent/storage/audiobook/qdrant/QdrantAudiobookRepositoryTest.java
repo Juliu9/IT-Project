@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
@@ -97,7 +98,8 @@ class QdrantAudiobookRepositoryTest {
     QdrantPointMapper mapper = new QdrantPointMapper(sparseEncoder);
     RetrievedPoint result =
         RetrievedPoint.newBuilder()
-            .setId(mapper.pointId("book-9"))
+            .setId(io.qdrant.client.PointIdFactory.id(98765L))
+            .putPayload("bookId", io.qdrant.client.ValueFactory.value("book-9"))
             .setVectors(
                 VectorsOutput.newBuilder()
                     .setVectors(
@@ -109,8 +111,8 @@ class QdrantAudiobookRepositoryTest {
                                     .build())))
             .build();
     when(client.collectionExistsAsync("audiobooks")).thenReturn(Futures.immediateFuture(true));
-    when(client.retrieveAsync(eq("audiobooks"), anyList(), eq(false), eq(true), isNull()))
-        .thenReturn(Futures.immediateFuture(List.of(result)));
+    when(client.scrollAsync(any(ScrollPoints.class)))
+        .thenReturn(Futures.immediateFuture(ScrollResponse.newBuilder().addResult(result).build()));
     QdrantAudiobookRepository repository =
         new QdrantAudiobookRepository(client, mapper, sparseEncoder, "audiobooks", 2);
 
@@ -126,16 +128,110 @@ class QdrantAudiobookRepositoryTest {
     SparseTextEncoder sparseEncoder = new Bm25SparseTextEncoder();
     QdrantPointMapper mapper = new QdrantPointMapper(sparseEncoder);
     when(client.collectionExistsAsync("audiobooks")).thenReturn(Futures.immediateFuture(true));
-    when(client.retrieveAsync(eq("audiobooks"), anyList(), eq(false), eq(true), isNull()))
-        .thenReturn(Futures.immediateFuture(List.of()));
+    when(client.scrollAsync(any(ScrollPoints.class)))
+        .thenReturn(Futures.immediateFuture(ScrollResponse.getDefaultInstance()));
     QdrantAudiobookRepository repository =
         new QdrantAudiobookRepository(client, mapper, sparseEncoder, "audiobooks", 2);
 
     repository.findEmbeddingsByBookIds(
         IntStream.range(0, 101).mapToObj(index -> "book-" + index).toList());
 
-    verify(client, times(2))
-        .retrieveAsync(eq("audiobooks"), anyList(), eq(false), eq(true), isNull());
+    var requests = ArgumentCaptor.forClass(ScrollPoints.class);
+    verify(client, times(2)).scrollAsync(requests.capture());
+    assertThat(requests.getAllValues())
+        .allSatisfy(
+            request -> {
+              assertThat(request.getLimit()).isEqualTo(100);
+              assertThat(request.getFilter().getMust(0).getField().getKey()).isEqualTo("bookId");
+            });
+  }
+
+  @Test
+  void rejectsDuplicatesAcrossScrollPagesBeforeWritingOrChoosingAVector() throws Exception {
+    var client = mock(QdrantClient.class);
+    var encoder = new Bm25SparseTextEncoder();
+    var mapper = new QdrantPointMapper(encoder);
+    when(client.collectionExistsAsync("audiobooks")).thenReturn(Futures.immediateFuture(true));
+    var first =
+        RetrievedPoint.newBuilder()
+            .setId(io.qdrant.client.PointIdFactory.id(1L))
+            .putPayload("bookId", io.qdrant.client.ValueFactory.value("duplicate"))
+            .build();
+    var second = first.toBuilder().setId(io.qdrant.client.PointIdFactory.id(2L)).build();
+    when(client.scrollAsync(any(ScrollPoints.class)))
+        .thenAnswer(
+            invocation -> {
+              ScrollPoints request = invocation.getArgument(0);
+              return Futures.immediateFuture(
+                  request.hasOffset()
+                      ? ScrollResponse.newBuilder().addResult(second).build()
+                      : ScrollResponse.newBuilder()
+                          .addResult(first)
+                          .setNextPageOffset(second.getId())
+                          .build());
+            });
+    var repository = new QdrantAudiobookRepository(client, mapper, encoder, "audiobooks", 2);
+    var record =
+        new AudiobookEmbedding(
+            new AudiobookRecord("duplicate", "s", "Title", List.of(), "Summary"),
+            new float[] {1, 0});
+    assertThatThrownBy(() -> repository.findEmbeddingByBookId("duplicate"))
+        .isInstanceOf(java.io.IOException.class)
+        .hasMessageContaining("Duplicate bookId");
+    assertThatThrownBy(() -> repository.importStoredBooks(List.of(record)))
+        .isInstanceOf(java.io.IOException.class)
+        .hasMessageContaining("Duplicate bookId");
+    assertThatThrownBy(() -> repository.indexEmbeddings(List.of(record)))
+        .isInstanceOf(java.io.IOException.class)
+        .hasMessageContaining("Duplicate bookId");
+    verify(client, never()).upsertAsync(anyString(), anyList());
+  }
+
+  @Test
+  void rejectsDuplicateInputBookIdsBeforeWriting() throws Exception {
+    var client = mock(QdrantClient.class);
+    var encoder = new Bm25SparseTextEncoder();
+    var repository =
+        new QdrantAudiobookRepository(
+            client, new QdrantPointMapper(encoder), encoder, "audiobooks", 2);
+    var record =
+        new AudiobookEmbedding(
+            new AudiobookRecord("duplicate", "s", "Title", List.of(), "Summary"),
+            new float[] {1, 0});
+    assertThatThrownBy(() -> repository.importStoredBooks(List.of(record, record)))
+        .isInstanceOf(java.io.IOException.class)
+        .hasMessageContaining("duplicate bookId");
+    assertThatThrownBy(() -> repository.indexEmbeddings(List.of(record, record)))
+        .isInstanceOf(java.io.IOException.class)
+        .hasMessageContaining("duplicate bookId");
+    org.mockito.Mockito.verifyNoInteractions(client);
+  }
+
+  @Test
+  void doesNotOverwriteAnUnrelatedRecordAtAGeneratedPointId() throws Exception {
+    var client = mock(QdrantClient.class);
+    var encoder = new Bm25SparseTextEncoder();
+    var mapper = new QdrantPointMapper(encoder);
+    when(client.collectionExistsAsync("audiobooks")).thenReturn(Futures.immediateFuture(true));
+    when(client.scrollAsync(any(ScrollPoints.class)))
+        .thenReturn(Futures.immediateFuture(ScrollResponse.getDefaultInstance()));
+    when(client.retrieveAsync(eq("audiobooks"), anyList(), eq(false), eq(false), isNull()))
+        .thenReturn(
+            Futures.immediateFuture(
+                List.of(RetrievedPoint.newBuilder().setId(mapper.pointId("new-book")).build())));
+    var repository = new QdrantAudiobookRepository(client, mapper, encoder, "audiobooks", 2);
+    var incoming =
+        List.of(
+            new AudiobookEmbedding(
+                new AudiobookRecord("new-book", "s", "Title", List.of(), "Description"),
+                new float[] {1, 0}));
+    assertThatThrownBy(() -> repository.importStoredBooks(incoming))
+        .isInstanceOf(java.io.IOException.class)
+        .hasMessageContaining("already occupied");
+    assertThatThrownBy(() -> repository.indexEmbeddings(incoming))
+        .isInstanceOf(java.io.IOException.class)
+        .hasMessageContaining("already occupied");
+    verify(client, never()).upsertAsync(anyString(), anyList());
   }
 
   @Test
@@ -231,6 +327,10 @@ class QdrantAudiobookRepositoryTest {
     QdrantAudiobookRepository repository =
         new QdrantAudiobookRepository(client, mapper, sparseEncoder, "audiobooks", 2);
 
+    when(client.scrollAsync(any(ScrollPoints.class)))
+        .thenReturn(Futures.immediateFuture(ScrollResponse.getDefaultInstance()));
+    when(client.retrieveAsync(eq("audiobooks"), anyList(), eq(false), eq(false), isNull()))
+        .thenReturn(Futures.immediateFuture(List.of()));
     repository.indexEmbeddings(
         List.of(
             new AudiobookEmbedding(

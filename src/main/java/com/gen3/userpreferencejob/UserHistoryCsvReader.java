@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.storage.user.importer;
+package com.gen3.userpreferencejob;
 
 import com.gen3.recommenderagent.storage.user.model.UserHistory;
 import java.io.BufferedReader;

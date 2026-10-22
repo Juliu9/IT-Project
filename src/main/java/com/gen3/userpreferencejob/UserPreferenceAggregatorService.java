@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.storage.user;
+package com.gen3.userpreferencejob;
 
 import com.gen3.recommenderagent.embedding.VectorMath;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorRepository;

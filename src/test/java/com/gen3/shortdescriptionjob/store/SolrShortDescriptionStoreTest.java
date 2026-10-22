@@ -53,11 +53,19 @@ class SolrShortDescriptionStoreTest {
   void writesOnlyTheSummaryWithAnOptimisticVersionCheckAndPreservesExistingSummaries()
       throws Exception {
     var missing = new SolrDocument();
+    missing.setField("id", "missing");
     missing.setField("_version_", 123L);
     var present = new SolrDocument();
+    present.setField("id", "present");
     present.setField("short_description", "Keep this");
-    when(client.getById("books", "missing")).thenReturn(missing);
-    when(client.getById("books", "present")).thenReturn(present);
+    var records = new org.apache.solr.common.SolrDocumentList();
+    records.add(missing);
+    records.add(present);
+    when(client.getById(
+            eq("books"),
+            eq(List.of("missing", "present")),
+            org.mockito.ArgumentMatchers.any(org.apache.solr.common.params.SolrParams.class)))
+        .thenReturn(records);
     store.updateShortDescriptions(
         List.of(
             new AudiobookEnrichmentStore.ShortDescriptionUpdate("missing", "Generated"),
@@ -74,8 +82,52 @@ class SolrShortDescriptionStoreTest {
   }
 
   @Test
+  void boundsReadsAndWritesAcrossLargeImports() throws Exception {
+    when(client.getById(
+            eq("books"),
+            org.mockito.ArgumentMatchers.anyCollection(),
+            org.mockito.ArgumentMatchers.any(org.apache.solr.common.params.SolrParams.class)))
+        .thenAnswer(
+            invocation -> {
+              var records = new org.apache.solr.common.SolrDocumentList();
+              for (String id : (java.util.Collection<String>) invocation.getArgument(1)) {
+                var record = new SolrDocument();
+                record.setField("id", id);
+                record.setField("_version_", 123L);
+                records.add(record);
+              }
+              return records;
+            });
+    store.updateShortDescriptions(
+        java.util.stream.IntStream.range(0, 501)
+            .mapToObj(
+                i -> new AudiobookEnrichmentStore.ShortDescriptionUpdate("id-" + i, "Summary"))
+            .toList());
+    var ids = ArgumentCaptor.forClass(java.util.Collection.class);
+    verify(client, org.mockito.Mockito.times(2))
+        .getById(
+            eq("books"),
+            ids.capture(),
+            org.mockito.ArgumentMatchers.any(org.apache.solr.common.params.SolrParams.class));
+    assertThat(ids.getAllValues()).extracting(java.util.Collection::size).containsExactly(500, 1);
+    var writes = ArgumentCaptor.forClass(java.util.Collection.class);
+    verify(client, org.mockito.Mockito.times(2)).add(eq("books"), writes.capture());
+    assertThat(writes.getAllValues())
+        .extracting(java.util.Collection::size)
+        .containsExactly(500, 1);
+  }
+
+  @Test
   void refusesUnsafeUpdatesWhenTheVersionIsMissing() throws Exception {
-    when(client.getById("books", "id")).thenReturn(new SolrDocument());
+    var records = new org.apache.solr.common.SolrDocumentList();
+    var document = new SolrDocument();
+    document.setField("id", "id");
+    records.add(document);
+    when(client.getById(
+            eq("books"),
+            eq(List.of("id")),
+            org.mockito.ArgumentMatchers.any(org.apache.solr.common.params.SolrParams.class)))
+        .thenReturn(records);
     assertThatThrownBy(
             () ->
                 store.updateShortDescriptions(
@@ -83,7 +135,11 @@ class SolrShortDescriptionStoreTest {
                         new AudiobookEnrichmentStore.ShortDescriptionUpdate("id", "Generated"))))
         .isInstanceOf(java.io.IOException.class)
         .hasMessageContaining("_version_");
-    verify(client).getById("books", "id");
+    verify(client)
+        .getById(
+            eq("books"),
+            eq(List.of("id")),
+            org.mockito.ArgumentMatchers.any(org.apache.solr.common.params.SolrParams.class));
     verifyNoMoreInteractions(client);
   }
 }

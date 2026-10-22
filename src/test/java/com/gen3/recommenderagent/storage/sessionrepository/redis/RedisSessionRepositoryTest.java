@@ -157,6 +157,47 @@ class RedisSessionRepositoryTest {
   }
 
   @Test
+  void releaseFailureDoesNotOverrideCommittedResultsOrOriginalErrors() {
+    var failingRelease = spy(stringRedisTemplate);
+    org.mockito.Mockito.doThrow(
+            new org.springframework.dao.DataAccessResourceFailureException("release failed"))
+        .when(failingRelease)
+        .execute(
+            any(org.springframework.data.redis.core.script.RedisScript.class),
+            any(List.class),
+            org.mockito.ArgumentMatchers.<Object[]>any());
+    var repository =
+        new RedisSessionRepository(
+            redisTemplate,
+            failingRelease,
+            Duration.ofSeconds(10),
+            Duration.ofSeconds(1),
+            lockRenewalExecutor);
+    assertEquals(
+        "committed",
+        repository.update(
+            "release-failure",
+            USER_ID,
+            session -> {
+              session.setBookCount(2);
+              return "committed";
+            }));
+    assertEquals(2, read("release-failure", USER_ID).getBookCount());
+    var original = new IllegalArgumentException("original");
+    assertEquals(
+        original,
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                repository.update(
+                    "release-failure-other",
+                    USER_ID,
+                    session -> {
+                      throw original;
+                    })));
+  }
+
+  @Test
   void renewsTheLockForAStillRunningTransition() throws Exception {
     AtomicReference<Runnable> renewal = new AtomicReference<>();
     ScheduledExecutorService scheduler = mock(ScheduledExecutorService.class);

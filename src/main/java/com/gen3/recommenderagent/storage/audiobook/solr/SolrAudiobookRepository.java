@@ -5,7 +5,6 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookSearchPage;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCatalogueRepository;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorIndexer;
@@ -405,19 +404,6 @@ public class SolrAudiobookRepository
               + vector.length
               + " does not match Solr dimension "
               + vectorDimension);
-    }
-  }
-
-  /** Converts Solr's response into the repository's database-independent search page. */
-  @Override
-  public AudiobookSearchPage searchBooks(String query, int limit) throws IOException {
-    try {
-      QueryResponse response = search(query, limit);
-      return new AudiobookSearchPage(
-          response.getResults().getNumFound(),
-          response.getResults().stream().map(this::toRecord).toList());
-    } catch (SolrServerException exception) {
-      throw new IOException("Solr audiobook search failed", exception);
     }
   }
 

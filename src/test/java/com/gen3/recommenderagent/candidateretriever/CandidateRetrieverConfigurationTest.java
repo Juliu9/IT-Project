@@ -126,27 +126,6 @@ class CandidateRetrieverConfigurationTest {
   }
 
   @Test
-  void allowsBothAdaptersOnlyForAnExplicitNonWebMigration() {
-    runner
-        .withBean(QdrantClient.class, () -> mock(QdrantClient.class))
-        .withPropertyValues(
-            "audiobook.qdrant.migration.enabled=true",
-            "spring.main.web-application-type=none",
-            "solr.url=http://localhost:8983/solr",
-            "solr.username=",
-            "solr.password=",
-            "solr.collection=books",
-            "solr.vector-field=embedding")
-        .run(
-            context ->
-                assertThat(context)
-                    .hasNotFailed()
-                    .hasSingleBean(CandidateRetriever.class)
-                    .hasSingleBean(QdrantAudiobookRepository.class)
-                    .hasSingleBean(SolrAudiobookRepository.class));
-  }
-
-  @Test
   void rejectsMigrationDuringNormalApplicationRun() {
     runner
         .withPropertyValues("audiobook.qdrant.migration.enabled=true")
@@ -154,6 +133,16 @@ class CandidateRetrieverConfigurationTest {
             context ->
                 assertThat(context.getStartupFailure())
                     .hasMessageContaining("dedicated migration run"));
+  }
+
+  @Test
+  void rejectsImportDuringNormalApplicationRun() {
+    runner
+        .withPropertyValues("user.preferences.import-on-startup=true")
+        .run(
+            context ->
+                assertThat(context.getStartupFailure())
+                    .hasMessageContaining("dedicated UserPreferenceApplication"));
   }
 
   @Test

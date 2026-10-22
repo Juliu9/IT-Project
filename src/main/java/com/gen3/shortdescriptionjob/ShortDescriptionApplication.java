@@ -50,6 +50,9 @@ public class ShortDescriptionApplication {
   @Bean
   static BeanFactoryPostProcessor validateJob(Environment environment) {
     return factory -> {
+      if (environment.getProperty("user.preferences.import-on-startup", Boolean.class, false)) {
+        throw new IllegalArgumentException("Run user-preference import separately");
+      }
       String mode = environment.getProperty("audiobook.short-description.batch.mode", "disabled");
       if (!"submit".equals(mode) && !"import".equals(mode)) {
         throw new IllegalArgumentException(

@@ -82,6 +82,7 @@ class SessionTest {
     SemanticQuery query = new SemanticQuery();
     query.setTopics(List.of(topic));
     SessionRequest request = new SessionRequest();
+    request.setIntent(com.gen3.recommenderagent.domain.Intent.RECOMMENDATION);
     request.setPositiveSemanticQuery(query);
     return request;
   }

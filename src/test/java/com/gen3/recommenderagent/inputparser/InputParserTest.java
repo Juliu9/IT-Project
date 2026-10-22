@@ -25,6 +25,42 @@ import tools.jackson.databind.ObjectMapper;
 
 class InputParserTest {
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = Intent.class,
+      names = {
+        "MORE_RESULTS",
+        "REPEAT",
+        "CHANGE_COUNT",
+        "UPDATE_PREFERENCES",
+        "CLEAR_HISTORY",
+        "HELP",
+        "UNKNOWN"
+      })
+  void stripsUnexpectedSemanticInformationFromControlIntents(Intent intent) {
+    var parsed = new ParsedRequest();
+    parsed.setIntent(intent);
+    var query = new SemanticQuery();
+    query.setGenres(List.of("horror"));
+    parsed.setPositiveSemanticQuery(query);
+    parsed.setNegativeSemanticQuery(query);
+    parsed.setPersonalised(true);
+    var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    when(client
+            .prompt()
+            .system(anyString())
+            .user("control")
+            .call()
+            .responseEntity(ParsedRequest.class))
+        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+    var builder = mock(ChatClient.Builder.class);
+    when(builder.build()).thenReturn(client);
+    var result = new AiInputParser(builder).parse("control").entity();
+    assertEquals(null, result.getPositiveSemanticQuery());
+    assertEquals(null, result.getNegativeSemanticQuery());
+    assertEquals(false, result.isPersonalised());
+  }
+
   @Test
   void mapsPersonalisedRequestWithoutInventingSearchCriteria() {
     String rawText = "Give me books I would like";

@@ -34,7 +34,7 @@ retrieval, and ranking while that queue has enough results. Parsing and response
 run normally. A short cached tail is combined with a fresh batch when possible; the tail is
 excluded from the new retrieval too.
 
-New searches, refinements, preference changes, new criteria supplied with “more”, and clearing
+New searches, refinements, preference changes, exact filters supplied with “more”, and clearing
 history discard the queue. Changing the result count or asking for help keeps it. Queue consumption
 and shown IDs commit together under the existing session lock and share its 24-hour sliding expiry;
 failed updates leave the saved queue untouched. There are no Redis-specific keys or database lookup
@@ -147,6 +147,18 @@ Qdrant field names, index types, vector schema, and filter translation live in
 creating indexes; explicit indexing creates an absent collection. Existing collections are not
 automatically inspected or migrated.
 
+Qdrant catalogue lookups match the payload's `bookId`, independently of whether the point ID
+is an integer or a UUID. Existing points retain their original IDs during explicit writes;
+migration skips existing books. New books keep the deterministic UUID convention.
+A generated ID already occupied by another record is rejected instead of overwritten.
+
+Each `bookId` must identify one point in the selected collection. Lookup, migration, and
+explicit writes reject multiple matches for a requested book ID; writes also reject duplicate
+IDs within an input batch. No duplicate is selected, merged, or deleted automatically.
+Matching reads are paginated in groups of at most 100. Keep the `bookId` keyword index on
+existing strict-mode collections. Maintenance writes still require a stable catalogue and one
+writer; checks do not enforce uniqueness against concurrent external writers.
+
 ## Catalogue embedding maintenance
 
 All catalogue indexing orchestration, book-to-vector conversion, and job-specific database adapters
@@ -200,7 +212,8 @@ Run against a stable source catalogue and avoid concurrent writes to the destina
 
 ```bash
 QDRANT_MIGRATION_ENABLED=true ./mvnw spring-boot:run \
-  -Dspring-boot.run.arguments="--spring.main.web-application-type=none --audiobook.database=qdrant"
+  -Dapplication.main-class=com.gen3.migrationjob.MigrationApplication \
+  -Dspring-boot.run.arguments="--audiobook.database=qdrant"
 ```
 
 ## Chat models
@@ -331,3 +344,28 @@ API keys, `.env`, or local logs.
 Changes targeting `staging` run the API-free test suite. Changes targeting `main` run the tagged
 integration checks. Configure the repository secrets `OPENAI_API_KEY`, `QDRANT_URL`, and
 `QDRANT_API_KEY`; only the `main` checks receive them.
+
+
+## User preference import
+
+CSV import and preference-vector aggregation run separately from the recommendation server.
+The existing opt-in flag and CSV path settings are retained. This job uses the selected
+database adapters; Qdrant currently provides the complete pair of audiobook-vector and
+user-preference adapters. It averages existing book vectors without calling an AI model.
+
+```bash
+USER_PREFERENCES_IMPORT_ON_STARTUP=true ./mvnw spring-boot:run \
+  -Dapplication.main-class=com.gen3.userpreferencejob.UserPreferenceApplication \
+  -Dspring-boot.run.arguments="--user.preferences.favourites-csv-path=/path/favourites.csv --user.preferences.history-csv-path=/path/history.csv"
+```
+
+Run maintenance jobs individually. The normal server rejects their enabled flags.
+
+Only `RECOMMENDATION` and `REFINE` accept newly parsed positive/negative semantic queries
+or the personalised flag. Other intents discard these fields. `MORE_RESULTS` and `REPEAT`
+inherit the saved search context; semantic changes use `REFINE`. `UPDATE_PREFERENCES`
+can still update exact filters. A semantic reply to a taste-clarification question uses `REFINE`.
+
+Solr summary imports read current IDs, summaries, and versions in batches of at most 500,
+then apply bounded, version-checked updates. A failed later batch retains the manifest;
+retrying preserves summaries already written.

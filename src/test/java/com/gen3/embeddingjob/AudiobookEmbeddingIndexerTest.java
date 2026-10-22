@@ -26,9 +26,12 @@ class AudiobookEmbeddingIndexerTest {
             "English",
             1200);
     String text = indexer.buildAudiobookText(book);
-    when(model.embed(text)).thenReturn(new float[] {3, 4});
+    when(model.embed(List.of(text))).thenReturn(List.of(new float[] {3, 4}));
 
-    assertArrayEquals(new float[] {0.6f, 0.8f}, indexer.embedAudiobook(book), 0.0001f);
+    assertArrayEquals(
+        new float[] {0.6f, 0.8f},
+        indexer.embedAudiobooks(List.of(book)).getFirst().vector(),
+        0.0001f);
     assertThat(text).contains("title: Dune", "authors: Frank Herbert", "narrators: Simon Vance");
   }
 

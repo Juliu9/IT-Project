@@ -31,6 +31,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class RedisSessionRepository implements SessionRepository {
 
+  private static final org.slf4j.Logger LOGGER =
+      org.slf4j.LoggerFactory.getLogger(RedisSessionRepository.class);
+
   private static final Duration SESSION_TTL = Duration.ofHours(24);
   private static final Duration LOCK_TTL = Duration.ofMinutes(2);
   private static final Duration LOCK_RENEWAL_INTERVAL = Duration.ofSeconds(30);
@@ -168,7 +171,11 @@ public class RedisSessionRepository implements SessionRepository {
       return result;
     } finally {
       renewal.cancel(false);
-      stringRedisTemplate.execute(RELEASE_LOCK, List.of(lockKey), owner);
+      try {
+        stringRedisTemplate.execute(RELEASE_LOCK, List.of(lockKey), owner);
+      } catch (DataAccessException exception) {
+        LOGGER.warn("Could not release session lock; its lease will expire", exception);
+      }
     }
   }
 

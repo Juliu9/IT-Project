@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.storage.user;
+package com.gen3.userpreferencejob;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.mockito.Mockito.mock;

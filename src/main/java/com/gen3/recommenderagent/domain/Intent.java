@@ -10,5 +10,9 @@ public enum Intent {
   UPDATE_PREFERENCES,
   CLEAR_HISTORY,
   HELP,
-  UNKNOWN
+  UNKNOWN;
+
+  public boolean acceptsSemanticInformation() {
+    return this == RECOMMENDATION || this == REFINE;
+  }
 }

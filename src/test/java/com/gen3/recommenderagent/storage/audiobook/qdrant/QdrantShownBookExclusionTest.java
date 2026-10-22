@@ -23,6 +23,69 @@ class QdrantShownBookExclusionTest {
       new GenericContainer<>("qdrant/qdrant:v1.15.4").withExposedPorts(6334);
 
   @Test
+  void catalogueOperationsUsePayloadBookIdsAndPreserveExistingPointIds() throws Exception {
+    try (var client =
+        new QdrantClient(
+            QdrantGrpcClient.newBuilder(server.getHost(), server.getMappedPort(6334), false)
+                .build())) {
+      var encoder = new Bm25SparseTextEncoder();
+      var mapper = new QdrantPointMapper(encoder);
+      var repository = new QdrantAudiobookRepository(client, mapper, encoder, "opaque-ids", 2);
+      repository.initialize();
+      var book = new AudiobookRecord("catalogue-id", "s", "Original", List.of(), "Summary");
+      var originalId = io.qdrant.client.PointIdFactory.id(98765L);
+      client
+          .upsertAsync(
+              "opaque-ids",
+              List.of(
+                  mapper.toPoint(new AudiobookEmbedding(book, new float[] {1, 0})).toBuilder()
+                      .setId(originalId)
+                      .build()))
+          .get();
+      assertThat(repository.findEmbeddingByBookId("catalogue-id").orElseThrow())
+          .containsExactly(1f, 0f);
+      assertThat(
+              repository.importStoredBooks(
+                  List.of(new AudiobookEmbedding(book, new float[] {0, 1}))))
+          .isZero();
+      assertThat(repository.findEmbeddingByBookId("catalogue-id").orElseThrow())
+          .containsExactly(1f, 0f);
+      repository.indexEmbeddings(List.of(new AudiobookEmbedding(book, new float[] {0, 1})));
+      assertThat(repository.findEmbeddingByBookId("catalogue-id").orElseThrow())
+          .containsExactly(0f, 1f);
+      var points =
+          client
+              .scrollAsync(
+                  io.qdrant.client.grpc.Points.ScrollPoints.newBuilder()
+                      .setCollectionName("opaque-ids")
+                      .setLimit(10)
+                      .build())
+              .get()
+              .getResultList();
+      assertThat(points).hasSize(1);
+      assertThat(points.getFirst().getId()).isEqualTo(originalId);
+
+      var duplicateId = io.qdrant.client.PointIdFactory.id(java.util.UUID.randomUUID());
+      client
+          .upsertAsync(
+              "opaque-ids",
+              List.of(
+                  mapper.toPoint(new AudiobookEmbedding(book, new float[] {1, 0})).toBuilder()
+                      .setId(duplicateId)
+                      .build()))
+          .get();
+      org.assertj.core.api.Assertions.assertThatThrownBy(
+              () -> repository.findEmbeddingByBookId("catalogue-id"))
+          .isInstanceOf(java.io.IOException.class)
+          .hasMessageContaining("Duplicate bookId");
+      org.assertj.core.api.Assertions.assertThatThrownBy(
+              () -> repository.importStoredBooks(List.of(new AudiobookEmbedding(book, null))))
+          .isInstanceOf(java.io.IOException.class)
+          .hasMessageContaining("Duplicate bookId");
+    }
+  }
+
+  @Test
   void embeddingJobUpdatesVectorsAtOriginalPointIdsWithoutReplacingAnyPayload() throws Exception {
     try (QdrantClient client =
         new QdrantClient(

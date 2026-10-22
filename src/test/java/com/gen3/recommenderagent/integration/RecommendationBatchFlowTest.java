@@ -267,6 +267,25 @@ class RecommendationBatchFlowTest {
     verify(ranker).rank(anyList(), eq(20), any(RankingContext.class));
   }
 
+  @ParameterizedTest
+  @EnumSource(
+      value = Intent.class,
+      names = {"MORE_RESULTS", "REPEAT", "CHANGE_COUNT", "HELP", "UNKNOWN"})
+  void unexpectedSemanticFieldsDoNotDestroyTheCachedSearch(Intent intent) {
+    process(request(Intent.RECOMMENDATION));
+    var control = request(intent);
+    var query = new SemanticQuery();
+    query.setGenres(List.of("horror"));
+    control.setPositiveSemanticQuery(query);
+    control.setNegativeSemanticQuery(query);
+    control.setPersonalised(true);
+    process(control);
+    var more = process(request(Intent.MORE_RESULTS));
+    assertIds(more, intent == Intent.MORE_RESULTS ? 11 : 6, 5);
+    assertThat(more.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
+    verify(ranker).rank(anyList(), eq(20), any(RankingContext.class));
+  }
+
   private SessionRequest process(SessionRequest request) {
     return service.process("session", "user", request);
   }

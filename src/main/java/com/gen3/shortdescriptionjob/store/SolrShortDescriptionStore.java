@@ -83,36 +83,53 @@ public class SolrShortDescriptionStore implements AudiobookEnrichmentStore {
       return;
     }
     try {
-      List<SolrInputDocument> documents = new ArrayList<>();
-      for (var update : updates) {
-        if (update == null
-            || update.storageReference() == null
-            || update.storageReference().isBlank()
-            || update.description() == null
-            || update.description().isBlank()) {
-          continue;
+      var valid =
+          updates.stream()
+              .filter(
+                  update ->
+                      update != null
+                          && update.storageReference() != null
+                          && !update.storageReference().isBlank()
+                          && update.description() != null
+                          && !update.description().isBlank())
+              .toList();
+      for (int start = 0; start < valid.size(); start += 500) {
+        var batch = valid.subList(start, Math.min(start + 500, valid.size()));
+        var parameters = new org.apache.solr.common.params.ModifiableSolrParams();
+        parameters.set("fl", "id,short_description,_version_");
+        var currentRecords =
+            client.getById(
+                collection,
+                batch.stream().map(ShortDescriptionUpdate::storageReference).distinct().toList(),
+                parameters);
+        var byId = new java.util.HashMap<String, org.apache.solr.common.SolrDocument>();
+        for (var current : currentRecords) {
+          byId.put(String.valueOf(current.getFieldValue("id")), current);
         }
-        var current = client.getById(collection, update.storageReference());
-        if (current == null) {
-          continue;
+        List<SolrInputDocument> documents = new ArrayList<>();
+        for (var update : batch) {
+          var current = byId.get(update.storageReference());
+          if (current == null) {
+            continue;
+          }
+          Object description = current.getFieldValue("short_description");
+          if (description != null && !description.toString().isBlank()) {
+            continue;
+          }
+          Object version = current.getFieldValue("_version_");
+          if (!(version instanceof Number)) {
+            throw new IOException("Solr must return _version_ for safe summary updates");
+          }
+          SolrInputDocument document = new SolrInputDocument();
+          document.addField("id", update.storageReference());
+          document.addField("_version_", version);
+          document.addField("short_description", Map.of("set", update.description()));
+          documents.add(document);
         }
-        Object description = current.getFieldValue("short_description");
-        if (description != null && !description.toString().isBlank()) {
-          continue;
+        if (!documents.isEmpty()) {
+          client.add(collection, documents);
+          client.commit(collection);
         }
-        Object version = current.getFieldValue("_version_");
-        if (!(version instanceof Number)) {
-          throw new IOException("Solr must return _version_ for safe summary updates");
-        }
-        SolrInputDocument document = new SolrInputDocument();
-        document.addField("id", update.storageReference());
-        document.addField("_version_", version);
-        document.addField("short_description", Map.of("set", update.description()));
-        documents.add(document);
-      }
-      if (!documents.isEmpty()) {
-        client.add(collection, documents);
-        client.commit(collection);
       }
     } catch (SolrServerException exception) {
       throw new IOException(

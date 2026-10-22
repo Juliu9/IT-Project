@@ -71,9 +71,7 @@ public final class ConversationState {
 
   public static boolean isSearchContext(SessionRequest request) {
     return request != null
-        && request.getIntent() != Intent.UPDATE_PREFERENCES
-        && (hasSearchCriteria(request)
-            || request.getIntent() == Intent.RECOMMENDATION
+        && (request.getIntent() == Intent.RECOMMENDATION
             || request.getIntent() == Intent.REFINE
             || request.getIntent() == Intent.MORE_RESULTS);
   }
@@ -275,12 +273,14 @@ public final class ConversationState {
     copy.setRawText(source.getRawText());
     copy.setCreatedAt(source.getCreatedAt());
     copy.setIntent(source.getIntent() == null ? Intent.UNKNOWN : source.getIntent());
-    copy.setPositiveSemanticQuery(copy(source.getPositiveSemanticQuery()));
-    copy.setNegativeSemanticQuery(copy(source.getNegativeSemanticQuery()));
+    if (copy.getIntent().acceptsSemanticInformation()) {
+      copy.setPositiveSemanticQuery(copy(source.getPositiveSemanticQuery()));
+      copy.setNegativeSemanticQuery(copy(source.getNegativeSemanticQuery()));
+      copy.setPersonalised(source.isPersonalised());
+    }
     copy.setMustInclude(copy(source.getMustInclude()));
     copy.setMustNotInclude(copy(source.getMustNotInclude()));
     copy.setBookCount(source.getBookCount());
-    copy.setPersonalised(source.isPersonalised());
     copy.setPreferenceClarificationRequired(source.isPreferenceClarificationRequired());
     return copy;
   }

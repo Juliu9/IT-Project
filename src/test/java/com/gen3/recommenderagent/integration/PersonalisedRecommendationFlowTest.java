@@ -149,7 +149,7 @@ class PersonalisedRecommendationFlowTest {
             mapper.writeValueAsString(sessions.getSession("session", "user")), Session.class);
     sessions.updateSession(restored);
     SessionRequest answer = new SessionRequest();
-    answer.setIntent(Intent.UPDATE_PREFERENCES);
+    answer.setIntent(Intent.REFINE);
     SemanticQuery taste = new SemanticQuery();
     taste.setGenres(List.of("fantasy"));
     taste.setAuthors(List.of("Ursula Le Guin"));
@@ -180,7 +180,7 @@ class PersonalisedRecommendationFlowTest {
     session.addRequest(pending);
     sessions.updateSession(session);
     SessionRequest answer = new SessionRequest();
-    answer.setIntent(Intent.UPDATE_PREFERENCES);
+    answer.setIntent(Intent.REFINE);
     SemanticQuery taste = new SemanticQuery();
     taste.setAuthors(List.of("Ursula Le Guin"));
     answer.setPositiveSemanticQuery(taste);

@@ -102,7 +102,8 @@ class SolrShortDescriptionIntegrationTest {
     var intercepted = org.mockito.Mockito.spy(client);
     org.mockito.Mockito.doAnswer(
             invocation -> {
-              var previous = client.getById(COLLECTION, "conflict");
+              var previous =
+                  client.getById(COLLECTION, List.of("conflict"), invocation.getArgument(2));
               var manual = new SolrInputDocument();
               manual.addField("id", "conflict");
               manual.addField("short_description", Map.of("set", "Manual summary"));
@@ -111,7 +112,10 @@ class SolrShortDescriptionIntegrationTest {
               return previous;
             })
         .when(intercepted)
-        .getById(COLLECTION, "conflict");
+        .getById(
+            org.mockito.ArgumentMatchers.eq(COLLECTION),
+            org.mockito.ArgumentMatchers.eq(List.of("conflict")),
+            org.mockito.ArgumentMatchers.any(org.apache.solr.common.params.SolrParams.class));
     assertThatThrownBy(
             () ->
                 store(intercepted)

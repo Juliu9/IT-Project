@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.storage.user.importer;
+package com.gen3.userpreferencejob;
 
 import java.io.IOException;
 
