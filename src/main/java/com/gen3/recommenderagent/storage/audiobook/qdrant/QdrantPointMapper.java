@@ -62,6 +62,19 @@ public class QdrantPointMapper {
         .build();
   }
 
+  /** Maps only data already stored in the source; absent vectors remain absent. */
+  public PointStruct toStoredPoint(AudiobookEmbedding stored) {
+    PointStruct.Builder point =
+        PointStruct.newBuilder()
+            .setId(pointId(stored.record().id()))
+            .putAllPayload(payload(stored.record()));
+    Map<String, io.qdrant.client.grpc.Points.Vector> vectors = new java.util.HashMap<>();
+    if (stored.vector() != null && stored.vector().length > 0) {
+      vectors.put(DENSE_VECTOR, vector(stored.vector()));
+    }
+    return point.setVectors(namedVectors(vectors)).build();
+  }
+
   /** Restores an audiobook record from a Qdrant similarity-search result. */
   public AudiobookRecord toRecord(ScoredPoint point) {
     return toRecord(point.getPayloadMap());

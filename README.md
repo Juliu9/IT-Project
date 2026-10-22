@@ -147,7 +147,17 @@ Qdrant field names, index types, vector schema, and filter translation live in
 creating indexes; explicit indexing creates an absent collection. Existing collections are not
 automatically inspected or migrated.
 
-Solr-to-Qdrant migration is the sole two-database exception and requires a dedicated non-web run:
+Solr-to-Qdrant migration is the sole two-database exception and requires a dedicated non-web run.
+It copies the supported catalogue fields, existing short descriptions, and the configured stored
+Solr dense-vector field. It never calls an embedding or summary model, normalizes existing vectors,
+or generates sparse keyword vectors. Records without vectors are copied with no vectors; they
+need a separate opt-in indexing step before vector search can find them. Existing destination
+records are skipped so reruns preserve their summaries and vectors. The record limit counts source
+records read, including skipped destination records. Source vector dimensions must match Qdrant.
+This does not add a Qdrant indexing job or complete the selectable Solr backend.
+
+Run against a stable source catalogue and avoid concurrent writes to the destination during migration:
+
 
 ```bash
 QDRANT_MIGRATION_ENABLED=true ./mvnw spring-boot:run \

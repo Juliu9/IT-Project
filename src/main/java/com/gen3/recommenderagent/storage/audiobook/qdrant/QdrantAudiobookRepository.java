@@ -204,6 +204,41 @@ public class QdrantAudiobookRepository
         "write audiobook vectors to Qdrant");
   }
 
+  /** Copies existing source data, leaving existing destination records untouched on reruns. */
+  public int importStoredBooks(List<AudiobookEmbedding> records) throws IOException {
+    if (records.isEmpty()) {
+      return 0;
+    }
+    for (AudiobookEmbedding record : records) {
+      if (record.vector() != null && record.vector().length > 0) {
+        validateDimension(record.vector());
+        for (float value : record.vector()) {
+          if (!Float.isFinite(value)) {
+            throw new IOException("Stored source vector contains a non-finite value");
+          }
+        }
+      }
+    }
+    initialize();
+    var ids = records.stream().map(record -> mapper.pointId(record.record().id())).toList();
+    var existing =
+        await(
+                client.retrieveAsync(collection, ids, false, false, null),
+                "check destination records before migration")
+            .stream()
+            .map(RetrievedPoint::getId)
+            .collect(java.util.stream.Collectors.toSet());
+    var points =
+        records.stream()
+            .filter(record -> !existing.contains(mapper.pointId(record.record().id())))
+            .map(mapper::toStoredPoint)
+            .toList();
+    if (!points.isEmpty()) {
+      await(client.upsertAsync(collection, points), "copy existing catalogue data to Qdrant");
+    }
+    return points.size();
+  }
+
   /** Stores generated short descriptions without recalculating or rewriting the book vectors. */
   @Override
   public void updateShortDescriptions(List<ShortDescriptionUpdate> updates) throws IOException {

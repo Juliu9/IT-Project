@@ -10,6 +10,7 @@ import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCatalogueRepository;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorIndexer;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -243,6 +244,38 @@ public class SolrAudiobookRepository
   /** Reads the complete catalogue in deterministic pages for the startup importer. */
   @Override
   public List<AudiobookRecord> findAllBooks(int offset, int limit) throws IOException {
+    return cataloguePage(offset, limit, false).stream().map(this::toRecord).toList();
+  }
+
+  /** Reads existing catalogue values and vectors without generating or normalizing anything. */
+  public List<AudiobookEmbedding> findStoredBooks(int offset, int limit) throws IOException {
+    List<AudiobookEmbedding> records = new ArrayList<>();
+    for (SolrDocument document : cataloguePage(offset, limit, true)) {
+      Object stored = document.getFieldValue(vectorField);
+      float[] vector = null;
+      if (stored instanceof float[] values) {
+        vector = values.clone();
+      } else if (stored instanceof java.util.Collection<?> values) {
+        vector = new float[values.size()];
+        int index = 0;
+        for (Object value : values) {
+          if (!(value instanceof Number number)) {
+            throw new IOException(
+                "Invalid stored Solr vector for book " + document.getFieldValue("id"));
+          }
+          vector[index++] = number.floatValue();
+        }
+      } else if (stored != null) {
+        throw new IOException(
+            "Invalid stored Solr vector for book " + document.getFieldValue("id"));
+      }
+      records.add(new AudiobookEmbedding(toRecord(document), vector));
+    }
+    return records;
+  }
+
+  private SolrDocumentList cataloguePage(int offset, int limit, boolean includeVectors)
+      throws IOException {
     SolrQuery solrQuery = new SolrQuery("*:* ".trim());
     solrQuery.setStart(Math.max(offset, 0));
     solrQuery.setRows(Math.max(limit, 1));
@@ -258,9 +291,12 @@ public class SolrAudiobookRepository
         "durationMinutes",
         "publicationYear",
         "short_description");
+    if (includeVectors) {
+      solrQuery.addField(vectorField);
+    }
     try {
       QueryResponse response = solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
-      return response.getResults().stream().map(this::toRecord).toList();
+      return response.getResults();
     } catch (SolrServerException exception) {
       throw new IOException("Could not load audiobook catalogue from Solr", exception);
     }

@@ -23,6 +23,42 @@ import org.mockito.ArgumentCaptor;
 class SolrAudiobookRepositoryUnitTest {
 
   @Test
+  void readsExistingVectorsAndSummariesIncludingRecordsWithNoVector() throws Exception {
+    SolrClient client = mock(SolrClient.class);
+    QueryResponse response = mock(QueryResponse.class);
+    SolrDocument first = new SolrDocument();
+    first.setField("id", "one");
+    first.setField("title", "Title");
+    first.setField("short_description", "Stored summary");
+    first.setField("stored_vector", List.of(2.0f, 3.0f));
+    SolrDocument second = new SolrDocument();
+    second.setField("id", "two");
+    SolrDocumentList documents = new SolrDocumentList();
+    documents.add(first);
+    documents.add(second);
+    when(response.getResults()).thenReturn(documents);
+    when(client.query(
+            org.mockito.ArgumentMatchers.eq("books"),
+            org.mockito.ArgumentMatchers.any(SolrQuery.class),
+            org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST)))
+        .thenReturn(response);
+    var records =
+        new SolrAudiobookRepository(client, "books", "stored_vector", 2).findStoredBooks(0, 2);
+    org.junit.jupiter.api.Assertions.assertArrayEquals(
+        new float[] {2, 3}, records.getFirst().vector());
+    assertEquals("Stored summary", records.getFirst().record().shortDescription());
+    org.junit.jupiter.api.Assertions.assertNull(records.getLast().vector());
+    var query = ArgumentCaptor.forClass(SolrQuery.class);
+    verify(client)
+        .query(
+            org.mockito.ArgumentMatchers.eq("books"),
+            query.capture(),
+            org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST));
+    org.junit.jupiter.api.Assertions.assertTrue(
+        query.getValue().getFields().contains("stored_vector"));
+  }
+
+  @Test
   void shouldQueryConfiguredCollectionAndOnlyRequestApiFields() throws Exception {
     SolrClient client = mock(SolrClient.class);
     QueryResponse expected = new QueryResponse();

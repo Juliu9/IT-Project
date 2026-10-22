@@ -23,6 +23,78 @@ class QdrantShownBookExclusionTest {
       new GenericContainer<>("qdrant/qdrant:v1.15.4").withExposedPorts(6334);
 
   @Test
+  void migrationCopiesOnlyStoredDataAndPreservesDestinationRecordsOnReruns() throws Exception {
+    try (QdrantClient client =
+        new QdrantClient(
+            QdrantGrpcClient.newBuilder(server.getHost(), server.getMappedPort(6334), false)
+                .build())) {
+      var encoder = org.mockito.Mockito.mock(SparseTextEncoder.class);
+      var mapper = new QdrantPointMapper(encoder);
+      var repository = new QdrantAudiobookRepository(client, mapper, encoder, "stored-books", 2);
+      var source =
+          new AudiobookRecord(
+              "stored",
+              "source",
+              "Title",
+              List.of("Author"),
+              "Description",
+              List.of(),
+              "English",
+              60,
+              2020,
+              "Existing summary");
+      var missing = new AudiobookRecord("missing", "source", "No vector", List.of(), null);
+      assertThat(
+              repository.importStoredBooks(
+                  List.of(
+                      new AudiobookEmbedding(source, new float[] {2, 3}),
+                      new AudiobookEmbedding(missing, null))))
+          .isEqualTo(2);
+      var points =
+          client
+              .retrieveAsync(
+                  "stored-books",
+                  List.of(mapper.pointId("stored"), mapper.pointId("missing")),
+                  true,
+                  true,
+                  null)
+              .get();
+      var stored =
+          points.stream()
+              .filter(p -> p.getId().equals(mapper.pointId("stored")))
+              .findFirst()
+              .orElseThrow();
+      var noVector =
+          points.stream()
+              .filter(p -> p.getId().equals(mapper.pointId("missing")))
+              .findFirst()
+              .orElseThrow();
+      assertThat(stored.getPayloadMap().get("short_description").getStringValue())
+          .isEqualTo("Existing summary");
+      var dense = stored.getVectors().getVectors().getVectorsMap().get("dense");
+      assertThat(dense.hasDense() ? dense.getDense().getDataList() : dense.getDataList())
+          .containsExactly(2f, 3f);
+      assertThat(stored.getVectors().getVectors().getVectorsMap()).doesNotContainKey("keywords");
+      assertThat(noVector.getVectors().getVectors().getVectorsMap()).isEmpty();
+      assertThat(
+              repository.importStoredBooks(
+                  List.of(
+                      new AudiobookEmbedding(
+                          new AudiobookRecord("stored", "source", "Replacement", List.of(), null),
+                          null))))
+          .isZero();
+      var unchanged =
+          client
+              .retrieveAsync("stored-books", List.of(mapper.pointId("stored")), true, true, null)
+              .get()
+              .getFirst();
+      assertThat(unchanged.getPayloadMap().get("short_description").getStringValue())
+          .isEqualTo("Existing summary");
+      org.mockito.Mockito.verifyNoInteractions(encoder);
+    }
+  }
+
+  @Test
   void everySearchModeFindsTheUnseenBookBeyondTheFirstFifty() throws Exception {
     try (QdrantClient client =
         new QdrantClient(
