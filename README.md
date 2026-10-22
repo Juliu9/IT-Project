@@ -149,6 +149,10 @@ automatically inspected or migrated.
 
 ## Catalogue embedding maintenance
 
+All catalogue indexing orchestration, book-to-vector conversion, and job-specific database adapters
+live under `com.gen3.embeddingjob`. Search-query embedding remains in the recommendation service;
+shared catalogue records and general database persistence stay in the storage packages.
+
 Book-vector generation is disabled by default and runs only in a separate, non-web process.
 Choose the database containing the existing records with `AUDIOBOOK_DATABASE=solr` or `qdrant`.
 The same selected adapter reads the records and updates their vectors; neither migration nor
@@ -179,7 +183,7 @@ catalogue and run one indexing job at a time. The process closes its clients and
 The former `solr.embedding-index-on-startup` and `solr.embedding-index-page-size` settings are
 replaced by this database-independent job. Enabling the new flag on the normal server is rejected;
 use the dedicated entry point. Migration and indexing cannot run together. Another database can
-implement `AudiobookEmbeddingStore` and register its adapter for the selected database.
+implement `com.gen3.embeddingjob.store.AudiobookEmbeddingStore` and register its adapter for the selected database.
 
 Solr-to-Qdrant migration is the sole two-database exception and requires a dedicated non-web run.
 It copies the supported catalogue fields, existing short descriptions, and the configured stored

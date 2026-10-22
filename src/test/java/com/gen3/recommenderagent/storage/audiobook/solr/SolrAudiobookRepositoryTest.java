@@ -71,8 +71,11 @@ class SolrAudiobookRepositoryTest {
     org.mockito.Mockito.when(model.embed(org.mockito.ArgumentMatchers.anyList()))
         .thenReturn(java.util.List.of(generated));
     var repository = new SolrAudiobookRepository(solrClient, collection, "embedding", 1536);
-    new com.gen3.recommenderagent.embedding.CatalogueEmbeddingJob(
-            repository, new com.gen3.recommenderagent.embedding.EmbeddingIndexer(model), 1, 1)
+    new com.gen3.embeddingjob.CatalogueEmbeddingJob(
+            new com.gen3.embeddingjob.store.SolrEmbeddingStore(repository),
+            new com.gen3.embeddingjob.AudiobookEmbeddingIndexer(model),
+            1,
+            1)
         .run();
     var updated = solrClient.getById(collection, "book-101");
     assertEquals(original.getFieldValue("title"), updated.getFieldValue("title"));

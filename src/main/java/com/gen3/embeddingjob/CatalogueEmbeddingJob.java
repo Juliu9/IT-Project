@@ -1,6 +1,6 @@
-package com.gen3.recommenderagent.embedding;
+package com.gen3.embeddingjob;
 
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEmbeddingStore;
+import com.gen3.embeddingjob.store.AudiobookEmbeddingStore;
 import java.util.ArrayList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -9,12 +9,15 @@ import org.slf4j.LoggerFactory;
 public class CatalogueEmbeddingJob {
   private static final Logger LOGGER = LoggerFactory.getLogger(CatalogueEmbeddingJob.class);
   private final AudiobookEmbeddingStore store;
-  private final EmbeddingIndexer indexer;
+  private final AudiobookEmbeddingIndexer indexer;
   private final int pageSize;
   private final int maximumRecords;
 
   public CatalogueEmbeddingJob(
-      AudiobookEmbeddingStore store, EmbeddingIndexer indexer, int pageSize, int maximumRecords) {
+      AudiobookEmbeddingStore store,
+      AudiobookEmbeddingIndexer indexer,
+      int pageSize,
+      int maximumRecords) {
     if (pageSize < 1 || maximumRecords < 0) {
       throw new IllegalArgumentException(
           "Embedding page size must be positive and maximum records nonnegative");

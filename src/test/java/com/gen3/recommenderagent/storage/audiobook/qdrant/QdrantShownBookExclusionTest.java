@@ -55,8 +55,12 @@ class QdrantShownBookExclusionTest {
       var model = org.mockito.Mockito.mock(org.springframework.ai.embedding.EmbeddingModel.class);
       org.mockito.Mockito.when(model.embed(org.mockito.ArgumentMatchers.anyList()))
           .thenReturn(List.of(new float[] {3, 4}));
-      new com.gen3.recommenderagent.embedding.CatalogueEmbeddingJob(
-              repository, new com.gen3.recommenderagent.embedding.EmbeddingIndexer(model), 1, 0)
+      new com.gen3.embeddingjob.CatalogueEmbeddingJob(
+              new com.gen3.embeddingjob.store.QdrantEmbeddingStore(
+                  client, mapper, "embedding-job", 2),
+              new com.gen3.embeddingjob.AudiobookEmbeddingIndexer(model),
+              1,
+              0)
           .run();
       var result =
           client.retrieveAsync("embedding-job", List.of(id), true, true, null).get().getFirst();

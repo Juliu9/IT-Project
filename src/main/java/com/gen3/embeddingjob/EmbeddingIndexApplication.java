@@ -1,10 +1,7 @@
 package com.gen3.embeddingjob;
 
-import com.gen3.recommenderagent.embedding.CatalogueEmbeddingJob;
-import com.gen3.recommenderagent.embedding.EmbeddingIndexer;
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookEmbeddingStore;
+import com.gen3.embeddingjob.store.AudiobookEmbeddingStore;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.Bm25SparseTextEncoder;
-import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantConfig;
 import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantPointMapper;
 import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
@@ -31,9 +28,10 @@ import org.springframework.core.env.Environment;
     })
 @Import({
   SolrConfig.class,
+  com.gen3.embeddingjob.store.SolrEmbeddingStore.class,
+  com.gen3.embeddingjob.store.QdrantEmbeddingStore.class,
   SolrAudiobookRepository.class,
   QdrantConfig.class,
-  QdrantAudiobookRepository.class,
   QdrantPointMapper.class,
   Bm25SparseTextEncoder.class
 })
@@ -71,7 +69,8 @@ public class EmbeddingIndexApplication {
       @Value("${audiobook.embedding-index.page-size:100}") int pageSize,
       @Value("${audiobook.embedding-index.maximum-records:0}") int maximumRecords) {
     return args ->
-        new CatalogueEmbeddingJob(store, new EmbeddingIndexer(model), pageSize, maximumRecords)
+        new CatalogueEmbeddingJob(
+                store, new AudiobookEmbeddingIndexer(model), pageSize, maximumRecords)
             .run();
   }
 }
