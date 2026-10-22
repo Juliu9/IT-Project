@@ -24,6 +24,89 @@ import org.springframework.ai.chat.model.ChatResponse;
 import tools.jackson.databind.ObjectMapper;
 
 class InputParserTest {
+  @Test
+  void rejectsOversizedInputBeforeCallingTheModel() {
+    var client = mock(ChatClient.class);
+    var parser =
+        new AiInputParser(
+            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+    assertThrows(
+        InvalidRequestException.class,
+        () -> parser.parse("x".repeat(InputParser.MAX_REQUEST_CHARACTERS + 1)));
+    verifyNoInteractions(client);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = Intent.class,
+      names = {
+        "MORE_RESULTS",
+        "REPEAT",
+        "CHANGE_COUNT",
+        "UPDATE_PREFERENCES",
+        "CLEAR_HISTORY",
+        "HELP",
+        "UNKNOWN"
+      })
+  void stripsUnexpectedSemanticInformationFromControlIntents(Intent intent) {
+    var parsed = new ParsedRequest();
+    parsed.setIntent(intent);
+    var query = new SemanticQuery();
+    query.setGenres(List.of("horror"));
+    parsed.setPositiveSemanticQuery(query);
+    parsed.setNegativeSemanticQuery(query);
+    parsed.setPersonalised(true);
+    var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    when(client
+            .prompt()
+            .system(anyString())
+            .user("control")
+            .call()
+            .responseEntity(ParsedRequest.class))
+        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+    var builder = mock(ChatClient.Builder.class);
+    when(builder.build()).thenReturn(client);
+    var result = new AiInputParser(builder).parse("control");
+    assertEquals(null, result.getPositiveSemanticQuery());
+    assertEquals(null, result.getNegativeSemanticQuery());
+    assertEquals(false, result.isPersonalised());
+  }
+
+  @Test
+  @org.junit.jupiter.api.extension.ExtendWith(
+      org.springframework.boot.test.system.OutputCaptureExtension.class)
+  void recordsProviderUsageWhileReturningOnlyTheRequest(
+      org.springframework.boot.test.system.CapturedOutput output) {
+    var parsed = new ParsedRequest();
+    parsed.setIntent(Intent.HELP);
+    var response = mock(ChatResponse.class, RETURNS_DEEP_STUBS);
+    when(response.getMetadata().getModel()).thenReturn("parser-model");
+    when(response.getMetadata().getUsage().getPromptTokens()).thenReturn(12);
+    when(response.getMetadata().getUsage().getCompletionTokens()).thenReturn(3);
+    when(response.getMetadata().getUsage().getTotalTokens()).thenReturn(15);
+    var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    when(client
+            .prompt()
+            .system(anyString())
+            .user("help")
+            .call()
+            .responseEntity(ParsedRequest.class))
+        .thenReturn(new ResponseEntity<>(response, parsed));
+    var observer =
+        new com.gen3.recommenderagent.observability.AiOperationObserver(
+            new org.springframework.beans.factory.support.DefaultListableBeanFactory()
+                .getBeanProvider(org.springframework.core.retry.RetryTemplate.class));
+    var result = new AiInputParser(client, observer).parse("help");
+    assertEquals(Intent.HELP, result.getIntent());
+    org.assertj.core.api.Assertions.assertThat(output.getOut())
+        .contains(
+            "operation=parse",
+            "model=parser-model",
+            "promptTokens=12",
+            "completionTokens=3",
+            "totalTokens=15",
+            "usageAvailable=true");
+  }
 
   @Test
   void mapsPersonalisedRequestWithoutInventingSearchCriteria() {
@@ -42,7 +125,7 @@ class InputParserTest {
     ChatClient.Builder builder = mock(ChatClient.Builder.class);
     when(builder.build()).thenReturn(client);
 
-    SessionRequest result = new AiInputParser(builder).parse(rawText).entity();
+    SessionRequest result = new AiInputParser(builder).parse(rawText);
 
     assertEquals(true, result.isPersonalised());
     assertEquals(null, result.getPositiveSemanticQuery());
@@ -83,7 +166,7 @@ class InputParserTest {
     ChatClient.Builder builder = mock(ChatClient.Builder.class);
     when(builder.build()).thenReturn(chatClient);
 
-    SessionRequest result = new AiInputParser(builder).parse(rawText).entity();
+    SessionRequest result = new AiInputParser(builder).parse(rawText);
 
     assertNotNull(result);
     assertEquals(rawText, result.getRawText());

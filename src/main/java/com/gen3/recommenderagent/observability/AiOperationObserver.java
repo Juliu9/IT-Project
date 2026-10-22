@@ -1,6 +1,5 @@
 package com.gen3.recommenderagent.observability;
 
-import com.openai.errors.OpenAIException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.function.Function;
@@ -56,7 +55,8 @@ public class AiOperationObserver {
       T response = call.get();
       logCompletion(current, usageExtractor.apply(response));
       return response;
-    } catch (OpenAIException exception) {
+    } catch (RuntimeException exception) {
+      RequestTelemetry.ai(operation, current.attempts(), AiUsage.unavailable());
       LOGGER.warn(
           "ai.operation.failed operation={} attempts={} durationMs={} lastAttemptDurationMs={}"
               + " exception={}",

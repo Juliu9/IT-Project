@@ -1,0 +1,58 @@
+@startuml
+!pragma layout smetana
+title Maintenance jobs — separate, explicit processes
+left to right direction
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam defaultFontName SansSerif
+skinparam ArrowColor #475569
+
+package "embeddingjob" {
+  component "EmbeddingIndexApplication\nCatalogueEmbeddingJob\nAudiobookEmbeddingIndexer" as Embedding #DCFCE7
+}
+package "shortdescriptionjob" {
+  component "ShortDescriptionApplication\nBatchShortDescriptionEnricher" as Summary #DCFCE7
+}
+package "migrationjob" {
+  component "MigrationApplication\nSolrToQdrantMigrator" as Migration #DBEAFE
+}
+package "userpreferencejob" {
+  component "UserPreferenceApplication\nCSV readers + preference aggregation" as Preferences #DBEAFE
+}
+component "Shared code in recommenderagent\nStorage ports, database adapters,\nmodels and vector utilities" as Shared #FEF3C7
+database "Selected catalogue\nSolr OR Qdrant" as Catalogue
+database "Solr source" as SolrSource
+database "Qdrant destination" as QdrantTarget
+database "Selected database\nBook + user preference vectors\nCurrently: Qdrant" as UserStore
+artifact "Favourites + history CSVs" as CSV
+cloud "Embedding model" as EmbeddingModel
+cloud "Batch summary provider" as SummaryModel
+
+Embedding ..> Shared : reuses
+Summary ..> Shared : reuses
+Migration ..> Shared : reuses
+Preferences ..> Shared : reuses
+
+Embedding --> Catalogue : read existing records / update vectors
+Embedding --> EmbeddingModel : book text → embedding
+Summary --> Catalogue : read descriptions / fill missing summaries
+Summary --> SummaryModel : submit batch / import completed output
+Migration --> SolrSource : read existing fields and vectors
+Migration --> QdrantTarget : copy books absent by bookId
+CSV --> Preferences : user interactions
+Preferences --> UserStore : read existing book vectors / save taste vectors
+
+note bottom of Shared
+  Jobs do not call one another.
+  recommenderagent does not depend on the jobs.
+  Their shared code currently lives inside recommenderagent.
+end note
+legend bottom
+  Migration copies existing data; it generates no embeddings or summaries.
+  Each job has its own non-web launcher and opt-in settings.
+  Jobs never run during ordinary recommendation-server startup.
+  Run maintenance writers separately against a stable catalogue.
+endlegend
+@enduml

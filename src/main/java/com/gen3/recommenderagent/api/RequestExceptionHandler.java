@@ -1,10 +1,10 @@
 package com.gen3.recommenderagent.api;
 
-import com.gen3.recommenderagent.application.sessionservice.SessionCommitException;
-import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalException;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
-import com.gen3.recommenderagent.storage.sessionrepository.redis.SessionBusyException;
-import com.gen3.recommenderagent.storage.sessionrepository.redis.SessionLockLostException;
+import com.gen3.recommenderagent.retrieval.CandidateRetrievalException;
+import com.gen3.recommenderagent.storage.session.SessionBusyException;
+import com.gen3.recommenderagent.storage.session.SessionCommitException;
+import com.gen3.recommenderagent.storage.session.SessionLockLostException;
 import java.nio.charset.StandardCharsets;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;

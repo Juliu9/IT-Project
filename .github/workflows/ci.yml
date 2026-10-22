@@ -24,10 +24,6 @@ concurrency:
 jobs:
   unit-tests:
     name: Unit tests
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/staging') ||
-      (github.event_name == 'pull_request' && github.base_ref == 'staging')
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -49,8 +45,9 @@ jobs:
         run: mvn --batch-mode --no-transfer-progress verify -DexcludedGroups=external
 
   external-integration:
-    name: Integration tests
+    name: Entire test suite
     if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'pull_request' && github.base_ref == 'main' &&
       github.event.pull_request.head.repo.fork == false)
@@ -73,7 +70,7 @@ jobs:
           java-version: "21"
           cache: maven
 
-      - name: Run real request-path test
+      - name: Run all unit and integration tests
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           QDRANT_URL: ${{ secrets.QDRANT_URL }}
@@ -82,4 +79,4 @@ jobs:
           test -n "$OPENAI_API_KEY"
           test -n "$QDRANT_URL"
           test -n "$QDRANT_API_KEY"
-          mvn --batch-mode --no-transfer-progress verify -Dgroups=external
+          mvn --batch-mode --no-transfer-progress verify

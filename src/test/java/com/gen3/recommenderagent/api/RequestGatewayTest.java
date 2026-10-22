@@ -1,20 +1,21 @@
 package com.gen3.recommenderagent.api;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.application.sessionservice.SessionCommitException;
-import com.gen3.recommenderagent.candidateretriever.CandidateRetrievalException;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.inputparser.InputParser;
-import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.gen3.recommenderagent.response.ResponseGenerator;
+import com.gen3.recommenderagent.retrieval.CandidateRetrievalException;
+import com.gen3.recommenderagent.storage.session.SessionCommitException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -44,13 +45,16 @@ class RequestGatewayTest {
     verify(telemetry).fail(null);
   }
 
-  @Test
-  void returnsBadRequestForInvalidInput() throws Exception {
-    when(inputParser.parse(null))
-        .thenThrow(
-            new InvalidRequestException("I didn't catch that. What would you like to listen to?"));
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.NullAndEmptySource
+  @org.junit.jupiter.params.provider.ValueSource(strings = {" ", "\n\t"})
+  void returnsTheBlankInputFallbackWithoutModelOrSessionWork(String rawText) throws Exception {
+    var model = mock(org.springframework.ai.chat.client.ChatClient.class);
+    var realParser =
+        new com.gen3.recommenderagent.inputparser.AiInputParser(
+            model, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
     RequestGateway gateway =
-        new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
+        new RequestGateway(realParser, sessionTransitionService, responseGenerator, telemetry);
     MockMvc mockMvc =
         MockMvcBuilders.standaloneSetup(gateway)
             .setControllerAdvice(new RequestExceptionHandler())
@@ -61,18 +65,18 @@ class RequestGatewayTest {
             post("/api/v1/recommendations")
                 .header("X-Session-Id", "session")
                 .header("X-User-Id", "user")
-                .content(""))
+                .content(rawText == null ? "" : rawText))
         .andExpect(status().isBadRequest())
         .andExpect(content().string("I didn't catch that. What would you like to listen to?"));
 
     verify(telemetry).fail(null);
+    verifyNoInteractions(model, sessionTransitionService, responseGenerator);
   }
 
   @Test
   void returnsServiceUnavailableWhenCandidateRetrievalFails() throws Exception {
     SessionRequest parsedRequest = new SessionRequest();
-    when(inputParser.parse("recommend science fiction"))
-        .thenReturn(new org.springframework.ai.chat.client.ResponseEntity<>(null, parsedRequest));
+    when(inputParser.parse("recommend science fiction")).thenReturn(parsedRequest);
     when(sessionTransitionService.process("session", "user", parsedRequest))
         .thenThrow(new CandidateRetrievalException("Qdrant", new RuntimeException("timed out")));
     RequestGateway gateway =
@@ -98,11 +102,9 @@ class RequestGatewayTest {
   @Test
   void returnsRetryAdviceWhenTheSessionIsBusy() throws Exception {
     SessionRequest parsedRequest = new SessionRequest();
-    when(inputParser.parse("recommend science fiction"))
-        .thenReturn(new org.springframework.ai.chat.client.ResponseEntity<>(null, parsedRequest));
+    when(inputParser.parse("recommend science fiction")).thenReturn(parsedRequest);
     when(sessionTransitionService.process("session", "user", parsedRequest))
-        .thenThrow(
-            new com.gen3.recommenderagent.storage.sessionrepository.redis.SessionBusyException());
+        .thenThrow(new com.gen3.recommenderagent.storage.session.SessionBusyException());
     RequestGateway gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
 
@@ -123,8 +125,7 @@ class RequestGatewayTest {
   @Test
   void returnsServiceUnavailableWhenTheSessionCommitFails() throws Exception {
     SessionRequest parsedRequest = new SessionRequest();
-    when(inputParser.parse("recommend science fiction"))
-        .thenReturn(new org.springframework.ai.chat.client.ResponseEntity<>(null, parsedRequest));
+    when(inputParser.parse("recommend science fiction")).thenReturn(parsedRequest);
     when(sessionTransitionService.process("session", "user", parsedRequest))
         .thenThrow(new SessionCommitException());
     RequestGateway gateway =

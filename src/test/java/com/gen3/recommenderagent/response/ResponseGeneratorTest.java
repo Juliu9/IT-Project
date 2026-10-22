@@ -16,6 +16,78 @@ import org.junit.jupiter.api.Test;
 class ResponseGeneratorTest {
 
   @Test
+  void usesTheResolvedDecisionWithoutReinterpretingIntent() {
+    var request = new SessionRequest();
+    request.setIntent(Intent.HELP);
+    request.setDecision(
+        com.gen3.recommenderagent.domain.session.ConversationDecision.NO_MORE_RESULTS);
+    var generator = new AiResponseGenerator(null);
+    assertEquals(
+        "There are no more audiobooks matching your current search. Try changing your criteria.",
+        generator.generate(List.of(), request));
+  }
+
+  @Test
+  void emptyMoreAndItsRepeatExplicitlySayThereAreNoMoreMatches() {
+    AiResponseGenerator generator = new AiResponseGenerator(null);
+    SessionRequest request = new SessionRequest();
+    request.setIntent(Intent.MORE_RESULTS);
+    String more = generator.generate(List.of(), request);
+    assertTrue(more.startsWith("There are no more audiobooks matching your current search."));
+    request.setIntent(Intent.REPEAT);
+    request.setNoMoreRecommendations(true);
+    assertEquals(more, generator.generate(List.of(), request));
+  }
+
+  @Test
+  void followUpPromptContainsResolvedCriteriaAndNoSearchAsksForOne() {
+    AiResponseGenerator generator = new AiResponseGenerator(null);
+    SessionRequest request = new SessionRequest();
+    request.setIntent(Intent.MORE_RESULTS);
+    request.setRawText("more please");
+    SemanticQuery query = new SemanticQuery();
+    query.setTopics(List.of("expeditions"));
+    query.setAuthors(List.of("Agatha Christie"));
+    request.setPositiveSemanticQuery(query);
+    SemanticQuery avoided = new SemanticQuery();
+    avoided.setKeywords(List.of("violence"));
+    request.setNegativeSemanticQuery(avoided);
+    MustInclude filter = new MustInclude();
+    filter.setLanguage("English");
+    filter.setDuration("under 3 hours");
+    request.setMustInclude(filter);
+    String prompt =
+        generator.compilePrompt(
+            List.of(new Recommendation("id", 1, 0.9, "Title", "An expedition.")), request, "");
+    for (String value :
+        List.of(
+            "expeditions",
+            "Agatha Christie",
+            "violence",
+            "English",
+            "under 3 hours",
+            "An expedition.")) {
+      assertTrue(prompt.contains(value));
+    }
+    request.setSearchClarificationRequired(true);
+    assertEquals("What kind of audiobook would you like?", generator.generate(List.of(), request));
+  }
+
+  @Test
+  void repeatRendersThePreviousBooksOrExplainsThatThereAreNone() {
+    AiResponseGenerator generator = new AiResponseGenerator(null);
+    SessionRequest request = new SessionRequest();
+    request.setIntent(Intent.REPEAT);
+    assertEquals(
+        "There are no previous recommendations to repeat. Ask me for audiobooks first.",
+        generator.generate(List.of(), request));
+    String response =
+        generator.generate(
+            List.of(new Recommendation("book-101", 1, 0.9, "Previous book")), request);
+    assertTrue(response.contains("book-101"));
+  }
+
+  @Test
   void shouldBuildAHumanReadableRecommendationMessage() {
     AiResponseGenerator generator = new AiResponseGenerator(null);
 

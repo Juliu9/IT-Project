@@ -1,21 +1,220 @@
 package com.gen3.recommenderagent.domain.session;
 
 import com.gen3.recommenderagent.domain.Intent;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Stream;
 
-/** Resolves an incoming request against the conversational state held by a session. */
+/** Conversation policy applied before and after recommendation work in the same session update. */
 public final class ConversationState {
 
-  public SessionRequest resolve(Session session, SessionRequest request) {
+  /** Resolves context and invalidates an obsolete queue before recommendation work begins. */
+  public SessionRequest begin(Session session, SessionRequest original) {
+    SessionRequest request = resolve(session, original);
+    // Invalidation uses the original action because clarification replies can become searches.
+    if (request.getIntent() != Intent.REPEAT
+        && !request.isSearchClarificationRequired()
+        && invalidatesBatch(original)) {
+      session.setPendingRecommendations(List.of());
+    }
+    return request;
+  }
+
+  public boolean needsRecommendations(SessionRequest request) {
+    return !request.isSearchClarificationRequired() && isRecommendationIntent(request.getIntent());
+  }
+
+  /** Records the completed transition and resolves wording-independent response policy. */
+  public void finish(Session session, SessionRequest request, SessionRequest original) {
+    // Repeating or asking for search criteria must not replace the retained search.
+    if (request.getIntent() == Intent.REPEAT || request.isSearchClarificationRequired()) {
+      if (request.isSearchClarificationRequired()) {
+        request.setRecommendations(List.of());
+      }
+      complete(request);
+    } else {
+      if (!isRecommendationIntent(request.getIntent())) {
+        request.setRecommendations(List.of());
+      }
+      request.setNoMoreRecommendations(
+          request.getIntent() == Intent.MORE_RESULTS && request.getRecommendations().isEmpty());
+      applyTransition(session, request, originalIntent(original));
+    }
+    request.setDecision(decisionFor(request.getRecommendations(), request));
+  }
+
+  /** Shared eligibility rule for parsed inputs and restored conversation requests. */
+  public static SessionRequest normalizeInput(SessionRequest request) {
+    // Control intents may carry exact filters, but cannot introduce new semantic preferences.
+    if (!acceptsSemanticInformation(request.getIntent())) {
+      request.setPositiveSemanticQuery(null);
+      request.setNegativeSemanticQuery(null);
+      request.setPersonalised(false);
+    }
+    return request;
+  }
+
+  private static boolean acceptsSemanticInformation(Intent intent) {
+    return intent == Intent.RECOMMENDATION || intent == Intent.REFINE;
+  }
+
+  public static ConversationDecision decisionFor(
+      List<Recommendation> recommendations, SessionRequest request) {
+    if (recommendations == null && request == null) {
+      return ConversationDecision.UNAVAILABLE;
+    }
+    // Clarification outranks actions; actions outrank empty-result messages.
+    if (request != null) {
+      if (request.isSearchClarificationRequired()) {
+        return ConversationDecision.SEARCH_CLARIFICATION;
+      }
+      if (request.isPreferenceClarificationRequired()) {
+        return ConversationDecision.PREFERENCE_CLARIFICATION;
+      }
+      if (request.getIntent() != null) {
+        ConversationDecision action =
+            switch (request.getIntent()) {
+              case CHANGE_COUNT ->
+                  request.getBookCount() == null
+                      ? ConversationDecision.COUNT_CLARIFICATION
+                      : ConversationDecision.COUNT_CHANGED;
+              case UPDATE_PREFERENCES -> ConversationDecision.PREFERENCES_UPDATED;
+              case CLEAR_HISTORY -> ConversationDecision.HISTORY_CLEARED;
+              case HELP -> ConversationDecision.HELP;
+              case UNKNOWN -> ConversationDecision.UNKNOWN;
+              case RECOMMENDATION, REFINE, MORE_RESULTS, REPEAT -> null;
+            };
+        if (action != null) {
+          return action;
+        }
+      }
+    }
+    if (recommendations == null || recommendations.isEmpty()) {
+      if (request != null
+          && (request.isNoMoreRecommendations() || request.getIntent() == Intent.MORE_RESULTS)) {
+        return ConversationDecision.NO_MORE_RESULTS;
+      }
+      if (request != null && request.getIntent() == Intent.REPEAT) {
+        return ConversationDecision.NOTHING_TO_REPEAT;
+      }
+      return ConversationDecision.NO_MATCHES;
+    }
+    return ConversationDecision.RECOMMENDATIONS;
+  }
+
+  static boolean awaitingPreferences(Session session) {
+    return session.getRequests() != null
+        && session.getRequests().stream()
+            .anyMatch(SessionRequest::isPreferenceClarificationRequired);
+  }
+
+  static void retainRequest(Session session, SessionRequest request) {
+    if (request == null) {
+      return;
+    }
+    // Keep one search and one non-search entry so actions do not erase follow-up context.
+    boolean search = isSearchContext(request);
+    session.getRequests().removeIf(existing -> isSearchContext(existing) == search);
+    session.getRequests().add(request);
+    session.setUpdatedAt(Instant.now());
+  }
+
+  private boolean invalidatesBatch(SessionRequest request) {
+    Intent intent = originalIntent(request);
+    SessionRequest filters = new SessionRequest();
+    if (request != null) {
+      filters.setMustInclude(request.getMustInclude());
+      filters.setMustNotInclude(request.getMustNotInclude());
+    }
+    return intent == Intent.RECOMMENDATION
+        || intent == Intent.REFINE
+        || intent == Intent.UPDATE_PREFERENCES
+        || intent == Intent.CLEAR_HISTORY
+        || (intent == Intent.MORE_RESULTS && hasSearchCriteria(filters));
+  }
+
+  private void applyTransition(Session session, SessionRequest request, Intent originalIntent) {
+    // Persist a taste reply before history replacement removes the pending clarification.
+    if (originalIntent == Intent.UPDATE_PREFERENCES
+        || (originalIntent == Intent.REFINE && awaitingPreferences(session))) {
+      session.setPreferences(mergedPreferences(session, request));
+    }
+    if (originalIntent == Intent.CHANGE_COUNT) {
+      session.setBookCount(resolveBookCount(request, session));
+    }
+    if (originalIntent == Intent.CLEAR_HISTORY) {
+      session.clearHistory();
+    }
+    complete(request);
+    session.addRecommendationIds(recommendationIds(request.getRecommendations()));
+    retainRequest(session, historyEntry(request));
+  }
+
+  private void complete(SessionRequest request) {
+    if (request.getRequestId() == null) {
+      request.setRequestId(UUID.randomUUID().toString());
+    }
+    if (request.getCreatedAt() == null) {
+      request.setCreatedAt(Instant.now());
+    }
+  }
+
+  private Intent originalIntent(SessionRequest request) {
+    return request == null || request.getIntent() == null ? Intent.UNKNOWN : request.getIntent();
+  }
+
+  private List<String> recommendationIds(List<Recommendation> recommendations) {
+    return recommendations.stream()
+        .filter(recommendation -> recommendation != null)
+        .map(Recommendation::getBookId)
+        .filter(bookId -> bookId != null && !bookId.isBlank())
+        .toList();
+  }
+
+  // Persist only reusable context; raw text and the temporary decision stay out of history.
+  private SessionRequest historyEntry(SessionRequest request) {
+    SessionRequest entry = new SessionRequest();
+    entry.setRequestId(request.getRequestId());
+    entry.setCreatedAt(request.getCreatedAt());
+    entry.setIntent(request.getIntent());
+    entry.setPersonalised(request.isPersonalised());
+    entry.setPreferenceClarificationRequired(request.isPreferenceClarificationRequired());
+    entry.setPositiveSemanticQuery(request.getPositiveSemanticQuery());
+    entry.setNegativeSemanticQuery(request.getNegativeSemanticQuery());
+    entry.setMustInclude(request.getMustInclude());
+    entry.setMustNotInclude(request.getMustNotInclude());
+    entry.setBookCount(request.getBookCount());
+    entry.setRecommendations(request.getRecommendations());
+    entry.setNoMoreRecommendations(request.isNoMoreRecommendations());
+    return entry;
+  }
+
+  SessionRequest resolve(Session session, SessionRequest request) {
     SessionRequest effective = copyOf(request);
     if (session == null) {
       return effective;
     }
-    if (session.isAwaitingPersonalisedPreferences() && acceptsPreferences(effective.getIntent())) {
+    if (effective.getIntent() == Intent.REPEAT) {
+      effective.setRecommendations(List.of());
+      applyPreviousSearch(effective, session);
+      return effective;
+    }
+    // Check before preference handling: MORE cannot invent a first search.
+    if (effective.getIntent() == Intent.MORE_RESULTS
+        && (session.getRequests() == null
+            || session.getRequests().stream()
+                .noneMatch(
+                    previous ->
+                        previous != null && isRecommendationIntent(previous.getIntent())))) {
+      effective.setSearchClarificationRequired(true);
+      return effective;
+    }
+    if (awaitingPreferences(session) && acceptsPreferences(effective.getIntent())) {
       applyPreferences(effective, session);
       effective.setIntent(Intent.RECOMMENDATION);
       effective.setPersonalised(true);
@@ -30,7 +229,7 @@ public final class ConversationState {
     return effective;
   }
 
-  public SessionPreferences mergedPreferences(Session session, SessionRequest request) {
+  private SessionPreferences mergedPreferences(Session session, SessionRequest request) {
     SessionRequest combined = copyOf(request);
     applyPreferences(combined, session);
     SessionPreferences preferences = new SessionPreferences();
@@ -41,27 +240,68 @@ public final class ConversationState {
     return preferences;
   }
 
-  public Integer resolveBookCount(SessionRequest request, Session session) {
+  private Integer resolveBookCount(SessionRequest request, Session session) {
     if (request != null && request.getBookCount() != null) {
       return request.getBookCount();
     }
     return session == null ? null : session.getBookCount();
   }
 
-  public boolean isRecommendationIntent(Intent intent) {
+  private static boolean isRecommendationIntent(Intent intent) {
     return intent == Intent.RECOMMENDATION
         || intent == Intent.REFINE
         || intent == Intent.MORE_RESULTS;
   }
 
-  public static boolean isSearchContext(SessionRequest request) {
+  static boolean isSearchContext(SessionRequest request) {
     return request != null
-        && request.getIntent() != Intent.UPDATE_PREFERENCES
-        && (request.isPersonalised()
-            || request.getPositiveSemanticQuery() != null
-            || request.getNegativeSemanticQuery() != null
-            || request.getMustInclude() != null
-            || request.getMustNotInclude() != null);
+        && (request.getIntent() == Intent.RECOMMENDATION
+            || request.getIntent() == Intent.REFINE
+            || request.getIntent() == Intent.MORE_RESULTS);
+  }
+
+  private static boolean hasSearchCriteria(SessionRequest request) {
+    if (request == null) {
+      return false;
+    }
+    MustInclude include = request.getMustInclude();
+    MustNotInclude exclude = request.getMustNotInclude();
+    return request.isPersonalised()
+        || hasQuery(request.getPositiveSemanticQuery())
+        || hasQuery(request.getNegativeSemanticQuery())
+        || (include != null
+            && (hasTerms(include.getAuthors())
+                || hasTerms(include.getNarrators())
+                || hasText(
+                    include.getLanguage(),
+                    include.getDuration(),
+                    include.getPublicationYear(),
+                    include.getSource())))
+        || (exclude != null
+            && (hasTerms(exclude.getAuthors())
+                || hasTerms(exclude.getNarrators())
+                || hasText(
+                    exclude.getLanguage(),
+                    exclude.getDuration(),
+                    exclude.getPublicationYear(),
+                    exclude.getSource())));
+  }
+
+  private static boolean hasQuery(SemanticQuery query) {
+    return query != null
+        && (hasTerms(query.getTopics())
+            || hasTerms(query.getGenres())
+            || hasTerms(query.getAuthors())
+            || hasTerms(query.getNarrators())
+            || hasTerms(query.getKeywords()));
+  }
+
+  private static boolean hasTerms(List<String> terms) {
+    return terms != null && terms.stream().anyMatch(value -> value != null && !value.isBlank());
+  }
+
+  private static boolean hasText(String... values) {
+    return Stream.of(values).anyMatch(value -> value != null && !value.isBlank());
   }
 
   private boolean acceptsPreferences(Intent intent) {
@@ -79,8 +319,19 @@ public final class ConversationState {
     }
     for (int index = requests.size() - 1; index >= 0; index--) {
       SessionRequest previous = requests.get(index);
+      boolean repeat = target.getIntent() == Intent.REPEAT;
       if (isSearchContext(previous)) {
         merge(previous, target);
+        if (repeat) {
+          target.setRecommendations(
+              previous.getRecommendations() == null
+                  ? List.of()
+                  : new ArrayList<>(previous.getRecommendations()));
+          target.setNoMoreRecommendations(
+              previous.isNoMoreRecommendations()
+                  || (previous.getIntent() == Intent.MORE_RESULTS
+                      && target.getRecommendations().isEmpty()));
+        }
         return;
       }
     }
@@ -196,6 +447,7 @@ public final class ConversationState {
     return merged;
   }
 
+  // Resolution must not mutate parser input or the saved criteria used by later requests.
   private SessionRequest copyOf(SessionRequest source) {
     SessionRequest copy = new SessionRequest();
     copy.setIntent(Intent.UNKNOWN);
@@ -206,12 +458,14 @@ public final class ConversationState {
     copy.setRawText(source.getRawText());
     copy.setCreatedAt(source.getCreatedAt());
     copy.setIntent(source.getIntent() == null ? Intent.UNKNOWN : source.getIntent());
-    copy.setPositiveSemanticQuery(copy(source.getPositiveSemanticQuery()));
-    copy.setNegativeSemanticQuery(copy(source.getNegativeSemanticQuery()));
+    if (acceptsSemanticInformation(copy.getIntent())) {
+      copy.setPositiveSemanticQuery(copy(source.getPositiveSemanticQuery()));
+      copy.setNegativeSemanticQuery(copy(source.getNegativeSemanticQuery()));
+      copy.setPersonalised(source.isPersonalised());
+    }
     copy.setMustInclude(copy(source.getMustInclude()));
     copy.setMustNotInclude(copy(source.getMustNotInclude()));
     copy.setBookCount(source.getBookCount());
-    copy.setPersonalised(source.isPersonalised());
     copy.setPreferenceClarificationRequired(source.isPreferenceClarificationRequired());
     return copy;
   }

@@ -5,11 +5,11 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookSearchPage;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCatalogueRepository;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorIndexer;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -24,6 +24,7 @@ import org.apache.solr.client.solrj.util.ClientUtils;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrInputDocument;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Repository;
@@ -31,7 +32,7 @@ import org.springframework.stereotype.Repository;
 /** Implements audiobook keyword, vector, catalogue, and indexing operations with Solr. */
 @Repository
 @ConditionalOnExpression(
-    "'${audiobook.candidate-retriever:qdrant}' == 'solr' || '${audiobook.qdrant.migration.enabled:false}' == 'true'")
+    "'${audiobook.qdrant.migration.enabled:false}' == 'true' or ('${audiobook.embedding-index.enabled:false}' == 'true' and '${audiobook.database:qdrant}' == 'solr') or ('${audiobook.short-description.batch.mode:disabled}' != 'disabled' and '${audiobook.database:qdrant}' == 'solr')")
 public class SolrAudiobookRepository
     implements AudiobookCatalogueRepository, AudiobookCandidateSearch, AudiobookVectorIndexer {
 
@@ -43,6 +44,7 @@ public class SolrAudiobookRepository
   private final String vectorField;
   private final int vectorDimension;
 
+  @Autowired
   public SolrAudiobookRepository(
       SolrClient solrClient,
       @Value("${solr.collection}") String collection,
@@ -242,6 +244,38 @@ public class SolrAudiobookRepository
   /** Reads the complete catalogue in deterministic pages for the startup importer. */
   @Override
   public List<AudiobookRecord> findAllBooks(int offset, int limit) throws IOException {
+    return cataloguePage(offset, limit, false).stream().map(this::toRecord).toList();
+  }
+
+  /** Reads existing catalogue values and vectors without generating or normalizing anything. */
+  public List<AudiobookEmbedding> findStoredBooks(int offset, int limit) throws IOException {
+    List<AudiobookEmbedding> records = new ArrayList<>();
+    for (SolrDocument document : cataloguePage(offset, limit, true)) {
+      Object stored = document.getFieldValue(vectorField);
+      float[] vector = null;
+      if (stored instanceof float[] values) {
+        vector = values.clone();
+      } else if (stored instanceof java.util.Collection<?> values) {
+        vector = new float[values.size()];
+        int index = 0;
+        for (Object value : values) {
+          if (!(value instanceof Number number)) {
+            throw new IOException(
+                "Invalid stored Solr vector for book " + document.getFieldValue("id"));
+          }
+          vector[index++] = number.floatValue();
+        }
+      } else if (stored != null) {
+        throw new IOException(
+            "Invalid stored Solr vector for book " + document.getFieldValue("id"));
+      }
+      records.add(new AudiobookEmbedding(toRecord(document), vector));
+    }
+    return records;
+  }
+
+  private SolrDocumentList cataloguePage(int offset, int limit, boolean includeVectors)
+      throws IOException {
     SolrQuery solrQuery = new SolrQuery("*:* ".trim());
     solrQuery.setStart(Math.max(offset, 0));
     solrQuery.setRows(Math.max(limit, 1));
@@ -257,9 +291,12 @@ public class SolrAudiobookRepository
         "durationMinutes",
         "publicationYear",
         "short_description");
+    if (includeVectors) {
+      solrQuery.addField(vectorField);
+    }
     try {
       QueryResponse response = solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
-      return response.getResults().stream().map(this::toRecord).toList();
+      return response.getResults();
     } catch (SolrServerException exception) {
       throw new IOException("Could not load audiobook catalogue from Solr", exception);
     }
@@ -367,19 +404,6 @@ public class SolrAudiobookRepository
               + vector.length
               + " does not match Solr dimension "
               + vectorDimension);
-    }
-  }
-
-  /** Converts Solr's response into the repository's database-independent search page. */
-  @Override
-  public AudiobookSearchPage searchBooks(String query, int limit) throws IOException {
-    try {
-      QueryResponse response = search(query, limit);
-      return new AudiobookSearchPage(
-          response.getResults().getNumFound(),
-          response.getResults().stream().map(this::toRecord).toList());
-    } catch (SolrServerException exception) {
-      throw new IOException("Solr audiobook search failed", exception);
     }
   }
 

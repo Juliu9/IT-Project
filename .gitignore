@@ -142,4 +142,5 @@ secrets/
 # =========================
 repomix-output.xml
 *.puml
+!/docs/diagrams/*.puml
 /data

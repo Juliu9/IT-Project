@@ -21,8 +21,8 @@ class ConversationStateTest {
   @MethodSource("followUpIntents")
   void resolvesFollowUpsFromTheLatestRetainedSearch(Intent intent) {
     Session session = new Session();
-    session.addRequest(searchRequest(Intent.RECOMMENDATION, "fantasy"));
-    session.addRequest(searchRequest(Intent.RECOMMENDATION, "history"));
+    ConversationState.retainRequest(session, searchRequest(Intent.RECOMMENDATION, "fantasy"));
+    ConversationState.retainRequest(session, searchRequest(Intent.RECOMMENDATION, "history"));
     SessionRequest request = request(intent);
 
     SessionRequest effective = conversationState.resolve(session, request);
@@ -62,8 +62,8 @@ class ConversationStateTest {
     SessionRequest pending = request(Intent.UNKNOWN);
     pending.setPersonalised(true);
     pending.setPreferenceClarificationRequired(true);
-    session.addRequest(pending);
-    SessionRequest reply = request(Intent.UPDATE_PREFERENCES);
+    ConversationState.retainRequest(session, pending);
+    SessionRequest reply = request(Intent.REFINE);
     reply.setPositiveSemanticQuery(queryWithGenres("fantasy"));
 
     SessionRequest effective = conversationState.resolve(session, reply);
@@ -72,7 +72,7 @@ class ConversationStateTest {
     assertTrue(effective.isPersonalised());
     assertEquals(List.of("fantasy"), effective.getPositiveSemanticQuery().getGenres());
     assertNull(session.getPreferences());
-    assertEquals(Intent.UPDATE_PREFERENCES, reply.getIntent());
+    assertEquals(Intent.REFINE, reply.getIntent());
   }
 
   @Test
@@ -82,7 +82,7 @@ class ConversationStateTest {
     SessionRequest pending = request(Intent.UNKNOWN);
     pending.setPersonalised(true);
     pending.setPreferenceClarificationRequired(true);
-    session.addRequest(pending);
+    ConversationState.retainRequest(session, pending);
 
     SessionRequest help = conversationState.resolve(session, request(Intent.HELP));
     SessionRequest recommendation =
@@ -93,6 +93,38 @@ class ConversationStateTest {
     assertEquals(3, recommendation.getBookCount());
     assertEquals(3, session.getBookCount());
     assertFalse(ConversationState.isSearchContext(request(Intent.UPDATE_PREFERENCES)));
+  }
+
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = Intent.class,
+      names = {
+        "MORE_RESULTS",
+        "REPEAT",
+        "CHANGE_COUNT",
+        "UPDATE_PREFERENCES",
+        "CLEAR_HISTORY",
+        "HELP",
+        "UNKNOWN"
+      })
+  void ignoresNewSemanticInformationOnControlIntents(Intent intent) {
+    var incoming = request(intent);
+    incoming.setPositiveSemanticQuery(queryWithGenres("horror"));
+    incoming.setNegativeSemanticQuery(queryWithGenres("romance"));
+    incoming.setPersonalised(true);
+    var effective = conversationState.resolve(new Session(), incoming);
+    assertNull(effective.getPositiveSemanticQuery());
+    assertNull(effective.getNegativeSemanticQuery());
+    assertFalse(effective.isPersonalised());
+  }
+
+  @Test
+  void helpWithCriteriaDoesNotReplaceTheRetainedSearch() {
+    var session = new Session();
+    ConversationState.retainRequest(session, searchRequest(Intent.RECOMMENDATION, "romance"));
+    ConversationState.retainRequest(session, searchRequest(Intent.HELP, "horror"));
+    var effective = conversationState.resolve(session, request(Intent.MORE_RESULTS));
+    assertEquals(List.of("romance"), effective.getPositiveSemanticQuery().getTopics());
   }
 
   private static Stream<Arguments> followUpIntents() {
@@ -121,5 +153,32 @@ class ConversationStateTest {
     SemanticQuery query = new SemanticQuery();
     query.setGenres(List.of(genre));
     return query;
+  }
+
+  @Test
+  void keepsOnlyTheLatestSearchAndLatestNonSearchRequest() {
+    Session session = new Session();
+    SessionRequest firstSearch = searchRequest(Intent.RECOMMENDATION, "fantasy");
+    SessionRequest help = new SessionRequest();
+    SessionRequest latestSearch = searchRequest(Intent.RECOMMENDATION, "history");
+
+    ConversationState.retainRequest(session, firstSearch);
+    ConversationState.retainRequest(session, help);
+    ConversationState.retainRequest(session, latestSearch);
+
+    assertEquals(List.of(help, latestSearch), session.getRequests());
+  }
+
+  @Test
+  void derivesPendingPersonalisedPreferencesFromRetainedRequests() {
+    Session session = new Session();
+    SessionRequest pending = new SessionRequest();
+    pending.setPreferenceClarificationRequired(true);
+
+    ConversationState.retainRequest(session, pending);
+    assertTrue(session.isAwaitingPersonalisedPreferences());
+
+    session.clearHistory();
+    assertFalse(session.isAwaitingPersonalisedPreferences());
   }
 }
