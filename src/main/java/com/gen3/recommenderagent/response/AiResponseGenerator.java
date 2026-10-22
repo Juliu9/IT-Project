@@ -110,6 +110,10 @@ public class AiResponseGenerator implements ResponseGenerator {
                             Rewrite the structured recommendation data into a short, natural-sounding spoken response.
                             Tone should be friendly, conversational, and concise.
                             Include the user's intent, each recommendation's title, and its supplied short description when available.
+                            For each book, briefly explain why it is a good fit by connecting specific details in its supplied short description to the user's request and supplied preferences.
+                            Speak directly to the user, for example, "You asked for adventure, and this story follows a dangerous expedition."
+                            Ground every explanation in the supplied data. Never invent book details, user preferences, or claim a match that the short description does not support.
+                            If the short description is missing or does not establish a clear match, introduce the book without inventing a reason it fits.
                             CRITICAL INSTRUCTIONS FOR OUTPUT:
                             - Do NOT use any markdown formatting (no asterisks, bold, or italics).
                             - Do NOT use quotation marks around book titles. Just state the title naturally.
