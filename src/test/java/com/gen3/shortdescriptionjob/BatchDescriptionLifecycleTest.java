@@ -53,6 +53,20 @@ class BatchDescriptionLifecycleTest {
   }
 
   @Test
+  void refusesDuplicateBookIdsBeforeUploadOrManifestCreation() throws Exception {
+    var duplicate = new StoredAudiobook(book().record(), "another-point");
+    when(store.findRecordsWithoutShortDescription(2)).thenReturn(List.of(book(), duplicate));
+    var provider = mock(ShortDescriptionBatchProvider.class);
+    var job =
+        new BatchShortDescriptionEnricher(store, mapper, provider, "submit", "", directory, 2);
+    assertThatThrownBy(() -> job.run(new DefaultApplicationArguments()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Duplicate bookId");
+    verifyNoInteractions(provider);
+    assertThat(directory.resolve("short-description-batch.json")).doesNotExist();
+  }
+
+  @Test
   void replacementProviderUsesTheSameLifecycleAndSharedDescriptionRules() throws Exception {
     when(store.datasetIdentity()).thenReturn(new DatasetIdentity("other", "catalogue-a"));
     when(store.findRecordsWithoutShortDescription(1)).thenReturn(List.of(book()));

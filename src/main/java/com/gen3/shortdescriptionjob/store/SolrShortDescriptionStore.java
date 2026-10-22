@@ -62,8 +62,10 @@ public class SolrShortDescriptionStore implements AudiobookEnrichmentStore {
     while (missing.size() < maximumRecords) {
       var page = catalogue.findAllBooks(offset, 500);
       for (var book : page) {
-        if (book.shortDescription() == null || book.shortDescription().isBlank()) {
-          missing.add(new StoredAudiobook(book, book.id()));
+        var stored = new StoredAudiobook(book, book.id());
+        if ((book.shortDescription() == null || book.shortDescription().isBlank())
+            && AudiobookEnrichmentStore.eligible(stored)) {
+          missing.add(stored);
           if (missing.size() == maximumRecords) {
             break;
           }
@@ -130,6 +132,11 @@ public class SolrShortDescriptionStore implements AudiobookEnrichmentStore {
           client.add(collection, documents);
           client.commit(collection);
         }
+        org.slf4j.LoggerFactory.getLogger(getClass())
+            .info(
+                "short.description.import.progress processed={} total={}",
+                start + batch.size(),
+                valid.size());
       }
     } catch (SolrServerException exception) {
       throw new IOException(

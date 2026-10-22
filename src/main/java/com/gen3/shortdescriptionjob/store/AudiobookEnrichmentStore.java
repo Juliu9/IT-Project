@@ -18,6 +18,18 @@ public interface AudiobookEnrichmentStore {
     }
   }
 
+  static boolean eligible(StoredAudiobook book) {
+    return book != null
+        && book.record() != null
+        && book.storageReference() != null
+        && !book.storageReference().isBlank()
+        && book.record().id() != null
+        && !book.record().id().isBlank()
+        && book.record().description() != null
+        && !book.record().description().isBlank();
+  }
+
+  /** The limit counts eligible records, not skipped catalogue rows. */
   List<StoredAudiobook> findRecordsWithoutShortDescription(int maximumRecords) throws IOException;
 
   void updateShortDescriptions(List<ShortDescriptionUpdate> updates) throws IOException;

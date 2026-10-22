@@ -130,6 +130,7 @@ public class QdrantShortDescriptionStore implements AudiobookEnrichmentStore {
                       new StoredAudiobook(
                           mapper.toRecord(point),
                           Base64.getEncoder().encodeToString(point.getId().toByteArray())))
+              .filter(AudiobookEnrichmentStore::eligible)
               .toList());
       if (!page.hasNextPageOffset() || page.getResultCount() == 0) {
         break;
@@ -156,6 +157,11 @@ public class QdrantShortDescriptionStore implements AudiobookEnrichmentStore {
       List<PointsUpdateOperation> batch =
           operations.subList(start, Math.min(start + 100, operations.size()));
       await(client.batchUpdateAsync(collection, batch), "store audiobook short descriptions");
+      org.slf4j.LoggerFactory.getLogger(getClass())
+          .info(
+              "short.description.import.progress processed={} total={}",
+              start + batch.size(),
+              operations.size());
     }
   }
 

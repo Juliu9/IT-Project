@@ -24,6 +24,17 @@ import org.springframework.ai.chat.model.ChatResponse;
 import tools.jackson.databind.ObjectMapper;
 
 class InputParserTest {
+  @Test
+  void rejectsOversizedInputBeforeCallingTheModel() {
+    var client = mock(ChatClient.class);
+    var parser =
+        new AiInputParser(
+            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+    assertThrows(
+        InvalidRequestException.class,
+        () -> parser.parse("x".repeat(InputParser.MAX_REQUEST_CHARACTERS + 1)));
+    verifyNoInteractions(client);
+  }
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.EnumSource(

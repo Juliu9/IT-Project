@@ -119,12 +119,15 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
   }
 
   private List<StoredAudiobook> validBooks(List<StoredAudiobook> records) {
-    return records.stream()
-        .filter(
-            record ->
-                record != null && record.record() != null && hasText(record.storageReference()))
-        .filter(record -> hasText(record.record().id()) && hasText(record.record().description()))
-        .toList();
+    var valid = records.stream().filter(AudiobookEnrichmentStore::eligible).toList();
+    var ids = new java.util.HashSet<String>();
+    for (var book : valid) {
+      if (!ids.add(book.record().id())) {
+        throw new IllegalArgumentException(
+            "Duplicate bookId in summary batch: " + book.record().id());
+      }
+    }
+    return valid;
   }
 
   private void importCompletedBatch() throws IOException, InterruptedException {

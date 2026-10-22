@@ -1,96 +1,133 @@
 # RecommenderAgent
 
-Spring Boot service for audiobook recommendations. It parses a natural-language request, retrieves
-and ranks candidates, retains a 24-hour Redis session, and returns a concise spoken-style response.
+A Spring Boot service that turns natural-language requests into audiobook recommendations.
+It understands search criteria and follow-up requests, retrieves and ranks books, and returns a
+concise response explaining why the books fit.
 
-## How it works
+## High-level concepts
 
-1. OpenAI parses the request into an intent, semantic query, exact filters, and result count.
-2. Qdrant retrieves unseen candidates using semantic, keyword, hybrid, or filter-only search.
-3. The ranker scores candidates and defensively excludes any book already shown in the session.
-4. Redis saves the request and up to 500 recent shown-book IDs under the `(userId, sessionId)` pair.
+1. **Parse:** A chat model identifies the intent, desired and avoided concepts, exact filters,
+   and requested result count.
+2. **Find and rank:** The service embeds search concepts, retrieves candidates from Qdrant,
+   and ranks them using relevance, available user preferences, and general scoring rules.
+3. **Remember:** Redis keeps a 24-hour session, including search context, recently shown books,
+   and a batch of recommendations waiting to be shown.
+4. **Respond:** A separate chat client explains the selected books using their stored short descriptions.
 
-Every search mode excludes those shown IDs inside Qdrant before selecting up to 50 candidates.
-Existing collections in Qdrant strict mode need a keyword payload index on `bookId`; new
-collections created by this adapter already include it. The ranker checks exclusions again.
-`MORE_RESULTS` reuses the previous search. Without a previous search it asks what the user wants,
-without embedding or retrieval. A previous search with no matches still counts. Clear history to
-make earlier books eligible again. Books outside the 500-ID window may reappear.
+Catalogue embedding generation, short-description generation, migration, and preference imports
+run as separate, explicit maintenance jobs. Normal requests only generate search-query embeddings.
 
-Author-only and narrator-only semantic preferences select semantic retrieval; exact names in
-`MustInclude` and `MustNotInclude` remain database filters.
+## How the recommender agent works
 
-`REPEAT` (for example, “show those again”) returns the most recent recommendation page
-from session history without consuming pending results or rerunning retrieval. After clearing
-history, there is nothing to repeat. Short “more” pages are allowed; an empty “more” explicitly
-says there are no further matches, and “repeat” preserves that empty outcome instead of returning
-older books. Response wording is generated normally. Both “more” and
-“repeat” supply the saved search criteria to the response generator so it can explain the fit.
+### 1. Turn the message into a structured request
 
-Each search ranks up to 20 recommendations from those candidates. The session stores the
-unserved recommendations (ID, title, short description, and score), then serves up to five per
-request using the existing result-count rules. Plain “more” skips preference lookup, embedding,
-retrieval, and ranking while that queue has enough results. Parsing and response generation still
-run normally. A short cached tail is combined with a fresh batch when possible; the tail is
-excluded from the new retrieval too.
+`RequestGateway` accepts text at `/api/v1/recommendations`, along with user and session IDs.
+`AiInputParser` asks its chat model to produce a `SessionRequest` containing:
 
-New searches, refinements, preference changes, exact filters supplied with “more”, and clearing
-history discard the queue. Changing the result count or asking for help keeps it. Queue consumption
-and shown IDs commit together under the existing session lock and share its 24-hour sliding expiry;
-failed updates leave the saved queue untouched. There are no Redis-specific keys or database lookup
-requirements. Old sessions without a queue refill normally.
+- An **intent**, such as a new recommendation, a refinement, “more”, or “repeat”.
+- Positive and negative **semantic criteria**: concepts the user wants or wants to avoid.
+- **Exact filters**, such as author, narrator, language, duration, publication year, or source.
+- A result count and whether the user explicitly requested personalisation.
 
-Cached details are a snapshot of the catalogue when the batch was ranked. Catalogue edits or
-removals take effect for new batches; queued entries are not checked against the database on each
-page.
+For example, “dark fantasy under ten hours, but no romance” supplies desired fantasy concepts,
+avoided romance concepts, and an exact duration limit. Semantic criteria influence similarity;
+exact filters restrict which records are eligible. Only new searches and refinements introduce
+new semantic criteria; follow-up control intents can inherit the saved search.
 
-Session changes use one `SessionRepository.update` operation: lock the `(userId, sessionId)`
-pair, load or create its session, apply the change once, commit, and release the lock. Redis
-checks lock ownership and session version before saving, and renews the lock for long updates.
-Busy sessions return 409; rejected commits or lost locks return 503. Updates are not retried
-automatically. Lock keys use a separate `lock:` namespace; existing session data keys are unchanged.
-When upgrading from the old lock-key scheme, drain and stop old instances and allow their leases
-to expire before serving traffic with the new version. Do not mix the two locking versions.
-Final response generation happens after commit, so a response failure does not
-undo history or shown-book changes.
+### 2. Resolve the conversation under a session lock
 
-Redis is the default session adapter (`SESSION_STORE=redis`). To replace it, register an
-implementation of `SessionRepository` and set `SESSION_STORE` to its backend name; this disables
-the Redis session adapter and Boot's Redis connections, templates, repositories, and health checks.
-Request handling and conversation rules do not
-need to change. The replacement must preserve cross-instance exclusion, single-attempt commits,
-the 24-hour sliding expiry, and the shared session error types. A cache offering only get/set
-operations is insufficient without additional coordination.
+`SessionTransitionService` loads or creates the session through `SessionRepository.update`.
+The Redis adapter locks that user/session pair so separate server instances cannot update it
+at the same time. `ConversationState` then resolves the request against saved search criteria,
+preferences, and history, and discards cached recommendations when the search changes.
 
-Supported intents are `RECOMMENDATION`, `REFINE`, `MORE_RESULTS`, `REPEAT`, `CHANGE_COUNT`,
-`UPDATE_PREFERENCES`, `CLEAR_HISTORY`, `HELP`, and `UNKNOWN`.
+Some intents need no search: help, count changes, clearing history, and repeat are handled from
+conversation state. “More” without an earlier search asks what the user wants instead of
+embedding or retrieving anything. A personalised request without usable taste information asks
+for preferences.
 
-Personalised requests such as “Give me books I would like” use a stored Qdrant user vector when
-available. Otherwise, session preferences are used; if none exist, the service asks what the user
-likes. `REFINE` and `MORE_RESULTS` reuse the last search.
+### 3. Retrieve candidates when the cache cannot supply the page
 
-For known users, retrieval combines one normalized stored-taste vector and the current positive
-semantic vector equally, then subtracts the negative semantic vector and normalizes the result.
-When a positive source is absent, the other contributes at full strength. Exact `MustInclude` and
-`MustNotInclude` constraints remain database filters; they are never relaxed to fill the count.
-The final ranker still applies its separately configured scoring weights.
+`AudiobookRecommendationWorkflow` prepares positive and negative query embeddings. For explicitly
+personalised retrieval, it also blends available stored favourite/history vectors with the current
+query. Without stored vectors, it uses the supplied or saved preferences.
 
-Duration filters support hours/minutes, decimals, mixed units (`1h 30m`), and ranges
-(`between 2 and 3 hours`). `under` and `over` are strict; `at most` and `at least` include the boundary.
-A bare duration is exact. Bounds account for the catalogue's whole-minute durations. Invalid,
-ambiguous, reversed, or unrepresentable ranges return 400 instead of silently losing the filter.
+`AudiobookRetrievalPlanner` builds the exact filters and chooses semantic, keyword, hybrid,
+or filter-only retrieval from the searchable content. `CandidateRetrievalService` executes the
+plan through the selected database adapter. Positive vectors point toward desired concepts;
+negative vectors steer away from avoided concepts. Exact filters remain mandatory.
 
-Publication-year filters accept exact four-digit years, strict `after`/`before` comparisons,
-inclusive `at least`/`at most` comparisons, and inclusive ranges such as `between 2000 and 2010`.
-Unsupported or reversed expressions return 400.
+Qdrant excludes recently shown book IDs before selecting up to **50 candidates**. This leaves
+unseen books eligible even when the closest matches have already been recommended.
+
+### 4. Rank a batch and serve one page
+
+`RankingService` removes duplicate or already-shown books and combines available scoring signals:
+retrieval relevance, similarity to stored user preferences, and general rules such as recency and
+duration plausibility. Their weights are configured in `application.properties`.
+
+The service retains up to **20 ranked recommendations**, serves up to **five** according to the
+requested count, and saves the unused recommendations in the session. Each saved item includes
+its ID, title, short description, and score, so cached pages do not need another catalogue lookup.
+
+| Follow-up | Behavior |
+| --- | --- |
+| “More please” | Consume the next cached page; skip preference lookup, embedding, retrieval, and ranking when enough items remain. Refill when needed, combining any cached tail with fresh results. |
+| “Repeat those” | Reuse the last recommendation page without consuming the cache or retrieving books. An empty “more” outcome is also repeated. |
+| Refine the search or start a new one | Discard the pending batch and retrieve using the resolved criteria. |
+| Change the result count or ask for help | Keep the pending batch. |
+| Clear history | Clear shown IDs, search history, and pending recommendations; keep saved preferences and the result-count setting. |
+
+Short “more” pages are allowed. If none remain, the response explicitly says there are no more
+matches for the current search. New exact filters supplied with “more”, or preference updates,
+also invalidate the pending batch.
+
+### 5. Commit the session, then explain the books
+
+Queue consumption, shown IDs, and conversation changes commit together before a response is
+written. The Redis adapter checks lock ownership and session version before saving, renews long
+locks, and refreshes the session's 24-hour expiry. A failed transition leaves the saved queue
+unchanged; response generation runs after the lock is released.
+
+`ConversationState` supplies a temporary `ConversationDecision` describing the resolved action.
+`AiResponseGenerator` uses built-in wording for actions and clarification, or asks its separate
+chat client to explain the selected books using the resolved criteria and stored short descriptions.
+The response model does not choose the books. If it fails, built-in wording returns the selected
+recommendations; the committed session is preserved.
+
+Request logs record stage timings, retrieval mode, and AI token usage. See
+[Architecture and behavior](docs/architecture.md) for adapter guarantees and detailed rules, or
+[the request sequence diagram](docs/diagrams/recommendation-flow.svg) for the execution order.
+
+## Repository structure
+
+Java sources live under `src/main/java/com/gen3/`:
+
+| Package | Responsibility |
+| --- | --- |
+| `recommenderagent` | Live API: parsing, conversation state, retrieval, ranking, responses, storage adapters, and telemetry |
+| `embeddingjob` | Read existing catalogue records and generate their vector embeddings |
+| `shortdescriptionjob` | Submit and import generated short descriptions |
+| `migrationjob` | Copy existing supported fields and vectors from Solr to Qdrant |
+| `userpreferencejob` | Read CSV favourites/history and aggregate existing book vectors into user preferences |
+
+The jobs reuse storage models and adapters from `recommenderagent`. Their launchers are separate
+from the recommendation server. Matching tests live under `src/test/java/com/gen3/`.
+
+| Location | Purpose |
+| --- | --- |
+| `src/main/resources/application.properties` | Backend selection, model choices, scoring, connections, and job settings |
+| `compose.yaml` | Local Redis and Qdrant services |
+| `compose.observability.yaml` / `observability/` | Optional Grafana Alloy log collector |
+| `solr/vector-field-schema.xml` | Manual Solr vector-field schema snippet |
+| `docs/` | Detailed behavior, maintenance instructions, and system diagrams |
+| `.github/workflows/ci.yml` | Build and test checks |
 
 ## Run locally
 
-Requirements: Java 21, Docker Compose, and an OpenAI API key.
-
-The local Qdrant image is now 1.19.1. Before reusing a volume created by 1.15.x,
-back it up and follow Qdrant's consecutive-minor-version upgrade procedure;
-do not point 1.19.1 directly at an old 1.15.x volume. Test containers use fresh storage.
+Requirements: **Java 21**, Docker Compose, and an OpenAI API key.
+You also need an existing audiobook collection with the expected Qdrant schema and indexed data;
+starting Docker alone does not populate a catalogue.
 
 ```bash
 docker compose up -d
@@ -98,7 +135,9 @@ export OPENAI_API_KEY="your-key"
 ./mvnw spring-boot:run
 ```
 
-Make a request:
+The server defaults to `http://localhost:8080`, Redis to `localhost:6379`, and Qdrant to
+`http://localhost:6333` with gRPC on port `6334`. Set credentials in your shell or IDE;
+the application does not automatically load a repository `.env` file.
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/recommendations \
@@ -108,317 +147,63 @@ curl -X POST http://localhost:8080/api/v1/recommendations \
   -d "Recommend a dark fantasy audiobook under ten hours, but no romance."
 ```
 
-## Configuration
+Reuse the same user and session IDs for follow-ups such as “more please” and “repeat those”.
 
-Only `OPENAI_API_KEY` is required. The defaults suit local Docker:
+## Important commands
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` | Redis session store |
-| `QDRANT_URL` | `http://localhost:6333` | Qdrant endpoint |
-| `QDRANT_GRPC_PORT` | `6334` | Qdrant gRPC port |
-| `QDRANT_API_KEY` | empty | Qdrant Cloud API key |
-| `QDRANT_COLLECTION` | `audiobooks_hybrid` | Audiobook collection |
-| `QDRANT_TIMEOUT` | `10s` | Maximum time for one Qdrant call |
-| `AUDIOBOOK_DATABASE` | `qdrant` | One database adapter set for search, vectors, preferences, and enrichment |
-| `EMBEDDING_DIMENSIONS` | `1536` | Shared embedding-model and vector-store dimension |
-| `QDRANT_MIGRATION_ENABLED` | `false` | Run the opt-in Solr-to-Qdrant migration |
-
-Qdrant stores dense and sparse vectors plus filterable metadata. Exact author, narrator, language,
-duration, and source constraints are applied as filters. Solr remains for explicit migration and its integration tests; it is not a complete selectable backend.
-
-`solr/vector-field-schema.xml` is a manual snippet for configuring an external Solr collection.
-It stays outside `src/` because the application does not load it or bundle it as a runtime
-resource. Apply its definitions to the target collection and match the vector dimensions to the
-configured embedding model.
-
-## Database selection and replacement
-
-Local Docker and Qdrant integration tests use server 1.19.1 with Java client 1.18.0.
-Vector readers use the current dense-vector response format; legacy flattened responses are not supported.
-
-
-`audiobook.database` in `application.properties` selects one database for the whole request flow;
-`qdrant` is the default. The former `audiobook.candidate-retriever` setting is rejected to prevent
-mixed backends. The recommendation server still rejects `solr` until its missing vector lookup
-and user-preference adapters are implemented; both maintenance jobs can select Solr independently.
-
-To add another database, register its implementations of `AudiobookCandidateSearch`,
-`AudiobookVectorRepository` and `UserPreferenceVectorRepository`
-under the same selection setting. Selecting it disables all Qdrant clients and adapters. Missing
-implementations fail startup; they never fall back to Qdrant. Preserve semantic, keyword, hybrid,
-and filtered search and the existing write guarantees; report unsupported operations explicitly.
-Conversation and ranking code do not change. A change of selection does not copy any data.
-
-Qdrant field names, index types, vector schema, and filter translation live in
-`QdrantAudiobookSchema`, inside the adapter. Reads still require an existing collection without
-creating indexes; explicit indexing creates an absent collection. Existing collections are not
-automatically inspected or migrated.
-
-Qdrant catalogue lookups match the payload's `bookId`, independently of whether the point ID
-is an integer or a UUID. Existing points retain their original IDs during explicit writes;
-migration skips existing books. New books keep the deterministic UUID convention.
-A generated ID already occupied by another record is rejected instead of overwritten.
-
-Each `bookId` must identify one point in the selected collection. Lookup, migration, and
-explicit writes reject multiple matches for a requested book ID; writes also reject duplicate
-IDs within an input batch. No duplicate is selected, merged, or deleted automatically.
-Matching reads are paginated in groups of at most 100. Keep the `bookId` keyword index on
-existing strict-mode collections. Maintenance writes still require a stable catalogue and one
-writer; checks do not enforce uniqueness against concurrent external writers.
-
-## Catalogue embedding maintenance
-
-All catalogue indexing orchestration, book-to-vector conversion, and job-specific database adapters
-live under `com.gen3.embeddingjob`. Search-query embedding remains in the recommendation service;
-shared catalogue records and general database persistence stay in the storage packages.
-
-Book-vector generation is disabled by default and runs only in a separate, non-web process.
-Choose the database containing the existing records with `AUDIOBOOK_DATABASE=solr` or `qdrant`.
-The same selected adapter reads the records and updates their vectors; neither migration nor
-normal request handling starts this job. Query embeddings used by normal searches are unchanged.
-
-For example, index up to 100 existing Solr records:
+Run formatting checks, build checks, unit tests, and local container integration tests
+without calling live AI services. Docker must be available:
 
 ```bash
-AUDIOBOOK_EMBEDDING_INDEX_ENABLED=true AUDIOBOOK_DATABASE=solr \
-./mvnw spring-boot:run \
-  -Dapplication.main-class=com.gen3.embeddingjob.EmbeddingIndexApplication \
-  -Dspring-boot.run.arguments="--audiobook.embedding-index.maximum-records=100"
+OPENAI_API_KEY=ci-placeholder ./mvnw clean verify -DexcludedGroups=external
 ```
 
-Replace `solr` with `qdrant` to index the records already in Qdrant. Only the selected database
-client is loaded; the job does not need Redis or the recommendation backend's user-preference
-adapters. OpenAI credentials and the selected database connection settings are still required.
-The Solr collection must have the configured stored vector field, or Qdrant must have the
-configured named-vector schema, matching `embedding.dimensions`.
-
-`audiobook.embedding-index.page-size` defaults to 100. `maximum-records=0` processes the full
-catalogue. This explicitly regenerates existing dense vectors, incurs embedding-provider cost,
-and also builds Qdrant keyword vectors. Updates preserve record IDs, metadata, custom fields,
-and short descriptions. Blank records are skipped. Failed pages are not written if embedding
-fails; earlier completed pages remain saved. Rerunning starts at the beginning, so use a stable
-catalogue and run one indexing job at a time. The process closes its clients and exits when done.
-
-The former `solr.embedding-index-on-startup` and `solr.embedding-index-page-size` settings are
-replaced by this database-independent job. Enabling the new flag on the normal server is rejected;
-use the dedicated entry point. Migration and indexing cannot run together. Another database can
-implement `com.gen3.embeddingjob.store.AudiobookEmbeddingStore` and register its adapter for the selected database.
-
-Solr-to-Qdrant migration is the sole two-database exception and requires a dedicated non-web run.
-It copies the supported catalogue fields, existing short descriptions, and the configured stored
-Solr dense-vector field. It never calls an embedding or summary model, normalizes existing vectors,
-or generates sparse keyword vectors. Records without vectors are copied with no vectors; they
-need a separate opt-in indexing step before vector search can find them. Existing destination
-records are skipped so reruns preserve their summaries and vectors. The record limit counts source
-records read, including skipped destination records. Source vector dimensions must match Qdrant.
-The embedding job above indexes these copied records. This does not complete the selectable
-Solr recommendation backend.
-
-Run against a stable source catalogue and avoid concurrent writes to the destination during migration:
-
+Run the entire suite, including live integration tests, with valid `OPENAI_API_KEY`,
+`QDRANT_URL`, and `QDRANT_API_KEY` values and Redis available locally:
 
 ```bash
-QDRANT_MIGRATION_ENABLED=true ./mvnw spring-boot:run \
-  -Dapplication.main-class=com.gen3.migrationjob.MigrationApplication \
-  -Dspring-boot.run.arguments="--audiobook.database=qdrant"
+./mvnw clean verify
 ```
 
-## Chat models
-
-The parser and response generator have separate clients. Set `INPUT_PARSER_CHAT_MODEL` and
-`RESPONSE_GENERATOR_CHAT_MODEL` independently (properties `ai.input-parser.model` and
-`ai.response-generator.model`). A blank value inherits the configured provider's default;
-OpenAI's default is `gpt-4o-mini`, overridable with `OPENAI_CHAT_MODEL`.
-To use different providers, register a Spring AI `ChatClient` bean named `inputParserChatClient`
-or `responseGeneratorChatClient`; each replacement affects only its role. Model names must be
-supported by that client's provider. Provider failures and missing or blank response text use the
-built-in recommendation response; the already committed session is preserved. These failures
-are recorded in local logs.
-
-## Short book descriptions
-
-Recommendations use a stored, one-sentence `short_description` when it is available. Generate
-these descriptions offline through a `ShortDescriptionBatchProvider`; OpenAI Batch is the default
-adapter. Normal requests never call AI for a summary.
-The database-independent job reads `description` through the selected `AudiobookEnrichmentStore`,
-generates `shortDescription`, and uploads through that same adapter without re-embedding books.
-The adapter maps those domain fields to its database names (Qdrant uses `short_description`) and
-preserves existing short descriptions.
-
-All short-description orchestration, provider transport, and summary-specific database adapters live
-under `com.gen3.shortdescriptionjob`. The normal server never loads this job, even when explicitly
-configured: it rejects enabled summary modes and directs you to the maintenance entry point.
-Choose `AUDIOBOOK_DATABASE=solr` or `qdrant`; only that database is connected. This job uses neither
-Redis nor embedding generation and does not require a complete recommendation backend.
-
-Start with a small submission to check quality and spend:
+Apply Java formatting:
 
 ```bash
-AUDIOBOOK_DATABASE=solr AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MODE=submit \
-AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MAXIMUM_RECORDS=1000 \
-./mvnw spring-boot:run \
-  -Dapplication.main-class=com.gen3.shortdescriptionjob.ShortDescriptionApplication
+./mvnw spotless:apply
 ```
 
-Solr requires a stored, single-valued `short_description` field (for example, type `string`) and
-the standard `_version_` field. It updates only `short_description`, checks `_version_` to reject concurrent changes,
-and preserves existing summaries. On a conflict, the manifest is retained; retry import to apply
-remaining results. Qdrant retains its conditional missing-only payload updates. Neither adapter
-rewrites book vectors. Run one submission/import process at a time and retain its output directory.
+Maintenance commands and their prerequisites are in [Maintenance jobs](docs/maintenance.md).
+They cover indexing either Solr or Qdrant, summary submission/import, migration, and preference imports.
+For optional log shipping, follow [Grafana Cloud logs](docs/observability.md).
 
-The job records the Batch ID, provider, backend/dataset identity, and opaque record references in
-`data/short-descriptions/short-description-batch.json`. Once OpenAI reports it as completed,
-import its output using the same backend, endpoint, and collection. A mismatched provider or dataset, or a legacy
-manifest without identity is rejected before provider calls or database writes, leaving the manifest
-intact. Legacy batches require explicit recovery with their original implementation/configuration;
-these manifests are never silently converted. Import the output:
+CI runs local tests for both shared branches. Trusted PRs to `main`, pushes to `main`, and manual
+runs on `main` also run the entire suite with repository secrets. Fork PRs run the local suite.
 
-```bash
-AUDIOBOOK_DATABASE=solr AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MODE=import \
-./mvnw spring-boot:run \
-  -Dapplication.main-class=com.gen3.shortdescriptionjob.ShortDescriptionApplication
-```
+## Important notes
 
-For the remaining catalogue, submit up to 100,000 records at a time and repeat after each import;
-each submission selects the records still missing `short_description`. A pending manifest blocks
-another submission until it is imported. An input-upload failure leaves no pending manifest, so
-submission can be retried normally. Once batch submission starts, an unknown outcome retains the
-manifest to prevent duplicate generation: reconcile the batch with the provider, then supply
-`AUDIOBOOK_SHORT_DESCRIPTION_BATCH_ID` to import it. Manifest updates are atomic so a failed
-write preserves the previous recovery data. OpenAI batch requests default to `gpt-4o-mini`
-(`OPENAI_BATCH_MODEL`), group ten books per request, and ask for a spoiler-free sentence of at most
-20 words. The shared job enforces that word limit for every provider. Keep the default mode
-(`disabled`) for ordinary application startup.
+- **Backend support:** Qdrant is the complete recommendation backend. Solr supports embedding and
+  summary maintenance and migration, but the recommendation server rejects it until its missing
+  vector-lookup and user-preference adapters are implemented. Backend selection does not move data.
+- **Replaceable technologies:** Storage and provider contracts isolate adapters. Replacing Redis
+  must preserve session locking, checked commits, and expiry; a plain get/set cache is insufficient.
+  See [adapter contracts](docs/architecture.md#database-selection-and-replacement).
+- **Existing data:** Maintenance jobs are opt-in, write data, and must run individually. Migration
+  copies existing supported values; it does not generate embeddings or summaries. Preserve pending
+  summary manifests so interrupted jobs can be recovered safely.
+- **Session behavior:** Responses contain at most five books. The session retains up to 500 shown
+  IDs, so older books may eventually reappear. Cached book details are snapshots. Session changes
+  commit before response generation; a response failure does not roll them back.
+- **Input limits:** Requests allow up to 10,000 Java characters, with a 40,000-byte HTTP body cap.
+  Oversized input is rejected before model calls.
+- **Client exposure:** User/session headers are caller-supplied; they are not authentication.
+  Establish a verified identity boundary before exposing the service to untrusted clients.
+- **Qdrant upgrades:** Local Docker uses server 1.19.1. Back up older volumes and upgrade through
+  consecutive minor versions; do not attach a 1.15.x volume directly to 1.19.1.
+- **Secrets:** Never commit API keys, `.env` files, local logs, or generated maintenance data.
 
-To replace OpenAI Batch, implement `ShortDescriptionBatchProvider`, register the adapter, and set
-`AUDIOBOOK_SHORT_DESCRIPTION_BATCH_PROVIDER` to its name. Its `upload` must only prepare input;
-`submit` starts generation, and `completedDescriptions` returns book IDs and descriptions. The
-job owns manifests, database references, safe retries, and import validation. Existing manifests
-without a provider field belong to OpenAI. The replacement adapter must be conditional on its
-configured name; do not switch provider while a batch is pending.
+## Further reading
 
-## Grafana Cloud logs
-
-The optional Alloy collector sends only structured `recommendation.completed` events to Grafana
-Cloud; it excludes request text and session contents. Nonmatching log lines, malformed JSON,
-and summaries with missing, mistyped, or extra top-level fields are dropped before export. The
-allowlist follows the ten fields emitted by `RequestTelemetry`; update it if that event schema
-changes. Other application logs remain local.
-
-1. Create a Grafana Cloud access-policy token with `logs:write`, then create `.env` in the repo:
-
-   ```dotenv
-   GRAFANA_LOKI_URL=https://<loki-host>/loki/api/v1/push
-   GRAFANA_LOKI_USER=<loki-user-id>
-   GRAFANA_LOKI_TOKEN=<logs-write-token>
-   ```
-
-2. Configure the application log file. In IntelliJ, add this VM option; from a terminal, set the
-   same value as `LOGGING_FILE_NAME`:
-
-   ```text
-   -Dlogging.file.name=/absolute/path/to/IT-Project/logs/recommender-agent.log
-   ```
-
-3. Start the collector and inspect it if needed:
-
-   ```bash
-   mkdir -p logs && touch logs/recommender-agent.log
-   docker compose -f compose.yaml -f compose.observability.yaml up -d
-   docker compose -f compose.yaml -f compose.observability.yaml logs -f alloy
-   ```
-
-4. In Grafana **Explore**, select the Loki source and run:
-
-   ```logql
-   {service="recommender-agent", environment="local"}
-   ```
-
-   Add `outcome="FAILURE"` to see only failed requests. Alloy retains its file position and sends
-   events written while it was stopped once it resumes.
-
-## Tests
-
-Run all tests with Docker available:
-
-```bash
-./mvnw clean test
-```
-
-The suite includes unit tests plus Redis and Solr container-backed integration tests. Never commit
-API keys, `.env`, or local logs.
-
-Changes targeting `staging` run the API-free test suite. Changes targeting `main` run the tagged
-integration checks. Configure the repository secrets `OPENAI_API_KEY`, `QDRANT_URL`, and
-`QDRANT_API_KEY`; only the `main` checks receive them.
-
-
-## User preference import
-
-CSV import and preference-vector aggregation run separately from the recommendation server.
-The existing opt-in flag and CSV path settings are retained. This job uses the selected
-database adapters; Qdrant currently provides the complete pair of audiobook-vector and
-user-preference adapters. It averages existing book vectors without calling an AI model.
-
-```bash
-USER_PREFERENCES_IMPORT_ON_STARTUP=true ./mvnw spring-boot:run \
-  -Dapplication.main-class=com.gen3.userpreferencejob.UserPreferenceApplication \
-  -Dspring-boot.run.arguments="--user.preferences.favourites-csv-path=/path/favourites.csv --user.preferences.history-csv-path=/path/history.csv"
-```
-
-Run maintenance jobs individually. The normal server rejects their enabled flags.
-
-Only `RECOMMENDATION` and `REFINE` accept newly parsed positive/negative semantic queries
-or the personalised flag. Other intents discard these fields. `MORE_RESULTS` and `REPEAT`
-inherit the saved search context; semantic changes use `REFINE`. `UPDATE_PREFERENCES`
-can still update exact filters. A semantic reply to a taste-clarification question uses `REFINE`.
-
-Solr summary imports read current IDs, summaries, and versions in batches of at most 500,
-then apply bounded, version-checked updates. A failed later batch retains the manifest;
-retrying preserves summaries already written.
-
-## Source layout
-
-The recommendation server is under `com.gen3.recommenderagent`:
-
-| Package | Responsibility |
-| --- | --- |
-| `api` | HTTP requests and error responses |
-| `application` | Session transitions, recommendation workflow and chat-client wiring |
-| `domain` | Intents, recommendation policy and conversational session models |
-| `inputparser` / `response` | Structured request parsing and response wording |
-| `embedding` | QueryEmbeddingService, positive/negative query vectors and shared vector math |
-| `retrieval` / `retrieval.plan` | Candidate search execution, retrieval plans and filter parsing |
-| `ranker` / `ranker.scorer` | Candidate ranking and scoring rules |
-| `storage.audiobook` / `storage.user` | Storage contracts, models and database adapters |
-| `storage.session` | Session contract, commit errors and Redis adapter |
-| `observability` | Request timing and AI usage telemetry |
-
-The sibling maintenance packages remain separate runnable jobs. CSV interaction records
-(`UserFavourite` and `UserHistory`) belong to `userpreferencejob.model`.
-Catalogue embedding generation remains in `embeddingjob`; the query embedding module
-only embeds live search criteria. `RecommendationPolicy` owns the existing limits
-and result-count clamping rules.
-
-
-## Conversation policy
-
-`SessionTransitionService.process` remains the entry point for a single session transition.
-`ConversationState` owns semantic eligibility, context inheritance, pending-batch invalidation,
-preference/count updates, history retention and the resolved conversation decision.
-The transition implementation retains cached paging, retrieval and timing inside one
-`SessionRepository.update`; response generation still follows a successful commit.
-
-`ConversationDecision` is temporary and excluded from session JSON. Existing session fields
-and recommendation details remain unchanged, so no Redis migration is required.
-The response implementation consumes this outcome for wording. Direct callers without a
-resolved decision use the same conversation-policy classifier; there is no second intent policy.
-
-Control intents still discard new semantic criteria while retaining exact filters. MORE with
-new exact filters invalidates its pending batch, and semantic taste replies use REFINE.
-This refactor preserves the existing clarification, history-retention and response-precedence rules.
-
-
-The parser interface returns `SessionRequest` directly. Provider responses and token usage stay
-inside the parser implementation; the request pipeline does not depend on Spring AI response types.
+- [Architecture and behavior](docs/architecture.md): terminology, conversation rules, internal
+  packages, configuration, and adapter guarantees.
+- [Maintenance jobs](docs/maintenance.md): commands, database prerequisites, progress, and recovery.
+- [Grafana Cloud logs](docs/observability.md): optional collector setup and exported log fields.
+- [System diagrams](docs/diagrams/README.md): overview, request sequence, and maintenance jobs.

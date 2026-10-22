@@ -35,6 +35,13 @@ public class AiInputParser implements InputParser {
       throw new InvalidRequestException("I didn't catch that. What would you like to listen to?");
     }
 
+    if (rawText.length() > InputParser.MAX_REQUEST_CHARACTERS) {
+      throw new InvalidRequestException(
+          "Please keep your request to "
+              + InputParser.MAX_REQUEST_CHARACTERS
+              + " characters or fewer.");
+    }
+
     var aiResponse =
         aiOperationObserver.observe(
             "parse",

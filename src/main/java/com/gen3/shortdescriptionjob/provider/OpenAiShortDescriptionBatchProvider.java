@@ -43,6 +43,8 @@ public class OpenAiShortDescriptionBatchProvider implements ShortDescriptionBatc
   private final String apiKey;
   private final String apiUrl;
   private final String model;
+  private final Duration requestTimeout;
+  private final Duration pollInterval;
 
   @Autowired
   public OpenAiShortDescriptionBatchProvider(
@@ -61,6 +63,19 @@ public class OpenAiShortDescriptionBatchProvider implements ShortDescriptionBatc
 
   public OpenAiShortDescriptionBatchProvider(
       ObjectMapper mapper, HttpClient client, String apiKey, String apiUrl, String model) {
+    this(mapper, client, apiKey, apiUrl, model, Duration.ofMinutes(15), Duration.ofSeconds(30));
+  }
+
+  OpenAiShortDescriptionBatchProvider(
+      ObjectMapper mapper,
+      HttpClient client,
+      String apiKey,
+      String apiUrl,
+      String model,
+      Duration requestTimeout,
+      Duration pollInterval) {
+    this.requestTimeout = requestTimeout;
+    this.pollInterval = pollInterval;
     this.mapper = mapper;
     this.client = client;
     this.apiKey = apiKey;
@@ -97,9 +112,32 @@ public class OpenAiShortDescriptionBatchProvider implements ShortDescriptionBatc
   @Override
   public Map<String, String> completedDescriptions(String batchId)
       throws IOException, InterruptedException {
-    JsonNode batch = getJson("/batches/" + batchId);
-    if (!"completed".equals(batch.path("status").asText())) {
-      throw new IllegalStateException("Batch " + batchId + " is " + batch.path("status").asText());
+    long deadline = System.nanoTime() + Duration.ofHours(24).toNanos();
+    JsonNode batch;
+    while (true) {
+      batch = getJson("/batches/" + batchId);
+      String status = batch.path("status").asText();
+      var counts = batch.path("request_counts");
+      LOGGER.info(
+          "short.description.batch.progress batchId={} status={} completed={} failed={} total={}",
+          batchId,
+          status,
+          counts.path("completed").asInt(),
+          counts.path("failed").asInt(),
+          counts.path("total").asInt());
+      if ("completed".equals(status)) {
+        break;
+      }
+      if (!List.of("validating", "in_progress", "finalizing", "cancelling").contains(status)) {
+        throw new IllegalStateException("Batch " + batchId + " is " + status);
+      }
+      if (System.nanoTime() >= deadline) {
+        throw new IOException(
+            "Timed out waiting for batch "
+                + batchId
+                + "; retry import using the retained manifest");
+      }
+      Thread.sleep(pollInterval);
     }
     String outputFileId = batch.path("output_file_id").asText();
     if (!hasText(outputFileId)) {
@@ -255,6 +293,7 @@ public class OpenAiShortDescriptionBatchProvider implements ShortDescriptionBatc
 
   private HttpRequest.Builder authorizedRequest(String path) {
     return HttpRequest.newBuilder(URI.create(apiUrl + path))
+        .timeout(requestTimeout)
         .header("Authorization", "Bearer " + apiKey);
   }
 
