@@ -101,6 +101,7 @@ class ConversationStateTest {
       names = {
         "MORE_RESULTS",
         "REPEAT",
+        "REPEAT_RECOMMENDATIONS",
         "CHANGE_COUNT",
         "UPDATE_PREFERENCES",
         "CLEAR_HISTORY",

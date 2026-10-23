@@ -22,6 +22,25 @@ public class SessionRequest {
   private String rawText;
   private Instant createdAt;
 
+  private Integer referenceRank;
+  private String referenceTitle;
+
+  public Integer getReferenceRank() {
+    return referenceRank;
+  }
+
+  public void setReferenceRank(Integer referenceRank) {
+    this.referenceRank = referenceRank;
+  }
+
+  public String getReferenceTitle() {
+    return referenceTitle;
+  }
+
+  public void setReferenceTitle(String referenceTitle) {
+    this.referenceTitle = referenceTitle;
+  }
+
   private Intent intent;
 
   private SemanticQuery positiveSemanticQuery;

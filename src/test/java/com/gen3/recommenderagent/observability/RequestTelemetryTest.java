@@ -32,6 +32,36 @@ class RequestTelemetryTest {
   }
 
   @Test
+  void standardRequestsKeepAggregateTelemetryWithoutCollectingDemoDetails() {
+    telemetry.start();
+    RequestTelemetry.ai("parse", 1, new AiOperationObserver.AiUsage("parser", 10, 2, 12, true));
+    assertThat(telemetry.snapshot().operations()).isEmpty();
+    telemetry.complete(null);
+    assertThat(lastMessage()).contains("\"inputTokens\":10");
+  }
+
+  @Test
+  void snapshotsKeepPerOperationUsageAndDoNotLeakIntoTheNextRequest() {
+    telemetry.startDemo();
+    RequestTelemetry.ai("parse", 1, new AiOperationObserver.AiUsage("parser", 10, 2, 12, true));
+    RequestTelemetry.ai(
+        "embed_query", 1, new AiOperationObserver.AiUsage("embedder", 3, 0, 3, true));
+    RequestTelemetry.ai(
+        "embed_query", 1, new AiOperationObserver.AiUsage("embedder", 4, 0, 4, true));
+    RequestTelemetry.ai(
+        "generate_response", 1, new AiOperationObserver.AiUsage(null, null, null, null, false));
+    var snapshot = telemetry.snapshot();
+    assertThat(snapshot.operations().get("parse").promptTokens()).isEqualTo(10);
+    assertThat(snapshot.operations().get("embed_query").promptTokens()).isEqualTo(7);
+    assertThat(snapshot.operations().get("generate_response").available()).isFalse();
+    telemetry.complete(null);
+    telemetry.start();
+    assertThat(telemetry.snapshot().operations()).isEmpty();
+    assertThat(snapshot.operations()).hasSize(3);
+    telemetry.complete(null);
+  }
+
+  @Test
   void logsTheCompleteRequestSummary() {
     SessionRequest request = new SessionRequest();
     request.setRequestId("request-1");

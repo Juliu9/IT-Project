@@ -1,0 +1,199 @@
+# Configuration reference
+
+[README](../README.md) · [Architecture](architecture.md) · [Maintenance commands](maintenance.md)
+
+[`application.properties`](../src/main/resources/application.properties) defines shared rules,
+backend selection, provider connections, and job defaults. Settings are grouped by responsibility:
+universal rules apply across adapters; technology sections configure a particular implementation.
+This reference covers the repository's settings, rather than every property supported by Spring Boot.
+
+## Loading and overriding settings
+
+For local runs, command-line application arguments override environment variables, which override
+values in the packaged properties files. For example, `--server.port=8081` overrides `server.port=8080`.
+An expression such as `${QDRANT_TIMEOUT:10s}` reads the named variable and uses `10s` when absent.
+An empty default (`${QDRANT_API_KEY:}`) means optional configuration, not a generated credential.
+
+| Source | Purpose |
+| --- | --- |
+| `application.properties` | Checked-in defaults for the server and dedicated jobs |
+| `application-dev.properties` | Enables an optional import of `./.env` when the `dev` profile is active |
+| Root `.env` | Local credentials and overrides; ignored by Git and resolved from the working directory |
+| Shell or IDE environment | Supplies configuration without the dev profile; also visible to Maven and environment-gated tests |
+| Application arguments | Overrides for one run, supplied through `-Dspring-boot.run.arguments="--property=value"` |
+
+The dev import treats `.env` as Java properties: use `KEY=value`, without `export` or surrounding
+quotes. It does **not** export environment variables to Maven or tests. No `.env.dev` or
+`.env.production` is loaded automatically. Outside the dev profile, `.env` is not imported.
+Docker Compose reads the root `.env` independently for substitution; this does not configure Java.
+
+See [local setup](../README.md#local-env-configuration) for the `.env` example and terminal export
+commands. Only source a trusted, shell-compatible file. Keep credentials out of tracked files and
+command-line arguments. The dev profile also enables the test website; leave it disabled in production.
+
+## Application and backend selection
+
+| Property / environment variable | Default | Purpose |
+| --- | --- | --- |
+| `spring.application.name` | `RecommenderAgent` | Application identity |
+| `server.port` / `SERVER_PORT` | `8080` | HTTP listening port |
+| `spring.threads.virtual.enabled` | `true` | Enables virtual request threads |
+| `session.store` / `SESSION_STORE` | `redis` | Selects the registered session adapter |
+| `audiobook.database` / `AUDIOBOOK_DATABASE` | `qdrant` | Selects one database for the operation |
+
+Qdrant is the complete live recommendation backend. Solr supports catalogue embedding and summary
+jobs and acts as the migration source; the recommendation server rejects Solr until its missing
+vector-lookup and user-preference adapters exist. Selecting a database does not move records.
+A replacement session adapter must preserve locking, checked commits, and expiry, not just get/set.
+See [adapter contracts](architecture.md#database-selection-and-replacement).
+
+## AI models and shared vector dimensions
+
+| Property / environment variable | Default | Purpose |
+| --- | --- | --- |
+| `embedding.dimensions` / `EMBEDDING_DIMENSIONS` | `1536` | Shared embedding-model and database vector dimension |
+| `spring.ai.retry.max-attempts` | `3` | Maximum attempts for Spring AI operations, including the first attempt |
+| `ai.input-parser.model` / `INPUT_PARSER_CHAT_MODEL` | empty | Parser model override; blank inherits the provider model |
+| `ai.response-generator.model` / `RESPONSE_GENERATOR_CHAT_MODEL` | empty | Independent response model override; blank inherits the provider model |
+| `spring.ai.openai.api-key` / `OPENAI_API_KEY` | required | OpenAI credentials for interactive AI and catalogue embedding generation |
+| `spring.ai.openai.chat.model` / `OPENAI_CHAT_MODEL` | `gpt-4o-mini` | Default interactive chat model |
+| `spring.ai.openai.embedding.options.model` | `text-embedding-3-small` | Embedding model; override the property directly if needed |
+| `spring.ai.openai.embedding.options.dimensions` | `${embedding.dimensions}` | Sends the shared dimension to the embedding provider |
+
+The configured model must support the requested dimensions. Catalogue vectors, query vectors,
+stored user-preference vectors, and the selected database schema must use compatible embeddings.
+Changing the model or dimension does not rebuild existing data or migrate a collection. Coordinate
+reindexing and preference regeneration before serving queries against changed embeddings.
+
+Separate parser and response model names still use their configured provider; a model-name override
+does not switch providers. Provider replacement is described in [chat-model wiring](architecture.md#chat-models).
+The summary Batch model is separate from both interactive roles.
+
+## Ranking rules
+
+Weights combine available signals; they are not percentages and need not total one. Retrieval scores
+are normalized per result set. Exact filters remain mandatory regardless of ranking weights.
+
+| Property under `ranking.scoring.` | Environment variable | Default |
+| --- | --- | --- |
+| `retrieval-relevance-weight` | `RANKING_SCORING_RETRIEVAL_RELEVANCE_WEIGHT` | `1.0` |
+| `user-preference-weight` | `RANKING_SCORING_USER_PREFERENCE_WEIGHT` | `1.0` |
+| `universal-rules-weight` | `RANKING_SCORING_UNIVERSAL_RULES_WEIGHT` | `0.5` |
+| `user-preference.favourites-weight` | `RANKING_SCORING_FAVOURITES_WEIGHT` | `0.6` |
+| `user-preference.history-weight` | `RANKING_SCORING_HISTORY_WEIGHT` | `0.4` |
+| `universal-rules.recency-weight` | `RANKING_SCORING_UNIVERSAL_RECENCY_WEIGHT` | `0.7` |
+| `universal-rules.duration-plausibility-weight` | `RANKING_SCORING_UNIVERSAL_DURATION_PLAUSIBILITY_WEIGHT` | `0.3` |
+
+## Technology connections
+
+### Redis
+
+Required by the live server when `SESSION_STORE=redis`; maintenance jobs do not need sessions.
+
+| Property under `spring.data.redis.` | Environment variable | Default / purpose |
+| --- | --- | --- |
+| `host` | `REDIS_HOST` | `localhost` |
+| `port` | `REDIS_PORT` | `6379` |
+| `username` | `REDIS_USERNAME` | empty; set when authentication requires it |
+| `password` | `REDIS_PASSWORD` | empty; set when authentication requires it |
+
+### Qdrant
+
+| Property under `qdrant.` | Environment variable | Default / purpose |
+| --- | --- | --- |
+| `url` | `QDRANT_URL` | `http://localhost:6333`; endpoint used to configure the connection |
+| `grpc-port` | `QDRANT_GRPC_PORT` | `6334`; query connection port |
+| `api-key` | `QDRANT_API_KEY` | empty; required for authenticated servers |
+| `collection` | `QDRANT_COLLECTION` | `audiobooks_hybrid`; existing audiobook catalogue |
+| `user-preference-collection` | `QDRANT_USER_PREFERENCE_COLLECTION` | `user`; stored favourites/history vectors |
+| `embedding-dimension` | Inherits `embedding.dimensions` | `1536`; keep aligned with the model and collection |
+| `timeout` | `QDRANT_TIMEOUT` | `10s`; timeout for one Qdrant call, not the whole HTTP request |
+
+Starting local Docker does not populate either collection. Existing schema and record-identity
+requirements are in [Qdrant schema](architecture.md#qdrant-schema-and-record-identity).
+
+### Solr
+
+These settings apply to jobs that use Solr. Solr is not included in the local Compose stack.
+
+| Property under `solr.` | Environment variable | Default / purpose |
+| --- | --- | --- |
+| `url` | `SOLR_URL` | `http://localhost:8983/solr` |
+| `collection` | `SOLR_COLLECTION` | `combinedbooks` |
+| `username` | `SOLR_USERNAME` | empty; optional authentication |
+| `password` | `SOLR_PASSWORD` | empty; optional authentication |
+| `vector-field` | `SOLR_VECTOR_FIELD` | `embedding`; dense-vector field |
+| `embedding-dimension` | Inherits `embedding.dimensions` | `1536`; must match the external field schema |
+
+Apply the [manual vector-field schema](../solr/vector-field-schema.xml) to the target collection;
+the application does not automatically install it.
+
+## Maintenance jobs: explicit opt-in
+
+Use the dedicated launcher as well as the corresponding opt-in setting. Normal server startup
+rejects enabled maintenance flags. Run jobs individually against the intended database and dataset;
+they can write records and generate provider charges. Commands, prerequisites, and recovery steps
+belong in [Maintenance jobs](maintenance.md).
+
+### Catalogue embedding generation
+
+Target selection uses `AUDIOBOOK_DATABASE` (`qdrant` or `solr`). The job reads existing records,
+regenerates vectors, and preserves metadata. The Qdrant implementation also builds sparse vectors.
+
+| Property under `audiobook.embedding-index.` | Environment variable | Default / purpose |
+| --- | --- | --- |
+| `enabled` | `AUDIOBOOK_EMBEDDING_INDEX_ENABLED` | `false`; explicit opt-in |
+| `page-size` | `AUDIOBOOK_EMBEDDING_INDEX_PAGE_SIZE` | `100`; records per page |
+| `maximum-records` | `AUDIOBOOK_EMBEDDING_INDEX_MAXIMUM_RECORDS` | `0`; full catalogue, or a positive record limit |
+
+### Short-description generation
+
+The selected database supplies descriptions and receives summaries. Submission calls the provider;
+import writes completed summaries. Keep the output directory and pending manifests between runs.
+
+| Property under `audiobook.short-description.batch.` | Environment variable | Default / purpose |
+| --- | --- | --- |
+| `mode` | `AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MODE` | `disabled`; choose `submit`, `import`, or `recover` explicitly |
+| `provider` | `AUDIOBOOK_SHORT_DESCRIPTION_BATCH_PROVIDER` | `openai`; must have a registered provider adapter |
+| `id` | `AUDIOBOOK_SHORT_DESCRIPTION_BATCH_ID` | empty; optional explicit batch ID, otherwise use the pending manifest |
+| `output-directory` | `AUDIOBOOK_SHORT_DESCRIPTION_BATCH_OUTPUT_DIRECTORY` | `./data/short-descriptions`; local batch and recovery files |
+| `maximum-records` | `AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MAXIMUM_RECORDS` | `100000`; submission record cap |
+| `openai.base-url` | `OPENAI_BATCH_BASE_URL` | `https://api.openai.com/v1`; Batch transport endpoint |
+| `openai.model` | `OPENAI_BATCH_MODEL` | `gpt-4o-mini`; summary model |
+
+Recovery verifies terminal provider failure and archives the pending manifest; it does not import
+partial results. OpenAI Batch uses `OPENAI_API_KEY` independently of interactive chat clients.
+
+### User-preference import
+
+The job aggregates existing catalogue vectors from CSV interaction records; it does not call an
+embedding model. See the maintenance guide for CSV columns and database support.
+
+| Property under `user.preferences.` | Environment variable | Default / purpose |
+| --- | --- | --- |
+| `import-on-startup` | `USER_PREFERENCES_IMPORT_ON_STARTUP` | `false`; opt-in for the dedicated launcher |
+| `favourites-csv-path` | `USER_PREFERENCES_FAVOURITES_CSV_PATH` | empty; favourites input path |
+| `history-csv-path` | `USER_PREFERENCES_HISTORY_CSV_PATH` | empty; history input path |
+
+### Solr-to-Qdrant migration
+
+This is the exception to single-database operation: it connects to both source and destination.
+It copies existing supported fields and vectors without generating embeddings or summaries.
+
+| Property under `audiobook.qdrant.migration.` | Environment variable | Default / purpose |
+| --- | --- | --- |
+| `enabled` | `QDRANT_MIGRATION_ENABLED` | `false`; opt-in for the dedicated launcher |
+| `batch-size` | `QDRANT_MIGRATION_BATCH_SIZE` | `100`; records per batch |
+| `max-records` | `QDRANT_MIGRATION_MAX_RECORDS` | `0`; full catalogue, or a positive record limit |
+
+## Common setups
+
+| Setup | Configuration to supply |
+| --- | --- |
+| Local development | Start Redis and Qdrant with Compose, populate the catalogue, supply `OPENAI_API_KEY`, and use the `dev` profile for `.env` loading and the website. |
+| Remote Qdrant | Set `QDRANT_URL`, `QDRANT_GRPC_PORT`, authentication and collection names for the remote instance; configure Redis separately. |
+| Catalogue maintenance in Solr | Select `AUDIOBOOK_DATABASE=solr`, supply Solr connection/schema settings, and run the dedicated embedding or summary launcher with its opt-in mode. Embedding generation needs OpenAI credentials; summary generation uses its selected Batch provider. |
+| Full live test suite | Export nonempty `OPENAI_API_KEY`, `QDRANT_URL`, and `QDRANT_API_KEY`; provide Redis and a populated catalogue. A dev `.env` import alone does not satisfy the test's environment conditions. |
+
+Optional Grafana settings belong to the Compose collector rather than `application.properties`;
+see [observability setup](observability.md#setup).

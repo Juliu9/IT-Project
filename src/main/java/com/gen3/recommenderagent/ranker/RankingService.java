@@ -90,13 +90,16 @@ public class RankingService implements Ranker {
       } else {
         score = candidate.score();
       }
-      recommendations.add(
+      Recommendation recommendation =
           new Recommendation(
               candidate.audiobook().id(),
               rank,
               score,
               candidate.audiobook().title(),
-              candidate.audiobook().shortDescription()));
+              candidate.audiobook().shortDescription());
+      recommendation.setReadingPreferencesUsed(
+          compositeScorer.usedReadingPreferences(candidate, scoringContext));
+      recommendations.add(recommendation);
     }
     return recommendations;
   }
