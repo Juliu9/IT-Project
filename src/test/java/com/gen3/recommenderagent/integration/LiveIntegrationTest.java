@@ -42,9 +42,9 @@ import tools.jackson.databind.ObjectMapper;
 class LiveIntegrationTest {
 
   private static final String INITIAL_RAW_TEXT =
-      "Please update my preferences to English-language science fiction. Do not recommend anything yet.";
+      "Can you give me five english sifi books?";
   private static final String FOLLOW_UP_RAW_TEXT =
-      "Recommend up to five audiobooks based on my preferences.";
+      "can you give me five more?";
   private static final int REDIS_PORT = 6379;
   private static final Duration SESSION_TIMEOUT = Duration.ofSeconds(5);
 
