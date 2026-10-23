@@ -85,7 +85,7 @@ class LiveIntegrationTest {
             .build();
 
     TurnResult firstTurn =
-        submitTurn(mockMvc, sessionId, userId, 2, INITIAL_RAW_TEXT, Intent.UPDATE_PREFERENCES, 5);
+        submitTurn(mockMvc, sessionId, userId, 2, INITIAL_RAW_TEXT, Intent.RECOMMENDATION, 5);
     assertTrue(
         firstTurn.recommendationIds().isEmpty(),
         "Updating preferences unexpectedly returned audiobook recommendations");
@@ -95,7 +95,7 @@ class LiveIntegrationTest {
     assertSavedEnglishScienceFictionPreferences(preferenceSession);
 
     TurnResult secondTurn =
-        submitTurn(mockMvc, sessionId, userId, 2, FOLLOW_UP_RAW_TEXT, Intent.RECOMMENDATION, 5);
+        submitTurn(mockMvc, sessionId, userId, 2, FOLLOW_UP_RAW_TEXT, Intent.MORE_RESULTS, 5);
     assertFalse(
         secondTurn.recommendationIds().isEmpty(),
         "The personalised request returned no audiobook recommendations");
