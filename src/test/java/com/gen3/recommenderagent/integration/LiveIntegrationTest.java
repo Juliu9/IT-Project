@@ -32,13 +32,14 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import tools.jackson.databind.ObjectMapper;
 
-/** Live test for asking for a recommendation reason in a new session with no history. */
+/** Live tests for repeating recommendations with and without session history. */
 @SpringBootTest
 @Testcontainers
 @Tag("external")
 class LiveIntegrationTest {
 
-  private static final String INITIAL_RAW_TEXT = "Why was that audiobook recommended?";
+  private static final String INITIAL_RAW_TEXT = "Recommend three science fiction audiobooks.";
+  private static final String REPEAT_RAW_TEXT = "Please repeat the most recent recommendations.";
   private static final int REDIS_PORT = 6379;
   private static final Duration SESSION_TIMEOUT = Duration.ofSeconds(5);
 
@@ -70,7 +71,7 @@ class LiveIntegrationTest {
   @Autowired private ObjectMapper objectMapper;
 
   @Test
-  void shouldNotInventAReasonWhenTheSessionHasNoRecommendationHistory() throws Exception {
+  void shouldRepeatTheMostRecentRecommendationsInTheSameSession() throws Exception {
     String sessionId = "full-live-" + UUID.randomUUID();
     String userId = "full-live-test-user";
     MockMvc mockMvc =
@@ -78,11 +79,46 @@ class LiveIntegrationTest {
             .setControllerAdvice(new RequestExceptionHandler())
             .build();
 
-    TurnResult result = submitTurn(mockMvc, sessionId, userId, 1, INITIAL_RAW_TEXT, null, 5);
+    TurnResult firstTurn =
+        submitTurn(mockMvc, sessionId, userId, 1, INITIAL_RAW_TEXT, Intent.RECOMMENDATION, 3);
+    assertFalse(
+        firstTurn.recommendationIds().isEmpty(),
+        "The first request returned no audiobook recommendations to repeat");
+    TurnResult repeatTurn =
+        submitTurn(mockMvc, sessionId, userId, 2, REPEAT_RAW_TEXT, Intent.REPEAT, 3);
 
     Session finalSession = awaitSavedSession(sessionId, userId, SESSION_TIMEOUT);
     assertNotNull(finalSession, "The final session was not saved to Docker Redis");
-    System.out.println("\n=== TC-08 no-prior-recommendation integration result ===");
+    System.out.println("\n=== TC-03 repeat-most-recent integration result ===");
+    System.out.println("Session ID: " + sessionId);
+    printTurn(firstTurn);
+    printTurn(repeatTurn);
+    System.out.println("All shown audiobook IDs: " + finalSession.getShownBooks());
+    System.out.println("=======================================================\n");
+
+    assertEquals(
+        firstTurn.recommendationIds(),
+        repeatTurn.recommendationIds(),
+        "The repeated list did not match the most recent recommendation list");
+    assertTrue(
+        finalSession.getShownBooks().containsAll(firstTurn.recommendationIds()),
+        "The session lost audiobook IDs after repeating the recommendation list");
+  }
+
+  @Test
+  void shouldExplainThatThereIsNothingToRepeatInANewSession() throws Exception {
+    String sessionId = "full-live-" + UUID.randomUUID();
+    String userId = "full-live-test-user";
+    MockMvc mockMvc =
+        MockMvcBuilders.standaloneSetup(requestGateway)
+            .setControllerAdvice(new RequestExceptionHandler())
+            .build();
+
+    TurnResult result =
+        submitTurn(mockMvc, sessionId, userId, 1, REPEAT_RAW_TEXT, Intent.REPEAT, 3);
+    Session finalSession = awaitSavedSession(sessionId, userId, SESSION_TIMEOUT);
+
+    System.out.println("\n=== TC-04 repeat-without-history integration result ===");
     System.out.println("Session ID: " + sessionId);
     printTurn(result);
     System.out.println("All shown audiobook IDs: " + finalSession.getShownBooks());
@@ -90,14 +126,14 @@ class LiveIntegrationTest {
 
     assertTrue(
         result.recommendationIds().isEmpty(),
-        "The system invented or returned a recommendation in a session with no history");
+        "The system invented recommendations in a new session with no history");
     assertTrue(
-        explainsMissingRecommendationHistory(result.response()),
-        "The response did not clearly explain that there was no earlier recommendation to explain: "
+        explainsNothingToRepeat(result.response()),
+        "The response did not clearly explain that there were no previous recommendations to repeat: "
             + result.response());
     assertTrue(
         finalSession.getShownBooks() == null || finalSession.getShownBooks().isEmpty(),
-        "The request added shown books even though no recommendation history existed");
+        "The repeat request added shown books in a new session with no history");
   }
 
   private TurnResult submitTurn(
@@ -168,14 +204,12 @@ class LiveIntegrationTest {
         .toList();
   }
 
-  private boolean explainsMissingRecommendationHistory(String response) {
+  private boolean explainsNothingToRepeat(String response) {
     String normalized = response == null ? "" : response.toLowerCase();
     return normalized.contains("no previous")
         || normalized.contains("no earlier")
-        || normalized.contains("haven't recommended")
-        || normalized.contains("have not recommended")
-        || normalized.contains("nothing to explain")
-        || normalized.contains("no recommendation to explain");
+        || normalized.contains("nothing to repeat")
+        || normalized.contains("no recommendations to repeat");
   }
 
   private void printTurn(TurnResult turn) throws Exception {
