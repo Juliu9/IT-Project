@@ -59,7 +59,7 @@ class LiveIntegrationTest {
     registry.add(
         "qdrant.user-preference-collection",
         () -> environment("QDRANT_USER_PREFERENCE_COLLECTION", "user"));
-    registry.add("audiobook.candidate-retriever", () -> "qdrant");
+    registry.add("audiobook.database", () -> "qdrant");
     registry.add("audiobook.qdrant.migration.enabled", () -> "false");
     registry.add("user.preferences.import-on-startup", () -> "false");
   }
