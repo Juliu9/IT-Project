@@ -17,6 +17,7 @@ import com.gen3.recommenderagent.storage.session.SessionRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -84,22 +85,32 @@ class LiveIntegrationTest {
     assertFalse(
         firstTurn.recommendationIds().isEmpty(),
         "The first request returned no audiobook recommendations to repeat");
-    TurnResult repeatTurn =
-        submitTurn(mockMvc, sessionId, userId, 2, REPEAT_RAW_TEXT, Intent.REPEAT, 3);
+    String repeatResponse = submitRawResponse(mockMvc, sessionId, userId, REPEAT_RAW_TEXT);
 
-    Session finalSession = awaitSavedSession(sessionId, userId, SESSION_TIMEOUT);
+    Session finalSession = readSavedSession(sessionId, userId);
     assertNotNull(finalSession, "The final session was not saved to Docker Redis");
     System.out.println("\n=== TC-03 repeat-most-recent integration result ===");
     System.out.println("Session ID: " + sessionId);
     printTurn(firstTurn);
-    printTurn(repeatTurn);
+    System.out.println("\n--- Turn 2 ---");
+    System.out.println("Raw text: " + REPEAT_RAW_TEXT);
+    System.out.println("Final response: " + repeatResponse);
     System.out.println("All shown audiobook IDs: " + finalSession.getShownBooks());
     System.out.println("=======================================================\n");
 
+    firstTurn
+        .completedRequest()
+        .getRecommendations()
+        .forEach(
+            recommendation ->
+                assertTrue(
+                    spokenText(repeatResponse).contains(spokenText(recommendation.getTitle())),
+                    "The repeated response omitted the earlier title: "
+                        + recommendation.getTitle()));
     assertEquals(
         firstTurn.recommendationIds(),
-        repeatTurn.recommendationIds(),
-        "The repeated list did not match the most recent recommendation list");
+        finalSession.getShownBooks(),
+        "Repeating recommendations changed the session's shownBooks list");
     assertTrue(
         finalSession.getShownBooks().containsAll(firstTurn.recommendationIds()),
         "The session lost audiobook IDs after repeating the recommendation list");
@@ -114,26 +125,45 @@ class LiveIntegrationTest {
             .setControllerAdvice(new RequestExceptionHandler())
             .build();
 
-    TurnResult result =
-        submitTurn(mockMvc, sessionId, userId, 1, REPEAT_RAW_TEXT, Intent.REPEAT, 3);
-    Session finalSession = awaitSavedSession(sessionId, userId, SESSION_TIMEOUT);
+    String response = submitRawResponse(mockMvc, sessionId, userId, REPEAT_RAW_TEXT);
+    Session finalSession = readSavedSession(sessionId, userId);
 
     System.out.println("\n=== TC-04 repeat-without-history integration result ===");
     System.out.println("Session ID: " + sessionId);
-    printTurn(result);
+    System.out.println("Raw text: " + REPEAT_RAW_TEXT);
+    System.out.println("Final response: " + response);
     System.out.println("All shown audiobook IDs: " + finalSession.getShownBooks());
     System.out.println("=======================================================\n");
 
     assertTrue(
-        result.recommendationIds().isEmpty(),
-        "The system invented recommendations in a new session with no history");
-    assertTrue(
-        explainsNothingToRepeat(result.response()),
+        explainsNothingToRepeat(response),
         "The response did not clearly explain that there were no previous recommendations to repeat: "
-            + result.response());
+            + response);
     assertTrue(
         finalSession.getShownBooks() == null || finalSession.getShownBooks().isEmpty(),
         "The repeat request added shown books in a new session with no history");
+  }
+
+  private String submitRawResponse(MockMvc mockMvc, String sessionId, String userId, String rawText)
+      throws Exception {
+    String response =
+        mockMvc
+            .perform(
+                post("/api/v1/recommendations")
+                    .header("X-Session-Id", sessionId)
+                    .header("X-User-Id", userId)
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .content(rawText))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    assertFalse(response.isBlank(), "The final response must not be blank");
+    return response;
+  }
+
+  private Session readSavedSession(String sessionId, String userId) {
+    return sessionRepository.update(sessionId, userId, savedSession -> savedSession);
   }
 
   private TurnResult submitTurn(
@@ -210,6 +240,10 @@ class LiveIntegrationTest {
         || normalized.contains("no earlier")
         || normalized.contains("nothing to repeat")
         || normalized.contains("no recommendations to repeat");
+  }
+
+  private String spokenText(String text) {
+    return text.replace("$b", "").replaceAll("[^\\p{L}\\p{N}]", "").toLowerCase(Locale.ROOT);
   }
 
   private void printTurn(TurnResult turn) throws Exception {
