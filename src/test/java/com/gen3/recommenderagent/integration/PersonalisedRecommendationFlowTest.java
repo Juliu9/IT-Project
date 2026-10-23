@@ -87,6 +87,7 @@ class PersonalisedRecommendationFlowTest {
     verify(books).searchSemantic(vector.capture(), eq(AudiobookFilters.empty()), eq(50));
     assertArrayEquals(new float[] {0.70710677f, 0.70710677f}, vector.getValue(), 0.0001f);
     assertThat(result.getRecommendations()).hasSize(1);
+    assertThat(result.getRecommendations().getFirst().isReadingPreferencesUsed()).isTrue();
     assertThat(result.isPreferenceClarificationRequired()).isFalse();
     verifyNoInteractions(embeddingModel);
     verify(users).findEmbeddingByUserId("user");

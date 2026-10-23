@@ -50,34 +50,24 @@ public class AiInputParser implements InputParser {
                     .prompt()
                     .system(
                         """
-                        Extract the user's audiobook request using only stated information.
-
-                        Set intent to RECOMMENDATION, REFINE, MORE_RESULTS, REPEAT, CHANGE_COUNT,
-                        UPDATE_PREFERENCES, CLEAR_HISTORY, HELP, or UNKNOWN. Use RECOMMENDATION
-                        for a new search; do not choose a retrieval mode. Put desired and avoided
-                        concepts in positiveSemanticQuery and negativeSemanticQuery. Use mustInclude
-                        and mustNotInclude only for exact author, narrator, language, duration,
-                        publication year, or source requirements. Preserve duration comparisons:
-                        use "under", "over", "at most", "at least", "exactly", or "between X and Y" with
-                        explicit hours or minutes. Keep decimal values and both range endpoints;
-                        for example, "under 1.5 hours" and "between 2 and 3 hours".
-                        Never convert a vague duration into an invented numeric limit.
-                        Preserve publication year comparisons as "after", "before", "at least",
-                        "at most", "exactly", or "between YYYY and YYYY". Keep both range endpoints.
-                        Set bookCount only when the user explicitly requests
-                        a number of recommendations; otherwise leave it null.
-                        Use REPEAT for requests to show the last recommendations again, such as
-                        "repeat those" or "show those again". MORE_RESULTS asks for different books.
-
-                        Set personalised=true only when the user requests recommendations based on
-                        their taste, favourites, or history. "Give me books I would like" is a
-                        personalised RECOMMENDATION with no invented criteria. Statements of taste,
-                        including short answers such as "fantasy", are REFINE; keep
-                        liked authors and narrators semantic unless an exact match is required.
-                        Only RECOMMENDATION and REFINE may contain positiveSemanticQuery,
-                        negativeSemanticQuery, or personalised=true. Leave these empty for all
-                        other intents. Use REFINE for a follow-up that supplies semantic criteria.
-                        Do not invent values or report contradictions.
+                        Extract only stated audiobook criteria; never invent values, report contradictions, or choose retrieval mode.
+                        Intents: RECOMMENDATION=new search; REFINE=semantic follow-up or taste statement (including "fantasy");
+                        MORE_RESULTS=different books; REPEAT=same books again; EXPLAIN_RECOMMENDATION=why recommended;
+                        CHANGE_COUNT, UPDATE_PREFERENCES, CLEAR_HISTORY, HELP, UNKNOWN=corresponding actions.
+                        Desired/avoided concepts go in positiveSemanticQuery/negativeSemanticQuery. Liked authors/narrators
+                        stay semantic unless exact matching is requested. mustInclude/mustNotInclude hold only exact author,
+                        narrator, language, duration, publication-year or source requirements.
+                        Duration: preserve under/over/at most/at least/exactly/between comparisons, decimals, both endpoints
+                        and explicit hours/minutes ("under 1.5 hours", "between 2 and 3 hours"); never quantify vague duration.
+                        Years: preserve after/before/at least/at most/exactly/between YYYY and YYYY, including both endpoints.
+                        bookCount=null unless explicitly requesting a recommendation count.
+                        personalised=true only for recommendations based on taste/favourites/history, including "books I would like";
+                        do not invent criteria. Only RECOMMENDATION/REFINE allow semantic queries or personalised=true;
+                        leave semantic queries empty and personalised=false for other intents.
+                        For EXPLAIN_RECOMMENDATION ("why these books", "why the second book", "why Harry Potter"),
+                        referenceRank=stated ordinal, even invalid (sixth=6); referenceTitle=stated title. Preserve both if supplied;
+                        both null means whole page. These selectors belong only to EXPLAIN_RECOMMENDATION, never bookCount.
+                        Bare ordinals ("fourth") are not explanation requests.
                         """)
                     .user(rawText)
                     .call()
@@ -92,6 +82,8 @@ public class AiInputParser implements InputParser {
 
     SessionRequest request = new SessionRequest();
     request.setIntent(parsed.getIntent());
+    request.setReferenceRank(parsed.getReferenceRank());
+    request.setReferenceTitle(parsed.getReferenceTitle());
     request.setPersonalised(parsed.isPersonalised());
     request.setPositiveSemanticQuery(parsed.getPositiveSemanticQuery());
     request.setNegativeSemanticQuery(parsed.getNegativeSemanticQuery());

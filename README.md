@@ -44,7 +44,7 @@ at the same time. `ConversationState` then resolves the request against saved se
 preferences, and history, and discards cached recommendations when the search changes.
 
 Some intents need no search: help, count changes, clearing history, and repeat are handled from
-conversation state. “More” without an earlier search asks what the user wants instead of
+conversation state. Explanations also reuse the latest recommendation page. “More” without an earlier search asks what the user wants instead of
 embedding or retrieving anything. A personalised request without usable taste information asks
 for preferences.
 
@@ -70,11 +70,12 @@ duration plausibility. Their weights are configured in `application.properties`.
 
 The service retains up to **20 ranked recommendations**, serves up to **five** according to the
 requested count, and saves the unused recommendations in the session. Each saved item includes
-its ID, title, short description, and score, so cached pages do not need another catalogue lookup.
+its ID, title, short description, score, and whether stored reading preferences contributed, so cached pages do not need another catalogue lookup.
 
 | Follow-up | Behavior |
 | --- | --- |
 | “More please” | Serve the next cached page; refill when short, keeping the cached tail. |
+| “Why these books?” / “Why the second book?” / “Why Harry Potter?” | Explain the latest page or a uniquely selected book, without searching or consuming the queue. |
 | “Repeat those” | Reuse the last page or empty “more” outcome; leave the queue untouched. |
 | Refine or start a search | Discard the queue and retrieve using resolved criteria. |
 | Change the result count or ask for help | Keep the pending batch. |
@@ -84,6 +85,13 @@ A full cached page skips preference lookup, embedding, retrieval, and ranking. P
 generation still run. Short “more” pages are allowed. If none remain, the response explicitly says there are no more
 matches for the current search. New exact filters supplied with “more”, or preference updates,
 also invalidate the pending batch.
+
+Explanation requests use `EXPLAIN_RECOMMENDATION`. Invalid ranks, ambiguous/missing titles, or
+conflicting rank/title references list the actual page in rank order and ask which book. An
+explicit retry such as “Why the fourth book?” uses that same page. No earlier page is selected
+after an empty MORE, and clearing history removes explanation context. Explanations connect the
+saved search criteria to descriptions and mention stored reading preferences only when recorded
+as having contributed; they do not invent exact metadata or specific favourites.
 
 ### 5. Commit the session, then explain the books
 

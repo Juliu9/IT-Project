@@ -44,6 +44,9 @@ public class SessionTransitionService {
     if (original != null && original.getIntent() == Intent.REPEAT) {
       RequestTelemetry.retrieval("SESSION_REPEAT", result.getRecommendations().size());
     }
+    if (original != null && original.getIntent() == Intent.EXPLAIN_RECOMMENDATION) {
+      RequestTelemetry.retrieval("SESSION_EXPLANATION", result.getRecommendations().size());
+    }
     return result;
   }
 
@@ -62,12 +65,15 @@ public class SessionTransitionService {
         .mapToObj(
             index -> {
               Recommendation item = page.get(index);
-              return new Recommendation(
-                  item.getBookId(),
-                  index + 1,
-                  item.getScore(),
-                  item.getTitle(),
-                  item.getShortDescription());
+              Recommendation displayed =
+                  new Recommendation(
+                      item.getBookId(),
+                      index + 1,
+                      item.getScore(),
+                      item.getTitle(),
+                      item.getShortDescription());
+              displayed.setReadingPreferencesUsed(item.isReadingPreferencesUsed());
+              return displayed;
             })
         .toList();
   }

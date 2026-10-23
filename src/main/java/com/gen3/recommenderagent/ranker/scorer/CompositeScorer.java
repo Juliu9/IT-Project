@@ -35,6 +35,16 @@ public class CompositeScorer implements CandidateScorer {
         : ScoreResult.available(clamp(weightedTotal / availableWeight));
   }
 
+  public boolean usedReadingPreferences(AudiobookCandidate candidate, RankingContext context) {
+    return scorers.stream()
+        .filter(weighted -> weighted.scorer() instanceof UserPreferenceScorer)
+        .anyMatch(
+            weighted -> {
+              ScoreResult result = weighted.scorer().score(candidate, context);
+              return result.available() && result.value() > 0.0;
+            });
+  }
+
   private double clamp(double score) {
     return Math.clamp(score, -1.0, 1.0);
   }

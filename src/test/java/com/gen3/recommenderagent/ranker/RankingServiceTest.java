@@ -21,6 +21,45 @@ class RankingServiceTest {
           new CompositeScorer(List.of(new WeightedScorer(new RetrievalRelevanceScorer(), 1.0))));
 
   @Test
+  void recordsPreferencesOnlyWhenAnActivePreferenceScorerHasPositiveEvidence() {
+    var properties =
+        new com.gen3.recommenderagent.ranker.scorer.RankingScoringProperties(
+            1,
+            1,
+            0,
+            new com.gen3.recommenderagent.ranker.scorer.RankingScoringProperties
+                .UserPreferenceWeights(1, 0),
+            new com.gen3.recommenderagent.ranker.scorer.RankingScoringProperties
+                .UniversalRuleWeights(1, 0));
+    var preferenceScorer =
+        new com.gen3.recommenderagent.ranker.scorer.UserPreferenceScorer(properties);
+    var service =
+        new RankingService(
+            new CompositeScorer(
+                List.of(
+                    new WeightedScorer(new RetrievalRelevanceScorer(), 1),
+                    new WeightedScorer(preferenceScorer, 1))));
+    var preference =
+        new com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding(
+            "user", new float[] {1, 0}, null);
+    var matching =
+        new AudiobookCandidate(candidate("match", 1.0).audiobook(), 1.0, new float[] {1, 0});
+    var unrelated =
+        new AudiobookCandidate(candidate("unrelated", 1.0).audiobook(), 1.0, new float[] {0, 1});
+    var result =
+        service.rank(List.of(matching, unrelated), 2, new RankingContext(preference, Set.of()));
+    assertEquals(true, result.getFirst().isReadingPreferencesUsed());
+    assertEquals(false, result.getLast().isReadingPreferencesUsed());
+    assertEquals(false, service.rank(List.of(matching), 1).getFirst().isReadingPreferencesUsed());
+    assertEquals(
+        false,
+        rankingService
+            .rank(List.of(matching), 1, new RankingContext(preference, Set.of()))
+            .getFirst()
+            .isReadingPreferencesUsed());
+  }
+
+  @Test
   void shouldPreserveCandidateOrderRemoveDuplicatesAndLimitResults() {
     AudiobookCandidate first = candidate("book-1", 3.5);
     AudiobookCandidate duplicate = candidate("book-1", 3.0);

@@ -112,12 +112,35 @@ inside the parser implementation; the request pipeline does not depend on Spring
 ## Semantic information and control intents
 
 Supported intents are `RECOMMENDATION`, `REFINE`, `MORE_RESULTS`, `REPEAT`, `CHANGE_COUNT`,
-`UPDATE_PREFERENCES`, `CLEAR_HISTORY`, `HELP`, and `UNKNOWN`.
+`EXPLAIN_RECOMMENDATION`, `UPDATE_PREFERENCES`, `CLEAR_HISTORY`, `HELP`, and `UNKNOWN`.
 
 Only `RECOMMENDATION` and `REFINE` accept newly parsed positive/negative semantic queries or the
-personalised flag. Other intents discard these fields. `MORE_RESULTS` and `REPEAT` inherit the saved
-search context; semantic changes use `REFINE`. `UPDATE_PREFERENCES` can still update exact filters.
+personalised flag. Other intents discard these fields. `MORE_RESULTS`, `REPEAT`, and
+`EXPLAIN_RECOMMENDATION` inherit the saved search context; semantic changes use `REFINE`. `UPDATE_PREFERENCES` can still update exact filters.
 A semantic reply to a taste-clarification question uses `REFINE`.
+
+## Explaining recommendations
+
+`EXPLAIN_RECOMMENDATION` carries optional `referenceRank` and `referenceTitle`, independent of
+`bookCount` and semantic criteria. No selectors means the whole latest search page. Title matching
+ignores case/punctuation and uses exact matches before unique partial matches. Missing, ambiguous,
+out-of-range or conflicting references produce a ranked-title clarification. A bare ordinal is not
+an explanation request; “Why the fourth book?” resolves independently after clarification.
+
+The resolved explanation copies saved criteria and selects from the page inside the session update.
+It does not retrieve, embed, rank, consume the pending batch, add shown IDs, replace history, or clear
+pending preference clarification. No search yields a fixed onboarding message; an empty latest page
+yields a distinct fixed message, even if an older page had results. The session represents committed
+recommendations, not confirmation that a client displayed or spoke them.
+
+Each retained/queued `Recommendation.readingPreferencesUsed` records whether stored preference
+vectors contributed to personalised retrieval or a positive active preference ranking score. It is
+copied when batch items receive page ranks; old session JSON defaults to false. Explanations never
+reload today's preference profile to justify an older selection. They may mention reading preferences
+when recorded, but cannot infer favourite genres or specific books from that flag. Descriptions and
+saved criteria support semantic explanations; filter requests alone cannot prove actual book metadata.
+Response generation uses the existing role-specific chat client, with distinct explanation instructions
+and an honest built-in fallback. Clarification/no-history responses need no response-model call.
 
 ## Configuration and schema
 

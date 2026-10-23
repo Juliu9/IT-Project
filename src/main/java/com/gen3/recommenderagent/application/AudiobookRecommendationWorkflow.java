@@ -73,8 +73,17 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
         (System.nanoTime() - retrievalStartedAt) / 1_000_000,
         candidates.size());
     RankingContext rankingContext = new RankingContext(preferences, shownBookIds);
-    return RequestTelemetry.measure(
-        "rankMs", () -> ranker.rank(candidates, RECOMMENDATION_BATCH_SIZE, rankingContext));
+    List<Recommendation> recommendations =
+        RequestTelemetry.measure(
+            "rankMs", () -> ranker.rank(candidates, RECOMMENDATION_BATCH_SIZE, rankingContext));
+    if (request != null
+        && request.isPersonalised()
+        && preferences != null
+        && ((preferences.favouritesVector() != null && preferences.favouritesVector().length > 0)
+            || (preferences.historyVector() != null && preferences.historyVector().length > 0))) {
+      recommendations.forEach(book -> book.setReadingPreferencesUsed(true));
+    }
+    return recommendations;
   }
 
   private SemanticQueryVectors retrievalVectors(
