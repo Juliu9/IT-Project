@@ -15,6 +15,11 @@ disable unused Spring AI models; the summary provider handles its own transport 
 | Short descriptions | Solr or Qdrant | Batch summaries | Missing short descriptions |
 | User preferences | Solr or Qdrant | None | Aggregated user vectors |
 
+Set `AUDIOBOOK_DATABASE=solr` for the recommendation server, embedding generation, all summary modes,
+and preference import. Supply the [Solr collections and schema](configuration.md#solr); only the
+recommendation server also needs Redis. Migration is specifically Solr **to Qdrant** and keeps
+`audiobook.database=qdrant` for its destination, as shown below; it is not a Solr-only job.
+
 ## Catalogue embeddings
 
 **Purpose:** Read existing books and regenerate their normalized dense vectors. Qdrant indexing
@@ -177,10 +182,23 @@ schema described in [Solr setup](configuration.md#solr). Favourites use a normal
 weights halve every 180 days before the result is normalized.
 
 ```bash
-USER_PREFERENCES_IMPORT_ON_STARTUP=true ./mvnw spring-boot:run \
+AUDIOBOOK_DATABASE=solr USER_PREFERENCES_IMPORT_ON_STARTUP=true ./mvnw spring-boot:run \
   -Dapplication.main-class=com.gen3.userpreferencejob.UserPreferenceApplication \
   -Dspring-boot.run.arguments="--user.preferences.favourites-csv-path=/path/favourites.csv --user.preferences.history-csv-path=/path/history.csv"
 ```
 
 CSV records and aggregation live in `com.gen3.userpreferencejob`. Run this separately from the server
 and other maintenance jobs.
+
+## Solr launcher verification
+
+The container test starts the actual embedding, summary (submit/import/recover), and preference
+applications, executes their startup jobs, then starts the recommendation HTTP server with Solr and
+Redis. It also checks migration reads from Solr. AI and the migration destination use test doubles;
+all data writes stay in disposable containers and temporary files.
+
+```bash
+OPENAI_API_KEY=ci-placeholder ./mvnw -Dtest=SolrApplicationLaunchIntegrationTest test
+```
+
+Docker must be running. The normal `clean verify` command includes this test too.

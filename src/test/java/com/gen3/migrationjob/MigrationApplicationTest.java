@@ -48,6 +48,18 @@ class MigrationApplicationTest {
   }
 
   @Test
+  void rejectsSolrAsTheMigrationDestinationRatherThanSilentlySwitchingDatabases() {
+    runner
+        .withPropertyValues("audiobook.qdrant.migration.enabled=true", "audiobook.database=solr")
+        .run(
+            context ->
+                assertThat(context)
+                    .hasFailed()
+                    .getFailure()
+                    .hasMessageContaining("Migration requires audiobook.database=qdrant"));
+  }
+
+  @Test
   void rejectsSimultaneousJobs() {
     runner
         .withPropertyValues(
