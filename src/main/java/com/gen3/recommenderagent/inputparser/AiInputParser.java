@@ -76,6 +76,9 @@ public class AiInputParser implements InputParser {
                         Duration: preserve under/over/at most/at least/exactly/between comparisons, decimals, both endpoints
                         and explicit hours/minutes ("under 1.5 hours", "between 2 and 3 hours"); never quantify vague duration.
                         Years: preserve after/before/at least/at most/exactly/between YYYY and YYYY, including both endpoints.
+                        Relative publication years: recent/recently means the last 5 years. Put "recent", "past year", or
+                        "last 4 years" (preserving the stated count, including words) in publicationYear, never a guessed
+                        calendar year. Apply exclusions to mustNotInclude; keep duration comparisons separate.
                         bookCount=null unless explicitly requesting a recommendation count.
                         personalised=true for recommendations based on taste/favourites/history and generic requests without
                         stated criteria ("Recommend an audiobook", "Recommend an audiobook for me", "books I would like");

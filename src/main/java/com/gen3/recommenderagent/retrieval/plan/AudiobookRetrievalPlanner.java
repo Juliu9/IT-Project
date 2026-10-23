@@ -7,6 +7,8 @@ import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
+import java.time.Clock;
+import java.time.Year;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -24,6 +26,19 @@ public class AudiobookRetrievalPlanner {
   private static final Pattern YEAR_COMPARISON =
       Pattern.compile(
           "^(?:(after|before|from|since|newer than|older than|over|under|more than|less than|at least|at most|minimum(?: of)?|maximum(?: of)?|up to|exactly) )?(\\d{4})$");
+
+  private static final Pattern RELATIVE_YEARS =
+      Pattern.compile(
+          "^(?:in |within |from )?(?:the )?(?:last|past) (?:([0-9]+|a|an|one|two|three|four|five|six|seven|eight|nine|ten) )?years?$");
+  private final Clock clock;
+
+  public AudiobookRetrievalPlanner() {
+    this(Clock.systemUTC());
+  }
+
+  AudiobookRetrievalPlanner(Clock clock) {
+    this.clock = clock;
+  }
 
   /** Separates semantic text, lexical terms, and exact payload constraints. */
   public AudiobookRetrievalPlan plan(
@@ -109,6 +124,41 @@ public class AudiobookRetrievalPlanner {
       return RangeBounds.empty();
     }
     String normalized = publicationYear.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
+    Matcher relative = RELATIVE_YEARS.matcher(normalized);
+    if (normalized.equals("recent") || normalized.equals("recently") || relative.matches()) {
+      int years;
+      if (normalized.equals("recent") || normalized.equals("recently")) {
+        years = 5;
+      } else {
+        years =
+            switch (relative.group(1) == null ? "one" : relative.group(1)) {
+              case "a", "an", "one" -> 1;
+              case "two" -> 2;
+              case "three" -> 3;
+              case "four" -> 4;
+              case "five" -> 5;
+              case "six" -> 6;
+              case "seven" -> 7;
+              case "eight" -> 8;
+              case "nine" -> 9;
+              case "ten" -> 10;
+              default -> {
+                try {
+                  yield Integer.parseInt(relative.group(1));
+                } catch (NumberFormatException exception) {
+                  throw new InvalidRequestException(
+                      "Please give a whole number of years within the available calendar range.");
+                }
+              }
+            };
+      }
+      int currentYear = Year.now(clock).getValue();
+      if (years < 1 || years >= currentYear) {
+        throw new InvalidRequestException(
+            "Please give a positive number of years within the available calendar range.");
+      }
+      return new RangeBounds(currentYear - years, currentYear);
+    }
     Matcher range = YEAR_RANGE.matcher(normalized);
     if (range.matches()) {
       int lower = Integer.parseInt(range.group(1) != null ? range.group(1) : range.group(3));

@@ -35,7 +35,9 @@ needed for retrieval; they never generate catalogue embeddings or summaries.
 
 For example, “dark fantasy under ten hours, but no romance” supplies desired fantasy concepts,
 avoided romance concepts, and an exact duration limit. Semantic criteria influence similarity;
-exact filters restrict which records are eligible. Only new searches and refinements introduce
+exact filters restrict which records are eligible. “Recent” means the last five years; “past year”
+and “last four years” also produce inclusive publication-year ranges ending in the current year.
+Only new searches and refinements introduce
 new semantic criteria; follow-up control intents can inherit the saved search.
 
 ### 2. Resolve the conversation under a session lock

@@ -79,7 +79,16 @@ never relaxed to fill the result count.
 | Filter | Accepted expressions | Boundaries |
 | --- | --- | --- |
 | Duration | Hours/minutes, decimals, `1h 30m`, `between 2 and 3 hours` | `under`/`over` are strict; `at most`/`at least` inclusive; bare duration exact |
-| Publication year | Four-digit year, `after`, `before`, `at least`, `at most`, inclusive ranges | `after`/`before` are strict; bare year exact |
+| Publication year | Four-digit year, comparisons, inclusive ranges, `recent`, `past year`, `last N years` | `after`/`before` are strict; bare year exact; relative windows include both boundary years |
+
+The parser preserves relative publication phrases rather than guessing a calendar year. Retrieval
+resolves them against the current UTC year: `recent`/`recently` means the last five years; `past year`
+means one year; `last 4 years` and `last four years` mean four. Both include and exclude filters use
+these rules. In 2026 these become 2021–2026, 2025–2026, and 2022–2026 respectively, excluding future
+years. Zero, fractional, negative, and unrepresentably large windows return `400`.
+
+Catalogue metadata contains years only, so these are inclusive year ranges, not exact rolling
+month/day cutoffs. Cached pages remain snapshots of the search that produced them.
 
 Duration bounds account for whole-minute catalogue values. Invalid, ambiguous, reversed, or
 unrepresentable duration ranges return `400`; unsupported or reversed year expressions also return `400`.

@@ -111,12 +111,81 @@ class AudiobookRetrievalPlannerTest {
     filter.setPublicationYear("at most 2020");
     assertThat(planner.plan(50, request, Set.of()).filters().mustInclude().maximumPublicationYear())
         .isEqualTo(2020);
-    for (String invalid :
-        List.of("between 2010 and 2000", "recent", "999999999999999", "2000 or 2010")) {
+    for (String invalid : List.of("between 2010 and 2000", "999999999999999", "2000 or 2010")) {
       filter.setPublicationYear(invalid);
       org.assertj.core.api.Assertions.assertThatThrownBy(() -> planner.plan(50, request, Set.of()))
           .isInstanceOf(com.gen3.recommenderagent.inputparser.InvalidRequestException.class);
     }
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "recent,2021",
+    "recently,2021",
+    "in the past year,2025",
+    "past year,2025",
+    "in the last 4 years,2022",
+    "within the past four years,2022",
+    "last five years,2021",
+    "the past one year,2025",
+    "last 10 years,2016"
+  })
+  void resolvesRelativeYearsFromTheClockForBothFilterGroups(String text, int startYear) {
+    var clock =
+        java.time.Clock.fixed(
+            java.time.Instant.parse("2026-10-24T00:00:00Z"), java.time.ZoneOffset.UTC);
+    var planner = new AudiobookRetrievalPlanner(clock);
+    var request = new SessionRequest();
+    var include = new MustInclude();
+    include.setPublicationYear(text);
+    request.setMustInclude(include);
+    var exclude = new MustNotInclude();
+    exclude.setPublicationYear(text);
+    request.setMustNotInclude(exclude);
+    var filters = planner.plan(50, request, Set.of()).filters();
+    for (var conditions : List.of(filters.mustInclude(), filters.mustNotInclude())) {
+      assertThat(conditions.minimumPublicationYear()).isEqualTo(startYear);
+      assertThat(conditions.maximumPublicationYear()).isEqualTo(2026);
+    }
+  }
+
+  @Test
+  void relativeYearsAdvanceWithTheClockIncludingAtNewYear() {
+    var request = new SessionRequest();
+    var include = new MustInclude();
+    include.setPublicationYear("recent");
+    request.setMustInclude(include);
+    for (int year : List.of(2026, 2027, 2031)) {
+      var clock =
+          java.time.Clock.fixed(
+              java.time.Instant.parse(year + "-01-01T00:00:00Z"), java.time.ZoneOffset.UTC);
+      var bounds =
+          new AudiobookRetrievalPlanner(clock).plan(50, request, Set.of()).filters().mustInclude();
+      assertThat(bounds.minimumPublicationYear()).isEqualTo(year - 5);
+      assertThat(bounds.maximumPublicationYear()).isEqualTo(year);
+    }
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "last 0 years",
+        "last -4 years",
+        "last 2.5 years",
+        "last 9999999999999999999999 years",
+        "last 3000 years"
+      })
+  void rejectsInvalidRelativeYearWindowsWithoutOverflow(String text) {
+    var request = new SessionRequest();
+    var include = new MustInclude();
+    include.setPublicationYear(text);
+    request.setMustInclude(include);
+    var clock =
+        java.time.Clock.fixed(
+            java.time.Instant.parse("2026-10-24T00:00:00Z"), java.time.ZoneOffset.UTC);
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> new AudiobookRetrievalPlanner(clock).plan(50, request, Set.of()))
+        .isInstanceOf(com.gen3.recommenderagent.inputparser.InvalidRequestException.class);
   }
 
   @Test

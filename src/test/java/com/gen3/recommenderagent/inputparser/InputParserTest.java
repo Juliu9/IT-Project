@@ -217,6 +217,47 @@ class InputParserTest {
     assertEquals(null, result.getPositiveSemanticQuery());
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "teen romance that is recent,recent,5",
+    "romance published in the past year,past year,1",
+    "romance published in the last 4 years,last 4 years,4",
+    "romance published in the last four years,last four years,4"
+  })
+  void preservesRelativePublicationWindowsForDeterministicFiltering(
+      String raw, String window, int years) {
+    var parsed = new ParsedRequest();
+    parsed.setIntent(Intent.RECOMMENDATION);
+    var include = new MustInclude();
+    include.setPublicationYear(window);
+    parsed.setMustInclude(include);
+    var query = new SemanticQuery();
+    query.setGenres(List.of("romance"));
+    parsed.setPositiveSemanticQuery(query);
+    var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    when(client
+            .prompt()
+            .system(anyString())
+            .user(raw)
+            .call()
+            .responseEntity(AiInputParser.REQUEST_CONVERTER))
+        .thenReturn(new ResponseEntity<>(null, parsed));
+    var result =
+        new AiInputParser(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
+            .parse(raw);
+    assertEquals(window, result.getMustInclude().getPublicationYear());
+    assertEquals(List.of("romance"), result.getPositiveSemanticQuery().getGenres());
+    var filters =
+        new com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner()
+            .plan(50, result, java.util.Set.of())
+            .filters()
+            .mustInclude();
+    int currentYear = java.time.Year.now(java.time.Clock.systemUTC()).getValue();
+    assertEquals(currentYear - years, filters.minimumPublicationYear());
+    assertEquals(currentYear, filters.maximumPublicationYear());
+  }
+
   @Test
   void mapsPersonalisedRequestWithoutInventingSearchCriteria() {
     String rawText = "Give me books I would like";
