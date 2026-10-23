@@ -61,16 +61,42 @@ class SolrUserPreferenceRepositoryTest {
   @Test
   void replacesBothVectorsAtomicallyAndClearsAnAbsentSide() throws Exception {
     repository.save(new UserPreferenceEmbedding("user", new float[] {1, 0}, null));
-    var captured = ArgumentCaptor.forClass(SolrInputDocument.class);
+    var captured = ArgumentCaptor.forClass(java.util.Collection.class);
     verify(client).add(eq("preferences"), captured.capture());
     verify(client).commit("preferences");
-    assertThat(captured.getValue().getFieldValue("id")).isEqualTo("user");
-    assertThat(captured.getValue().getFieldValue("favouritesVector"))
+    assertThat(((SolrInputDocument) captured.getValue().iterator().next()).getFieldValue("id"))
+        .isEqualTo("user");
+    assertThat(
+            ((SolrInputDocument) captured.getValue().iterator().next())
+                .getFieldValue("favouritesVector"))
         .isEqualTo(Map.of("set", List.of(1f, 0f)));
-    assertThat(((Map<?, ?>) captured.getValue().getFieldValue("historyVector")).containsKey("set"))
+    assertThat(
+            ((Map<?, ?>)
+                    ((SolrInputDocument) captured.getValue().iterator().next())
+                        .getFieldValue("historyVector"))
+                .containsKey("set"))
         .isTrue();
-    assertThat(((Map<?, ?>) captured.getValue().getFieldValue("historyVector")).get("set"))
+    assertThat(
+            ((Map<?, ?>)
+                    ((SolrInputDocument) captured.getValue().iterator().next())
+                        .getFieldValue("historyVector"))
+                .get("set"))
         .isNull();
+  }
+
+  @Test
+  void commitsMultipleUsersOnceAndSkipsEmptyBatches() throws Exception {
+    repository.saveAll(List.of());
+    verifyNoInteractions(client);
+    repository.saveAll(
+        List.of(
+            new UserPreferenceEmbedding("one", new float[] {1, 0}, null),
+            new UserPreferenceEmbedding("two", null, new float[] {0, 1})));
+    var captured = ArgumentCaptor.forClass(java.util.Collection.class);
+    verify(client).add(eq("preferences"), captured.capture());
+    assertThat(captured.getValue()).hasSize(2);
+    verify(client).commit("preferences");
+    verifyNoMoreInteractions(client);
   }
 
   @Test

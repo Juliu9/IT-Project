@@ -6,6 +6,7 @@ import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
@@ -44,17 +45,33 @@ public class SolrUserPreferenceRepository implements UserPreferenceVectorReposit
     if (embedding == null) {
       return;
     }
-    var document = new SolrInputDocument();
-    document.setField("id", embedding.userId());
-    document.setField(
-        "favouritesVector",
-        Collections.singletonMap(
-            "set", SolrVectors.values(embedding.favouritesVector(), dimension)));
-    document.setField(
-        "historyVector",
-        Collections.singletonMap("set", SolrVectors.values(embedding.historyVector(), dimension)));
+    saveAll(List.of(embedding));
+  }
+
+  @Override
+  public void saveAll(List<UserPreferenceEmbedding> embeddings) throws IOException {
+    if (embeddings.isEmpty()) {
+      return;
+    }
+    var documents =
+        embeddings.stream()
+            .map(
+                embedding -> {
+                  var document = new SolrInputDocument();
+                  document.setField("id", embedding.userId());
+                  document.setField(
+                      "favouritesVector",
+                      Collections.singletonMap(
+                          "set", SolrVectors.values(embedding.favouritesVector(), dimension)));
+                  document.setField(
+                      "historyVector",
+                      Collections.singletonMap(
+                          "set", SolrVectors.values(embedding.historyVector(), dimension)));
+                  return document;
+                })
+            .toList();
     try {
-      client.add(collection, document);
+      client.add(collection, documents);
       client.commit(collection);
     } catch (SolrServerException | SolrException exception) {
       throw new IOException("Could not write Solr user preferences", exception);

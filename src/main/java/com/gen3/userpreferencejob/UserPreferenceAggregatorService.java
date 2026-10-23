@@ -47,6 +47,7 @@ public class UserPreferenceAggregatorService {
 
     Instant now = Instant.now();
 
+    List<UserPreferenceEmbedding> pending = new ArrayList<>();
     for (String userId : allUserIds) {
       // 1. Process Favourites (Standard Average)
       List<float[]> favVectors = new ArrayList<>();
@@ -79,8 +80,15 @@ public class UserPreferenceAggregatorService {
       if (aggregatedFavs.length > 0 || aggregatedHist.length > 0) {
         UserPreferenceEmbedding embedding =
             new UserPreferenceEmbedding(userId, aggregatedFavs, aggregatedHist);
-        userPreferenceVectorRepository.save(embedding);
+        pending.add(embedding);
+        if (pending.size() == 500) {
+          userPreferenceVectorRepository.saveAll(List.copyOf(pending));
+          pending.clear();
+        }
       }
+    }
+    if (!pending.isEmpty()) {
+      userPreferenceVectorRepository.saveAll(List.copyOf(pending));
     }
   }
 

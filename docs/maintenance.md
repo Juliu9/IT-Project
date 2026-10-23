@@ -178,7 +178,9 @@ Implementation lives in `com.gen3.shortdescriptionjob`:
 Read favourites/history CSVs and aggregate existing book vectors into user vectors, without AI calls.
 Both Solr and Qdrant supply the required adapters. Set `AUDIOBOOK_DATABASE=solr` or `qdrant`;
 reads and writes stay within that database. For Solr, prepare the separate preference collection and
-schema described in [Solr setup](configuration.md#solr). Favourites use a normalized average; history
+schema described in [Solr setup](configuration.md#solr). Solr writes at most 500 user updates per
+batch and commits once per batch; earlier batches remain saved if a later batch fails.
+Favourites use a normalized average; history
 weights halve every 180 days before the result is normalized.
 
 ```bash
