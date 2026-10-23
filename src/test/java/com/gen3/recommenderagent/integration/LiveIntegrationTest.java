@@ -85,7 +85,7 @@ class LiveIntegrationTest {
             .build();
 
     TurnResult firstTurn =
-        submitTurn(mockMvc, sessionId, userId, 1, INITIAL_RAW_TEXT, Intent.UPDATE_PREFERENCES, 0);
+        submitTurn(mockMvc, sessionId, userId, 2, INITIAL_RAW_TEXT, Intent.UPDATE_PREFERENCES, 5);
     assertTrue(
         firstTurn.recommendationIds().isEmpty(),
         "Updating preferences unexpectedly returned audiobook recommendations");
