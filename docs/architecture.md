@@ -143,6 +143,8 @@ reply such as “1” selects that rank from the retained page; invalid numbers 
 such as help or a new search end this context. “Why the fourth book?” also resolves independently.
 Model-provided ranks and counts accept large integers before conversion to bounded internal values:
 oversized ranks clarify rather than overflow, and result counts retain the existing one-to-five cap.
+Fractional numeric fields and structured responses exceeding JSON limits return a friendly `400`
+validation message rather than truncating a position or returning a server error.
 
 The resolved explanation copies saved criteria and selects from the page inside the session update.
 It does not retrieve, embed, rank, consume the pending batch, add shown IDs, replace history, or clear

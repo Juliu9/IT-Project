@@ -31,7 +31,12 @@ class InputParserTest {
     parsed.setReferenceRank(java.math.BigInteger.valueOf(6));
     parsed.setReferenceTitle("Harry Potter");
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
-    when(client.prompt().system(anyString()).user("why").call().responseEntity(ParsedRequest.class))
+    when(client
+            .prompt()
+            .system(anyString())
+            .user("why")
+            .call()
+            .responseEntity(AiInputParser.REQUEST_CONVERTER))
         .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
     var result =
         new AiInputParser(
@@ -48,16 +53,20 @@ class InputParserTest {
       strings = {"1008392481092349012389201382", "2147483648", "-2147483649"})
   void oversizedModelNumbersCannotOverflowRanksOrCounts(String number) {
     var parsed =
-        new org.springframework.ai.converter.BeanOutputConverter<>(ParsedRequest.class)
-            .convert(
-                "{\"intent\":\"EXPLAIN_RECOMMENDATION\",\"referenceRank\":"
-                    + number
-                    + ",\"bookCount\":"
-                    + number
-                    + "}");
+        AiInputParser.REQUEST_CONVERTER.convert(
+            "{\"intent\":\"EXPLAIN_RECOMMENDATION\",\"referenceRank\":"
+                + number
+                + ",\"bookCount\":"
+                + number
+                + "}");
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     String raw = "explain the " + number + "th one more";
-    when(client.prompt().system(anyString()).user(raw).call().responseEntity(ParsedRequest.class))
+    when(client
+            .prompt()
+            .system(anyString())
+            .user(raw)
+            .call()
+            .responseEntity(AiInputParser.REQUEST_CONVERTER))
         .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
     var result =
         new AiInputParser(
@@ -66,6 +75,35 @@ class InputParserTest {
     assertEquals(
         number.startsWith("-") ? Integer.MIN_VALUE : Integer.MAX_VALUE, result.getReferenceRank());
     assertEquals(result.getReferenceRank(), result.getBookCount());
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"2.7", "1e3", "tooLong"})
+  void invalidModelNumbersReturnFriendlyValidationInsteadOfCrashing(String number) {
+    String value = number.equals("tooLong") ? "9".repeat(1001) : number;
+    for (String field : List.of("referenceRank", "bookCount")) {
+      var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+      when(client
+              .prompt()
+              .system(anyString())
+              .user("bad number")
+              .call()
+              .responseEntity(AiInputParser.REQUEST_CONVERTER))
+          .thenAnswer(
+              ignored ->
+                  new ResponseEntity<>(
+                      null,
+                      AiInputParser.REQUEST_CONVERTER.convert(
+                          "{\"intent\":\"EXPLAIN_RECOMMENDATION\",\""
+                              + field
+                              + "\":"
+                              + value
+                              + "}")));
+      var parser =
+          new AiInputParser(
+              client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+      assertThrows(InvalidRequestException.class, () -> parser.parse("bad number"));
+    }
   }
 
   @Test
@@ -108,7 +146,7 @@ class InputParserTest {
             .system(anyString())
             .user("control")
             .call()
-            .responseEntity(ParsedRequest.class))
+            .responseEntity(AiInputParser.REQUEST_CONVERTER))
         .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
     var builder = mock(ChatClient.Builder.class);
     when(builder.build()).thenReturn(client);
@@ -136,7 +174,7 @@ class InputParserTest {
             .system(anyString())
             .user("help")
             .call()
-            .responseEntity(ParsedRequest.class))
+            .responseEntity(AiInputParser.REQUEST_CONVERTER))
         .thenReturn(new ResponseEntity<>(response, parsed));
     var observer =
         new com.gen3.recommenderagent.observability.AiOperationObserver(
@@ -166,7 +204,7 @@ class InputParserTest {
             .system(anyString())
             .user(rawText)
             .call()
-            .responseEntity(ParsedRequest.class))
+            .responseEntity(AiInputParser.REQUEST_CONVERTER))
         .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
     ChatClient.Builder builder = mock(ChatClient.Builder.class);
     when(builder.build()).thenReturn(client);
@@ -206,7 +244,7 @@ class InputParserTest {
             .system(anyString())
             .user(rawText)
             .call()
-            .responseEntity(ParsedRequest.class))
+            .responseEntity(AiInputParser.REQUEST_CONVERTER))
         .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsedRequest));
 
     ChatClient.Builder builder = mock(ChatClient.Builder.class);
@@ -253,7 +291,7 @@ class InputParserTest {
             .system(anyString())
             .user(rawText)
             .call()
-            .responseEntity(ParsedRequest.class))
+            .responseEntity(AiInputParser.REQUEST_CONVERTER))
         .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, null));
 
     ChatClient.Builder builder = mock(ChatClient.Builder.class);

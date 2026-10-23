@@ -7,12 +7,23 @@ import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.util.UUID;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ResponseEntity;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.json.JsonMapper;
 
 @Component
 public class AiInputParser implements InputParser {
+  static final BeanOutputConverter<ParsedRequest> REQUEST_CONVERTER =
+      new BeanOutputConverter<>(
+          ParsedRequest.class,
+          JsonMapper.builder().disable(DeserializationFeature.ACCEPT_FLOAT_AS_INT).build());
+
   private static final SecureRandom RANDOM = new SecureRandom();
 
   private final ChatClient chatClient;
@@ -43,14 +54,16 @@ public class AiInputParser implements InputParser {
               + " characters or fewer.");
     }
 
-    var aiResponse =
-        aiOperationObserver.observe(
-            "parse",
-            () ->
-                this.chatClient
-                    .prompt()
-                    .system(
-                        """
+    ResponseEntity<ChatResponse, ParsedRequest> aiResponse;
+    try {
+      aiResponse =
+          aiOperationObserver.observe(
+              "parse",
+              () ->
+                  this.chatClient
+                      .prompt()
+                      .system(
+                          """
                         Extract only stated audiobook criteria; never invent values, report contradictions, or choose retrieval mode.
                         Intents: RECOMMENDATION=new search; REFINE=semantic follow-up or taste statement (including "fantasy");
                         MORE_RESULTS=different books; REPEAT=repeat the latest request ("repeat that", "say that again"), including explanations/help.
@@ -72,10 +85,14 @@ public class AiInputParser implements InputParser {
                         both null means whole page. These selectors belong only to EXPLAIN_RECOMMENDATION, never bookCount.
                         Bare ordinals ("fourth") are not explanation requests.
                         """)
-                    .user(rawText)
-                    .call()
-                    .responseEntity(ParsedRequest.class),
-            response -> AiOperationObserver.AiUsage.from(response.response()));
+                      .user(rawText)
+                      .call()
+                      .responseEntity(REQUEST_CONVERTER),
+              response -> AiOperationObserver.AiUsage.from(response.response()));
+    } catch (JacksonException exception) {
+      throw new InvalidRequestException(
+          "I couldn't understand that request. Please use whole numbers for book positions and counts, and keep numbers short.");
+    }
 
     if (aiResponse.entity() == null) {
       throw new IllegalStateException("AI did not return a ParsedRequest");

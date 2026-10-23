@@ -276,7 +276,11 @@ class ExplanationFlowTest {
             .system(org.mockito.ArgumentMatchers.anyString())
             .user(raw)
             .call()
-            .responseEntity(com.gen3.recommenderagent.inputparser.ParsedRequest.class))
+            .responseEntity(
+                org.mockito.ArgumentMatchers
+                    .<org.springframework.ai.converter.StructuredOutputConverter<
+                            com.gen3.recommenderagent.inputparser.ParsedRequest>>
+                        any()))
         .thenAnswer(
             ignored ->
                 new org.springframework.ai.chat.client.ResponseEntity<>(
