@@ -19,10 +19,10 @@ package "recommenderagent — live requests" {
   component "CandidateRetrievalService\nSelects and executes search" as Retrieval #DCFCE7
   component "RankingService\nRanks up to 20 recommendations" as Ranking #DCFCE7
   component "AiResponseGenerator\nExplains the selected books" as Response #DBEAFE
-  component "Database adapter\nCurrent runtime: Qdrant" as Adapter #FEF3C7
+  component "Database adapter\nQdrant OR Solr" as Adapter #FEF3C7
   component "SessionRepository adapter\nCurrent runtime: Redis" as SessionStore #FEF3C7
 }
-database "Qdrant\nCatalogue + book vectors\nUser preference vectors" as Qdrant
+database "Selected database\nQdrant OR Solr\nCatalogue + book vectors\nUser preference vectors" as Qdrant
 database "Redis\nSearch context + last page\nPending recommendations + shown IDs" as Redis
 
 User -right-> Gateway : request / response
@@ -42,15 +42,15 @@ note bottom of Session
   ConversationState owns conversation policy.
   The result carries a temporary ConversationDecision.
   MORE: use pending recommendations first.
-  REPEAT: reuse the last search outcome.
+  REPEAT: replay the latest resolved request.
   MORE without a previous search: ask for criteria.
   These paths can skip retrieval and ranking.
 end note
 note bottom of Adapter
   Runtime code depends on storage interfaces.
   application.properties selects the adapter.
-  Solr currently supports maintenance jobs;
-  it is not yet a complete runtime backend.
+  Qdrant and Solr provide complete adapter sets.
+  Exactly one database is selected for live requests.
 end note
 legend bottom
   Blue: request handling

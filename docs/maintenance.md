@@ -13,7 +13,7 @@ disable unused Spring AI models; the summary provider handles its own transport 
 | Catalogue embeddings | Solr or Qdrant | Embeddings | Existing records' vectors |
 | Migration | Solr → Qdrant | None | Copies absent destination books |
 | Short descriptions | Solr or Qdrant | Batch summaries | Missing short descriptions |
-| User preferences | Qdrant currently | None | Aggregated user vectors |
+| User preferences | Solr or Qdrant | None | Aggregated user vectors |
 
 ## Catalogue embeddings
 
@@ -68,7 +68,7 @@ QDRANT_MIGRATION_ENABLED=true ./mvnw spring-boot:run \
   means the full catalogue.
 - Keep the source stable and avoid other destination writers during migration.
 
-Migration does not complete the missing Solr recommendation-server adapters.
+Migration copies data only; use `AUDIOBOOK_DATABASE` to select the recommendation backend.
 
 ## Short descriptions
 
@@ -171,8 +171,10 @@ Implementation lives in `com.gen3.shortdescriptionjob`:
 ## User preferences
 
 Read favourites/history CSVs and aggregate existing book vectors into user vectors, without AI calls.
-Qdrant currently supplies the required audiobook-vector and user-preference adapters. Favourites
-use a normalized average; history weights halve every 180 days before the result is normalized.
+Both Solr and Qdrant supply the required adapters. Set `AUDIOBOOK_DATABASE=solr` or `qdrant`;
+reads and writes stay within that database. For Solr, prepare the separate preference collection and
+schema described in [Solr setup](configuration.md#solr). Favourites use a normalized average; history
+weights halve every 180 days before the result is normalized.
 
 ```bash
 USER_PREFERENCES_IMPORT_ON_STARTUP=true ./mvnw spring-boot:run \

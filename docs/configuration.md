@@ -41,9 +41,11 @@ command-line arguments. The dev profile also enables the test website; leave it 
 | `session.store` / `SESSION_STORE` | `redis` | Selects the registered session adapter |
 | `audiobook.database` / `AUDIOBOOK_DATABASE` | `qdrant` | Selects one database for the operation |
 
-Qdrant is the complete live recommendation backend. Solr supports catalogue embedding and summary
-jobs and acts as the migration source; the recommendation server rejects Solr until its missing
-vector-lookup and user-preference adapters exist. Selecting a database does not move records.
+Qdrant and Solr both support the live recommendation server and its maintenance jobs. Select
+`qdrant` or `solr`; only that database's runtime adapters and client are enabled. Migration is the
+explicit exception that connects to both databases. Selecting a database does not move records.
+When switching to a different catalogue, use new sessions or clear existing history so cached pages
+from the previous backend are not reused.
 A replacement session adapter must preserve locking, checked commits, and expiry, not just get/set.
 See [adapter contracts](architecture.md#database-selection-and-replacement).
 
@@ -114,7 +116,8 @@ requirements are in [Qdrant schema](architecture.md#qdrant-schema-and-record-ide
 
 ### Solr
 
-These settings apply to jobs that use Solr. Solr is not included in the local Compose stack.
+These settings apply to the recommendation server and jobs when Solr is selected. Solr is not
+included in the local Compose stack; Redis is still the session store.
 
 | Property under `solr.` | Environment variable | Default / purpose |
 | --- | --- | --- |
@@ -123,10 +126,47 @@ These settings apply to jobs that use Solr. Solr is not included in the local Co
 | `username` | `SOLR_USERNAME` | empty; optional authentication |
 | `password` | `SOLR_PASSWORD` | empty; optional authentication |
 | `vector-field` | `SOLR_VECTOR_FIELD` | `embedding`; dense-vector field |
+| `user-preference-collection` | `SOLR_USER_PREFERENCE_COLLECTION` | `user`; separate collection containing user taste vectors |
 | `embedding-dimension` | Inherits `embedding.dimensions` | `1536`; must match the external field schema |
 
-Apply the [manual vector-field schema](../solr/vector-field-schema.xml) to the target collection;
-the application does not automatically install it.
+To select Solr, supply these values through your environment or the dev `.env`:
+
+```properties
+AUDIOBOOK_DATABASE=solr
+SOLR_URL=http://localhost:8983/solr
+SOLR_COLLECTION=combinedbooks
+SOLR_VECTOR_FIELD=embedding
+SOLR_USER_PREFERENCE_COLLECTION=user
+EMBEDDING_DIMENSIONS=1536
+```
+
+Supply OpenAI credentials and Redis settings as usual. Add Solr credentials when authentication is
+enabled. `SOLR_URL` points to `/solr`, not a particular collection.
+
+Prepare the collections before use; reads and normal server startup never create collections or schemas:
+
+- **Catalogue:** Use a string `id` unique key as the book ID. Apply the
+  [catalogue vector schema](../solr/vector-field-schema.xml), matching the configured field name and
+  dimensions. Generate vectors with the opt-in embedding job if absent. The adapter uses `source`,
+  `title`, `authors`, `description`, `narrators`, `language`, `durationMinutes`, `publicationYear`, and
+  `short_description`. Keyword search also expects `rt_title`, `rt_authors`, and `all` fields in the schema.
+  Exact author/narrator/language/source filters require keyword (`string`) fields; use analyzed
+  `rt_title`, `rt_authors`, and `all` for text search. Store metadata needed for responses and updates.
+- **User preferences:** Create a separate collection using the
+  [preference schema](../solr/user-preference-schema.xml). Its string `id` is the exact external user ID;
+  `favouritesVector` and `historyVector` are optional stored vectors of the shared dimension. Use the
+  preference import job to populate them. Saving replaces both vector fields, clears a missing side,
+  and preserves other user fields through atomic updates. Retain `_version_` and make non-copy fields
+  stored or backed by docValues as required for Solr atomic updates.
+
+The catalogue and preference collections must have different names to prevent ID collisions. Unknown
+users can still supply session preferences. Preference read errors fall back to session taste; catalogue
+search errors are reported as unavailable. Candidate vectors are returned and normalized for ranking;
+missing vectors make the preference ranking signal unavailable for that record. Malformed stored
+vectors fail rather than supplying misleading similarity scores.
+
+Solr hybrid search blends lexical and dense scores; it does not use Qdrant's sparse-vector schema.
+Expect ranking differences between databases even with equivalent catalogue content.
 
 ## Maintenance jobs: explicit opt-in
 
@@ -192,6 +232,7 @@ It copies existing supported fields and vectors without generating embeddings or
 | --- | --- |
 | Local development | Start Redis and Qdrant with Compose, populate the catalogue, supply `OPENAI_API_KEY`, and use the `dev` profile for `.env` loading and the website. |
 | Remote Qdrant | Set `QDRANT_URL`, `QDRANT_GRPC_PORT`, authentication and collection names for the remote instance; configure Redis separately. |
+| Solr recommendation server | Select `AUDIOBOOK_DATABASE=solr`, configure both collections and their schemas above, populate catalogue vectors, and provide OpenAI and Redis connections. |
 | Catalogue maintenance in Solr | Select `AUDIOBOOK_DATABASE=solr`, supply Solr connection/schema settings, and run the dedicated embedding or summary launcher with its opt-in mode. Embedding generation needs OpenAI credentials; summary generation uses its selected Batch provider. |
 | Full live test suite | Export nonempty `OPENAI_API_KEY`, `QDRANT_URL`, and `QDRANT_API_KEY`; provide Redis and a populated catalogue. A dev `.env` import alone does not satisfy the test's environment conditions. |
 

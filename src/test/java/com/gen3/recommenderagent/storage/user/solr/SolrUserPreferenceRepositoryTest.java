@@ -2,6 +2,7 @@ package com.gen3.recommenderagent.storage.user.solr;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -14,8 +15,13 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import org.apache.solr.client.solrj.SolrClient;
+import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.SolrRequest;
+import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
+import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrInputDocument;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -26,12 +32,27 @@ class SolrUserPreferenceRepositoryTest {
   private final SolrUserPreferenceRepository repository =
       new SolrUserPreferenceRepository(client, "preferences", 2, "books");
 
+  private final QueryResponse response = mock(QueryResponse.class);
+
+  @BeforeEach
+  void emptyStore() throws Exception {
+    when(response.getResults()).thenReturn(new SolrDocumentList());
+    when(client.query(eq("preferences"), any(SolrQuery.class), eq(SolrRequest.METHOD.POST)))
+        .thenReturn(response);
+  }
+
+  private void stored(SolrDocument document) {
+    var documents = new SolrDocumentList();
+    documents.add(document);
+    when(response.getResults()).thenReturn(documents);
+  }
+
   @Test
   void readsBothVectorsUsingTheExactUserIdAndNormalizesForRanking() throws Exception {
     var document = new SolrDocument();
     document.setField("favouritesVector", List.of(3f, 4f));
     document.setField("historyVector", new float[] {0, 1});
-    when(client.getById("preferences", "user:+ /quote\"")).thenReturn(document);
+    stored(document);
     var result = repository.findEmbeddingByUserId("user:+ /quote\"").orElseThrow();
     assertThat(result.favouritesVector()).containsExactly(0.6f, 0.8f);
     assertThat(result.historyVector()).containsExactly(0, 1);
@@ -59,7 +80,7 @@ class SolrUserPreferenceRepositoryTest {
     repository.save(null);
     verifyNoInteractions(client);
     assertThat(repository.findEmbeddingByUserId("missing")).isEmpty();
-    verify(client).getById("preferences", "missing");
+    verify(client).query(eq("preferences"), any(SolrQuery.class), eq(SolrRequest.METHOD.POST));
     verifyNoMoreInteractions(client);
   }
 
@@ -75,7 +96,7 @@ class SolrUserPreferenceRepositoryTest {
           case "zero" -> List.of(0f, 0f);
           default -> List.of("oops", 1f);
         });
-    when(client.getById("preferences", "user")).thenReturn(document);
+    stored(document);
     assertThatThrownBy(() -> repository.findEmbeddingByUserId("user"))
         .isInstanceOf(IOException.class);
   }
@@ -94,7 +115,7 @@ class SolrUserPreferenceRepositoryTest {
 
   @Test
   void vendorErrorsRespectTheRepositoryIoContract() throws Exception {
-    when(client.getById("preferences", "user"))
+    when(client.query(eq("preferences"), any(SolrQuery.class), eq(SolrRequest.METHOD.POST)))
         .thenThrow(
             new org.apache.solr.common.SolrException(
                 org.apache.solr.common.SolrException.ErrorCode.SERVICE_UNAVAILABLE, "unavailable"));

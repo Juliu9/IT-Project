@@ -25,7 +25,7 @@ component "Shared code in recommenderagent\nStorage ports, database adapters,\nm
 database "Selected catalogue\nSolr OR Qdrant" as Catalogue
 database "Solr source" as SolrSource
 database "Qdrant destination" as QdrantTarget
-database "Selected database\nBook + user preference vectors\nCurrently: Qdrant" as UserStore
+database "Selected database\nBook + user preference vectors\nSolr OR Qdrant" as UserStore
 artifact "Favourites + history CSVs" as CSV
 cloud "Embedding model" as EmbeddingModel
 cloud "Batch summary provider" as SummaryModel

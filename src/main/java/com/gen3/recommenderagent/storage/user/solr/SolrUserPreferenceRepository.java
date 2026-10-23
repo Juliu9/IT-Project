@@ -8,6 +8,8 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.Optional;
 import org.apache.solr.client.solrj.SolrClient;
+import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrInputDocument;
@@ -65,10 +67,16 @@ public class SolrUserPreferenceRepository implements UserPreferenceVectorReposit
       return Optional.empty();
     }
     try {
-      var document = client.getById(collection, userId);
-      if (document == null) {
+      // POST avoids SolrJ GET escaping problems with quotes and commas in external IDs.
+      var query = new SolrQuery("{!term f=id v=$userId}");
+      query.set("userId", userId);
+      query.setRows(1);
+      query.setFields("id", "favouritesVector", "historyVector");
+      var documents = client.query(collection, query, SolrRequest.METHOD.POST).getResults();
+      if (documents.isEmpty()) {
         return Optional.empty();
       }
+      var document = documents.getFirst();
       float[] favourites = SolrVectors.read(document.getFieldValue("favouritesVector"), dimension);
       float[] history = SolrVectors.read(document.getFieldValue("historyVector"), dimension);
       if (favourites == null && history == null) {

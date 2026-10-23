@@ -10,7 +10,7 @@ concise response explaining why the books fit.
 
 1. **Parse:** A chat model identifies the intent, desired and avoided concepts, exact filters,
    and requested result count.
-2. **Find and rank:** The service embeds search concepts, retrieves candidates from Qdrant,
+2. **Find and rank:** The service embeds search concepts, retrieves candidates from the selected Qdrant or Solr backend,
    and ranks them using relevance, available user preferences, and general scoring rules.
 3. **Remember:** Redis keeps a 24-hour session, including search context, recently shown books,
    and a batch of recommendations waiting to be shown.
@@ -63,7 +63,7 @@ query. Without stored vectors, it uses the supplied or saved preferences.
 the selected database adapter. Positive vectors point toward desired concepts;
 negative vectors steer away from avoided concepts. Exact filters remain mandatory.
 
-Qdrant excludes recently shown book IDs before selecting up to **50 candidates**. This leaves
+Both adapters exclude recently shown book IDs before selecting up to **50 candidates**. This leaves
 unseen books eligible even when the closest matches have already been recommended.
 
 ### 4. Rank a batch and serve one page
@@ -139,7 +139,7 @@ from the recommendation server. Matching tests live under `src/test/java/com/gen
 | `src/main/resources/demo/index.html` | Test website, served only with the dev profile |
 | `compose.yaml` | Local Redis and Qdrant services |
 | `compose.observability.yaml` / `observability/` | Optional Grafana Alloy log collector |
-| `solr/vector-field-schema.xml` | Manual Solr vector-field schema snippet |
+| `solr/` | Manual Solr catalogue-vector and user-preference schema snippets |
 | `docs/` | Configuration reference, detailed behavior, maintenance instructions, and system diagrams |
 | `.github/workflows/ci.yml` | Build and test checks |
 
@@ -276,9 +276,9 @@ runs on `main` also run the entire suite with repository secrets. Fork PRs run t
 
 ## Important notes
 
-- **Backend support:** Qdrant is the complete recommendation backend. Solr supports embedding and
-  summary maintenance and migration, but the recommendation server rejects it until its missing
-  vector-lookup and user-preference adapters are implemented. Backend selection does not move data.
+- **Backend support:** Qdrant and Solr support the recommendation server, catalogue embeddings,
+  short descriptions, and preference imports. Set `AUDIOBOOK_DATABASE` to select one; selection
+  does not move data. See [Solr setup](docs/configuration.md#solr) for collections and schemas.
 - **Replaceable technologies:** Storage and provider contracts isolate adapters. Replacing Redis
   must preserve session locking, checked commits, and expiry; a plain get/set cache is insufficient.
   See [adapter contracts](docs/architecture.md#database-selection-and-replacement).

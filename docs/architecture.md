@@ -193,8 +193,9 @@ See [Configuration reference](configuration.md) for property defaults, environme
 model selection, connections, and maintenance opt-ins.
 
 Qdrant stores dense and sparse vectors plus filterable metadata. Exact author, narrator, language,
-duration, and source constraints are applied as filters. Solr supports embedding and summary
-maintenance jobs and migration; it is not a complete selectable recommendation backend.
+duration, and source constraints are applied as filters. Solr supports the same runtime storage ports,
+plus catalogue embedding, summary maintenance, and preference imports. Its hybrid search blends
+lexical and dense scores; candidate vectors are normalized for preference ranking.
 
 [`solr/vector-field-schema.xml`](../solr/vector-field-schema.xml) is a manual snippet for
 configuring an external Solr collection. It stays outside `src/` because the application does not
@@ -210,8 +211,8 @@ use the current dense-vector response format; legacy flattened responses are not
 
 `audiobook.database` in `application.properties` selects one database for the whole request flow;
 `qdrant` is the default. The former `audiobook.candidate-retriever` setting is rejected to prevent
-mixed backends. The recommendation server still rejects `solr` until its missing vector lookup and
-user-preference adapters are implemented; both maintenance jobs can select Solr independently.
+mixed backends. Both `qdrant` and `solr` provide candidate search, book-vector lookup, and user-preference
+storage. Maintenance jobs select their own backend with the same property.
 
 ### Add a database adapter
 
@@ -223,6 +224,19 @@ user-preference adapters are implemented; both maintenance jobs can select Solr 
 
 Missing implementations fail startup instead of falling back to Qdrant. Conversation and ranking
 code remain unchanged. Selection does not copy data; maintenance jobs have their own store contracts.
+
+### Solr schema and record identity
+
+`SolrAudiobookRepository` supplies search, indexing, and exact vector lookups by the catalogue's
+unique `id`. Lookups deduplicate IDs and query in batches of at most 100; missing vectors are omitted.
+`SolrUserPreferenceRepository` stores exact external user IDs in a separate collection. Atomic saves
+replace both taste vectors, including removal of an absent vector, while preserving unrelated metadata.
+Reads do not create collections or schemas. Stored vectors must be finite, nonzero, and match the
+configured dimension; preference and candidate vectors are normalized for ranking.
+
+Solr is wired only when selected, except for the explicit migration source. The preference-import
+launcher registers either Solr or Qdrant adapters without loading Redis or AI models. See
+[Solr configuration](configuration.md#solr) for schema prerequisites and connection settings.
 
 ### Qdrant schema and record identity
 
