@@ -41,7 +41,20 @@ Do not mix the two locking versions.
 ### Context and cached results
 
 A zero-match search still supplies context for `MORE_RESULTS`; clearing history removes it.
-`MORE_RESULTS` and `REPEAT` supply resolved criteria to response generation.
+`MORE_RESULTS` restores saved search criteria. `REPEAT` replays the latest resolved request,
+including explanations, help, clarifications, and empty results, without retrieving or applying
+state changes again. Repeated REPEAT requests keep replaying the same original request.
+`REPEAT_RECOMMENDATIONS` ("repeat the books", "show those recommendations again") instead
+restores the retained search page, even after help or a single-book explanation. It leaves search
+history, shown IDs and the pending queue untouched, while updating the latest replay snapshot so
+"repeat that" afterward repeats that page. No page yields a fixed message; an empty latest MORE
+repeats exhaustion rather than falling back to an older page. Clearing history removes the page.
+
+The session stores one bounded `lastRequest` snapshot and its `lastDecision`, separately from
+search/preference history. Raw input and final response text are not stored. A repeated explanation
+uses the original selected books and criteria; AI wording may vary. Old sessions without these
+fields fall back to their latest retained request. Clearing history removes the old snapshot, then
+retains only the clear-history acknowledgement for replay.
 
 Pending recommendations are catalogue snapshots. Edits and removals affect new batches; cached
 items are not rechecked on each page. Sessions without a pending queue refill normally. The queue
@@ -101,9 +114,9 @@ generation remains in `embeddingjob`; the query embedding module only embeds liv
 | `ConversationState` | Semantic eligibility, context inheritance, queue invalidation, preference/count changes, history retention, and the conversation decision |
 | `AiResponseGenerator` | Wording after the session commits |
 
-`ConversationDecision` is temporary and excluded from session JSON. Retained search criteria and
-recommendation details are persisted separately. The response implementation consumes this decision
-for wording. Direct callers without a resolved decision use the same conversation-policy classifier;
+`SessionRequest.decision` is temporary and excluded from request JSON. Retained search criteria and
+recommendation details are persisted separately. Only the latest replay snapshot stores its decision
+in `Session.lastDecision`. The response implementation consumes the resolved decision for wording. Direct callers without a resolved decision use the same conversation-policy classifier;
 there is no second intent policy.
 
 The parser interface returns `SessionRequest` directly. Provider responses and token usage stay
@@ -111,30 +124,43 @@ inside the parser implementation; the request pipeline does not depend on Spring
 
 ## Semantic information and control intents
 
-Supported intents are `RECOMMENDATION`, `REFINE`, `MORE_RESULTS`, `REPEAT`, `CHANGE_COUNT`,
-`UPDATE_PREFERENCES`, `CLEAR_HISTORY`, `HELP`, and `UNKNOWN`.
+Supported intents are `RECOMMENDATION`, `REFINE`, `MORE_RESULTS`, `REPEAT`, `REPEAT_RECOMMENDATIONS`, `CHANGE_COUNT`,
+`EXPLAIN_RECOMMENDATION`, `UPDATE_PREFERENCES`, `CLEAR_HISTORY`, `HELP`, and `UNKNOWN`.
 
 Only `RECOMMENDATION` and `REFINE` accept newly parsed positive/negative semantic queries or the
-personalised flag. Other intents discard these fields. `MORE_RESULTS` and `REPEAT` inherit the saved
-search context; semantic changes use `REFINE`. `UPDATE_PREFERENCES` can still update exact filters.
+personalised flag. Other intents discard these fields. `MORE_RESULTS`, `REPEAT_RECOMMENDATIONS`, and
+`EXPLAIN_RECOMMENDATION` inherit saved search context; `REPEAT` restores its retained request context; semantic changes use `REFINE`. `UPDATE_PREFERENCES` can still update exact filters.
 A semantic reply to a taste-clarification question uses `REFINE`.
+
+## Explaining recommendations
+
+`EXPLAIN_RECOMMENDATION` carries optional `referenceRank` and `referenceTitle`, independent of
+`bookCount` and semantic criteria. No selectors means the whole latest search page. Title matching
+ignores case/punctuation and uses exact matches before unique partial matches. Missing, ambiguous,
+out-of-range or conflicting references produce a ranked-title clarification. A bare ordinal is not
+an explanation request; “Why the fourth book?” resolves independently after clarification.
+
+The resolved explanation copies saved criteria and selects from the page inside the session update.
+It does not retrieve, embed, rank, consume the pending batch, add shown IDs, replace history, or clear
+pending preference clarification. No search yields a fixed onboarding message; an empty latest page
+yields a distinct fixed message, even if an older page had results. The session represents committed
+recommendations, not confirmation that a client displayed or spoke them.
+
+Each retained/queued `Recommendation.readingPreferencesUsed` records whether stored preference
+vectors contributed to personalised retrieval or a positive active preference ranking score. It is
+copied when batch items receive page ranks; old session JSON defaults to false. Explanations never
+reload today's preference profile to justify an older selection. They may mention reading preferences
+when recorded, but cannot infer favourite genres or specific books from that flag. Descriptions and
+saved criteria support semantic explanations; filter requests alone cannot prove actual book metadata.
+Response generation uses the existing role-specific chat client, with distinct explanation instructions
+and an honest built-in fallback. Explanations are plain text with a 150-word total limit; oversized
+AI output uses a bounded fallback covering every selected book. Clarification/no-history responses
+need no response-model call.
 
 ## Configuration and schema
 
-The server needs `OPENAI_API_KEY` plus an existing populated Qdrant collection. Connection defaults
-suit local Docker:
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` | Redis session store |
-| `QDRANT_URL` | `http://localhost:6333` | Qdrant endpoint |
-| `QDRANT_GRPC_PORT` | `6334` | Qdrant gRPC port |
-| `QDRANT_API_KEY` | empty | Qdrant Cloud API key |
-| `QDRANT_COLLECTION` | `audiobooks_hybrid` | Audiobook collection |
-| `QDRANT_TIMEOUT` | `10s` | Maximum time for one Qdrant call |
-| `AUDIOBOOK_DATABASE` | `qdrant` | One database adapter set for search, vectors, preferences, and enrichment |
-| `EMBEDDING_DIMENSIONS` | `1536` | Shared embedding-model and vector-store dimension |
-| `QDRANT_MIGRATION_ENABLED` | `false` | Run the opt-in Solr-to-Qdrant migration |
+See [Configuration reference](configuration.md) for property defaults, environment overrides,
+model selection, connections, and maintenance opt-ins.
 
 Qdrant stores dense and sparse vectors plus filterable metadata. Exact author, narrator, language,
 duration, and source constraints are applied as filters. Solr supports embedding and summary
@@ -197,8 +223,8 @@ The parser and response generator use separate clients:
 | Input parser | `INPUT_PARSER_CHAT_MODEL` (`ai.input-parser.model`) | `inputParserChatClient` |
 | Response generator | `RESPONSE_GENERATOR_CHAT_MODEL` (`ai.response-generator.model`) | `responseGeneratorChatClient` |
 
-Blank overrides inherit the provider default. OpenAI defaults to `gpt-4o-mini`, overridable through
-`OPENAI_CHAT_MODEL`. A replacement bean affects only its role; its provider must support the model.
+Blank overrides inherit the provider default; see [model settings](configuration.md#ai-models-and-shared-vector-dimensions).
+A replacement bean affects only its role; its provider must support the model.
 
 Response-model failure or missing/blank text uses built-in recommendation wording and preserves
 the committed session. Failures are logged locally.
