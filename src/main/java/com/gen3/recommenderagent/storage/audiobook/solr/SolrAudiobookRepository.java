@@ -76,7 +76,8 @@ public class SolrAudiobookRepository
 
     solrQuery.setQuery(query);
     solrQuery.set("defType", "edismax");
-    solrQuery.set("qf", "title rt_title authors rt_authors all");
+    solrQuery.set("qf", "all");
+    solrQuery.set("uf", "all");
     solrQuery.setRows(limit);
     solrQuery.setFields(
         "id",

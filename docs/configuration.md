@@ -149,9 +149,10 @@ Prepare the collections before use; reads and normal server startup never create
   [catalogue vector schema](../solr/vector-field-schema.xml), matching the configured field name and
   dimensions. Generate vectors with the opt-in embedding job if absent. The adapter uses `source`,
   `title`, `authors`, `description`, `narrators`, `language`, `durationMinutes`, `publicationYear`, and
-  `short_description`. Keyword search also expects `rt_title`, `rt_authors`, and `all` fields in the schema.
-  Exact author/narrator/language/source filters require keyword (`string`) fields; use analyzed
-  `rt_title`, `rt_authors`, and `all` for text search. Store metadata needed for responses and updates.
+  `short_description`. Keyword search, including the keyword part of hybrid retrieval, targets only
+  the analyzed `all` field; populate it with the text you want searchable. Explicit query field
+  selectors are restricted to `all` too. Exact author/narrator/language/source filters still use their
+  dedicated keyword (`string`) fields. Store metadata needed for responses and updates.
 - **User preferences:** Create a separate collection using the
   [preference schema](../solr/user-preference-schema.xml). Its string `id` is the exact external user ID;
   `favouritesVector` and `historyVector` are optional stored vectors of the shared dimension. Use the

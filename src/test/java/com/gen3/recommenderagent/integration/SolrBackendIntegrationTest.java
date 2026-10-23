@@ -87,6 +87,9 @@ class SolrBackendIntegrationTest {
                   ? List.of(0f, 1f)
                   : id.equals("book-101") ? List.of(0.6f, 0.8f) : List.of(1f, 0f)));
       document.setField("publicationYear", Map.of("set", 2024));
+      if (id.equals("book-606")) {
+        document.setField("title", Map.of("set", "hiddenmatch"));
+      }
       client.add(BOOKS, document);
     }
     client.commit(BOOKS);
@@ -209,12 +212,20 @@ class SolrBackendIntegrationTest {
             include, AudiobookFilterConditions.empty(), List.of("book-101", "book-404"));
     var candidates = books().searchHybrid(new float[] {1, 0}, "science fiction", filters, 50);
     assertThat(candidates).hasSize(4);
+    assertThat(books().searchByFilters(filters, 50)).hasSize(4);
     assertThat(candidates)
         .allSatisfy(
             candidate -> {
               assertThat(candidate.embedding()).containsExactly(1, 0);
               assertThat(candidate.audiobook().id()).isNotIn("book-101", "book-404");
             });
+  }
+
+  @Test
+  void keywordSearchUsesOnlyAllEvenWithAnExplicitFieldSelector() throws Exception {
+    assertThat(books().searchKeyword("hiddenmatch", AudiobookFilters.empty(), 50)).isEmpty();
+    assertThat(books().searchKeyword("title:hiddenmatch", AudiobookFilters.empty(), 50)).isEmpty();
+    assertThat(books().searchKeyword("science fiction", AudiobookFilters.empty(), 50)).hasSize(5);
   }
 
   @Test

@@ -160,7 +160,8 @@ class SolrAudiobookRepositoryUnitTest {
     assertSame(expected, actual);
     assertEquals("mystery", query.getQuery());
     assertEquals("edismax", query.get("defType"));
-    assertEquals("title rt_title authors rt_authors all", query.get("qf"));
+    assertEquals("all", query.get("qf"));
+    assertEquals("all", query.get("uf"));
     assertEquals(5, query.getRows());
     assertEquals(
         "id,source,title,authors,description,narrators,language,durationMinutes,publicationYear,short_description,score,embedding",
