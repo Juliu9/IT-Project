@@ -159,20 +159,8 @@ need no response-model call.
 
 ## Configuration and schema
 
-The server needs `OPENAI_API_KEY` plus an existing populated Qdrant collection. Connection defaults
-suit local Docker:
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` | Redis session store |
-| `QDRANT_URL` | `http://localhost:6333` | Qdrant endpoint |
-| `QDRANT_GRPC_PORT` | `6334` | Qdrant gRPC port |
-| `QDRANT_API_KEY` | empty | Qdrant Cloud API key |
-| `QDRANT_COLLECTION` | `audiobooks_hybrid` | Audiobook collection |
-| `QDRANT_TIMEOUT` | `10s` | Maximum time for one Qdrant call |
-| `AUDIOBOOK_DATABASE` | `qdrant` | One database adapter set for search, vectors, preferences, and enrichment |
-| `EMBEDDING_DIMENSIONS` | `1536` | Shared embedding-model and vector-store dimension |
-| `QDRANT_MIGRATION_ENABLED` | `false` | Run the opt-in Solr-to-Qdrant migration |
+See [Configuration reference](configuration.md) for property defaults, environment overrides,
+model selection, connections, and maintenance opt-ins.
 
 Qdrant stores dense and sparse vectors plus filterable metadata. Exact author, narrator, language,
 duration, and source constraints are applied as filters. Solr supports embedding and summary
@@ -235,8 +223,8 @@ The parser and response generator use separate clients:
 | Input parser | `INPUT_PARSER_CHAT_MODEL` (`ai.input-parser.model`) | `inputParserChatClient` |
 | Response generator | `RESPONSE_GENERATOR_CHAT_MODEL` (`ai.response-generator.model`) | `responseGeneratorChatClient` |
 
-Blank overrides inherit the provider default. OpenAI defaults to `gpt-4o-mini`, overridable through
-`OPENAI_CHAT_MODEL`. A replacement bean affects only its role; its provider must support the model.
+Blank overrides inherit the provider default; see [model settings](configuration.md#ai-models-and-shared-vector-dimensions).
+A replacement bean affects only its role; its provider must support the model.
 
 Response-model failure or missing/blank text uses built-in recommendation wording and preserves
 the committed session. Failures are logged locally.
