@@ -3,6 +3,7 @@ package com.gen3.recommenderagent.inputparser;
 import com.gen3.recommenderagent.domain.session.ConversationState;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
+import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.util.UUID;
 import org.springframework.ai.chat.client.ChatClient;
@@ -84,7 +85,7 @@ public class AiInputParser implements InputParser {
 
     SessionRequest request = new SessionRequest();
     request.setIntent(parsed.getIntent());
-    request.setReferenceRank(parsed.getReferenceRank());
+    request.setReferenceRank(boundedInteger(parsed.getReferenceRank()));
     request.setReferenceTitle(parsed.getReferenceTitle());
     request.setPersonalised(parsed.isPersonalised());
     request.setPositiveSemanticQuery(parsed.getPositiveSemanticQuery());
@@ -92,11 +93,21 @@ public class AiInputParser implements InputParser {
     ConversationState.normalizeInput(request);
     request.setMustInclude(parsed.getMustInclude());
     request.setMustNotInclude(parsed.getMustNotInclude());
-    request.setBookCount(parsed.getBookCount());
+    request.setBookCount(boundedInteger(parsed.getBookCount()));
     request.setRequestId(createUuidV7().toString());
     request.setRawText(rawText);
 
     return request;
+  }
+
+  // Keep oversized model numbers invalid without overflowing into a valid rank or count.
+  private Integer boundedInteger(BigInteger value) {
+    return value == null
+        ? null
+        : value
+            .max(BigInteger.valueOf(Integer.MIN_VALUE))
+            .min(BigInteger.valueOf(Integer.MAX_VALUE))
+            .intValue();
   }
 
   private UUID createUuidV7() {

@@ -138,7 +138,11 @@ A semantic reply to a taste-clarification question uses `REFINE`.
 `bookCount` and semantic criteria. No selectors means the whole latest search page. Title matching
 ignores case/punctuation and uses exact matches before unique partial matches. Missing, ambiguous,
 out-of-range or conflicting references produce a ranked-title clarification. A bare ordinal is not
-an explanation request; “Why the fourth book?” resolves independently after clarification.
+an explanation request on its own. While a book-selection clarification is pending, a numeric
+reply such as “1” selects that rank from the retained page; invalid numbers ask again. Other actions
+such as help or a new search end this context. “Why the fourth book?” also resolves independently.
+Model-provided ranks and counts accept large integers before conversion to bounded internal values:
+oversized ranks clarify rather than overflow, and result counts retain the existing one-to-five cap.
 
 The resolved explanation copies saved criteria and selects from the page inside the session update.
 It does not retrieve, embed, rank, consume the pending batch, add shown IDs, replace history, or clear

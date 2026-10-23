@@ -50,7 +50,7 @@ public class SessionTransitionService {
               : "SESSION_REPEAT_RECOMMENDATIONS",
           result.getRecommendations().size());
     }
-    if (original != null && original.getIntent() == Intent.EXPLAIN_RECOMMENDATION) {
+    if (result.getIntent() == Intent.EXPLAIN_RECOMMENDATION) {
       RequestTelemetry.retrieval("SESSION_EXPLANATION", result.getRecommendations().size());
     }
     return result;

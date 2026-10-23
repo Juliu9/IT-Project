@@ -18,6 +18,7 @@ public final class ConversationState {
     SessionRequest request = resolve(session, original);
     // Invalidation uses the original action because clarification replies can become searches.
     if (request.getIntent() != Intent.REPEAT
+        && request.getIntent() != Intent.EXPLAIN_RECOMMENDATION
         && !request.isSearchClarificationRequired()
         && invalidatesBatch(original)) {
       session.setPendingRecommendations(List.of());
@@ -233,6 +234,19 @@ public final class ConversationState {
         effective.setDecision(ConversationDecision.NOTHING_TO_EXPLAIN);
       }
       return effective;
+    }
+    // Only a pending clarification gives a bare number meaning as a book selection.
+    String reply = effective.getRawText() == null ? "" : effective.getRawText().strip();
+    if (session.getLastDecision() == ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
+        && reply.matches("[0-9]+")) {
+      effective.setIntent(Intent.EXPLAIN_RECOMMENDATION);
+      normalizeInput(effective);
+      effective.setReferenceTitle(null);
+      try {
+        effective.setReferenceRank(Integer.valueOf(reply));
+      } catch (NumberFormatException ignored) {
+        effective.setReferenceRank(0); // An oversized number is an invalid rank, so ask again.
+      }
     }
     if (effective.getIntent() == Intent.EXPLAIN_RECOMMENDATION) {
       resolveExplanation(effective, session);

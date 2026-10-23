@@ -76,6 +76,66 @@ class ExplanationFlowTest {
     verify(workflow).recommend(any(), any());
   }
 
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = Intent.class,
+      names = {"UNKNOWN", "CHANGE_COUNT", "REFINE", "RECOMMENDATION"})
+  void numericClarificationReplyExplainsBookWithoutChangingCountOrQueue(Intent parsedIntent)
+      throws Exception {
+    search();
+    String before = saved();
+    explain(null, "Harry Potter");
+    var reply = new SessionRequest();
+    reply.setIntent(parsedIntent);
+    reply.setBookCount(1);
+    reply.setRawText(" 1 ");
+    var result = service.process("session", "user", reply);
+    assertThat(result.getIntent()).isEqualTo(Intent.EXPLAIN_RECOMMENDATION);
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(result.getRecommendations()).extracting(Recommendation::getRank).containsExactly(1);
+    assertThat(responses.generate(result.getRecommendations(), result))
+        .contains("Number 1, Harry Potter 1");
+    assertThat(saved()).isEqualTo(before);
+    assertThat(process(Intent.REPEAT).getRecommendations())
+        .extracting(Recommendation::getRank)
+        .containsExactly(1);
+    assertThat(process(Intent.MORE_RESULTS).getRecommendations()).hasSize(5);
+    verify(workflow).recommend(any(), any());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"0", "6", "999999999999999999999"})
+  void invalidNumericReplyKeepsClarifyingUntilAValidSelection(String number) {
+    search();
+    explain(null, "Harry Potter");
+    var reply = new SessionRequest();
+    reply.setIntent(Intent.UNKNOWN);
+    reply.setRawText(number);
+    var result = service.process("session", "user", reply);
+    assertThat(result.getDecision())
+        .isEqualTo(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+    reply.setRawText("1");
+    assertThat(service.process("session", "user", reply).getRecommendations())
+        .extracting(Recommendation::getRank)
+        .containsExactly(1);
+    verify(workflow).recommend(any(), any());
+  }
+
+  @Test
+  void numericReplyOnlySelectsABookWhileClarificationIsPending() {
+    search();
+    var reply = new SessionRequest();
+    reply.setIntent(Intent.UNKNOWN);
+    reply.setRawText("1");
+    assertThat(service.process("session", "user", reply).getDecision())
+        .isEqualTo(ConversationDecision.UNKNOWN);
+    explain(null, "Harry Potter");
+    process(Intent.HELP);
+    assertThat(service.process("session", "user", reply).getDecision())
+        .isEqualTo(ConversationDecision.UNKNOWN);
+    verify(workflow).recommend(any(), any());
+  }
+
   @Test
   void ambiguousMissingAndConflictingTitlesClarifyWithoutSelectingSilently() {
     search();
@@ -151,14 +211,15 @@ class ExplanationFlowTest {
             "I returned 2 books: 1. Harry Potter 6. 2. Harry Potter 7. Which one did you mean?");
   }
 
-  @Test
-  void apiClarifiesSixthThenExplainsFourthWithoutReplacingThePage() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"Why the fourth book?", "1"})
+  void apiClarifiesThenExplainsSelectionWithoutReplacingThePage(String reply) throws Exception {
     search();
     String before = saved();
     com.gen3.recommenderagent.inputparser.InputParser parser =
         raw -> {
           var request = new SessionRequest();
-          request.setIntent(Intent.EXPLAIN_RECOMMENDATION);
+          request.setIntent(raw.equals("1") ? Intent.UNKNOWN : Intent.EXPLAIN_RECOMMENDATION);
           request.setReferenceRank(raw.contains("sixth") ? 6 : 4);
           request.setRawText(raw);
           return request;
@@ -184,12 +245,69 @@ class ExplanationFlowTest {
                 .header("X-Session-Id", "session")
                 .header("X-User-Id", "user")
                 .contentType("text/plain")
-                .content("Why the fourth book?"))
+                .content(reply))
         .andExpect(
             org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
         .andExpect(
             org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
-                .string(org.hamcrest.Matchers.containsString("Number 4, Harry Potter 4")));
+                .string(
+                    org.hamcrest.Matchers.containsString(
+                        reply.equals("1")
+                            ? "Number 1, Harry Potter 1"
+                            : "Number 4, Harry Potter 4")));
+    assertThat(saved()).isEqualTo(before);
+    verify(workflow).recommend(any(), any());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"/api/v1/recommendations", "/api/v1/recommendations/demo"})
+  void oversizedOrdinalClarifiesThroughTheRealParserAndBothEndpoints(String endpoint)
+      throws Exception {
+    search();
+    String before = saved();
+    String number = "1008392481092349012389201382";
+    String raw = "explain the " + number + "th one more";
+    var client =
+        mock(
+            org.springframework.ai.chat.client.ChatClient.class,
+            org.mockito.Mockito.RETURNS_DEEP_STUBS);
+    when(client
+            .prompt()
+            .system(org.mockito.ArgumentMatchers.anyString())
+            .user(raw)
+            .call()
+            .responseEntity(com.gen3.recommenderagent.inputparser.ParsedRequest.class))
+        .thenAnswer(
+            ignored ->
+                new org.springframework.ai.chat.client.ResponseEntity<>(
+                    null,
+                    new org.springframework.ai.converter.BeanOutputConverter<>(
+                            com.gen3.recommenderagent.inputparser.ParsedRequest.class)
+                        .convert(
+                            "{\"intent\":\"EXPLAIN_RECOMMENDATION\",\"referenceRank\":"
+                                + number
+                                + "}")));
+    var parser =
+        new com.gen3.recommenderagent.inputparser.AiInputParser(
+            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+    var gateway = new com.gen3.recommenderagent.api.RequestGateway(parser, service, responses);
+    var mvc =
+        org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(
+                gateway, new com.gen3.recommenderagent.api.DemoWebsite(gateway))
+            .build();
+    String body =
+        mvc.perform(
+                org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(endpoint)
+                    .header("X-Session-Id", "session")
+                    .header("X-User-Id", "user")
+                    .contentType("text/plain")
+                    .content(raw))
+            .andExpect(
+                org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    assertThat(body).contains("Which one did you mean?", "Harry Potter 1", "Harry Potter 5");
     assertThat(saved()).isEqualTo(before);
     verify(workflow).recommend(any(), any());
   }
