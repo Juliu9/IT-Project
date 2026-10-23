@@ -13,7 +13,7 @@ import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
-import com.gen3.recommenderagent.storage.sessionrepository.SessionRepository;
+import com.gen3.recommenderagent.storage.session.SessionRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -225,8 +225,8 @@ class LiveIntegrationTest {
       throws InterruptedException {
     Instant deadline = Instant.now().plus(timeout);
     while (Instant.now().isBefore(deadline)) {
-      Session session = sessionRepository.getSession(sessionId, userId);
-      if (session != null) {
+      Session session = sessionRepository.update(sessionId, userId, savedSession -> savedSession);
+      if (!session.getRequests().isEmpty()) {
         return session;
       }
       Thread.sleep(100);
