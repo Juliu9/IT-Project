@@ -69,7 +69,7 @@ public class AiInputParser implements InputParser {
                         MORE_RESULTS=different books; REPEAT=repeat the latest request ("repeat that", "say that again"), including explanations/help.
                         REPEAT_RECOMMENDATIONS=repeat the latest book page ("repeat the books", "show those recommendations again");
                         EXPLAIN_RECOMMENDATION=why recommended;
-                        CHANGE_COUNT, UPDATE_PREFERENCES, CLEAR_HISTORY, HELP, UNKNOWN=corresponding actions.
+                        CANCEL=cancel or never mind; CHANGE_COUNT, UPDATE_PREFERENCES, CLEAR_HISTORY, HELP, UNKNOWN=corresponding actions.
                         Desired/avoided concepts go in positiveSemanticQuery/negativeSemanticQuery. Liked authors/narrators
                         stay semantic unless exact matching is requested. mustInclude/mustNotInclude hold only exact author,
                         narrator, language, duration, publication-year or source requirements.

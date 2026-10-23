@@ -128,6 +128,44 @@ class ConversationStateTest {
     assertEquals(List.of("romance"), effective.getPositiveSemanticQuery().getTopics());
   }
 
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"never mind", "cancel", "stop!"})
+  void cancellationClearsThePreferenceQuestionWithoutSearchingOrClearingHistory(String text) {
+    var session = new Session();
+    var pending = request(Intent.RECOMMENDATION);
+    pending.setPreferenceClarificationRequired(true);
+    pending.setPersonalised(true);
+    ConversationState.retainRequest(session, pending);
+    var preferences = new SessionPreferences();
+    session.setPreferences(preferences);
+    session.setShownBooks(List.of("saved-book"));
+    var reply = request(Intent.UNKNOWN);
+    reply.setRawText(text);
+    var result = conversationState.begin(session, reply);
+    assertEquals(Intent.CANCEL, result.getIntent());
+    assertFalse(conversationState.needsRecommendations(result));
+    conversationState.finish(session, result, reply);
+    assertFalse(session.isAwaitingPersonalisedPreferences());
+    assertEquals(ConversationDecision.CANCELLED, result.getDecision());
+    assertEquals(List.of("saved-book"), session.getShownBooks());
+    assertEquals(preferences, session.getPreferences());
+    assertEquals(
+        ConversationDecision.CANCELLED,
+        conversationState.begin(session, request(Intent.REPEAT)).getDecision());
+  }
+
+  @Test
+  void unknownReplyDoesNotBecomeAPersonalisedSearch() {
+    var session = new Session();
+    var pending = request(Intent.RECOMMENDATION);
+    pending.setPreferenceClarificationRequired(true);
+    ConversationState.retainRequest(session, pending);
+    var reply = request(Intent.UNKNOWN);
+    reply.setRawText("huh?");
+    assertEquals(Intent.UNKNOWN, conversationState.begin(session, reply).getIntent());
+    assertFalse(conversationState.needsRecommendations(conversationState.begin(session, reply)));
+  }
+
   private static Stream<Arguments> followUpIntents() {
     return Stream.of(Arguments.of(Intent.REFINE), Arguments.of(Intent.MORE_RESULTS));
   }

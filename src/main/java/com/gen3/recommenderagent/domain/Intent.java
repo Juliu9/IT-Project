@@ -12,5 +12,6 @@ public enum Intent {
   UPDATE_PREFERENCES,
   CLEAR_HISTORY,
   HELP,
+  CANCEL,
   UNKNOWN;
 }

@@ -8,10 +8,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /** Conversation policy applied before and after recommendation work in the same session update. */
 public final class ConversationState {
+
+  private static final Pattern SELECTION_REPLY =
+      Pattern.compile(
+          "(?i)^(?:(?:the|number|book)\\s+)?([0-9]+(?:st|nd|rd|th)?|one|two|three|four|five|six|seven|eight|nine|ten|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)(?:\\s+(?:one|book))?(?:\\s+please)?[.!?]?$");
 
   /** Resolves context and invalidates an obsolete queue before recommendation work begins. */
   public SessionRequest begin(Session session, SessionRequest original) {
@@ -19,6 +24,8 @@ public final class ConversationState {
     // Invalidation uses the original action because clarification replies can become searches.
     if (request.getIntent() != Intent.REPEAT
         && request.getIntent() != Intent.EXPLAIN_RECOMMENDATION
+        && request.getIntent() != Intent.CHANGE_COUNT
+        && request.getIntent() != Intent.CANCEL
         && !request.isSearchClarificationRequired()
         && invalidatesBatch(original)) {
       session.setPendingRecommendations(List.of());
@@ -112,6 +119,7 @@ public final class ConversationState {
               case UPDATE_PREFERENCES -> ConversationDecision.PREFERENCES_UPDATED;
               case CLEAR_HISTORY -> ConversationDecision.HISTORY_CLEARED;
               case HELP -> ConversationDecision.HELP;
+              case CANCEL -> ConversationDecision.CANCELLED;
               case UNKNOWN -> ConversationDecision.UNKNOWN;
               case RECOMMENDATION, REFINE, MORE_RESULTS, REPEAT, REPEAT_RECOMMENDATIONS -> null;
             };
@@ -169,14 +177,18 @@ public final class ConversationState {
 
   private void applyTransition(Session session, SessionRequest request, Intent originalIntent) {
     // Persist a taste reply before history replacement removes the pending clarification.
-    if (originalIntent == Intent.UPDATE_PREFERENCES
-        || (originalIntent == Intent.REFINE && awaitingPreferences(session))) {
+    if (request.getIntent() != Intent.CANCEL
+        && (originalIntent == Intent.UPDATE_PREFERENCES
+            || (originalIntent == Intent.REFINE && awaitingPreferences(session)))) {
       session.setPreferences(mergedPreferences(session, request));
     }
-    if (originalIntent == Intent.CHANGE_COUNT) {
+    if (request.getIntent() == Intent.CHANGE_COUNT) {
       session.setBookCount(resolveBookCount(request, session));
     }
-    if (originalIntent == Intent.CLEAR_HISTORY) {
+    if (request.getIntent() == Intent.CANCEL) {
+      session.getRequests().forEach(previous -> previous.setPreferenceClarificationRequired(false));
+    }
+    if (request.getIntent() == Intent.CLEAR_HISTORY) {
       session.clearHistory();
     }
     complete(request);
@@ -235,18 +247,27 @@ public final class ConversationState {
       }
       return effective;
     }
-    // Only a pending clarification gives a bare number meaning as a book selection.
     String reply = effective.getRawText() == null ? "" : effective.getRawText().strip();
+    if (reply.matches("(?i)(?:never mind|nevermind|cancel|stop|forget it)[.!?]?")) {
+      effective.setIntent(Intent.CANCEL);
+    }
+    if (effective.getIntent() == Intent.CANCEL) {
+      return normalizeInput(effective);
+    }
+    // The parser has no session context; resolve short answers against the outstanding question.
+    Integer selection = selectionReply(reply);
+    if (session.getLastDecision() == ConversationDecision.COUNT_CLARIFICATION
+        && selection != null) {
+      effective.setIntent(Intent.CHANGE_COUNT);
+      normalizeInput(effective);
+      effective.setBookCount(selection);
+    }
     if (session.getLastDecision() == ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
-        && reply.matches("[0-9]+")) {
+        && (selection != null || (effective.getIntent() == Intent.UNKNOWN && !reply.isBlank()))) {
       effective.setIntent(Intent.EXPLAIN_RECOMMENDATION);
       normalizeInput(effective);
-      effective.setReferenceTitle(null);
-      try {
-        effective.setReferenceRank(Integer.valueOf(reply));
-      } catch (NumberFormatException ignored) {
-        effective.setReferenceRank(0); // An oversized number is an invalid rank, so ask again.
-      }
+      effective.setReferenceRank(selection);
+      effective.setReferenceTitle(selection == null ? reply : null);
     }
     if (effective.getIntent() == Intent.EXPLAIN_RECOMMENDATION) {
       resolveExplanation(effective, session);
@@ -290,6 +311,32 @@ public final class ConversationState {
       effective.setBookCount(resolveBookCount(effective, session));
     }
     return effective;
+  }
+
+  private Integer selectionReply(String reply) {
+    var match = SELECTION_REPLY.matcher(reply);
+    if (!match.matches()) {
+      return null;
+    }
+    return switch (match.group(1).toLowerCase(Locale.ROOT)) {
+      case "one", "first" -> 1;
+      case "two", "second" -> 2;
+      case "three", "third" -> 3;
+      case "four", "fourth" -> 4;
+      case "five", "fifth" -> 5;
+      case "six", "sixth" -> 6;
+      case "seven", "seventh" -> 7;
+      case "eight", "eighth" -> 8;
+      case "nine", "ninth" -> 9;
+      case "ten", "tenth" -> 10;
+      default -> {
+        try {
+          yield Integer.valueOf(match.group(1).replaceFirst("(?i)(st|nd|rd|th)$", ""));
+        } catch (NumberFormatException ignored) {
+          yield Integer.MAX_VALUE;
+        }
+      }
+    };
   }
 
   private SessionRequest resolveRepeat(Session session, SessionRequest incoming) {
@@ -477,8 +524,7 @@ public final class ConversationState {
     return intent == Intent.UPDATE_PREFERENCES
         || intent == Intent.RECOMMENDATION
         || intent == Intent.REFINE
-        || intent == Intent.MORE_RESULTS
-        || intent == Intent.UNKNOWN;
+        || intent == Intent.MORE_RESULTS;
   }
 
   private void applyPreviousSearch(SessionRequest target, Session session) {

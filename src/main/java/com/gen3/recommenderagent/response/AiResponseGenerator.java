@@ -373,9 +373,10 @@ public class AiResponseGenerator implements ResponseGenerator {
       }
       case PREFERENCES_UPDATED -> "Thanks, I've updated your preferences for this session.";
       case HISTORY_CLEARED -> "All set, I've cleared this session's recommendation history.";
+      case CANCELLED -> "Okay, cancelled. Let me know what you would like next.";
       case HELP ->
           "I can help you find audiobooks, refine a search, show more results, repeat the last request or book page, change the result "
-              + "count, explain why books were recommended, update your preferences, or clear this session's history.";
+              + "count, explain why books were recommended, update your preferences, cancel, or clear this session's history.";
       case UNKNOWN ->
           "I'm not quite sure what you'd like to do. You can ask for audiobook recommendations or "
               + "say help to hear what I can do.";

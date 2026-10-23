@@ -122,10 +122,19 @@ there is no second intent policy.
 The parser interface returns `SessionRequest` directly. Provider responses and token usage stay
 inside the parser implementation; the request pipeline does not depend on Spring AI response types.
 
+A pending result-count question also accepts short answers such as “3” and “three”. The resolved
+count updates the session without consuming the pending recommendation queue. An explicit count
+on `MORE_RESULTS`, such as “2 more”, applies to that page without changing the saved default.
+
+`CANCEL` acknowledges cancellation and clears pending preference clarification without clearing
+search history, preferences, or queued books. “Never mind” and “cancel” also end count and book-selection
+questions. Unrecognized replies no longer become personalised searches merely because a taste
+question is pending.
+
 ## Semantic information and control intents
 
 Supported intents are `RECOMMENDATION`, `REFINE`, `MORE_RESULTS`, `REPEAT`, `REPEAT_RECOMMENDATIONS`, `CHANGE_COUNT`,
-`EXPLAIN_RECOMMENDATION`, `UPDATE_PREFERENCES`, `CLEAR_HISTORY`, `HELP`, and `UNKNOWN`.
+`EXPLAIN_RECOMMENDATION`, `UPDATE_PREFERENCES`, `CLEAR_HISTORY`, `HELP`, `CANCEL`, and `UNKNOWN`.
 
 Only `RECOMMENDATION` and `REFINE` accept newly parsed positive/negative semantic queries or the
 personalised flag. Other intents discard these fields. `MORE_RESULTS`, `REPEAT_RECOMMENDATIONS`, and
@@ -139,7 +148,8 @@ A semantic reply to a taste-clarification question uses `REFINE`.
 ignores case/punctuation and uses exact matches before unique partial matches. Missing, ambiguous,
 out-of-range or conflicting references produce a ranked-title clarification. A bare ordinal is not
 an explanation request on its own. While a book-selection clarification is pending, a numeric
-reply such as “1” selects that rank from the retained page; invalid numbers ask again. Other actions
+reply such as “1”, “1.”, “first”, or “the first one” selects that rank from the retained page;
+invalid numbers ask again. An otherwise unrecognized reply can also identify a displayed title. Other actions
 such as help or a new search end this context. “Why the fourth book?” also resolves independently.
 Model-provided ranks and counts accept large integers before conversion to bounded internal values:
 oversized ranks clarify rather than overflow, and result counts retain the existing one-to-five cap.

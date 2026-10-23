@@ -104,6 +104,71 @@ class ExplanationFlowTest {
   }
 
   @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "first",
+        "the first one",
+        "1.",
+        "1st",
+        "number one",
+        "book 1 please",
+        "Harry Potter 1"
+      })
+  void naturalSelectionRepliesExplainTheChosenBook(String text) throws Exception {
+    search();
+    String before = saved();
+    explain(null, "Harry Potter");
+    var reply = new SessionRequest();
+    reply.setIntent(Intent.UNKNOWN);
+    reply.setRawText(text);
+    var result = service.process("session", "user", reply);
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(result.getRecommendations()).extracting(Recommendation::getRank).containsExactly(1);
+    assertThat(saved()).isEqualTo(before);
+    verify(workflow).recommend(any(), any());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"3", "three", "3 please"})
+  void countQuestionAcceptsShortRepliesAndPreservesTheQueue(String text) throws Exception {
+    search();
+    var question = process(Intent.CHANGE_COUNT);
+    assertThat(question.getDecision()).isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
+    String before =
+        new ObjectMapper()
+            .writeValueAsString(sessions.getSession("session", "user").getPendingRecommendations());
+    var reply = new SessionRequest();
+    reply.setIntent(Intent.UNKNOWN);
+    reply.setRawText(text);
+    var result = service.process("session", "user", reply);
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.COUNT_CHANGED);
+    assertThat(sessions.getSession("session", "user").getBookCount()).isEqualTo(3);
+    assertThat(
+            new ObjectMapper()
+                .writeValueAsString(
+                    sessions.getSession("session", "user").getPendingRecommendations()))
+        .isEqualTo(before);
+    assertThat(process(Intent.MORE_RESULTS).getRecommendations()).hasSize(3);
+    verify(workflow).recommend(any(), any());
+  }
+
+  @Test
+  void explicitlyAskingForTwoMoreReturnsTwoAndKeepsTheRest() {
+    search();
+    var more = new SessionRequest();
+    more.setIntent(Intent.MORE_RESULTS);
+    more.setRawText("2 more");
+    more.setBookCount(2);
+    assertThat(service.process("session", "user", more).getRecommendations())
+        .extracting(Recommendation::getBookId)
+        .containsExactly("book-6", "book-7");
+    assertThat(sessions.getSession("session", "user").getPendingRecommendations())
+        .extracting(Recommendation::getBookId)
+        .containsExactly("book-8", "book-9", "book-10");
+    verify(workflow).recommend(any(), any());
+  }
+
+  @ParameterizedTest
   @ValueSource(strings = {"0", "6", "999999999999999999999"})
   void invalidNumericReplyKeepsClarifyingUntilAValidSelection(String number) {
     search();
