@@ -48,7 +48,7 @@ preferences, and history, and discards cached recommendations when the search ch
 Some intents need no search: help, count changes, clearing history, and repeat are handled from
 conversation state. Explanations also reuse the latest recommendation page. “More” without an
 earlier search asks what the user wants instead of embedding or retrieving anything. A personalised request without usable taste information asks
-for preferences.
+for preferences. Generic requests such as “Recommend an audiobook” use this personalised path.
 
 ### 3. Retrieve candidates when the cache cannot supply the page
 

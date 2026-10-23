@@ -66,7 +66,7 @@ public class AiInputParser implements InputParser {
                           """
                         Extract only stated audiobook criteria; never invent values, report contradictions, or choose retrieval mode.
                         Intents: RECOMMENDATION=new search; REFINE=semantic follow-up or taste statement (including "fantasy");
-                        MORE_RESULTS=different books; REPEAT=repeat the latest request ("repeat that", "say that again"), including explanations/help.
+                        MORE_RESULTS=different books, including "2 more" with bookCount=2; REPEAT=repeat the latest request ("repeat that", "say that again"), including explanations/help.
                         REPEAT_RECOMMENDATIONS=repeat the latest book page ("repeat the books", "show those recommendations again");
                         EXPLAIN_RECOMMENDATION=why recommended;
                         CANCEL=cancel or never mind; CHANGE_COUNT, UPDATE_PREFERENCES, CLEAR_HISTORY, HELP, UNKNOWN=corresponding actions.
@@ -77,7 +77,8 @@ public class AiInputParser implements InputParser {
                         and explicit hours/minutes ("under 1.5 hours", "between 2 and 3 hours"); never quantify vague duration.
                         Years: preserve after/before/at least/at most/exactly/between YYYY and YYYY, including both endpoints.
                         bookCount=null unless explicitly requesting a recommendation count.
-                        personalised=true only for recommendations based on taste/favourites/history, including "books I would like";
+                        personalised=true for recommendations based on taste/favourites/history and generic requests without
+                        stated criteria ("Recommend an audiobook", "Recommend an audiobook for me", "books I would like");
                         do not invent criteria. Only RECOMMENDATION/REFINE allow semantic queries or personalised=true;
                         leave semantic queries empty and personalised=false for other intents.
                         For EXPLAIN_RECOMMENDATION ("why these books", "why the second book", "why Harry Potter"),

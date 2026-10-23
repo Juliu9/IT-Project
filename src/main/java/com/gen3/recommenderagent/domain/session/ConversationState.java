@@ -240,6 +240,9 @@ public final class ConversationState {
 
   SessionRequest resolve(Session session, SessionRequest request) {
     SessionRequest effective = copyOf(request);
+    if (effective.getIntent() == Intent.RECOMMENDATION && !hasSearchCriteria(effective)) {
+      effective.setPersonalised(true);
+    }
     if (session == null) {
       if (effective.getIntent() == Intent.EXPLAIN_RECOMMENDATION) {
         effective.setRecommendations(List.of());

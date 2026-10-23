@@ -130,6 +130,7 @@ class InputParserTest {
         "UPDATE_PREFERENCES",
         "CLEAR_HISTORY",
         "HELP",
+        "CANCEL",
         "UNKNOWN"
       })
   void stripsUnexpectedSemanticInformationFromControlIntents(Intent intent) {
@@ -190,6 +191,30 @@ class InputParserTest {
             "completionTokens=3",
             "totalTokens=15",
             "usageAvailable=true");
+  }
+
+  @Test
+  void preservesAnExplicitCountOnMoreWithoutAddingSearchCriteria() {
+    var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    when(client
+            .prompt()
+            .system(anyString())
+            .user("2 more")
+            .call()
+            .responseEntity(AiInputParser.REQUEST_CONVERTER))
+        .thenAnswer(
+            ignored ->
+                new ResponseEntity<>(
+                    null,
+                    AiInputParser.REQUEST_CONVERTER.convert(
+                        "{\"intent\":\"MORE_RESULTS\",\"bookCount\":2}")));
+    var result =
+        new AiInputParser(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
+            .parse("2 more");
+    assertEquals(Intent.MORE_RESULTS, result.getIntent());
+    assertEquals(2, result.getBookCount());
+    assertEquals(null, result.getPositiveSemanticQuery());
   }
 
   @Test

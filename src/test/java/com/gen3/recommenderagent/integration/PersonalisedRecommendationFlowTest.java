@@ -74,6 +74,56 @@ class PersonalisedRecommendationFlowTest {
     application = new SessionTransitionService(sessions, workflow);
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"Recommend an audiobook", "Recommend an audiobook for me"})
+  void genericRequestForNewUserAsksForTasteWithoutSearching(String text) {
+    var request = new SessionRequest();
+    request.setIntent(Intent.RECOMMENDATION);
+    request.setRawText(text);
+    var result = process(request);
+    assertThat(result.isPersonalised()).isTrue();
+    assertThat(result.isPreferenceClarificationRequired()).isTrue();
+    assertThat(result.getRecommendations()).isEmpty();
+    assertThat(responseGenerator.generate(result.getRecommendations(), result))
+        .contains("What genres");
+    verifyNoInteractions(books, embeddingModel, ranker);
+  }
+
+  @Test
+  void genericRequestForKnownUserUsesStoredTaste() throws Exception {
+    when(users.findEmbeddingByUserId("user"))
+        .thenReturn(
+            Optional.of(new UserPreferenceEmbedding("user", new float[] {1, 0}, new float[0])));
+    var request = new SessionRequest();
+    request.setIntent(Intent.RECOMMENDATION);
+    request.setRawText("Recommend an audiobook");
+    var result = process(request);
+    assertThat(result.isPersonalised()).isTrue();
+    assertThat(result.getRecommendations()).hasSize(1);
+    verify(books).searchSemantic(any(), eq(AudiobookFilters.empty()), eq(50));
+    verifyNoInteractions(embeddingModel);
+  }
+
+  @Test
+  void cancellationSurvivesSessionReloadAndDoesNotRestartThePreferenceQuestion() {
+    process(personalisedRequest());
+    var cancel = new SessionRequest();
+    cancel.setIntent(Intent.UNKNOWN);
+    cancel.setRawText("never mind");
+    var result = process(cancel);
+    assertThat(result.getDecision())
+        .isEqualTo(com.gen3.recommenderagent.domain.session.ConversationDecision.CANCELLED);
+    assertThat(responseGenerator.generate(result.getRecommendations(), result))
+        .contains("cancelled");
+    assertThat(sessions.getSession("session", "user").isAwaitingPersonalisedPreferences())
+        .isFalse();
+    var unknown = new SessionRequest();
+    unknown.setIntent(Intent.UNKNOWN);
+    assertThat(process(unknown).getIntent()).isEqualTo(Intent.UNKNOWN);
+    verifyNoInteractions(books, embeddingModel, ranker);
+  }
+
   @Test
   void knownUserRetrievesWithCombinedVectorsWithoutCallingEmbeddingModel() throws Exception {
     when(users.findEmbeddingByUserId("user"))

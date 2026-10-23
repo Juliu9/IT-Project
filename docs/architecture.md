@@ -131,6 +131,11 @@ search history, preferences, or queued books. “Never mind” and “cancel” 
 questions. Unrecognized replies no longer become personalised searches merely because a taste
 question is pending.
 
+Generic recommendation requests without criteria, such as “Recommend an audiobook”, use the
+personalised path. Existing users can use stored taste vectors; users without usable preferences
+are asked what they like before candidate retrieval. Explicit criteria still work without requiring
+personalisation.
+
 ## Semantic information and control intents
 
 Supported intents are `RECOMMENDATION`, `REFINE`, `MORE_RESULTS`, `REPEAT`, `REPEAT_RECOMMENDATIONS`, `CHANGE_COUNT`,
