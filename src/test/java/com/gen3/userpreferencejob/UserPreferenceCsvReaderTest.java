@@ -50,6 +50,20 @@ class UserPreferenceCsvReaderTest {
         .containsExactly(new UserHistory("1001", "rnib_42", Instant.parse("2022-01-01T00:00:00Z")));
   }
 
+  @Test
+  void keepsDistinctUserBookPairsWhenUnderscoresCollide() throws IOException {
+    Path csv = temporaryDirectory.resolve("collisions.csv");
+    Files.writeString(
+        csv,
+        "type,user,item,created_at,updated_at\n"
+            + "book,a,b:book:c_d,2026-01-01 00:00:00,NULL\n"
+            + "book,a_b,c:book:d,2026-02-01 00:00:00,NULL\n");
+    assertThat(new UserHistoryCsvReader().read(csv))
+        .containsExactly(
+            new UserHistory("a", "b_c_d", Instant.parse("2026-01-01T00:00:00Z")),
+            new UserHistory("a_b", "c_d", Instant.parse("2026-02-01T00:00:00Z")));
+  }
+
   /** Rejects malformed catalogue item identifiers instead of producing an unusable point ID. */
   @Test
   void rejectsMalformedBookItem() {

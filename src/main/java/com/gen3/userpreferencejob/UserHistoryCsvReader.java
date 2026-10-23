@@ -23,8 +23,10 @@ public class UserHistoryCsvReader {
   private static final DateTimeFormatter DATE_FORMATTER =
       DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+  private record UserBook(String userId, String bookId) {}
+
   public List<UserHistory> read(Path path) throws IOException {
-    Map<String, UserHistory> recentsByUserAndBook = new LinkedHashMap<>();
+    Map<UserBook, UserHistory> recentsByUserAndBook = new LinkedHashMap<>();
 
     CSVFormat format =
         CSVFormat.DEFAULT
@@ -62,7 +64,7 @@ public class UserHistoryCsvReader {
         }
 
         UserHistory history = new UserHistory(userId, bookId, lastInteractionTime);
-        String dedupeKey = userId + "_" + bookId;
+        UserBook dedupeKey = new UserBook(userId, bookId);
         recentsByUserAndBook.merge(
             dedupeKey,
             history,

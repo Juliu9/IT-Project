@@ -221,16 +221,18 @@ class ResponseGeneratorTest {
   }
 
   @Test
-  void shouldExplainWhenNoBooksMatchTheRequestedPublicationPeriod() {
+  void shouldNotBlameTheYearWhenCombinedFiltersReturnNoMatches() {
     AiResponseGenerator generator = new AiResponseGenerator(null);
     SessionRequest request = new SessionRequest();
     request.setIntent(Intent.RECOMMENDATION);
     MustInclude publicationYear = new MustInclude();
-    publicationYear.setPublicationYear("before 1900");
+    publicationYear.setPublicationYear("2024");
+    publicationYear.setLanguage("French");
+    publicationYear.setAuthors(List.of("An Author"));
     request.setMustInclude(publicationYear);
 
     assertEquals(
-        "Sorry, we don't have books from that time period.",
+        "I couldn't find books matching those criteria. Try changing your criteria.",
         generator.generate(List.of(), request));
   }
 

@@ -459,8 +459,10 @@ public class AiResponseGenerator implements ResponseGenerator {
 
   // Safe node output
   private String generateFallbackResponse(SessionRequest currentRequest) {
-    if (hasPublicationYearFilter(currentRequest)) {
-      return "Sorry, we don't have books from that time period.";
+    if (currentRequest != null
+        && currentRequest.getMustInclude() != null
+        && currentRequest.getMustInclude().getPublicationYear() != null) {
+      return "I couldn't find books matching those criteria. Try changing your criteria.";
     }
     if (currentRequest != null
         && currentRequest.getRawText() != null
@@ -471,12 +473,5 @@ public class AiResponseGenerator implements ResponseGenerator {
     }
 
     return PROCESSING_FALLBACK;
-  }
-
-  private boolean hasPublicationYearFilter(SessionRequest request) {
-    return request != null
-        && request.getMustInclude() != null
-        && request.getMustInclude().getPublicationYear() != null
-        && !request.getMustInclude().getPublicationYear().isBlank();
   }
 }
