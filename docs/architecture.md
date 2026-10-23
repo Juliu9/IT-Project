@@ -41,7 +41,20 @@ Do not mix the two locking versions.
 ### Context and cached results
 
 A zero-match search still supplies context for `MORE_RESULTS`; clearing history removes it.
-`MORE_RESULTS` and `REPEAT` supply resolved criteria to response generation.
+`MORE_RESULTS` restores saved search criteria. `REPEAT` replays the latest resolved request,
+including explanations, help, clarifications, and empty results, without retrieving or applying
+state changes again. Repeated REPEAT requests keep replaying the same original request.
+`REPEAT_RECOMMENDATIONS` ("repeat the books", "show those recommendations again") instead
+restores the retained search page, even after help or a single-book explanation. It leaves search
+history, shown IDs and the pending queue untouched, while updating the latest replay snapshot so
+"repeat that" afterward repeats that page. No page yields a fixed message; an empty latest MORE
+repeats exhaustion rather than falling back to an older page. Clearing history removes the page.
+
+The session stores one bounded `lastRequest` snapshot and its `lastDecision`, separately from
+search/preference history. Raw input and final response text are not stored. A repeated explanation
+uses the original selected books and criteria; AI wording may vary. Old sessions without these
+fields fall back to their latest retained request. Clearing history removes the old snapshot, then
+retains only the clear-history acknowledgement for replay.
 
 Pending recommendations are catalogue snapshots. Edits and removals affect new batches; cached
 items are not rechecked on each page. Sessions without a pending queue refill normally. The queue
@@ -101,9 +114,9 @@ generation remains in `embeddingjob`; the query embedding module only embeds liv
 | `ConversationState` | Semantic eligibility, context inheritance, queue invalidation, preference/count changes, history retention, and the conversation decision |
 | `AiResponseGenerator` | Wording after the session commits |
 
-`ConversationDecision` is temporary and excluded from session JSON. Retained search criteria and
-recommendation details are persisted separately. The response implementation consumes this decision
-for wording. Direct callers without a resolved decision use the same conversation-policy classifier;
+`SessionRequest.decision` is temporary and excluded from request JSON. Retained search criteria and
+recommendation details are persisted separately. Only the latest replay snapshot stores its decision
+in `Session.lastDecision`. The response implementation consumes the resolved decision for wording. Direct callers without a resolved decision use the same conversation-policy classifier;
 there is no second intent policy.
 
 The parser interface returns `SessionRequest` directly. Provider responses and token usage stay
@@ -111,12 +124,12 @@ inside the parser implementation; the request pipeline does not depend on Spring
 
 ## Semantic information and control intents
 
-Supported intents are `RECOMMENDATION`, `REFINE`, `MORE_RESULTS`, `REPEAT`, `CHANGE_COUNT`,
+Supported intents are `RECOMMENDATION`, `REFINE`, `MORE_RESULTS`, `REPEAT`, `REPEAT_RECOMMENDATIONS`, `CHANGE_COUNT`,
 `EXPLAIN_RECOMMENDATION`, `UPDATE_PREFERENCES`, `CLEAR_HISTORY`, `HELP`, and `UNKNOWN`.
 
 Only `RECOMMENDATION` and `REFINE` accept newly parsed positive/negative semantic queries or the
-personalised flag. Other intents discard these fields. `MORE_RESULTS`, `REPEAT`, and
-`EXPLAIN_RECOMMENDATION` inherit the saved search context; semantic changes use `REFINE`. `UPDATE_PREFERENCES` can still update exact filters.
+personalised flag. Other intents discard these fields. `MORE_RESULTS`, `REPEAT_RECOMMENDATIONS`, and
+`EXPLAIN_RECOMMENDATION` inherit saved search context; `REPEAT` restores its retained request context; semantic changes use `REFINE`. `UPDATE_PREFERENCES` can still update exact filters.
 A semantic reply to a taste-clarification question uses `REFINE`.
 
 ## Explaining recommendations

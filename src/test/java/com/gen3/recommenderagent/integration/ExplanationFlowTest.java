@@ -70,7 +70,9 @@ class ExplanationFlowTest {
         .extracting(Recommendation::getRank)
         .containsExactly(4);
     assertThat(saved()).isEqualTo(before);
-    assertThat(process(Intent.REPEAT).getRecommendations()).hasSize(5);
+    assertThat(process(Intent.REPEAT).getRecommendations())
+        .extracting(Recommendation::getRank)
+        .containsExactly(4);
     verify(workflow).recommend(any(), any());
   }
 

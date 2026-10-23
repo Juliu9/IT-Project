@@ -41,8 +41,14 @@ public class SessionTransitionService {
       result.setRecommendations(recommendationPage(result, session));
     }
     CONVERSATION_STATE.finish(session, result, original);
-    if (original != null && original.getIntent() == Intent.REPEAT) {
-      RequestTelemetry.retrieval("SESSION_REPEAT", result.getRecommendations().size());
+    if (original != null
+        && (original.getIntent() == Intent.REPEAT
+            || original.getIntent() == Intent.REPEAT_RECOMMENDATIONS)) {
+      RequestTelemetry.retrieval(
+          original.getIntent() == Intent.REPEAT
+              ? "SESSION_REPEAT"
+              : "SESSION_REPEAT_RECOMMENDATIONS",
+          result.getRecommendations().size());
     }
     if (original != null && original.getIntent() == Intent.EXPLAIN_RECOMMENDATION) {
       RequestTelemetry.retrieval("SESSION_EXPLANATION", result.getRecommendations().size());

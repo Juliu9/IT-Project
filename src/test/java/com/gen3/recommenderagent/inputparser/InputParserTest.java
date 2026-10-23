@@ -61,6 +61,7 @@ class InputParserTest {
       names = {
         "MORE_RESULTS",
         "REPEAT",
+        "REPEAT_RECOMMENDATIONS",
         "EXPLAIN_RECOMMENDATION",
         "CHANGE_COUNT",
         "UPDATE_PREFERENCES",

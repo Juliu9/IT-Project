@@ -79,7 +79,7 @@ class ResponseGeneratorTest {
     SessionRequest request = new SessionRequest();
     request.setIntent(Intent.REPEAT);
     assertEquals(
-        "There are no previous recommendations to repeat. Ask me for audiobooks first.",
+        "There is no previous request to repeat. Ask me for recommendations or help first.",
         generator.generate(List.of(), request));
     String response =
         generator.generate(

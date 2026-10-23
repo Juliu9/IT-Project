@@ -70,7 +70,9 @@ class RecommendationBatchFlowTest {
     for (int i = 0; i < 2; i++) {
       SessionRequest repeat = process(request(Intent.REPEAT));
       assertThat(repeat.getRecommendations()).isEmpty();
-      assertThat(repeat.isNoMoreRecommendations()).isTrue();
+      assertThat(repeat.isNoMoreRecommendations()).isFalse();
+      assertThat(repeat.getDecision())
+          .isEqualTo(com.gen3.recommenderagent.domain.session.ConversationDecision.HELP);
     }
     verify(ranker, times(3)).rank(anyList(), eq(20), any(RankingContext.class));
   }
@@ -123,11 +125,16 @@ class RecommendationBatchFlowTest {
   }
 
   @Test
-  void repeatReturnsTheLastPageWithoutConsumingOrInvalidatingTheBatch() {
+  void repeatReturnsTheLatestRequestWithoutConsumingOrInvalidatingTheBatch() {
     assertIds(process(request(Intent.RECOMMENDATION)), 1, 5);
+    assertIds(process(request(Intent.REPEAT)), 1, 5);
     process(request(Intent.HELP));
-    assertIds(process(request(Intent.REPEAT)), 1, 5);
-    assertIds(process(request(Intent.REPEAT)), 1, 5);
+    for (int i = 0; i < 2; i++) {
+      SessionRequest repeat = process(request(Intent.REPEAT));
+      assertThat(repeat.getRecommendations()).isEmpty();
+      assertThat(repeat.getDecision())
+          .isEqualTo(com.gen3.recommenderagent.domain.session.ConversationDecision.HELP);
+    }
     assertThat(sessions.getSession("session", "user").getShownBooks()).hasSize(5);
     assertIds(process(request(Intent.MORE_RESULTS)), 6, 5);
     assertIds(process(request(Intent.REPEAT)), 6, 5);
@@ -270,7 +277,14 @@ class RecommendationBatchFlowTest {
   @ParameterizedTest
   @EnumSource(
       value = Intent.class,
-      names = {"MORE_RESULTS", "REPEAT", "CHANGE_COUNT", "HELP", "UNKNOWN"})
+      names = {
+        "MORE_RESULTS",
+        "REPEAT",
+        "REPEAT_RECOMMENDATIONS",
+        "CHANGE_COUNT",
+        "HELP",
+        "UNKNOWN"
+      })
   void unexpectedSemanticFieldsDoNotDestroyTheCachedSearch(Intent intent) {
     process(request(Intent.RECOMMENDATION));
     var control = request(intent);

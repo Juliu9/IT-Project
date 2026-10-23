@@ -76,7 +76,8 @@ its ID, title, short description, score, and whether stored reading preferences 
 | --- | --- |
 | “More please” | Serve the next cached page; refill when short, keeping the cached tail. |
 | “Why these books?” / “Why the second book?” / “Why Harry Potter?” | Explain the latest page or a uniquely selected book, without searching or consuming the queue. |
-| “Repeat those” | Reuse the last page or empty “more” outcome; leave the queue untouched. |
+| “Repeat that” | Replay the latest request, including help, explanations and clarifications; do not rerun searches or actions. |
+| “Repeat the books” | Replay the latest recommendation page, even after help or an explanation; leave the queue untouched. |
 | Refine or start a search | Discard the queue and retrieve using resolved criteria. |
 | Change the result count or ask for help | Keep the pending batch. |
 | Clear history | Clear search history, shown IDs, and the queue; keep preferences and result count. |

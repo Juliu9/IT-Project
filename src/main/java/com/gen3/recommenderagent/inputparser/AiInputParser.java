@@ -52,7 +52,9 @@ public class AiInputParser implements InputParser {
                         """
                         Extract only stated audiobook criteria; never invent values, report contradictions, or choose retrieval mode.
                         Intents: RECOMMENDATION=new search; REFINE=semantic follow-up or taste statement (including "fantasy");
-                        MORE_RESULTS=different books; REPEAT=same books again; EXPLAIN_RECOMMENDATION=why recommended;
+                        MORE_RESULTS=different books; REPEAT=repeat the latest request ("repeat that", "say that again"), including explanations/help.
+                        REPEAT_RECOMMENDATIONS=repeat the latest book page ("repeat the books", "show those recommendations again");
+                        EXPLAIN_RECOMMENDATION=why recommended;
                         CHANGE_COUNT, UPDATE_PREFERENCES, CLEAR_HISTORY, HELP, UNKNOWN=corresponding actions.
                         Desired/avoided concepts go in positiveSemanticQuery/negativeSemanticQuery. Liked authors/narrators
                         stay semantic unless exact matching is requested. mustInclude/mustNotInclude hold only exact author,

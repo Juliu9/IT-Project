@@ -86,12 +86,13 @@ public class AiResponseGenerator implements ResponseGenerator {
     if (fixedResponse != null) {
       boolean noResults =
           switch (decision) {
-            case NO_MORE_RESULTS, NOTHING_TO_REPEAT, NO_MATCHES -> true;
+            case NO_MORE_RESULTS, NOTHING_TO_REPEAT, NO_RECOMMENDATIONS_TO_REPEAT, NO_MATCHES ->
+                true;
             default -> false;
           };
       RequestTelemetry.responseMode(noResults ? "NO_RESULTS" : "ACTION_RESPONSE");
       return switch (decision) {
-        case NO_MORE_RESULTS, NOTHING_TO_REPEAT -> fixedResponse;
+        case NO_MORE_RESULTS, NOTHING_TO_REPEAT, NO_RECOMMENDATIONS_TO_REPEAT -> fixedResponse;
         default -> limitNotice + fixedResponse;
       };
     }
@@ -373,11 +374,13 @@ public class AiResponseGenerator implements ResponseGenerator {
       case PREFERENCES_UPDATED -> "Thanks, I've updated your preferences for this session.";
       case HISTORY_CLEARED -> "All set, I've cleared this session's recommendation history.";
       case HELP ->
-          "I can help you find audiobooks, refine a search, show more results, repeat the last recommendations, change the result "
+          "I can help you find audiobooks, refine a search, show more results, repeat the last request or book page, change the result "
               + "count, explain why books were recommended, update your preferences, or clear this session's history.";
       case UNKNOWN ->
           "I'm not quite sure what you'd like to do. You can ask for audiobook recommendations or "
               + "say help to hear what I can do.";
+      case NO_RECOMMENDATIONS_TO_REPEAT ->
+          "There are no recommendations to repeat. Ask me for audiobooks first.";
       case NOTHING_TO_EXPLAIN ->
           "I haven't recommended any books yet. Ask me for recommendations first.";
       case EMPTY_EXPLANATION_PAGE -> "The latest request returned no recommendations to explain.";
@@ -385,7 +388,7 @@ public class AiResponseGenerator implements ResponseGenerator {
       case NO_MORE_RESULTS ->
           "There are no more audiobooks matching your current search. Try changing your criteria.";
       case NOTHING_TO_REPEAT ->
-          "There are no previous recommendations to repeat. Ask me for audiobooks first.";
+          "There is no previous request to repeat. Ask me for recommendations or help first.";
       case NO_MATCHES -> generateFallbackResponse(currentRequest);
       case UNAVAILABLE -> PROCESSING_FALLBACK;
       case SEARCH_CLARIFICATION, PREFERENCE_CLARIFICATION, RECOMMENDATIONS, EXPLANATION -> null;

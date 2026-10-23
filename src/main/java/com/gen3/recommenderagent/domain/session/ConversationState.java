@@ -31,15 +31,22 @@ public final class ConversationState {
 
   /** Records the completed transition and resolves wording-independent response policy. */
   public void finish(Session session, SessionRequest request, SessionRequest original) {
-    if (request.getIntent() == Intent.EXPLAIN_RECOMMENDATION) {
+    if (request.getIntent() == Intent.REPEAT) {
       complete(request);
+      if (request.getDecision() == null) {
+        request.setDecision(decisionFor(request.getRecommendations(), request));
+      }
       return;
     }
-    // Repeating or asking for search criteria must not replace the retained search.
-    if (request.getIntent() == Intent.REPEAT || request.isSearchClarificationRequired()) {
-      if (request.isSearchClarificationRequired()) {
-        request.setRecommendations(List.of());
-      }
+    if (request.getIntent() == Intent.EXPLAIN_RECOMMENDATION
+        || request.getIntent() == Intent.REPEAT_RECOMMENDATIONS) {
+      complete(request);
+      remember(session, request);
+      return;
+    }
+    // Asking for search criteria must not replace the retained search.
+    if (request.isSearchClarificationRequired()) {
+      request.setRecommendations(List.of());
       complete(request);
     } else {
       if (!isRecommendationIntent(request.getIntent())) {
@@ -50,6 +57,12 @@ public final class ConversationState {
       applyTransition(session, request, originalIntent(original));
     }
     request.setDecision(decisionFor(request.getRecommendations(), request));
+    remember(session, request);
+  }
+
+  private void remember(Session session, SessionRequest request) {
+    session.setLastRequest(historyEntry(request));
+    session.setLastDecision(request.getDecision());
   }
 
   /** Shared eligibility rule for parsed inputs and restored conversation requests. */
@@ -99,7 +112,7 @@ public final class ConversationState {
               case CLEAR_HISTORY -> ConversationDecision.HISTORY_CLEARED;
               case HELP -> ConversationDecision.HELP;
               case UNKNOWN -> ConversationDecision.UNKNOWN;
-              case RECOMMENDATION, REFINE, MORE_RESULTS, REPEAT -> null;
+              case RECOMMENDATION, REFINE, MORE_RESULTS, REPEAT, REPEAT_RECOMMENDATIONS -> null;
             };
         if (action != null) {
           return action;
@@ -110,6 +123,9 @@ public final class ConversationState {
       if (request != null
           && (request.isNoMoreRecommendations() || request.getIntent() == Intent.MORE_RESULTS)) {
         return ConversationDecision.NO_MORE_RESULTS;
+      }
+      if (request != null && request.getIntent() == Intent.REPEAT_RECOMMENDATIONS) {
+        return ConversationDecision.NO_RECOMMENDATIONS_TO_REPEAT;
       }
       if (request != null && request.getIntent() == Intent.REPEAT) {
         return ConversationDecision.NOTHING_TO_REPEAT;
@@ -203,6 +219,9 @@ public final class ConversationState {
     entry.setBookCount(request.getBookCount());
     entry.setRecommendations(request.getRecommendations());
     entry.setNoMoreRecommendations(request.isNoMoreRecommendations());
+    entry.setSearchClarificationRequired(request.isSearchClarificationRequired());
+    entry.setReferenceRank(request.getReferenceRank());
+    entry.setReferenceTitle(request.getReferenceTitle());
     return entry;
   }
 
@@ -220,9 +239,19 @@ public final class ConversationState {
       return effective;
     }
     if (effective.getIntent() == Intent.REPEAT) {
-      effective.setRecommendations(List.of());
-      applyPreviousSearch(effective, session);
-      return effective;
+      return resolveRepeat(session, effective);
+    }
+    if (effective.getIntent() == Intent.REPEAT_RECOMMENDATIONS) {
+      SessionRequest previous = latestSearch(session);
+      SessionRequest repeated = restoreRequest(previous, effective);
+      repeated.setPreferenceClarificationRequired(false);
+      repeated.setSearchClarificationRequired(false);
+      repeated.setNoMoreRecommendations(
+          previous != null
+              && (previous.isNoMoreRecommendations() || previous.getIntent() == Intent.MORE_RESULTS)
+              && repeated.getRecommendations().isEmpty());
+      repeated.setDecision(decisionFor(repeated.getRecommendations(), repeated));
+      return repeated;
     }
     // Check before preference handling: MORE cannot invent a first search.
     if (effective.getIntent() == Intent.MORE_RESULTS
@@ -249,19 +278,57 @@ public final class ConversationState {
     return effective;
   }
 
+  private SessionRequest resolveRepeat(Session session, SessionRequest incoming) {
+    SessionRequest previous = session.getLastRequest();
+    ConversationDecision decision = session.getLastDecision();
+    if (previous == null && session.getRequests() != null) {
+      // Sessions saved before replay snapshots can still repeat their latest retained request.
+      previous =
+          session.getRequests().stream()
+              .filter(java.util.Objects::nonNull)
+              .reduce((first, second) -> second)
+              .orElse(null);
+      decision = null;
+    }
+    if (previous == null) {
+      incoming.setRecommendations(List.of());
+      incoming.setDecision(ConversationDecision.NOTHING_TO_REPEAT);
+      return incoming;
+    }
+    SessionRequest repeated = restoreRequest(previous, incoming);
+    repeated.setDecision(
+        decision == null ? decisionFor(repeated.getRecommendations(), previous) : decision);
+    return repeated;
+  }
+
+  private SessionRequest restoreRequest(SessionRequest previous, SessionRequest incoming) {
+    SessionRequest repeated = previous == null ? new SessionRequest() : historyEntry(previous);
+    repeated.setIntent(incoming.getIntent());
+    repeated.setRequestId(incoming.getRequestId());
+    repeated.setCreatedAt(incoming.getCreatedAt());
+    repeated.setRawText(incoming.getRawText());
+    if (repeated.getRecommendations() == null) {
+      repeated.setRecommendations(List.of());
+    }
+    return repeated;
+  }
+
+  private SessionRequest latestSearch(Session session) {
+    return session.getRequests() == null
+        ? null
+        : session.getRequests().stream()
+            .filter(ConversationState::isSearchContext)
+            .reduce((first, second) -> second)
+            .orElse(null);
+  }
+
   private void resolveExplanation(SessionRequest target, Session session) {
     target.setRecommendations(List.of());
     target.setPreferenceClarificationRequired(false);
     target.setMustInclude(null);
     target.setMustNotInclude(null);
     target.setBookCount(null);
-    SessionRequest previous =
-        session.getRequests() == null
-            ? null
-            : session.getRequests().stream()
-                .filter(ConversationState::isSearchContext)
-                .reduce((first, second) -> second)
-                .orElse(null);
+    SessionRequest previous = latestSearch(session);
     if (previous == null) {
       target.setDecision(ConversationDecision.NOTHING_TO_EXPLAIN);
       return;
@@ -407,19 +474,8 @@ public final class ConversationState {
     }
     for (int index = requests.size() - 1; index >= 0; index--) {
       SessionRequest previous = requests.get(index);
-      boolean repeat = target.getIntent() == Intent.REPEAT;
       if (isSearchContext(previous)) {
         merge(previous, target);
-        if (repeat) {
-          target.setRecommendations(
-              previous.getRecommendations() == null
-                  ? List.of()
-                  : new ArrayList<>(previous.getRecommendations()));
-          target.setNoMoreRecommendations(
-              previous.isNoMoreRecommendations()
-                  || (previous.getIntent() == Intent.MORE_RESULTS
-                      && target.getRecommendations().isEmpty()));
-        }
         return;
       }
     }

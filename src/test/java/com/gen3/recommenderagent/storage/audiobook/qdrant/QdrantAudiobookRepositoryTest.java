@@ -47,6 +47,36 @@ import org.mockito.ArgumentCaptor;
 /** Covers Qdrant repository behavior that does not require a running database. */
 class QdrantAudiobookRepositoryTest {
 
+  @Test
+  void hybridPrefetchesOneHundredPerSearchAndReturnsFiftyWithExclusionsIntact() throws Exception {
+    var client = mock(QdrantClient.class);
+    var encoder = new Bm25SparseTextEncoder();
+    when(client.collectionExistsAsync("audiobooks")).thenReturn(Futures.immediateFuture(true));
+    when(client.queryAsync(any(QueryPoints.class))).thenReturn(Futures.immediateFuture(List.of()));
+    var repository =
+        new QdrantAudiobookRepository(
+            client, new QdrantPointMapper(encoder), encoder, "audiobooks", 2);
+    var filters =
+        new AudiobookFilters(
+            AudiobookFilterConditions.empty(),
+            AudiobookFilterConditions.empty(),
+            List.of("shown-book"));
+    repository.searchHybrid(new float[] {1, 0}, "fantasy", filters, 50);
+    var query = ArgumentCaptor.forClass(QueryPoints.class);
+    verify(client).queryAsync(query.capture());
+    assertThat(query.getValue().getLimit()).isEqualTo(50);
+    assertThat(query.getValue().getPrefetchList())
+        .hasSize(2)
+        .allSatisfy(
+            prefetch -> {
+              assertThat(prefetch.getLimit()).isEqualTo(100);
+              assertThat(prefetch.getFilter()).isEqualTo(QdrantAudiobookSchema.filter(filters));
+            });
+    assertThat(query.getValue().getPrefetchList())
+        .extracting(prefetch -> prefetch.getUsing())
+        .containsExactly("dense", "keywords");
+  }
+
   /** Verifies that Qdrant's dot-product score remains attached to the returned audiobook. */
   @Test
   void returnsDatabaseIndependentCandidateWithQdrantScore() throws Exception {

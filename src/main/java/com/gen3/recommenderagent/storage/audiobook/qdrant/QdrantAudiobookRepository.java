@@ -105,7 +105,7 @@ public class QdrantAudiobookRepository
       return searchSemantic(queryVector, filters, limit);
     }
     requireCollection();
-    int prefetchLimit = limit * 4;
+    int prefetchLimit = limit * 2;
     Filter filter = QdrantAudiobookSchema.filter(filters);
     PrefetchQuery.Builder dense =
         PrefetchQuery.newBuilder()
