@@ -28,6 +28,7 @@ Response generation follows commit and cannot roll back history. Updates are not
 | --- | --- |
 | Session already locked | `409` |
 | Commit rejected or lock lost | `503` |
+| AI connection/service failure or exhausted retries | `503`, with a readable retry message |
 
 Set `SESSION_STORE` to a registered replacement adapter's name. This disables the Redis adapter
 and Boot's Redis connections, templates, repositories, and health checks.

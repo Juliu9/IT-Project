@@ -15,6 +15,19 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class RequestExceptionHandler {
 
+  @ExceptionHandler({
+    org.springframework.web.client.RestClientException.class,
+    org.springframework.core.retry.RetryException.class,
+    com.openai.errors.OpenAIIoException.class,
+    com.openai.errors.OpenAIServiceException.class
+  })
+  public ResponseEntity<String> handleUnavailableAi(Exception exception) {
+    return ResponseEntity.status(503)
+        .contentType(new MediaType(MediaType.TEXT_PLAIN, StandardCharsets.UTF_8))
+        .body(
+            "I'm having trouble processing your request right now. Please try again in a moment.");
+  }
+
   @ExceptionHandler(InvalidRequestException.class)
   public ResponseEntity<String> handleInvalidRequest(InvalidRequestException exception) {
     return ResponseEntity.badRequest()

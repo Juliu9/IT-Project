@@ -139,6 +139,44 @@ class RequestGatewayTest {
     verify(telemetry).fail(null);
   }
 
+  @Test
+  void returnsReadableUnavailableResponseForAiFailures() throws Exception {
+    var gateway = new RequestGateway(inputParser, sessionTransitionService, responseGenerator);
+    var mvc =
+        MockMvcBuilders.standaloneSetup(gateway)
+            .setControllerAdvice(new RequestExceptionHandler())
+            .build();
+    when(inputParser.parse("fantasy"))
+        .thenThrow(new com.openai.errors.OpenAIIoException("private provider detail"));
+    mvc.perform(
+            post("/api/v1/recommendations")
+                .header("X-Session-Id", "session")
+                .header("X-User-Id", "user")
+                .content("fantasy"))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(
+            content()
+                .string(
+                    "I'm having trouble processing your request right now. Please try again in a moment."));
+    org.mockito.Mockito.reset(inputParser);
+    var parsed = new SessionRequest();
+    when(inputParser.parse("fantasy")).thenReturn(parsed);
+    when(sessionTransitionService.process("session", "user", parsed))
+        .thenThrow(
+            new org.springframework.web.client.HttpServerErrorException(
+                org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE));
+    mvc.perform(
+            post("/api/v1/recommendations")
+                .header("X-Session-Id", "session")
+                .header("X-User-Id", "user")
+                .content("fantasy"))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(
+            content()
+                .string(
+                    "I'm having trouble processing your request right now. Please try again in a moment."));
+  }
+
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.NullAndEmptySource
   @org.junit.jupiter.params.provider.ValueSource(strings = {" ", "\n\t"})
