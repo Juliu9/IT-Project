@@ -43,6 +43,35 @@ class UserPreferenceApplicationTest {
   }
 
   @Test
+  void solrImportWiresBothVectorPortsWithoutQdrantOrAi() {
+    new ApplicationContextRunner()
+        .withUserConfiguration(UserPreferenceApplication.class)
+        .withPropertyValues(
+            "audiobook.database=solr",
+            "user.preferences.import-on-startup=true",
+            "solr.url=http://localhost:8983/solr",
+            "solr.collection=books",
+            "solr.username=",
+            "solr.password=",
+            "user.preferences.favourites-csv-path=",
+            "user.preferences.history-csv-path=")
+        .run(
+            context ->
+                assertThat(context)
+                    .hasNotFailed()
+                    .hasSingleBean(
+                        com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorRepository
+                            .class)
+                    .hasSingleBean(
+                        com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository
+                            .class)
+                    .doesNotHaveBean(QdrantClient.class)
+                    .doesNotHaveBean(org.springframework.ai.embedding.EmbeddingModel.class)
+                    .doesNotHaveBean(
+                        org.springframework.data.redis.connection.RedisConnectionFactory.class));
+  }
+
+  @Test
   void rejectsSimultaneousJobs() {
     runner
         .withPropertyValues(

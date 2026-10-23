@@ -1,5 +1,6 @@
 package com.gen3.recommenderagent.storage.audiobook.solr;
 
+import com.gen3.recommenderagent.embedding.VectorMath;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
@@ -7,7 +8,7 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCatalogueRepository;
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorIndexer;
+import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorRepository;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -15,6 +16,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrRequest;
@@ -23,6 +25,7 @@ import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.client.solrj.util.ClientUtils;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
+import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrInputDocument;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,9 +35,9 @@ import org.springframework.stereotype.Repository;
 /** Implements audiobook keyword, vector, catalogue, and indexing operations with Solr. */
 @Repository
 @ConditionalOnExpression(
-    "'${audiobook.qdrant.migration.enabled:false}' == 'true' or ('${audiobook.embedding-index.enabled:false}' == 'true' and '${audiobook.database:qdrant}' == 'solr') or ('${audiobook.short-description.batch.mode:disabled}' != 'disabled' and '${audiobook.database:qdrant}' == 'solr')")
+    "'${audiobook.database:qdrant}' == 'solr' or '${audiobook.qdrant.migration.enabled:false}' == 'true'")
 public class SolrAudiobookRepository
-    implements AudiobookCatalogueRepository, AudiobookCandidateSearch, AudiobookVectorIndexer {
+    implements AudiobookCatalogueRepository, AudiobookCandidateSearch, AudiobookVectorRepository {
 
   private static final double KEYWORD_WEIGHT = 0.4;
   private static final double VECTOR_WEIGHT = 0.6;
@@ -86,7 +89,8 @@ public class SolrAudiobookRepository
         "durationMinutes",
         "publicationYear",
         "short_description",
-        "score");
+        "score",
+        vectorField);
     addFilters(solrQuery, filters);
 
     return solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
@@ -183,13 +187,13 @@ public class SolrAudiobookRepository
       QueryResponse vectorResponse;
       try {
         vectorResponse = searchVector(queryVector, filters, candidateLimit);
-      } catch (SolrServerException exception) {
-        return keywordResponse.getResults().stream().limit(limit).map(this::toCandidate).toList();
+      } catch (SolrServerException | SolrException exception) {
+        return toCandidates(keywordResponse.getResults().stream().limit(limit).toList());
       }
       List<SolrDocument> merged =
           mergeResults(keywordResponse.getResults(), vectorResponse.getResults());
-      return merged.stream().limit(limit).map(this::toCandidate).toList();
-    } catch (SolrServerException exception) {
+      return toCandidates(merged.stream().limit(limit).toList());
+    } catch (SolrServerException | SolrException exception) {
       throw new IOException("Solr hybrid audiobook search failed", exception);
     }
   }
@@ -236,7 +240,7 @@ public class SolrAudiobookRepository
     try {
       solrClient.add(collection, documents);
       solrClient.commit(collection);
-    } catch (SolrServerException exception) {
+    } catch (SolrServerException | SolrException exception) {
       throw new IOException("Could not store audiobook embedding in Solr", exception);
     }
   }
@@ -297,7 +301,7 @@ public class SolrAudiobookRepository
     try {
       QueryResponse response = solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
       return response.getResults();
-    } catch (SolrServerException exception) {
+    } catch (SolrServerException | SolrException exception) {
       throw new IOException("Could not load audiobook catalogue from Solr", exception);
     }
   }
@@ -319,7 +323,8 @@ public class SolrAudiobookRepository
         "durationMinutes",
         "publicationYear",
         "short_description",
-        "score");
+        "score",
+        vectorField);
     addFilters(solrQuery, filters);
     return solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
   }
@@ -417,8 +422,8 @@ public class SolrAudiobookRepository
     validateDimension(queryVector);
     try {
       QueryResponse response = searchVector(queryVector, filters, limit);
-      return response.getResults().stream().map(this::toCandidate).toList();
-    } catch (SolrServerException exception) {
+      return toCandidates(response.getResults());
+    } catch (SolrServerException | SolrException exception) {
       throw new IOException("Solr semantic audiobook search failed", exception);
     }
   }
@@ -432,8 +437,8 @@ public class SolrAudiobookRepository
     }
     try {
       QueryResponse response = search(query, filters, limit);
-      return response.getResults().stream().map(this::toCandidate).toList();
-    } catch (SolrServerException exception) {
+      return toCandidates(response.getResults());
+    } catch (SolrServerException | SolrException exception) {
       throw new IOException("Solr audiobook search failed", exception);
     }
   }
@@ -448,11 +453,56 @@ public class SolrAudiobookRepository
     return searchKeyword("*:*", filters, limit);
   }
 
-  /** Converts a Solr result into the shared candidate type without adding score to the book. */
-  private AudiobookCandidate toCandidate(SolrDocument document) {
-    Object score = document.getFieldValue("score");
-    Double value = score instanceof Number number ? number.doubleValue() : null;
-    return new AudiobookCandidate(toRecord(document), value);
+  private List<AudiobookCandidate> toCandidates(Collection<SolrDocument> documents)
+      throws IOException {
+    List<AudiobookCandidate> candidates = new ArrayList<>();
+    for (SolrDocument document : documents) {
+      Object score = document.getFieldValue("score");
+      float[] vector = SolrVectors.read(document.getFieldValue(vectorField), vectorDimension);
+      candidates.add(
+          new AudiobookCandidate(
+              toRecord(document),
+              score instanceof Number number ? number.doubleValue() : null,
+              vector == null ? null : VectorMath.normalize(vector)));
+    }
+    return candidates;
+  }
+
+  @Override
+  public Optional<float[]> findEmbeddingByBookId(String bookId) throws IOException {
+    return bookId == null || bookId.isBlank()
+        ? Optional.empty()
+        : Optional.ofNullable(findEmbeddingsByBookIds(List.of(bookId)).get(bookId));
+  }
+
+  @Override
+  public Map<String, float[]> findEmbeddingsByBookIds(Collection<String> bookIds)
+      throws IOException {
+    if (bookIds == null || bookIds.isEmpty()) {
+      return Map.of();
+    }
+    List<String> ids =
+        bookIds.stream().filter(id -> id != null && !id.isBlank()).distinct().toList();
+    Map<String, float[]> vectors = new LinkedHashMap<>();
+    for (int offset = 0; offset < ids.size(); offset += 100) {
+      SolrQuery query = new SolrQuery("*:*");
+      List<String> page = ids.subList(offset, Math.min(offset + 100, ids.size()));
+      addAnyValueFilter(query, "id", page, false);
+      query.setRows(page.size());
+      query.setFields("id", vectorField);
+      try {
+        for (SolrDocument document :
+            solrClient.query(collection, query, SolrRequest.METHOD.POST).getResults()) {
+          float[] vector = SolrVectors.read(document.getFieldValue(vectorField), vectorDimension);
+          if (vector != null) {
+            vectors.put(field(document, "id"), vector);
+          }
+        }
+      } catch (SolrServerException | SolrException exception) {
+        throw new IOException("Could not read audiobook vectors from Solr", exception);
+      }
+    }
+    return vectors;
   }
 
   /** Maps one Solr document to the fields used by the application. */

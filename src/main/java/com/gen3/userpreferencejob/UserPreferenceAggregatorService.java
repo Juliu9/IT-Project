@@ -75,7 +75,7 @@ public class UserPreferenceAggregatorService {
       }
       float[] aggregatedHist = VectorMath.weightedAverage(histVectors, histWeights);
 
-      // 3. Save to Qdrant
+      // 3. Save through the selected database adapter
       if (aggregatedFavs.length > 0 || aggregatedHist.length > 0) {
         UserPreferenceEmbedding embedding =
             new UserPreferenceEmbedding(userId, aggregatedFavs, aggregatedHist);

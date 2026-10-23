@@ -22,6 +22,59 @@ import org.mockito.ArgumentCaptor;
 class SolrAudiobookRepositoryUnitTest {
 
   @Test
+  void vectorLookupBatchesExactIdsAndSkipsMissingVectors() throws Exception {
+    var client = mock(SolrClient.class);
+    var response = new QueryResponse();
+    var docs = new SolrDocumentList();
+    var document = new SolrDocument();
+    document.setField("id", "book-1");
+    document.setField("custom_vector", List.of(3f, 4f));
+    docs.add(document);
+    var missing = new SolrDocument();
+    missing.setField("id", "missing-vector");
+    docs.add(missing);
+    var results = new org.apache.solr.common.util.NamedList<Object>();
+    results.add("response", docs);
+    response.setResponse(results);
+    when(client.query(
+            org.mockito.ArgumentMatchers.eq("books"),
+            org.mockito.ArgumentMatchers.any(SolrQuery.class),
+            org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST)))
+        .thenReturn(response);
+    var repository = new SolrAudiobookRepository(client, "books", "custom_vector", 2);
+    var ids =
+        new java.util.ArrayList<>(
+            java.util.stream.IntStream.rangeClosed(1, 101).mapToObj(i -> "book-" + i).toList());
+    ids.add("special:+ \"id\"");
+    ids.add("book-1");
+    ids.add("");
+    var vectors = repository.findEmbeddingsByBookIds(ids);
+    org.assertj.core.api.Assertions.assertThat(vectors).containsOnlyKeys("book-1");
+    org.assertj.core.api.Assertions.assertThat(vectors.get("book-1")).containsExactly(3, 4);
+    var queries = ArgumentCaptor.forClass(SolrQuery.class);
+    verify(client, org.mockito.Mockito.times(2))
+        .query(
+            org.mockito.ArgumentMatchers.eq("books"),
+            queries.capture(),
+            org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST));
+    assertEquals(List.of(100, 2), queries.getAllValues().stream().map(SolrQuery::getRows).toList());
+    assertEquals("id,custom_vector", queries.getValue().getFields());
+    org.assertj.core.api.Assertions.assertThat(queries.getValue().getFilterQueries()[0])
+        .contains("special\\:");
+  }
+
+  @Test
+  void blankVectorLookupsDoNotQueryTheWholeCatalogue() throws Exception {
+    var client = mock(SolrClient.class);
+    var repository = new SolrAudiobookRepository(client, "books", "embedding", 2);
+    org.assertj.core.api.Assertions.assertThat(repository.findEmbeddingByBookId(null)).isEmpty();
+    org.assertj.core.api.Assertions.assertThat(
+            repository.findEmbeddingsByBookIds(java.util.Arrays.asList(null, " ")))
+        .isEmpty();
+    org.mockito.Mockito.verifyNoInteractions(client);
+  }
+
+  @Test
   void embeddingJobUsesAtomicVectorUpdatesWithoutReplacingMetadata() throws Exception {
     SolrClient client = mock(SolrClient.class);
     var repository = new SolrAudiobookRepository(client, "books", "embedding", 2);
@@ -110,7 +163,7 @@ class SolrAudiobookRepositoryUnitTest {
     assertEquals("title rt_title authors rt_authors all", query.get("qf"));
     assertEquals(5, query.getRows());
     assertEquals(
-        "id,source,title,authors,description,narrators,language,durationMinutes,publicationYear,short_description,score",
+        "id,source,title,authors,description,narrators,language,durationMinutes,publicationYear,short_description,score,embedding",
         query.getFields());
   }
 

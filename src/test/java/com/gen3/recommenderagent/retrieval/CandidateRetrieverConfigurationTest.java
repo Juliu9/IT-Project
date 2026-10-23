@@ -33,7 +33,8 @@ class CandidateRetrieverConfigurationTest {
               QdrantUserPreferenceMapper.class,
               QdrantUserPreferenceRepository.class,
               SolrConfig.class,
-              SolrAudiobookRepository.class)
+              SolrAudiobookRepository.class,
+              com.gen3.recommenderagent.storage.user.solr.SolrUserPreferenceRepository.class)
           .withBean(QueryEmbeddingService.class, () -> mock(QueryEmbeddingService.class))
           .withBean(AudiobookRetrievalPlanner.class, AudiobookRetrievalPlanner::new);
 
@@ -116,13 +117,30 @@ class CandidateRetrieverConfigurationTest {
   }
 
   @Test
-  void rejectsSolrAsAnIncompleteSoleDatabase() {
+  void selectsOnlySolrWhenConfigured() {
     runner
-        .withPropertyValues("audiobook.database=solr")
+        .withPropertyValues(
+            "audiobook.database=solr",
+            "solr.url=http://localhost:8983/solr",
+            "solr.collection=books",
+            "solr.username=",
+            "solr.password=")
         .run(
-            context ->
-                assertThat(context.getStartupFailure())
-                    .hasMessageContaining("Solr lacks vector lookup and user-preference adapters"));
+            context -> {
+              assertThat(context)
+                  .hasNotFailed()
+                  .hasSingleBean(CandidateRetriever.class)
+                  .hasSingleBean(AudiobookCandidateSearch.class)
+                  .hasSingleBean(AudiobookVectorRepository.class)
+                  .hasSingleBean(UserPreferenceVectorRepository.class)
+                  .hasSingleBean(
+                      com.gen3.recommenderagent.storage.user.solr.SolrUserPreferenceRepository
+                          .class)
+                  .doesNotHaveBean(QdrantClient.class)
+                  .doesNotHaveBean(QdrantConfig.class)
+                  .doesNotHaveBean(QdrantAudiobookRepository.class)
+                  .doesNotHaveBean(QdrantUserPreferenceRepository.class);
+            });
   }
 
   @Test
