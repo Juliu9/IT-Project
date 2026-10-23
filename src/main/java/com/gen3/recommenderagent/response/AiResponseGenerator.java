@@ -9,6 +9,7 @@ import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
+import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -25,6 +26,7 @@ public class AiResponseGenerator implements ResponseGenerator {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(AiResponseGenerator.class);
 
+  private static final int MAX_EXPLANATION_WORDS = 150;
   private static final String PROCESSING_FALLBACK =
       "I'm having a little trouble with that right now. Please try again in a moment.";
   private static final Pattern EXPLICIT_OVERSIZED_COUNT =
@@ -120,7 +122,13 @@ public class AiResponseGenerator implements ResponseGenerator {
                               ? """
                             Explain why each supplied book was recommended, in rank order, naming its title and original rank.
                             Use saved search criteria and short descriptions; the current question is not new search criteria.
-                            Give 1-2 sentences per book for a page, slightly fuller for one book. Mention reading preferences
+                            Use at most 150 words TOTAL, including titles and ranks, even for a whole page.
+                            Use complete conversational sentences addressed to "you", connecting each book to your request.
+                            Weave rank and title into the sentence: "For number 1, Title fits your request because..."
+                            Vary transitions, such as "Next, number 2..." and "Finally, number 5...". Keep the actual ranks.
+                            Give one brief reason per book and end each sentence with a period. Avoid title-summary fragments.
+                            No introduction, conclusion, headings, markdown, bullets, parentheses or repeated rank labels.
+                            Use only plain words, numbers and ordinary sentence punctuation. Mention reading preferences
                             only when readingPreferencesUsed=true; never infer specific favourites from that flag.
                             Requested filters do not prove book metadata: claim exact matches only with supplied evidence.
                             Never infer reasons from numerical scores. Admit when missing/insufficient descriptions cannot
@@ -160,8 +168,16 @@ public class AiResponseGenerator implements ResponseGenerator {
           ? explanationFallback(recommendations)
           : limitNotice + buildHumanReadableResponse(recommendations, currentRequest);
     }
+    String text = aiResponse.getResult().getOutput().getText();
+    if (explanation) {
+      text = plainExplanation(text);
+      if (text.isBlank() || wordCount(text) > MAX_EXPLANATION_WORDS) {
+        RequestTelemetry.responseMode("FALLBACK");
+        return explanationFallback(recommendations);
+      }
+    }
     RequestTelemetry.responseMode("AI");
-    return aiResponse.getResult().getOutput().getText();
+    return text;
   }
 
   // Turns structure Java objects into a text prompt
@@ -392,25 +408,49 @@ public class AiResponseGenerator implements ResponseGenerator {
   }
 
   private String explanationFallback(List<Recommendation> books) {
-    return books.stream()
+    List<Recommendation> page = getTopRecommendations(books);
+    int budget = MAX_EXPLANATION_WORDS / Math.max(1, page.size());
+    return page.stream()
         .map(
             book -> {
-              String description = book.getShortDescription();
-              return "Number "
-                  + book.getRank()
-                  + ", "
-                  + book.getTitle()
-                  + ". "
-                  + (book.isReadingPreferencesUsed()
-                      ? "Your reading preferences were used when selecting this book. "
-                      : "")
-                  + (description == null || description.isBlank()
-                      ? "I don't have enough description information to explain a specific match."
-                      : "Its supplied description says: "
-                          + description
-                          + " I can't establish a more specific reason from the available information.");
+              String prefix =
+                  "Number "
+                      + book.getRank()
+                      + ", "
+                      + limitWords(plainExplanation(book.getTitle()), 12)
+                      + ". "
+                      + (book.isReadingPreferencesUsed()
+                          ? "Your reading preferences were used. "
+                          : "");
+              String description = plainExplanation(book.getShortDescription());
+              String reason =
+                  description.isBlank()
+                      ? "There's not enough description information for a specific explanation."
+                      : "Its description says " + description;
+              return (prefix + limitWords(reason, budget - wordCount(prefix)))
+                      .replaceAll("[.,!?]+$", "")
+                  + ".";
             })
-        .collect(Collectors.joining(" "));
+        .collect(Collectors.joining(" "))
+        .trim();
+  }
+
+  private String plainExplanation(String text) {
+    return text == null
+        ? ""
+        : text.replaceAll("(?i)\\(\\s*rank\\s+\\d+\\s*\\)", "")
+            .replaceAll("[^\\p{L}\\p{M}\\p{N}\\s.,'’!?]", " ")
+            .replaceAll("\\s+", " ")
+            .trim();
+  }
+
+  private int wordCount(String text) {
+    return text.isBlank() ? 0 : text.trim().split("\\s+").length;
+  }
+
+  private String limitWords(String text, int maximum) {
+    String[] words = text.trim().split("\\s+");
+    return String.join(" ", Arrays.copyOf(words, Math.max(0, Math.min(maximum, words.length))));
   }
 
   // Safe node output

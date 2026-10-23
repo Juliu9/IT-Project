@@ -140,7 +140,9 @@ reload today's preference profile to justify an older selection. They may mentio
 when recorded, but cannot infer favourite genres or specific books from that flag. Descriptions and
 saved criteria support semantic explanations; filter requests alone cannot prove actual book metadata.
 Response generation uses the existing role-specific chat client, with distinct explanation instructions
-and an honest built-in fallback. Clarification/no-history responses need no response-model call.
+and an honest built-in fallback. Explanations are plain text with a 150-word total limit; oversized
+AI output uses a bounded fallback covering every selected book. Clarification/no-history responses
+need no response-model call.
 
 ## Configuration and schema
 

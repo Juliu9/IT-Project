@@ -38,6 +38,10 @@ class ExplanationResponseTest {
     assertThat(system.getValue())
         .contains(
             "Explain why",
+            "150 words TOTAL",
+            "complete conversational sentences",
+            "Vary transitions",
+            "Keep the actual ranks",
             "only when readingPreferencesUsed=true",
             "Never infer reasons from numerical scores");
     String prompt = generator.compilePrompt(books, request, "");
@@ -59,9 +63,59 @@ class ExplanationResponseTest {
         .contains(
             "Your reading preferences were used",
             "school of magic",
-            "don't have enough description information");
+            "not enough description information");
     assertThat(new AiResponseGenerator(null).generate(List.of(unknown), request()))
         .doesNotContain("Your reading preferences were used");
+  }
+
+  @Test
+  void removesMarkdownAndParentheticalRankSyntaxFromModelExplanations() {
+    var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    when(client.prompt().system(anyString()).user(anyString()).call().chatResponse())
+        .thenReturn(
+            new ChatResponse(
+                List.of(
+                    new Generation(
+                        new AssistantMessage(
+                            "4. **Harry Potter** (rank 4): A school of magic fits your fantasy request.")))));
+    String result =
+        new AiResponseGenerator(client, AiOperationObserver.noop())
+            .generate(List.of(book(false)), request());
+    assertThat(result).isEqualTo("4. Harry Potter A school of magic fits your fantasy request.");
+  }
+
+  @Test
+  void oversizedModelOutputUsesABoundedFallbackThatStillIncludesEveryBook() {
+    var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    when(client.prompt().system(anyString()).user(anyString()).call().chatResponse())
+        .thenReturn(
+            new ChatResponse(
+                List.of(new Generation(new AssistantMessage("verbose ".repeat(200))))));
+    var books =
+        java.util.stream.IntStream.rangeClosed(1, 5)
+            .mapToObj(
+                rank -> {
+                  var book =
+                      new Recommendation(
+                          "id-" + rank,
+                          rank,
+                          0.8,
+                          "**Title " + rank + "**",
+                          "description ".repeat(200));
+                  book.setReadingPreferencesUsed(true);
+                  return book;
+                })
+            .toList();
+    var generator = new AiResponseGenerator(client, AiOperationObserver.noop());
+    String result = generator.generate(books, request());
+    assertThat(result.split("\\s+")).hasSizeLessThanOrEqualTo(150);
+    assertThat(result).doesNotContain("*", "(", ")", "verbose");
+    for (int rank = 1; rank <= 5; rank++) {
+      assertThat(result).contains("Number " + rank + ", Title " + rank);
+    }
+    String offline = new AiResponseGenerator(null).generate(books, request());
+    assertThat(offline).isEqualTo(result);
+    assertThat(offline).contains(". Number 2,", ". Number 5,").endsWith(".");
   }
 
   private SessionRequest request() {
