@@ -10,8 +10,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 
+@ConditionalOnProperty(name = "audiobook.database", havingValue = "qdrant", matchIfMissing = true)
 @Repository
 public class QdrantUserPreferenceRepository implements UserPreferenceVectorRepository {
 

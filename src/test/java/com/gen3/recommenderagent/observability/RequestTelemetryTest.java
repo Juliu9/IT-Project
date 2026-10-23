@@ -1,6 +1,7 @@
 package com.gen3.recommenderagent.observability;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -51,6 +52,42 @@ class RequestTelemetryTest {
         .contains("\"backend\":\"qdrant\"")
         .contains("\"inputTokens\":10")
         .contains("\"outputTokens\":5");
+  }
+
+  @Test
+  void failedModelRetriesRemainInTheSuccessfulFallbackSummary() {
+    var beans = new org.springframework.beans.factory.support.DefaultListableBeanFactory();
+    var retry =
+        new org.springframework.core.retry.RetryTemplate(
+            org.springframework.core.retry.RetryPolicy.builder()
+                .maxRetries(2)
+                .delay(java.time.Duration.ZERO)
+                .build());
+    beans.registerSingleton("retryTemplate", retry);
+    var observer =
+        new AiOperationObserver(
+            beans.getBeanProvider(org.springframework.core.retry.RetryTemplate.class));
+    telemetry.start();
+    RequestTelemetry.ai("parse", 1, new AiOperationObserver.AiUsage("parser", 10, 2, 12, true));
+    assertThatThrownBy(
+            () ->
+                observer.observe(
+                    "generate_response",
+                    () ->
+                        retry.<String>invoke(
+                            () -> {
+                              throw new IllegalStateException("unavailable");
+                            }),
+                    response -> new AiOperationObserver.AiUsage(null, null, null, null, false)))
+        .isInstanceOf(RuntimeException.class);
+    telemetry.complete(new SessionRequest());
+    var summary = new ObjectMapper().readTree(lastMessage());
+    assertThat(summary.path("outcome").asText()).isEqualTo("SUCCESS");
+    assertThat(summary.path("ai").path("calls").asInt()).isEqualTo(2);
+    assertThat(summary.path("ai").path("attempts").asInt()).isEqualTo(4);
+    assertThat(summary.path("ai").path("lastOperation").asText()).isEqualTo("generate_response");
+    assertThat(summary.path("ai").path("usageAvailable").asBoolean()).isFalse();
+    assertThat(summary.path("ai").path("inputTokens").asInt()).isEqualTo(10);
   }
 
   @Test

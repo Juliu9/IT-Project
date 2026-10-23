@@ -1,0 +1,78 @@
+@startuml
+title Recommendation request — session and retrieval decisions
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName SansSerif
+skinparam sequenceMessageAlign center
+hide footbox
+
+actor User
+participant RequestGateway as Gateway
+participant AiInputParser as Parser
+participant SessionTransitionService as Transition
+participant "SessionRepository\nRedis adapter" as Sessions
+participant "RecommendationWorkflow\nEmbedding → retrieval → ranking" as Workflow
+participant AiResponseGenerator as Response
+
+User -> Gateway : Natural-language request
+Gateway -> Parser : Parse intent, criteria and count
+Parser --> Gateway : Parsed request
+note over Parser
+  Only RECOMMENDATION and REFINE accept
+  new semantic criteria.
+  Parser and response chat models can differ.
+end note
+Gateway -> Transition : Process request
+Transition -> Sessions : update(sessionId, userId, change)
+activate Sessions
+note over Sessions
+  Acquire session lock.
+  Load session and run the transition.
+end note
+Sessions -> Transition : Apply change to loaded session
+activate Transition
+
+alt REPEAT
+  Transition -> Transition : Restore last search outcome\nKeep pending queue unchanged
+else MORE with no previous search
+  Transition -> Transition : Mark search clarification required\nDo not retrieve candidates
+else Recommendation, refinement, or MORE
+  Transition -> Transition : ConversationState resolves context and preferences\nDiscard stale queue if search changed
+  Transition -> Transition : Take pending recommendations, up to requested count
+  opt Page still needs books
+    Transition -> Workflow : Build fresh batch, excluding shown IDs and cached tail
+    activate Workflow
+    Workflow -> Workflow : Load user preference vectors\nBuild query vectors when needed
+    alt Personalised request lacks usable preferences
+      Workflow --> Transition : Ask for taste preferences
+    else Search can proceed
+      Workflow -> Workflow : Retrieve up to 50 candidates\nRank up to 20 recommendations
+      Workflow --> Transition : New batch for session queue
+    end
+    deactivate Workflow
+    Transition -> Transition : Fill page from new queue\nReturn fewer if necessary
+  end
+  Transition -> Transition : ConversationState records the page and resolves outcome\nEmpty MORE = no further matches
+else Count, preference, history, help or unknown action
+  Transition -> Transition : Apply the relevant session action\nNo candidate retrieval
+end
+
+Transition --> Sessions : Transition result
+deactivate Transition
+Sessions -> Sessions : Commit session if lock and version still match\nRelease lock
+Sessions --> Transition : Return only after successful commit
+deactivate Sessions
+Transition --> Gateway : Selected page + resolved ConversationDecision
+Gateway -> Response : Generate wording using resolved decision and context
+note over Response
+  Chat model for book explanations.
+  Built-in wording for actions, clarification,
+  exhausted results and model failures.
+end note
+Response --> Gateway : Response text
+Gateway --> User : Response
+note over Gateway, Sessions
+  Commit precedes final response generation.
+  Busy lock: 409. Lost lock or rejected commit: 503.
+end note
+@enduml

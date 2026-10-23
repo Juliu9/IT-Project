@@ -1,10 +1,22 @@
 package com.gen3.recommenderagent.domain.session;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.gen3.recommenderagent.domain.Intent;
 import java.time.Instant;
 import java.util.List;
 
 public class SessionRequest {
+
+  @JsonIgnore private ConversationDecision decision;
+
+  @JsonIgnore
+  public ConversationDecision getDecision() {
+    return decision;
+  }
+
+  public void setDecision(ConversationDecision decision) {
+    this.decision = decision;
+  }
 
   private String requestId;
   private String rawText;
@@ -20,6 +32,24 @@ public class SessionRequest {
   private Integer bookCount;
   private boolean personalised;
   private boolean preferenceClarificationRequired;
+  private boolean searchClarificationRequired;
+  private boolean noMoreRecommendations;
+
+  public boolean isNoMoreRecommendations() {
+    return noMoreRecommendations;
+  }
+
+  public void setNoMoreRecommendations(boolean exhausted) {
+    noMoreRecommendations = exhausted;
+  }
+
+  public boolean isSearchClarificationRequired() {
+    return searchClarificationRequired;
+  }
+
+  public void setSearchClarificationRequired(boolean required) {
+    searchClarificationRequired = required;
+  }
 
   public boolean isPersonalised() {
     return personalised;

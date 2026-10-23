@@ -1,0 +1,2 @@
+org.springframework.boot.autoconfigure.AutoConfigurationImportFilter=\
+com.gen3.recommenderagent.storage.session.redis.SessionStoreRedisAutoConfigurationFilter
