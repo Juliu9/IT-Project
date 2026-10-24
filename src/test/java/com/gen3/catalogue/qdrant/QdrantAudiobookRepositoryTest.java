@@ -211,9 +211,6 @@ class QdrantAudiobookRepositoryTest {
     assertThatThrownBy(() -> repository.importStoredBooks(List.of(record)))
         .isInstanceOf(java.io.IOException.class)
         .hasMessageContaining("Duplicate bookId");
-    assertThatThrownBy(() -> repository.indexEmbeddings(List.of(record)))
-        .isInstanceOf(java.io.IOException.class)
-        .hasMessageContaining("Duplicate bookId");
     verify(client, never()).upsertAsync(anyString(), anyList());
   }
 
@@ -229,9 +226,6 @@ class QdrantAudiobookRepositoryTest {
             new AudiobookRecord("duplicate", "s", "Title", List.of(), "Summary"),
             new float[] {1, 0});
     assertThatThrownBy(() -> repository.importStoredBooks(List.of(record, record)))
-        .isInstanceOf(java.io.IOException.class)
-        .hasMessageContaining("duplicate bookId");
-    assertThatThrownBy(() -> repository.indexEmbeddings(List.of(record, record)))
         .isInstanceOf(java.io.IOException.class)
         .hasMessageContaining("duplicate bookId");
     org.mockito.Mockito.verifyNoInteractions(client);
@@ -256,9 +250,6 @@ class QdrantAudiobookRepositoryTest {
                 new AudiobookRecord("new-book", "s", "Title", List.of(), "Description"),
                 new float[] {1, 0}));
     assertThatThrownBy(() -> repository.importStoredBooks(incoming))
-        .isInstanceOf(java.io.IOException.class)
-        .hasMessageContaining("already occupied");
-    assertThatThrownBy(() -> repository.indexEmbeddings(incoming))
         .isInstanceOf(java.io.IOException.class)
         .hasMessageContaining("already occupied");
     verify(client, never()).upsertAsync(anyString(), anyList());
@@ -340,7 +331,7 @@ class QdrantAudiobookRepositoryTest {
   }
 
   @Test
-  void createsCollectionOnlyForExplicitIndexing() throws Exception {
+  void createsCollectionOnlyForExplicitMigration() throws Exception {
     QdrantClient client = mock(QdrantClient.class);
     SparseTextEncoder sparseEncoder = new Bm25SparseTextEncoder();
     QdrantPointMapper mapper = new QdrantPointMapper(sparseEncoder);
@@ -361,7 +352,7 @@ class QdrantAudiobookRepositoryTest {
         .thenReturn(Futures.immediateFuture(ScrollResponse.getDefaultInstance()));
     when(client.retrieveAsync(eq("audiobooks"), anyList(), eq(false), eq(false), isNull()))
         .thenReturn(Futures.immediateFuture(List.of()));
-    repository.indexEmbeddings(
+    repository.importStoredBooks(
         List.of(
             new AudiobookEmbedding(
                 new AudiobookRecord("book-1", "source", "Title", List.of(), "Summary"),

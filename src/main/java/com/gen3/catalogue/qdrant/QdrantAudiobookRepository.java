@@ -6,7 +6,6 @@ import static io.qdrant.client.WithPayloadSelectorFactory.enable;
 import com.gen3.catalogue.model.AudiobookCandidate;
 import com.gen3.catalogue.model.AudiobookEmbedding;
 import com.gen3.catalogue.model.AudiobookFilters;
-import com.gen3.catalogue.model.AudiobookRecord;
 import com.gen3.catalogue.port.AudiobookCandidateSearch;
 import com.gen3.catalogue.port.AudiobookVectorRepository;
 import io.qdrant.client.QdrantClient;
@@ -145,44 +144,6 @@ public class QdrantAudiobookRepository
     return query(baseQuery(filters, limit).build());
   }
 
-  /** Upserts one audiobook, preserving the existing point ID matched by bookId. */
-  @Override
-  public void indexEmbedding(AudiobookRecord record, float[] vector) throws IOException {
-    indexEmbeddings(List.of(new AudiobookEmbedding(record, vector)));
-  }
-
-  /** Upserts a batch of audiobook points and waits until Qdrant accepts the operation. */
-  @Override
-  public void indexEmbeddings(List<AudiobookEmbedding> embeddings) throws IOException {
-    if (embeddings == null || embeddings.isEmpty()) {
-      return;
-    }
-    List<AudiobookEmbedding> valid =
-        embeddings.stream()
-            .filter(item -> item != null && item.record() != null)
-            .filter(item -> item.vector() != null && item.vector().length > 0)
-            .toList();
-    if (valid.isEmpty()) {
-      return;
-    }
-    valid.forEach(item -> validateDimension(item.vector()));
-    validateUniqueBookIds(valid);
-    initialize();
-    var existing =
-        findRecordsByBookIds(valid.stream().map(item -> item.record().id()).toList(), false);
-    requireAvailablePointIds(valid, existing);
-    var points =
-        valid.stream()
-            .map(
-                item -> {
-                  var point = mapper.toPoint(item);
-                  var stored = existing.get(item.record().id());
-                  return stored == null ? point : point.toBuilder().setId(stored.getId()).build();
-                })
-            .toList();
-    await(client.upsertAsync(collection, points), "write audiobook vectors to Qdrant");
-  }
-
   /** Copies existing source data, leaving existing destination records untouched on reruns. */
   public int importStoredBooks(List<AudiobookEmbedding> records) throws IOException {
     if (records.isEmpty()) {
@@ -316,7 +277,6 @@ public class QdrantAudiobookRepository
   }
 
   /** Creates named dense and sparse vectors plus indexes used by payload filters. */
-  @Override
   public void initialize() throws IOException {
     ensureCollection(true);
   }

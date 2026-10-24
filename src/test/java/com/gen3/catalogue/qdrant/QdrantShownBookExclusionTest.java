@@ -50,9 +50,6 @@ class QdrantShownBookExclusionTest {
           .isZero();
       assertThat(repository.findEmbeddingByBookId("catalogue-id").orElseThrow())
           .containsExactly(1f, 0f);
-      repository.indexEmbeddings(List.of(new AudiobookEmbedding(book, new float[] {0, 1})));
-      assertThat(repository.findEmbeddingByBookId("catalogue-id").orElseThrow())
-          .containsExactly(0f, 1f);
       var points =
           client
               .scrollAsync(
@@ -215,27 +212,31 @@ class QdrantShownBookExclusionTest {
             QdrantGrpcClient.newBuilder(server.getHost(), server.getMappedPort(6334), false)
                 .build())) {
       var encoder = new Bm25SparseTextEncoder();
-      var repository =
-          new QdrantAudiobookRepository(
-              client, new QdrantPointMapper(encoder), encoder, "books", 2);
-      repository.indexEmbeddings(
-          IntStream.range(0, 51)
-              .mapToObj(
-                  index ->
-                      new AudiobookEmbedding(
-                          new AudiobookRecord(
-                              "book-" + index,
-                              "catalogue",
-                              "Fantasy book",
-                              List.of("Author"),
-                              "A fantasy adventure.",
-                              List.of("Narrator"),
-                              "English",
-                              100,
-                              2020,
-                              null),
-                          VectorMath.normalize(new float[] {1, index / 100.0f})))
-              .toList());
+      var mapper = new QdrantPointMapper(encoder);
+      var repository = new QdrantAudiobookRepository(client, mapper, encoder, "books", 2);
+      repository.initialize();
+      client
+          .upsertAsync(
+              "books",
+              IntStream.range(0, 51)
+                  .mapToObj(
+                      index ->
+                          new AudiobookEmbedding(
+                              new AudiobookRecord(
+                                  "book-" + index,
+                                  "catalogue",
+                                  "Fantasy book",
+                                  List.of("Author"),
+                                  "A fantasy adventure.",
+                                  List.of("Narrator"),
+                                  "English",
+                                  100,
+                                  2020,
+                                  null),
+                              VectorMath.normalize(new float[] {1, index / 100.0f})))
+                  .map(mapper::toPoint)
+                  .toList())
+          .get();
       List<String> shown =
           repository.searchSemantic(new float[] {1, 0}, AudiobookFilters.empty(), 50).stream()
               .map(candidate -> candidate.audiobook().id())

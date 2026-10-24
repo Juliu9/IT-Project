@@ -200,31 +200,10 @@ public class SolrAudiobookRepository
     }
   }
 
-  /** Stores a normalized embedding using an atomic update to the configured DenseVectorField. */
-  @Override
-  public void indexEmbedding(AudiobookRecord record, float[] vector) throws IOException {
-    if (record.id() == null || record.id().isBlank() || vector == null || vector.length == 0) {
-      return;
-    }
-    validateDimension(vector);
-
-    indexEmbeddings(List.of(new AudiobookEmbedding(record, vector)));
-  }
-
-  /** Writes a batch of vector field updates and commits once. */
-  @Override
-  public void indexEmbeddings(List<AudiobookEmbedding> embeddings) throws IOException {
-    writeEmbeddings(embeddings, null);
-  }
-
   /** Rejects stale or deleted catalogue records instead of creating partial documents. */
   public void updateExistingEmbeddings(
       List<AudiobookEmbedding> embeddings, Map<String, Long> versions) throws IOException {
-    writeEmbeddings(embeddings, java.util.Objects.requireNonNull(versions));
-  }
-
-  private void writeEmbeddings(List<AudiobookEmbedding> embeddings, Map<String, Long> versions)
-      throws IOException {
+    java.util.Objects.requireNonNull(versions);
     if (embeddings == null || embeddings.isEmpty()) {
       return;
     }
@@ -242,14 +221,12 @@ public class SolrAudiobookRepository
                 embedding -> {
                   SolrInputDocument document = new SolrInputDocument();
                   document.addField("id", embedding.record().id());
-                  if (versions != null) {
-                    Long version = versions.get(embedding.record().id());
-                    if (version == null || version <= 1) {
-                      throw new IllegalArgumentException(
-                          "An exact source version is required for embedding updates");
-                    }
-                    document.addField("_version_", version);
+                  Long version = versions.get(embedding.record().id());
+                  if (version == null || version <= 1) {
+                    throw new IllegalArgumentException(
+                        "An exact source version is required for embedding updates");
                   }
+                  document.addField("_version_", version);
                   document.addField(vectorField, Map.of("set", toList(embedding.vector())));
                   return document;
                 })

@@ -5,8 +5,8 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
 
-/** Stores and retrieves audiobook vectors independently from catalogue search. */
-public interface AudiobookVectorRepository extends AudiobookVectorIndexer {
+/** Retrieves audiobook vectors independently from catalogue search. */
+public interface AudiobookVectorRepository {
 
   /** Returns the dense vector stored for one catalogue book ID. */
   Optional<float[]> findEmbeddingByBookId(String bookId) throws IOException;
