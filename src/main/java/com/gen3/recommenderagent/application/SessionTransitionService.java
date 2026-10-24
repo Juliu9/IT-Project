@@ -102,7 +102,10 @@ public class SessionTransitionService {
       previous = previous.getSearchCriteria().asRequest();
     }
     planner.resolveFilterCorrections(resolved, original, previous);
-    if (resolved.getSearchCriteria() != null && resolved.getIntent() != Intent.MORE_RESULTS) {
+    if (resolved.getSearchCriteria() != null
+        && (resolved.getIntent() == Intent.RECOMMENDATION
+            || resolved.getIntent() == Intent.REFINE
+            || resolved.getIntent() == Intent.MORE_RESULTS)) {
       var criteria = resolved.getSearchCriteria().asRequest();
       planner.resolveFilterCorrections(criteria, original, previous);
       resolved.setSearchCriteria(SessionPreferences.fromRequest(criteria));

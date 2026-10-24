@@ -71,7 +71,8 @@ replacement without a new value clears that field. Other preferences remain unch
 
 An empty update asks what to change and sets `Session.awaitingPreferenceUpdate`. A short taste reply
 completes the update without retrieving books. Explicit search commands (`explicitSearch=true`) start
-normal recommendation work instead; cancel and clear-history end the pending update.
+normal recommendation work instead; cancel and clear-history end the pending update. Numeric
+answers to a newer book-selection or count question take priority over an older preference question.
 
 Successful updates change only session preferences and the replay acknowledgement. They preserve the
 latest displayed page, shown IDs, search history and pending batch. Both repeat modes remain usable.

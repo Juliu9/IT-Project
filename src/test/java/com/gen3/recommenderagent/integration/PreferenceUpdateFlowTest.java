@@ -236,6 +236,42 @@ class PreferenceUpdateFlowTest {
   }
 
   @Test
+  void newerSelectionQuestionsTakePriorityOverAnOlderPreferenceQuestion() {
+    process(update(tastes("fantasy")));
+    process(request(Intent.RECOMMENDATION));
+    process(update(null));
+    var explain = request(Intent.EXPLAIN_RECOMMENDATION);
+    explain.setReferenceRank(6);
+    assertThat(process(explain).getDecision())
+        .isEqualTo(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+    var selection = request(Intent.UNKNOWN);
+    selection.setRawText("1");
+    assertThat(process(selection).getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    process(request(Intent.CHANGE_COUNT));
+    var count = request(Intent.UNKNOWN);
+    count.setRawText("2");
+    assertThat(process(count).getDecision()).isEqualTo(ConversationDecision.COUNT_CHANGED);
+  }
+
+  @Test
+  void explicitMoreFiltersRemainCriteriaForTheNextRefinement() {
+    process(update(tastes("romance")));
+    process(request(Intent.RECOMMENDATION));
+    var more = request(Intent.MORE_RESULTS);
+    var english = new MustInclude();
+    english.setLanguage("English");
+    more.setMustInclude(english);
+    process(more);
+    var refine = request(Intent.REFINE);
+    var shorter = new MustInclude();
+    shorter.setDuration("under 5 hours");
+    refine.setMustInclude(shorter);
+    var result = process(refine);
+    assertThat(result.getMustInclude().getLanguage()).isEqualTo("English");
+    assertThat(result.getMustInclude().getDuration()).isEqualTo("under 5 hours");
+  }
+
+  @Test
   void refillsUseTheOriginalDatabaseTasteVectorAsWell() throws Exception {
     var old = new UserPreferenceEmbedding("user", new float[] {1, 0}, null);
     var changed = new UserPreferenceEmbedding("user", new float[] {0, 1}, null);

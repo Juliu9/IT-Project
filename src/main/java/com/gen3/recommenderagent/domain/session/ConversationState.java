@@ -287,6 +287,8 @@ public final class ConversationState {
     }
     if (effective.getIntent() == Intent.UPDATE_PREFERENCES
         || (session.isAwaitingPreferenceUpdate()
+            && session.getLastDecision() != ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
+            && session.getLastDecision() != ConversationDecision.COUNT_CLARIFICATION
             && !effective.isExplicitSearch()
             && (effective.getIntent() == Intent.RECOMMENDATION
                 || effective.getIntent() == Intent.REFINE
@@ -612,6 +614,12 @@ public final class ConversationState {
     for (int index = requests.size() - 1; index >= 0; index--) {
       SessionRequest previous = requests.get(index);
       if (isSearchContext(previous)) {
+        SessionPreferences moreCriteria = null;
+        if (target.getIntent() == Intent.MORE_RESULTS && previous.getSearchCriteria() != null) {
+          var explicit = copyOf(target);
+          merge(previous.getSearchCriteria().asRequest(), explicit);
+          moreCriteria = SessionPreferences.fromRequest(explicit);
+        }
         if (target.getIntent() == Intent.REFINE && previous.getSearchCriteria() != null) {
           merge(previous.getSearchCriteria().asRequest(), target);
           target.setPersonalised(previous.isPersonalised() || target.isPersonalised());
@@ -619,8 +627,7 @@ public final class ConversationState {
           merge(previous, target);
         }
         if (target.getIntent() == Intent.MORE_RESULTS) {
-          target.setSearchCriteria(
-              previous.getSearchCriteria() == null ? null : previous.getSearchCriteria().copy());
+          target.setSearchCriteria(moreCriteria);
           target.setUserPreferenceSnapshot(previous.getUserPreferenceSnapshot());
           target.setUserPreferencesLoaded(previous.isUserPreferencesLoaded());
         }
