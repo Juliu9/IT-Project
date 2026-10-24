@@ -14,7 +14,8 @@ actor User
 package "recommenderagent — live requests" {
   component "RequestGateway\nCoordinates the request" as Gateway #DBEAFE
   component "AiInputParser\nText → intent + criteria" as Parser #DBEAFE
-  component "SessionTransitionService\nCoordinates paging and retrieval" as Session #DBEAFE
+  component "SessionTransitionService\nOwns session transaction" as Session #DBEAFE
+  component "ConversationEngine + intent handlers\nResolve, validate and page" as Engine #DBEAFE
   component "AudiobookRecommendationWorkflow\nBuilds a new recommendation batch" as Workflow #DCFCE7
   component "CandidateRetrievalService\nSelects and executes search" as Retrieval #DCFCE7
   component "RankingService\nRanks up to 20 recommendations" as Ranking #DCFCE7
@@ -30,7 +31,8 @@ Gateway --> Parser : 1. Parse
 Gateway --> Session : 2. Apply session transition
 Session --> SessionStore : lock / load / commit / release
 SessionStore --> Redis
-Session --> Workflow : only when a new batch is needed
+Session --> Engine : apply within session update
+Engine --> Workflow : only when a new batch is needed
 Workflow --> Adapter : load user preferences
 Workflow --> Retrieval : retrieve up to 50 candidates
 Retrieval --> Adapter : semantic / keyword / hybrid / filters
@@ -39,8 +41,9 @@ Workflow --> Ranking : rank candidates
 Gateway --> Response : 3. Generate response after commit
 
 note bottom of Session
-  ConversationState owns conversation policy.
-  The result carries a temporary ConversationDecision.
+  ConversationState dispatches validated intent handlers.
+  RecommendationPager consumes and refills the queue.
+  ConversationTurn carries the resolved decision.
   MORE: use pending recommendations first.
   REPEAT: replay the latest resolved request.
   MORE without a previous search: ask for criteria.

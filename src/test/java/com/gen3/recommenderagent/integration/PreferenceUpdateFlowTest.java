@@ -17,12 +17,13 @@ import com.gen3.recommenderagent.application.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDecision;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ConversationTurn;
 import com.gen3.recommenderagent.domain.session.MustInclude;
 import com.gen3.recommenderagent.domain.session.MustNotInclude;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectors;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
@@ -67,13 +68,13 @@ class PreferenceUpdateFlowTest {
             });
   }
 
-  private SessionRequest request(Intent intent) {
-    var request = new SessionRequest();
+  private ConversationDraft request(Intent intent) {
+    var request = new ConversationDraft();
     request.setIntent(intent);
     return request;
   }
 
-  private SessionRequest process(SessionRequest request) {
+  private ConversationTurn process(ConversationDraft request) {
     return service.process("session", "user", request);
   }
 
@@ -85,7 +86,7 @@ class PreferenceUpdateFlowTest {
     return result;
   }
 
-  private SessionRequest update(SessionPreferences changes) {
+  private ConversationDraft update(SessionPreferences changes) {
     var request = request(Intent.UPDATE_PREFERENCES);
     request.setPreferenceUpdates(changes);
     return request;

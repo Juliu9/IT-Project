@@ -12,9 +12,10 @@ import com.gen3.recommenderagent.application.RecommendationWorkflow;
 import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDecision;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ConversationTurn;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
 import java.util.List;
 import java.util.stream.IntStream;
@@ -85,7 +86,7 @@ class ExplanationFlowTest {
     search();
     String before = saved();
     explain(null, "Harry Potter");
-    var reply = new SessionRequest();
+    var reply = new ConversationDraft();
     reply.setIntent(parsedIntent);
     reply.setBookCount(1);
     reply.setRawText(" 1 ");
@@ -118,7 +119,7 @@ class ExplanationFlowTest {
     search();
     String before = saved();
     explain(null, "Harry Potter");
-    var reply = new SessionRequest();
+    var reply = new ConversationDraft();
     reply.setIntent(Intent.UNKNOWN);
     reply.setRawText(text);
     var result = service.process("session", "user", reply);
@@ -137,7 +138,7 @@ class ExplanationFlowTest {
     String before =
         new ObjectMapper()
             .writeValueAsString(sessions.getSession("session", "user").getPendingRecommendations());
-    var reply = new SessionRequest();
+    var reply = new ConversationDraft();
     reply.setIntent(Intent.UNKNOWN);
     reply.setRawText(text);
     var result = service.process("session", "user", reply);
@@ -155,7 +156,7 @@ class ExplanationFlowTest {
   @Test
   void explicitlyAskingForTwoMoreReturnsTwoAndKeepsTheRest() {
     search();
-    var more = new SessionRequest();
+    var more = new ConversationDraft();
     more.setIntent(Intent.MORE_RESULTS);
     more.setRawText("2 more");
     more.setBookCount(2);
@@ -173,7 +174,7 @@ class ExplanationFlowTest {
   void invalidNumericReplyKeepsClarifyingUntilAValidSelection(String number) {
     search();
     explain(null, "Harry Potter");
-    var reply = new SessionRequest();
+    var reply = new ConversationDraft();
     reply.setIntent(Intent.UNKNOWN);
     reply.setRawText(number);
     var result = service.process("session", "user", reply);
@@ -189,7 +190,7 @@ class ExplanationFlowTest {
   @Test
   void numericReplyOnlySelectsABookWhileClarificationIsPending() {
     search();
-    var reply = new SessionRequest();
+    var reply = new ConversationDraft();
     reply.setIntent(Intent.UNKNOWN);
     reply.setRawText("1");
     assertThat(service.process("session", "user", reply).getDecision())
@@ -204,7 +205,7 @@ class ExplanationFlowTest {
   @Test
   void ambiguousMissingAndConflictingTitlesClarifyWithoutSelectingSilently() {
     search();
-    for (SessionRequest result :
+    for (ConversationTurn result :
         List.of(
             explain(null, "Harry Potter"),
             explain(null, "unknown title"),
@@ -248,10 +249,10 @@ class ExplanationFlowTest {
   @Test
   void explanationPreservesPendingPreferenceQuestion() {
     search();
-    var pending = new SessionRequest();
+    var pending = new ConversationDraft();
     pending.setIntent(Intent.RECOMMENDATION);
     pending.setPreferenceClarificationRequired(true);
-    sessions.getSession("session", "user").getRequests().add(pending);
+    sessions.getSession("session", "user").getRequests().add(ConversationTurn.fromDraft(pending));
     var explain = explain(4, null);
     assertThat(explain.getDecision()).isEqualTo(ConversationDecision.EMPTY_EXPLANATION_PAGE);
     assertThat(
@@ -283,7 +284,7 @@ class ExplanationFlowTest {
     String before = saved();
     com.gen3.recommenderagent.inputparser.InputParser parser =
         raw -> {
-          var request = new SessionRequest();
+          var request = new ConversationDraft();
           request.setIntent(raw.equals("1") ? Intent.UNKNOWN : Intent.EXPLAIN_RECOMMENDATION);
           request.setReferenceRank(raw.contains("sixth") ? 6 : 4);
           request.setRawText(raw);
@@ -398,7 +399,7 @@ class ExplanationFlowTest {
                       return book;
                     })
                 .toList());
-    var search = new SessionRequest();
+    var search = new ConversationDraft();
     search.setIntent(Intent.RECOMMENDATION);
     var query = new SemanticQuery();
     query.setGenres(List.of("fantasy"));
@@ -406,16 +407,16 @@ class ExplanationFlowTest {
     service.process("session", "user", search);
   }
 
-  private SessionRequest explain(Integer rank, String title) {
-    var request = new SessionRequest();
+  private ConversationTurn explain(Integer rank, String title) {
+    var request = new ConversationDraft();
     request.setIntent(Intent.EXPLAIN_RECOMMENDATION);
     request.setReferenceRank(rank);
     request.setReferenceTitle(title);
     return service.process("session", "user", request);
   }
 
-  private SessionRequest process(Intent intent) {
-    var request = new SessionRequest();
+  private ConversationTurn process(Intent intent) {
+    var request = new ConversationDraft();
     request.setIntent(intent);
     return service.process("session", "user", request);
   }

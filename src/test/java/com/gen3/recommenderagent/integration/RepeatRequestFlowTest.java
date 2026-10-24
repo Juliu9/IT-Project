@@ -12,9 +12,10 @@ import com.gen3.recommenderagent.application.RecommendationWorkflow;
 import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDecision;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ConversationTurn;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
 import java.util.List;
 import java.util.stream.IntStream;
@@ -145,7 +146,7 @@ class RepeatRequestFlowTest {
     var legacy = new Session();
     legacy.setSessionId("session");
     legacy.setUserId("user");
-    legacy.getRequests().add(request(Intent.HELP));
+    legacy.getRequests().add(ConversationTurn.fromDraft(request(Intent.HELP)));
     sessions.updateSession(legacy);
     assertThat(process(request(Intent.REPEAT)).getDecision()).isEqualTo(ConversationDecision.HELP);
     verifyNoInteractions(workflow);
@@ -233,13 +234,13 @@ class RepeatRequestFlowTest {
     process(request(Intent.RECOMMENDATION));
   }
 
-  private SessionRequest request(Intent intent) {
-    var request = new SessionRequest();
+  private ConversationDraft request(Intent intent) {
+    var request = new ConversationDraft();
     request.setIntent(intent);
     return request;
   }
 
-  private SessionRequest process(SessionRequest request) {
+  private ConversationTurn process(ConversationDraft request) {
     return service.process("session", "user", request);
   }
 

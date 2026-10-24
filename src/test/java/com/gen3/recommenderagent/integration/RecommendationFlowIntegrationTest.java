@@ -14,9 +14,9 @@ import com.gen3.recommenderagent.api.RequestGateway;
 import com.gen3.recommenderagent.application.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.ranker.RankingService;
@@ -137,7 +137,7 @@ class RecommendationFlowIntegrationTest {
 
   private MockMvc recommendationEndpoint(
       String rawText,
-      SessionRequest parsedRequest,
+      ConversationDraft parsedRequest,
       RecommendationFlowTestSupport.InMemorySessionRepository sessionRepository) {
     InputParser inputParser = mock(InputParser.class);
     when(inputParser.parse(rawText)).thenReturn(parsedRequest);
@@ -183,11 +183,11 @@ class RecommendationFlowIntegrationTest {
         new RankingScoringProperties.UniversalRuleWeights(0.7, 0.3));
   }
 
-  private SessionRequest parsedRequest(String rawText) {
+  private ConversationDraft parsedRequest(String rawText) {
     SemanticQuery semanticQuery = new SemanticQuery();
     semanticQuery.setGenres(List.of("science fiction"));
 
-    SessionRequest request = new SessionRequest();
+    ConversationDraft request = new ConversationDraft();
     request.setRawText(rawText);
     request.setIntent(Intent.RECOMMENDATION);
     request.setPositiveSemanticQuery(semanticQuery);

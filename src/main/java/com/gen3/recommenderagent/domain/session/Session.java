@@ -30,17 +30,17 @@ public class Session {
 
   private Integer bookCount = MAX_BOOK_COUNT;
   private List<String> shownBooks;
-  private List<SessionRequest> requests = new ArrayList<>();
+  private List<ConversationTurn> requests = new ArrayList<>();
   private SessionPreferences preferences;
   // REPEAT needs the latest resolved action, separately from reusable search/preference history.
-  private SessionRequest lastRequest;
+  private ConversationTurn lastRequest;
   private ConversationDecision lastDecision;
 
-  public SessionRequest getLastRequest() {
+  public ConversationTurn getLastRequest() {
     return lastRequest;
   }
 
-  public void setLastRequest(SessionRequest request) {
+  public void setLastRequest(ConversationTurn request) {
     lastRequest = request;
   }
 
@@ -57,7 +57,7 @@ public class Session {
   private List<Recommendation> pendingRecommendations = new ArrayList<>();
 
   public boolean isAwaitingPersonalisedPreferences() {
-    return ConversationState.awaitingPreferences(this);
+    return ConversationHistory.awaitingPreferences(this);
   }
 
   public Session() {}
@@ -126,11 +126,11 @@ public class Session {
     this.bookCount = clampOrDefault(bookCount);
   }
 
-  public List<SessionRequest> getRequests() {
+  public List<ConversationTurn> getRequests() {
     return requests;
   }
 
-  public void setRequests(List<SessionRequest> requests) {
+  public void setRequests(List<ConversationTurn> requests) {
     this.requests = requests;
   }
 

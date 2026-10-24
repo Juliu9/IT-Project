@@ -2,9 +2,9 @@ package com.gen3.recommenderagent.application;
 
 import static com.gen3.recommenderagent.domain.RecommendationPolicy.clampOrDefault;
 
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -22,7 +22,7 @@ public class RecommendationPager {
     this.recommendationWorkflow = recommendationWorkflow;
   }
 
-  public List<Recommendation> page(SessionRequest request, Session session) {
+  public List<Recommendation> page(ConversationDraft request, Session session) {
     int limit = clampOrDefault(request.getBookCount());
     List<Recommendation> page = takePending(session, limit);
     if (page.size() < limit) {

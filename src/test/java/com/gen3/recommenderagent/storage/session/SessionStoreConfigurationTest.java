@@ -9,8 +9,8 @@ import com.gen3.recommenderagent.application.RecommendationPager;
 import com.gen3.recommenderagent.application.RecommendationWorkflow;
 import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.Session;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.retrieval.plan.ExactFilterPolicy;
 import com.gen3.recommenderagent.storage.session.redis.RedisConfig;
@@ -34,6 +34,8 @@ class SessionStoreConfigurationTest {
               RedisConfig.class,
               RedisSessionRepository.class,
               SessionTransitionService.class,
+              com.gen3.recommenderagent.application.ConversationEngine.class,
+              com.gen3.recommenderagent.application.ConversationConfiguration.class,
               AudiobookRetrievalPlanner.class,
               ExactFilterPolicy.class,
               RecommendationPager.class)
@@ -101,7 +103,7 @@ class SessionStoreConfigurationTest {
     when(replacement.update(any(), any(), any()))
         .thenAnswer(
             invocation -> {
-              Function<Session, SessionRequest> change = invocation.getArgument(2);
+              Function<Session, ConversationDraft> change = invocation.getArgument(2);
               Session session = new Session();
               session.setSessionId(invocation.getArgument(0));
               session.setUserId(invocation.getArgument(1));
@@ -120,7 +122,7 @@ class SessionStoreConfigurationTest {
                   .doesNotHaveBean(RedisConnectionFactory.class)
                   .doesNotHaveBean(RedisTemplate.class);
               assertThat(context.getBean(SessionRepository.class)).isSameAs(replacement);
-              SessionRequest request = new SessionRequest();
+              ConversationDraft request = new ConversationDraft();
               request.setIntent(Intent.HELP);
               var result =
                   context

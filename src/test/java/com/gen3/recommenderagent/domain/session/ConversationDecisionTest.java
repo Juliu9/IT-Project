@@ -12,7 +12,7 @@ class ConversationDecisionTest {
 
   @Test
   void decisionPrecedenceIsClarificationThenActionThenResults() {
-    var request = new SessionRequest();
+    var request = new ConversationDraft();
     request.setIntent(Intent.HELP);
     request.setSearchClarificationRequired(true);
     request.setPreferenceClarificationRequired(true);
@@ -44,18 +44,18 @@ class ConversationDecisionTest {
   void decisionsAreNotPersistedAndOldSessionsStillResolveThem() throws Exception {
     var mapper = JsonMapper.builder().build();
     var session = new Session();
-    var request = new SessionRequest();
+    var request = new ConversationDraft();
     request.setIntent(Intent.MORE_RESULTS);
     request.setRecommendations(List.of());
     request.setNoMoreRecommendations(true);
     request.setDecision(ConversationDecision.NO_MORE_RESULTS);
-    session.getRequests().add(request);
+    session.getRequests().add(ConversationTurn.fromDraft(request));
     var before = mapper.writeValueAsString(session);
     assertThat(mapper.readTree(before).path("requests").get(0).has("decision")).isFalse();
     request.setDecision(null);
     assertThat(mapper.writeValueAsString(session)).isEqualTo(before);
     var restored = mapper.readValue(before, Session.class);
-    var repeat = new SessionRequest();
+    var repeat = new ConversationDraft();
     repeat.setIntent(Intent.REPEAT);
     var effective = policy.begin(restored, repeat);
     policy.finish(restored, effective, repeat);

@@ -13,13 +13,14 @@ import com.gen3.recommenderagent.application.RecommendationWorkflow;
 import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDecision;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ConversationTurn;
 import com.gen3.recommenderagent.domain.session.MustInclude;
 import com.gen3.recommenderagent.domain.session.MustNotInclude;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -33,13 +34,13 @@ class RefinementFlowTest {
       new RecommendationFlowTestSupport.InMemorySessionRepository();
   private final SessionTransitionService service = new SessionTransitionService(sessions, workflow);
 
-  private SessionRequest request(Intent intent) {
-    var request = new SessionRequest();
+  private ConversationDraft request(Intent intent) {
+    var request = new ConversationDraft();
     request.setIntent(intent);
     return request;
   }
 
-  private SessionRequest process(SessionRequest request) {
+  private ConversationTurn process(ConversationDraft request) {
     return service.process("session", "user", request);
   }
 
@@ -199,7 +200,7 @@ class RefinementFlowTest {
     var pending = request(Intent.RECOMMENDATION);
     pending.setPersonalised(true);
     pending.setPreferenceClarificationRequired(true);
-    session.setRequests(new java.util.ArrayList<>(List.of(pending)));
+    session.setRequests(new java.util.ArrayList<>(List.of(ConversationTurn.fromDraft(pending))));
     sessions.updateSession(session);
     var reply = request(Intent.RECOMMENDATION);
     var query = new SemanticQuery();

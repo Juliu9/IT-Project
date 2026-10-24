@@ -4,9 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.MustInclude;
 import com.gen3.recommenderagent.domain.session.MustNotInclude;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import java.util.List;
 import java.util.Set;
@@ -16,8 +16,8 @@ import org.junit.jupiter.params.provider.CsvSource;
 class ExactFilterCorrectionTest {
   private final ExactFilterPolicy planner = new ExactFilterPolicy();
 
-  private SessionRequest request(String field, String required, String forbidden) {
-    var request = new SessionRequest();
+  private ConversationDraft request(String field, String required, String forbidden) {
+    var request = new ConversationDraft();
     request.setIntent(Intent.REFINE);
     var include = new MustInclude();
     var exclude = new MustNotInclude();

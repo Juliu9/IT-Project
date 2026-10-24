@@ -163,17 +163,41 @@ generation remains in `embeddingjob`; the query embedding module only embeds liv
 
 | Component | Owns |
 | --- | --- |
-| `SessionTransitionService.process` | One ordered transition: cached paging, retrieval, and timing inside `SessionRepository.update` |
-| `ConversationState` | Semantic eligibility, context inheritance, queue invalidation, preference/count changes, history retention, and the conversation decision |
+| `SessionTransitionService.process` | The single `SessionRepository.update` load, transition, and commit boundary |
+| `ConversationEngine` | Resolve, validate, retrieve when needed, then complete the turn inside that boundary |
+| `ConversationState` | Validated handler dispatch and shared completion ordering |
+| `ClarificationResolver` | Short numeric/title replies, pending-question priority, and cancellation routing |
+| `SearchContextResolver` | Search inheritance, current preferences for new searches/refinements, and frozen preferences for MORE |
+| Preference, explanation, replay, and session-action handlers | Their own action rules; no independent saves or locks |
+| `ExactFilterPolicy` | Exact-filter parsing, inherited corrections and conflict validation |
+| `RecommendationPager` | Cached pages, refill, duplicate exclusion and displayed ranks |
+| `ConversationHistory` | Retained searches, metadata and replay snapshots |
 | `AiResponseGenerator` | Wording after the session commits |
 
-`SessionRequest.decision` is temporary and excluded from request JSON. Retained search criteria and
-recommendation details are persisted separately. Only the latest replay snapshot stores its decision
-in `Session.lastDecision`. The response implementation consumes the resolved decision for wording. Direct callers without a resolved decision use the same conversation-policy classifier;
-there is no second intent policy.
+The parser returns `SessionRequest`, which contains incoming intent, criteria and edit instructions.
+Provider responses and token usage stay inside the parser. A `ConversationDraft` holds working state
+inside the session transition. `SearchContext` groups explicit and effective criteria with frozen
+reading-preference evidence. Completion creates a `ConversationTurn` for response generation and
+session history; parser-only edit instructions are not persisted in that turn.
 
-The parser interface returns `SessionRequest` directly. Provider responses and token usage stay
-inside the parser implementation; the request pipeline does not depend on Spring AI response types.
+Redis retains the existing flat search-field names. Old snapshots with parser-only fields remain
+readable; those fields are ignored. Decisions remain outside serialized turns, in
+`Session.lastDecision`, so existing replay snapshots continue to work without flushing sessions.
+The response generator consumes the resolved decision; direct callers without one use the shared
+`ConversationRules` classifier.
+
+### Adding an intent
+
+1. Add its parser contract and normalization rules, including whether it can introduce search criteria.
+2. Implement or extend a `ConversationHandler` family and register its bean in
+   `ConversationConfiguration`. The dispatcher rejects duplicate or missing intent registrations.
+3. Keep action rules in that handler and reuse the filter, search, paging and history modules.
+   Handlers mutate the supplied session; the transaction service alone loads and commits it.
+4. Add behavior tests for fresh sessions, follow-ups and replay. Update response wording as needed.
+
+Simple actions share `SessionActionHandler`; a new intent does not require a new class by default.
+The parser schema and response vocabulary remain explicit contracts rather than dynamically
+loadable plugins.
 
 A pending result-count question also accepts short answers such as “3” and “three”. The resolved
 count updates the session without consuming the pending recommendation queue. An explicit count

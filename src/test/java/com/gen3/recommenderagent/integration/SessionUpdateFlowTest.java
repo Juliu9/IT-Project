@@ -11,8 +11,8 @@ import com.gen3.recommenderagent.api.RequestGateway;
 import com.gen3.recommenderagent.application.RecommendationWorkflow;
 import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.Recommendation;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.response.ResponseGenerator;
 import java.util.List;
@@ -24,7 +24,7 @@ class SessionUpdateFlowTest {
   void responseFailureLeavesRecommendationsCommitted() {
     var sessions = new RecommendationFlowTestSupport.InMemorySessionRepository();
     InputParser parser = mock(InputParser.class);
-    SessionRequest request = new SessionRequest();
+    ConversationDraft request = new ConversationDraft();
     request.setIntent(Intent.RECOMMENDATION);
     when(parser.parse("recommend a book")).thenReturn(request);
     RecommendationWorkflow workflow = mock(RecommendationWorkflow.class);

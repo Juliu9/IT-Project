@@ -1,5 +1,7 @@
 package com.gen3.recommenderagent.observability;
 
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ConversationTurn;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.time.Duration;
 import java.time.Instant;
@@ -119,15 +121,20 @@ public class RequestTelemetry {
       Map<String, AiOperationObserver.AiUsage> operations,
       Map<String, Object> retrieval) {}
 
-  public void complete(SessionRequest request) {
-    finish(request, "SUCCESS");
+  public void complete(ConversationTurn request) {
+    finish(request == null ? null : request.toDraft(), "SUCCESS");
   }
 
   public void fail(SessionRequest request) {
-    finish(request, "FAILURE");
+    var draft = new ConversationDraft();
+    if (request != null) {
+      draft.setRequestId(request.getRequestId());
+      draft.setIntent(request.getIntent());
+    }
+    finish(draft, "FAILURE");
   }
 
-  private void finish(SessionRequest request, String outcome) {
+  private void finish(ConversationDraft request, String outcome) {
     RequestState state = CURRENT.get();
     if (state == null) {
       return;

@@ -9,7 +9,7 @@ import com.gen3.recommenderagent.application.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDecision;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.ranker.RankingService;
@@ -157,7 +157,7 @@ class SolrBackendIntegrationTest {
     var gateway =
         new RequestGateway(
             raw -> {
-              var request = new SessionRequest();
+              var request = new ConversationDraft();
               request.setRawText(raw);
               request.setBookCount(2);
               request.setIntent(raw.equals("2 more") ? Intent.MORE_RESULTS : Intent.RECOMMENDATION);
@@ -190,12 +190,12 @@ class SolrBackendIntegrationTest {
       }
     }
     assertThat(sessions.getSession("session", user).getShownBooks()).hasSize(4);
-    var explain = new SessionRequest();
+    var explain = new ConversationDraft();
     explain.setIntent(Intent.EXPLAIN_RECOMMENDATION);
     var explanation = service.process("session", user, explain);
     assertThat(explanation.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
     assertThat(explanation.getRecommendations()).hasSize(2);
-    var fresh = new SessionRequest();
+    var fresh = new ConversationDraft();
     fresh.setIntent(Intent.RECOMMENDATION);
     assertThat(service.process("new-session", "new-user", fresh).getDecision())
         .isEqualTo(ConversationDecision.PREFERENCE_CLARIFICATION);

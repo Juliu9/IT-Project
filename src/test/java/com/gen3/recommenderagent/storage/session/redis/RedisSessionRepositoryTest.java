@@ -16,13 +16,14 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import com.gen3.recommenderagent.application.RecommendationWorkflow;
 import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ConversationTurn;
 import com.gen3.recommenderagent.domain.session.MustInclude;
 import com.gen3.recommenderagent.domain.session.MustNotInclude;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.storage.session.SessionBusyException;
 import com.gen3.recommenderagent.storage.session.SessionCommitException;
 import com.gen3.recommenderagent.storage.session.SessionRepository;
@@ -276,9 +277,9 @@ class RedisSessionRepositoryTest {
 
     Session session = session("session-request-test");
 
-    SessionRequest request = new SessionRequest();
+    ConversationDraft request = new ConversationDraft();
 
-    session.setRequests(List.of(request));
+    session.setRequests(new java.util.ArrayList<>(List.of(ConversationTurn.fromDraft(request))));
 
     write(session);
 
@@ -344,11 +345,11 @@ class RedisSessionRepositoryTest {
 
     semanticQuery.setKeywords(List.of("war", "Europe"));
 
-    SessionRequest request = new SessionRequest();
+    ConversationDraft request = new ConversationDraft();
 
     request.setPositiveSemanticQuery(semanticQuery);
 
-    session.setRequests(List.of(request));
+    session.setRequests(new java.util.ArrayList<>(List.of(ConversationTurn.fromDraft(request))));
 
     write(session);
 
@@ -380,11 +381,11 @@ class RedisSessionRepositoryTest {
     SemanticQuery negativeQuery = new SemanticQuery();
     negativeQuery.setGenres(List.of("romance"));
 
-    SessionRequest request = new SessionRequest();
+    ConversationDraft request = new ConversationDraft();
 
     request.setNegativeSemanticQuery(negativeQuery);
 
-    session.setRequests(List.of(request));
+    session.setRequests(new java.util.ArrayList<>(List.of(ConversationTurn.fromDraft(request))));
 
     write(session);
 
@@ -415,19 +416,19 @@ class RedisSessionRepositoryTest {
     mustNotInclude.setPublicationYear("before 2000");
     mustNotInclude.setSource("Legacy");
 
-    SessionRequest request = new SessionRequest();
+    ConversationDraft request = new ConversationDraft();
 
     request.setBookCount(5);
     request.setMustInclude(mustInclude);
     request.setMustNotInclude(mustNotInclude);
 
-    session.setRequests(List.of(request));
+    session.setRequests(new java.util.ArrayList<>(List.of(ConversationTurn.fromDraft(request))));
 
     write(session);
 
     Session retrieved = read("constraints-test", USER_ID);
 
-    SessionRequest retrievedRequest = retrieved.getRequests().get(0);
+    ConversationTurn retrievedRequest = retrieved.getRequests().get(0);
     assertEquals(5, retrievedRequest.getBookCount());
     assertEquals("under 10 hours", retrievedRequest.getMustInclude().getDuration());
     assertEquals("English", retrievedRequest.getMustInclude().getLanguage());
@@ -452,11 +453,11 @@ class RedisSessionRepositoryTest {
             new Recommendation("book1", 1, 10.0, "Book One"),
             new Recommendation("book2", 1, 20.0, "Book Two"));
 
-    SessionRequest request = new SessionRequest();
+    ConversationDraft request = new ConversationDraft();
 
     request.setRecommendations(recommendations);
 
-    session.setRequests(List.of(request));
+    session.setRequests(new java.util.ArrayList<>(List.of(ConversationTurn.fromDraft(request))));
 
     write(session);
 
@@ -487,15 +488,15 @@ class RedisSessionRepositoryTest {
 
     Session session = session("null-test");
 
-    SessionRequest request = new SessionRequest();
+    ConversationDraft request = new ConversationDraft();
 
-    session.setRequests(List.of(request));
+    session.setRequests(new java.util.ArrayList<>(List.of(ConversationTurn.fromDraft(request))));
 
     write(session);
 
     Session retrieved = read("null-test", USER_ID);
 
-    SessionRequest retrievedRequest = retrieved.getRequests().get(0);
+    ConversationTurn retrievedRequest = retrieved.getRequests().get(0);
 
     assertNull(retrievedRequest.getPositiveSemanticQuery());
     assertNull(retrievedRequest.getNegativeSemanticQuery());
@@ -519,17 +520,21 @@ class RedisSessionRepositoryTest {
 
     semanticQuery.setTopics(List.of("WWI"));
 
-    SessionRequest request = new SessionRequest();
+    ConversationDraft request = new ConversationDraft();
 
     request.setPositiveSemanticQuery(semanticQuery);
 
-    session.setRequests(List.of(request));
+    session.setRequests(new java.util.ArrayList<>(List.of(ConversationTurn.fromDraft(request))));
 
     // First write
     write(session);
 
     // Modify session
-    semanticQuery.setTopics(List.of("WWI", "Vietnam War"));
+    session
+        .getRequests()
+        .get(0)
+        .getPositiveSemanticQuery()
+        .setTopics(List.of("WWI", "Vietnam War"));
 
     // Second write
     write(session);
@@ -815,9 +820,9 @@ class RedisSessionRepositoryTest {
         "cached-pages",
         USER_ID,
         session -> {
-          SessionRequest previous = new SessionRequest();
+          ConversationDraft previous = new ConversationDraft();
           previous.setIntent(Intent.RECOMMENDATION);
-          session.getRequests().add(previous);
+          session.getRequests().add(ConversationTurn.fromDraft(previous));
           session.setPendingRecommendations(
               IntStream.rangeClosed(1, 20)
                   .mapToObj(
@@ -850,9 +855,9 @@ class RedisSessionRepositoryTest {
             new RedisSessionRepository(redisTemplate, stringRedisTemplate), workflow);
     ExecutorService worker = Executors.newSingleThreadExecutor();
     try {
-      SessionRequest more = new SessionRequest();
+      ConversationDraft more = new ConversationDraft();
       more.setIntent(Intent.MORE_RESULTS);
-      Future<SessionRequest> firstPage =
+      Future<ConversationTurn> firstPage =
           worker.submit(() -> first.process("cached-pages", USER_ID, more));
       assertTrue(consumed.await(5, TimeUnit.SECONDS));
       assertThrows(SessionBusyException.class, () -> second.process("cached-pages", USER_ID, more));

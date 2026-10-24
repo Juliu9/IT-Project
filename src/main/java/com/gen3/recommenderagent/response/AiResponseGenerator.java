@@ -4,9 +4,9 @@ import static com.gen3.recommenderagent.domain.RecommendationPolicy.MAX_BOOK_COU
 
 import com.gen3.recommenderagent.domain.session.ConversationDecision;
 import com.gen3.recommenderagent.domain.session.ConversationState;
+import com.gen3.recommenderagent.domain.session.ConversationTurn;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import java.util.Arrays;
@@ -60,7 +60,7 @@ public class AiResponseGenerator implements ResponseGenerator {
    * @return A natural language string tailored for the end user.
    */
   @Override
-  public String generate(List<Recommendation> recommendations, SessionRequest currentRequest) {
+  public String generate(List<Recommendation> recommendations, ConversationTurn currentRequest) {
 
     // if both inputs are missing, the method returns a polite error message instead
     // of crashing
@@ -71,7 +71,8 @@ public class AiResponseGenerator implements ResponseGenerator {
     var decision =
         currentRequest != null && currentRequest.getDecision() != null
             ? currentRequest.getDecision()
-            : ConversationState.decisionFor(recommendations, currentRequest);
+            : ConversationState.decisionFor(
+                recommendations, currentRequest == null ? null : currentRequest.toDraft());
     if (decision == ConversationDecision.SEARCH_CLARIFICATION) {
       RequestTelemetry.responseMode("SEARCH_CLARIFICATION");
       return "What kind of audiobook would you like?";
@@ -183,7 +184,7 @@ public class AiResponseGenerator implements ResponseGenerator {
 
   // Turns structure Java objects into a text prompt
   String compilePrompt(
-      List<Recommendation> recommendations, SessionRequest currentRequest, String limitNotice) {
+      List<Recommendation> recommendations, ConversationTurn currentRequest, String limitNotice) {
     // Extracts the original user text if available
     String requestSummary =
         (currentRequest != null && currentRequest.getRawText() != null)
@@ -222,7 +223,7 @@ public class AiResponseGenerator implements ResponseGenerator {
             recommendationsSummary);
   }
 
-  private String resolvedCriteria(SessionRequest request) {
+  private String resolvedCriteria(ConversationTurn request) {
     if (request == null) {
       return "";
     }
@@ -287,7 +288,7 @@ public class AiResponseGenerator implements ResponseGenerator {
 
   // Creates a clean message when AI is not used
   private String buildHumanReadableResponse(
-      List<Recommendation> recommendations, SessionRequest currentRequest) {
+      List<Recommendation> recommendations, ConversationTurn currentRequest) {
     StringBuilder response = new StringBuilder();
     response.append("Here are a few recommendations");
 
@@ -352,7 +353,7 @@ public class AiResponseGenerator implements ResponseGenerator {
     return recommendations.subList(0, MAX_BOOK_COUNT);
   }
 
-  private String limitNotice(SessionRequest request) {
+  private String limitNotice(ConversationTurn request) {
     if (request == null
         || request.getBookCount() == null
         || request.getBookCount() <= MAX_BOOK_COUNT
@@ -364,7 +365,7 @@ public class AiResponseGenerator implements ResponseGenerator {
   }
 
   private String generateOutcomeResponse(
-      ConversationDecision decision, SessionRequest currentRequest) {
+      ConversationDecision decision, ConversationTurn currentRequest) {
     return switch (decision) {
       case COUNT_CLARIFICATION -> "How many recommendations would you like at a time?";
       case COUNT_CHANGED -> {
@@ -398,7 +399,7 @@ public class AiResponseGenerator implements ResponseGenerator {
     };
   }
 
-  private String explanationClarification(SessionRequest request) {
+  private String explanationClarification(ConversationTurn request) {
     List<Recommendation> page = request.getRecommendations();
     String titles =
         page.stream()
@@ -460,7 +461,7 @@ public class AiResponseGenerator implements ResponseGenerator {
   }
 
   // Safe node output
-  private String generateFallbackResponse(SessionRequest currentRequest) {
+  private String generateFallbackResponse(ConversationTurn currentRequest) {
     if (currentRequest != null
         && currentRequest.getMustInclude() != null
         && currentRequest.getMustInclude().getPublicationYear() != null) {

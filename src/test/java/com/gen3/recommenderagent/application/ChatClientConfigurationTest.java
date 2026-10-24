@@ -59,7 +59,9 @@ class ChatClientConfigurationTest {
               assertThat(
                       context
                           .getBean(AiResponseGenerator.class)
-                          .generate(List.of(recommendation), parsed))
+                          .generate(
+                              List.of(recommendation),
+                              new com.gen3.recommenderagent.domain.session.ConversationTurn()))
                   .isEqualTo("Try this audiobook.");
               shared.build().prompt().user("default").call().chatResponse();
               assertThat(requestedModels)

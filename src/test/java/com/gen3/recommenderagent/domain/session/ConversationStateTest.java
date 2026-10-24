@@ -21,11 +21,13 @@ class ConversationStateTest {
   @MethodSource("followUpIntents")
   void resolvesFollowUpsFromTheLatestRetainedSearch(Intent intent) {
     Session session = new Session();
-    ConversationState.retainRequest(session, searchRequest(Intent.RECOMMENDATION, "fantasy"));
-    ConversationState.retainRequest(session, searchRequest(Intent.RECOMMENDATION, "history"));
-    SessionRequest request = request(intent);
+    ConversationState.retainRequest(
+        session, ConversationTurn.fromDraft(searchRequest(Intent.RECOMMENDATION, "fantasy")));
+    ConversationState.retainRequest(
+        session, ConversationTurn.fromDraft(searchRequest(Intent.RECOMMENDATION, "history")));
+    ConversationDraft request = request(intent);
 
-    SessionRequest effective = conversationState.resolve(session, request);
+    ConversationDraft effective = conversationState.resolve(session, request);
 
     assertEquals(List.of("history"), effective.getPositiveSemanticQuery().getTopics());
     assertNull(request.getPositiveSemanticQuery());
@@ -41,14 +43,14 @@ class ConversationStateTest {
     defaults.setPublicationYear("before 2000");
     preferences.setMustInclude(defaults);
     session.setPreferences(preferences);
-    SessionRequest request = request(Intent.RECOMMENDATION);
+    ConversationDraft request = request(Intent.RECOMMENDATION);
     request.setPositiveSemanticQuery(queryWithGenres("mystery"));
     MustInclude explicit = new MustInclude();
     explicit.setLanguage("French");
     explicit.setPublicationYear("after 2020");
     request.setMustInclude(explicit);
 
-    SessionRequest effective = conversationState.resolve(session, request);
+    ConversationDraft effective = conversationState.resolve(session, request);
 
     assertEquals(List.of("fantasy", "mystery"), effective.getPositiveSemanticQuery().getGenres());
     assertEquals("French", effective.getMustInclude().getLanguage());
@@ -59,14 +61,14 @@ class ConversationStateTest {
   @Test
   void turnsAValidPreferenceReplyIntoAPersonalisedRecommendationWithoutMutatingTheSession() {
     Session session = new Session();
-    SessionRequest pending = request(Intent.UNKNOWN);
+    ConversationDraft pending = request(Intent.UNKNOWN);
     pending.setPersonalised(true);
     pending.setPreferenceClarificationRequired(true);
-    ConversationState.retainRequest(session, pending);
-    SessionRequest reply = request(Intent.REFINE);
+    ConversationState.retainRequest(session, ConversationTurn.fromDraft(pending));
+    ConversationDraft reply = request(Intent.REFINE);
     reply.setPositiveSemanticQuery(queryWithGenres("fantasy"));
 
-    SessionRequest effective = conversationState.resolve(session, reply);
+    ConversationDraft effective = conversationState.resolve(session, reply);
 
     assertEquals(Intent.RECOMMENDATION, effective.getIntent());
     assertTrue(effective.isPersonalised());
@@ -79,20 +81,20 @@ class ConversationStateTest {
   void leavesUnrelatedRequestsPendingAndResolvesBookCountWithoutMutatingTheSession() {
     Session session = new Session();
     session.setBookCount(3);
-    SessionRequest pending = request(Intent.UNKNOWN);
+    ConversationDraft pending = request(Intent.UNKNOWN);
     pending.setPersonalised(true);
     pending.setPreferenceClarificationRequired(true);
-    ConversationState.retainRequest(session, pending);
+    ConversationState.retainRequest(session, ConversationTurn.fromDraft(pending));
 
-    SessionRequest help = conversationState.resolve(session, request(Intent.HELP));
-    SessionRequest recommendation =
+    ConversationDraft help = conversationState.resolve(session, request(Intent.HELP));
+    ConversationDraft recommendation =
         conversationState.resolve(session, request(Intent.RECOMMENDATION));
 
     assertEquals(Intent.HELP, help.getIntent());
     assertTrue(session.isAwaitingPersonalisedPreferences());
     assertEquals(3, recommendation.getBookCount());
     assertEquals(3, session.getBookCount());
-    assertFalse(ConversationState.isSearchContext(request(Intent.UPDATE_PREFERENCES)));
+    assertFalse(ConversationRules.isSearchContext(request(Intent.UPDATE_PREFERENCES)));
   }
 
   @ParameterizedTest
@@ -122,8 +124,10 @@ class ConversationStateTest {
   @Test
   void helpWithCriteriaDoesNotReplaceTheRetainedSearch() {
     var session = new Session();
-    ConversationState.retainRequest(session, searchRequest(Intent.RECOMMENDATION, "romance"));
-    ConversationState.retainRequest(session, searchRequest(Intent.HELP, "horror"));
+    ConversationState.retainRequest(
+        session, ConversationTurn.fromDraft(searchRequest(Intent.RECOMMENDATION, "romance")));
+    ConversationState.retainRequest(
+        session, ConversationTurn.fromDraft(searchRequest(Intent.HELP, "horror")));
     var effective = conversationState.resolve(session, request(Intent.MORE_RESULTS));
     assertEquals(List.of("romance"), effective.getPositiveSemanticQuery().getTopics());
   }
@@ -135,7 +139,7 @@ class ConversationStateTest {
     var pending = request(Intent.RECOMMENDATION);
     pending.setPreferenceClarificationRequired(true);
     pending.setPersonalised(true);
-    ConversationState.retainRequest(session, pending);
+    ConversationState.retainRequest(session, ConversationTurn.fromDraft(pending));
     var preferences = new SessionPreferences();
     session.setPreferences(preferences);
     session.setShownBooks(List.of("saved-book"));
@@ -159,7 +163,7 @@ class ConversationStateTest {
     var session = new Session();
     var pending = request(Intent.RECOMMENDATION);
     pending.setPreferenceClarificationRequired(true);
-    ConversationState.retainRequest(session, pending);
+    ConversationState.retainRequest(session, ConversationTurn.fromDraft(pending));
     var reply = request(Intent.UNKNOWN);
     reply.setRawText("huh?");
     assertEquals(Intent.UNKNOWN, conversationState.begin(session, reply).getIntent());
@@ -170,14 +174,14 @@ class ConversationStateTest {
     return Stream.of(Arguments.of(Intent.REFINE), Arguments.of(Intent.MORE_RESULTS));
   }
 
-  private SessionRequest request(Intent intent) {
-    SessionRequest request = new SessionRequest();
+  private ConversationDraft request(Intent intent) {
+    ConversationDraft request = new ConversationDraft();
     request.setIntent(intent);
     return request;
   }
 
-  private SessionRequest searchRequest(Intent intent, String topic) {
-    SessionRequest request = request(intent);
+  private ConversationDraft searchRequest(Intent intent, String topic) {
+    ConversationDraft request = request(intent);
     request.setPositiveSemanticQuery(queryWithTopics(topic));
     return request;
   }
@@ -197,24 +201,27 @@ class ConversationStateTest {
   @Test
   void keepsOnlyTheLatestSearchAndLatestNonSearchRequest() {
     Session session = new Session();
-    SessionRequest firstSearch = searchRequest(Intent.RECOMMENDATION, "fantasy");
-    SessionRequest help = new SessionRequest();
-    SessionRequest latestSearch = searchRequest(Intent.RECOMMENDATION, "history");
+    ConversationDraft firstSearch = searchRequest(Intent.RECOMMENDATION, "fantasy");
+    ConversationDraft help = new ConversationDraft();
+    ConversationDraft latestSearch = searchRequest(Intent.RECOMMENDATION, "history");
 
-    ConversationState.retainRequest(session, firstSearch);
-    ConversationState.retainRequest(session, help);
-    ConversationState.retainRequest(session, latestSearch);
+    ConversationState.retainRequest(session, ConversationTurn.fromDraft(firstSearch));
+    ConversationState.retainRequest(session, ConversationTurn.fromDraft(help));
+    ConversationState.retainRequest(session, ConversationTurn.fromDraft(latestSearch));
 
-    assertEquals(List.of(help, latestSearch), session.getRequests());
+    assertEquals(2, session.getRequests().size());
+    assertEquals(help.getIntent(), session.getRequests().get(0).getIntent());
+    assertEquals(
+        List.of("history"), session.getRequests().get(1).getPositiveSemanticQuery().getTopics());
   }
 
   @Test
   void derivesPendingPersonalisedPreferencesFromRetainedRequests() {
     Session session = new Session();
-    SessionRequest pending = new SessionRequest();
+    ConversationDraft pending = new ConversationDraft();
     pending.setPreferenceClarificationRequired(true);
 
-    ConversationState.retainRequest(session, pending);
+    ConversationState.retainRequest(session, ConversationTurn.fromDraft(pending));
     assertTrue(session.isAwaitingPersonalisedPreferences());
 
     session.clearHistory();

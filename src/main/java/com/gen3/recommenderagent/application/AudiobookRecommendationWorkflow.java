@@ -3,9 +3,9 @@ package com.gen3.recommenderagent.application;
 import static com.gen3.recommenderagent.domain.RecommendationPolicy.RECOMMENDATION_BATCH_SIZE;
 
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectors;
 import com.gen3.recommenderagent.embedding.VectorMath;
@@ -51,7 +51,7 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
 
   /** Builds retrieval text, lets the retriever select its mode, and ranks the candidates. */
   @Override
-  public List<Recommendation> recommend(SessionRequest request, Session session) {
+  public List<Recommendation> recommend(ConversationDraft request, Session session) {
     UserPreferenceEmbedding preferences;
     if (request != null
         && request.getIntent() == Intent.MORE_RESULTS
@@ -99,7 +99,7 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
   }
 
   private SemanticQueryVectors retrievalVectors(
-      SessionRequest request, UserPreferenceEmbedding preferences) {
+      ConversationDraft request, UserPreferenceEmbedding preferences) {
     if (request == null || !request.isPersonalised()) {
       return semanticQueryVectorService.create(request);
     }

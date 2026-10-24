@@ -11,9 +11,10 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ConversationTurn;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.storage.session.SessionCommitException;
 import com.gen3.recommenderagent.storage.session.SessionRepository;
 import java.util.List;
@@ -27,7 +28,7 @@ class SessionTransitionServiceTest {
     SessionRepository sessions = mock(SessionRepository.class);
     RecommendationWorkflow workflow = mock(RecommendationWorkflow.class);
     Session session = new Session();
-    SessionRequest request = request(Intent.RECOMMENDATION);
+    ConversationDraft request = request(Intent.RECOMMENDATION);
     List<Recommendation> recommendations =
         List.of(
             new Recommendation("book-1", 1, 0.9, "First"),
@@ -36,7 +37,7 @@ class SessionTransitionServiceTest {
     runUpdate(sessions, session);
     when(workflow.recommend(any(), eq(session))).thenReturn(recommendations);
 
-    SessionRequest result = service(sessions, workflow).process("session-1", "user-1", request);
+    ConversationTurn result = service(sessions, workflow).process("session-1", "user-1", request);
 
     assertEquals(
         recommendations.stream().map(Recommendation::getBookId).toList(),
@@ -57,12 +58,12 @@ class SessionTransitionServiceTest {
     SessionRepository sessions = mock(SessionRepository.class);
     RecommendationWorkflow workflow = mock(RecommendationWorkflow.class);
     Session session = new Session();
-    SessionRequest request = request(Intent.CHANGE_COUNT);
+    ConversationDraft request = request(Intent.CHANGE_COUNT);
     request.setBookCount(2);
 
     runUpdate(sessions, session);
 
-    SessionRequest result = service(sessions, workflow).process("session-2", "user-2", request);
+    ConversationTurn result = service(sessions, workflow).process("session-2", "user-2", request);
 
     assertEquals(
         com.gen3.recommenderagent.domain.session.ConversationDecision.COUNT_CHANGED,
@@ -78,13 +79,13 @@ class SessionTransitionServiceTest {
     SessionRepository sessions = mock(SessionRepository.class);
     RecommendationWorkflow workflow = mock(RecommendationWorkflow.class);
     Session session = new Session();
-    SessionRequest request = request(Intent.RECOMMENDATION);
+    ConversationDraft request = request(Intent.RECOMMENDATION);
 
     when(workflow.recommend(any(), eq(session))).thenReturn(List.of());
     when(sessions.update(any(), any(), any()))
         .thenAnswer(
             invocation -> {
-              Function<Session, SessionRequest> change = invocation.getArgument(2);
+              Function<Session, ConversationDraft> change = invocation.getArgument(2);
               change.apply(session);
               throw new SessionCommitException();
             });
@@ -101,8 +102,8 @@ class SessionTransitionServiceTest {
     return new SessionTransitionService(sessions, workflow);
   }
 
-  private SessionRequest request(Intent intent) {
-    SessionRequest request = new SessionRequest();
+  private ConversationDraft request(Intent intent) {
+    ConversationDraft request = new ConversationDraft();
     request.setIntent(intent);
     return request;
   }
@@ -111,7 +112,7 @@ class SessionTransitionServiceTest {
     when(sessions.update(any(), any(), any()))
         .thenAnswer(
             invocation -> {
-              Function<Session, SessionRequest> change = invocation.getArgument(2);
+              Function<Session, ConversationDraft> change = invocation.getArgument(2);
               return change.apply(session);
             });
   }

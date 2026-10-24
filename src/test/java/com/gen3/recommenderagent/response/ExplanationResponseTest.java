@@ -9,9 +9,10 @@ import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDecision;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ConversationTurn;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -32,7 +33,8 @@ class ExplanationResponseTest {
     var request = request();
     var books = List.of(book(true), book(false));
     var generator = new AiResponseGenerator(client, AiOperationObserver.noop());
-    assertThat(generator.generate(books, request)).isEqualTo("An explanation.");
+    assertThat(generator.generate(books, ConversationTurn.fromDraft(request)))
+        .isEqualTo("An explanation.");
     var system = ArgumentCaptor.forClass(String.class);
     verify(client.prompt()).system(system.capture());
     assertThat(system.getValue())
@@ -44,7 +46,7 @@ class ExplanationResponseTest {
             "Keep the actual ranks",
             "only when readingPreferencesUsed=true",
             "Never infer reasons from numerical scores");
-    String prompt = generator.compilePrompt(books, request, "");
+    String prompt = generator.compilePrompt(books, ConversationTurn.fromDraft(request), "");
     assertThat(prompt)
         .contains("fantasy", "readingPreferencesUsed=true", "readingPreferencesUsed=false");
   }
@@ -58,13 +60,16 @@ class ExplanationResponseTest {
     var unknown = book(false);
     unknown.setShortDescription(null);
     var generator = new AiResponseGenerator(client, AiOperationObserver.noop());
-    String response = generator.generate(List.of(known, unknown), request());
+    String response =
+        generator.generate(List.of(known, unknown), ConversationTurn.fromDraft(request()));
     assertThat(response)
         .contains(
             "Your reading preferences were used",
             "school of magic",
             "not enough description information");
-    assertThat(new AiResponseGenerator(null).generate(List.of(unknown), request()))
+    assertThat(
+            new AiResponseGenerator(null)
+                .generate(List.of(unknown), ConversationTurn.fromDraft(request())))
         .doesNotContain("Your reading preferences were used");
   }
 
@@ -80,7 +85,7 @@ class ExplanationResponseTest {
                             "4. **Harry Potter** (rank 4): A school of magic fits your fantasy request.")))));
     String result =
         new AiResponseGenerator(client, AiOperationObserver.noop())
-            .generate(List.of(book(false)), request());
+            .generate(List.of(book(false)), ConversationTurn.fromDraft(request()));
     assertThat(result).isEqualTo("4. Harry Potter A school of magic fits your fantasy request.");
   }
 
@@ -107,19 +112,20 @@ class ExplanationResponseTest {
                 })
             .toList();
     var generator = new AiResponseGenerator(client, AiOperationObserver.noop());
-    String result = generator.generate(books, request());
+    String result = generator.generate(books, ConversationTurn.fromDraft(request()));
     assertThat(result.split("\\s+")).hasSizeLessThanOrEqualTo(150);
     assertThat(result).doesNotContain("*", "(", ")", "verbose");
     for (int rank = 1; rank <= 5; rank++) {
       assertThat(result).contains("Number " + rank + ", Title " + rank);
     }
-    String offline = new AiResponseGenerator(null).generate(books, request());
+    String offline =
+        new AiResponseGenerator(null).generate(books, ConversationTurn.fromDraft(request()));
     assertThat(offline).isEqualTo(result);
     assertThat(offline).contains(". Number 2,", ". Number 5,").endsWith(".");
   }
 
-  private SessionRequest request() {
-    var request = new SessionRequest();
+  private ConversationDraft request() {
+    var request = new ConversationDraft();
     request.setIntent(Intent.EXPLAIN_RECOMMENDATION);
     request.setDecision(ConversationDecision.EXPLANATION);
     request.setRawText("Why this book?");

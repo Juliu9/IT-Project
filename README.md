@@ -46,8 +46,9 @@ ask for clarification before searching and preserve the saved search.
 
 `SessionTransitionService` loads or creates the session through `SessionRepository.update`.
 The Redis adapter locks that user/session pair so separate server instances cannot update it
-at the same time. `ConversationState` then resolves the request against saved search criteria,
-preferences, and history, and discards cached recommendations when the search changes.
+at the same time. `ConversationEngine` dispatches the request through `ConversationState` to
+handlers for search, preferences, explanations, replay, or simple session actions. These resolve
+saved criteria and history; a changed search discards obsolete cached recommendations.
 
 Some intents need no search: help, count changes, clearing history, and repeat are handled from
 conversation state. Explanations also reuse the latest recommendation page. “More” without an
@@ -110,8 +111,9 @@ written. The Redis adapter checks lock ownership and session version before savi
 locks, and refreshes the session's 24-hour expiry. A failed transition leaves the saved queue
 unchanged; response generation runs after the lock is released.
 
-`ConversationState` supplies a `ConversationDecision` describing the resolved action. The session
-saves the latest resolved request and decision so a repeat can replay it without reapplying changes.
+The completed `ConversationTurn` carries a `ConversationDecision` describing the resolved action.
+It is separate from the parser’s incoming `SessionRequest`. The session saves the latest turn and
+decision so a repeat can replay it without reapplying changes.
 `AiResponseGenerator` uses built-in wording for actions and clarification, or asks its separate
 chat client to explain the selected books using the resolved criteria and stored short descriptions.
 The response model does not choose the books. If it fails, built-in wording returns the selected

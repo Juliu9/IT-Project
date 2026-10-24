@@ -13,13 +13,14 @@ import static org.mockito.Mockito.when;
 import com.gen3.recommenderagent.application.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ConversationTurn;
 import com.gen3.recommenderagent.domain.session.MustInclude;
 import com.gen3.recommenderagent.domain.session.MustNotInclude;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.ranker.Ranker;
@@ -78,7 +79,7 @@ class PersonalisedRecommendationFlowTest {
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {"Recommend an audiobook", "Recommend an audiobook for me"})
   void genericRequestForNewUserAsksForTasteWithoutSearching(String text) {
-    var request = new SessionRequest();
+    var request = new ConversationDraft();
     request.setIntent(Intent.RECOMMENDATION);
     request.setRawText(text);
     var result = process(request);
@@ -95,7 +96,7 @@ class PersonalisedRecommendationFlowTest {
     when(users.findEmbeddingByUserId("user"))
         .thenReturn(
             Optional.of(new UserPreferenceEmbedding("user", new float[] {1, 0}, new float[0])));
-    var request = new SessionRequest();
+    var request = new ConversationDraft();
     request.setIntent(Intent.RECOMMENDATION);
     request.setRawText("Recommend an audiobook");
     var result = process(request);
@@ -108,7 +109,7 @@ class PersonalisedRecommendationFlowTest {
   @Test
   void cancellationSurvivesSessionReloadAndDoesNotRestartThePreferenceQuestion() {
     process(personalisedRequest());
-    var cancel = new SessionRequest();
+    var cancel = new ConversationDraft();
     cancel.setIntent(Intent.UNKNOWN);
     cancel.setRawText("never mind");
     var result = process(cancel);
@@ -118,7 +119,7 @@ class PersonalisedRecommendationFlowTest {
         .contains("cancelled");
     assertThat(sessions.getSession("session", "user").isAwaitingPersonalisedPreferences())
         .isFalse();
-    var unknown = new SessionRequest();
+    var unknown = new ConversationDraft();
     unknown.setIntent(Intent.UNKNOWN);
     assertThat(process(unknown).getIntent()).isEqualTo(Intent.UNKNOWN);
     verifyNoInteractions(books, embeddingModel, ranker);
@@ -131,7 +132,7 @@ class PersonalisedRecommendationFlowTest {
             Optional.of(
                 new UserPreferenceEmbedding("user", new float[] {1, 0}, new float[] {0, 1})));
 
-    SessionRequest result = process(personalisedRequest());
+    ConversationTurn result = process(personalisedRequest());
 
     ArgumentCaptor<float[]> vector = ArgumentCaptor.forClass(float[].class);
     verify(books).searchSemantic(vector.capture(), eq(AudiobookFilters.empty()), eq(50));
@@ -148,7 +149,7 @@ class PersonalisedRecommendationFlowTest {
     when(users.findEmbeddingByUserId("user"))
         .thenReturn(
             Optional.of(new UserPreferenceEmbedding("user", new float[0], new float[] {1, 0})));
-    SessionRequest request = personalisedRequest();
+    ConversationDraft request = personalisedRequest();
     MustInclude filter = new MustInclude();
     filter.setLanguage("English");
     request.setMustInclude(filter);
@@ -184,7 +185,7 @@ class PersonalisedRecommendationFlowTest {
     blank.setGenres(List.of(" "));
     session.getPreferences().setPositiveSemanticQuery(blank);
     sessions.updateSession(session);
-    SessionRequest first = process(personalisedRequest());
+    ConversationTurn first = process(personalisedRequest());
 
     assertThat(first.getRecommendations()).isEmpty();
     assertThat(responseGenerator.generate(first.getRecommendations(), first))
@@ -199,14 +200,14 @@ class PersonalisedRecommendationFlowTest {
         mapper.readValue(
             mapper.writeValueAsString(sessions.getSession("session", "user")), Session.class);
     sessions.updateSession(restored);
-    SessionRequest answer = new SessionRequest();
+    ConversationDraft answer = new ConversationDraft();
     answer.setIntent(Intent.REFINE);
     SemanticQuery taste = new SemanticQuery();
     taste.setGenres(List.of("fantasy"));
     taste.setAuthors(List.of("Ursula Le Guin"));
     answer.setPositiveSemanticQuery(taste);
 
-    SessionRequest result = process(answer);
+    ConversationTurn result = process(answer);
 
     assertThat(result.getIntent()).isEqualTo(Intent.RECOMMENDATION);
     assertThat(result.getRecommendations()).hasSize(1);
@@ -226,11 +227,11 @@ class PersonalisedRecommendationFlowTest {
     SemanticQuery earlier = new SemanticQuery();
     earlier.setGenres(List.of("fantasy"));
     session.getPreferences().setPositiveSemanticQuery(earlier);
-    SessionRequest pending = personalisedRequest();
+    ConversationDraft pending = personalisedRequest();
     pending.setPreferenceClarificationRequired(true);
-    session.getRequests().add(pending);
+    session.getRequests().add(ConversationTurn.fromDraft(pending));
     sessions.updateSession(session);
-    SessionRequest answer = new SessionRequest();
+    ConversationDraft answer = new ConversationDraft();
     answer.setIntent(Intent.REFINE);
     SemanticQuery taste = new SemanticQuery();
     taste.setAuthors(List.of("Ursula Le Guin"));
@@ -242,7 +243,7 @@ class PersonalisedRecommendationFlowTest {
         .containsExactly("fantasy");
     assertThat(session.getPreferences().getPositiveSemanticQuery().getAuthors())
         .containsExactly("Ursula Le Guin");
-    SessionRequest more = new SessionRequest();
+    ConversationDraft more = new ConversationDraft();
     more.setIntent(Intent.MORE_RESULTS);
     assertThat(process(more).isPersonalised()).isTrue();
   }
@@ -282,11 +283,11 @@ class PersonalisedRecommendationFlowTest {
   @Test
   void unrelatedHelpKeepsPendingAndClearHistoryCancelsIt() {
     process(personalisedRequest());
-    SessionRequest help = new SessionRequest();
+    ConversationDraft help = new ConversationDraft();
     help.setIntent(Intent.HELP);
     assertThat(process(help).getIntent()).isEqualTo(Intent.HELP);
     assertThat(sessions.getSession("session", "user").isAwaitingPersonalisedPreferences()).isTrue();
-    SessionRequest clear = new SessionRequest();
+    ConversationDraft clear = new ConversationDraft();
     clear.setIntent(Intent.CLEAR_HISTORY);
     process(clear);
     assertThat(sessions.getSession("session", "user").isAwaitingPersonalisedPreferences())
@@ -305,7 +306,7 @@ class PersonalisedRecommendationFlowTest {
                 List.of(
                     new Embedding(new float[] {0, 1, 0}, 0),
                     new Embedding(new float[] {0, 0, 1}, 1))));
-    SessionRequest request = personalisedRequest();
+    ConversationDraft request = personalisedRequest();
     SemanticQuery positive = new SemanticQuery();
     positive.setTopics(List.of("deserts"));
     SemanticQuery negative = new SemanticQuery();
@@ -320,7 +321,7 @@ class PersonalisedRecommendationFlowTest {
     request.setMustInclude(include);
     request.setMustNotInclude(exclude);
 
-    SessionRequest result = process(request);
+    ConversationTurn result = process(request);
 
     ArgumentCaptor<float[]> vector = ArgumentCaptor.forClass(float[].class);
     ArgumentCaptor<AudiobookFilters> filters = ArgumentCaptor.forClass(AudiobookFilters.class);
@@ -336,12 +337,12 @@ class PersonalisedRecommendationFlowTest {
     assertThat(result.getRecommendations()).hasSize(1);
   }
 
-  private SessionRequest process(SessionRequest request) {
+  private ConversationTurn process(ConversationDraft request) {
     return application.process("session", "user", request);
   }
 
-  private SessionRequest personalisedRequest() {
-    SessionRequest request = new SessionRequest();
+  private ConversationDraft personalisedRequest() {
+    ConversationDraft request = new ConversationDraft();
     request.setIntent(Intent.RECOMMENDATION);
     request.setPersonalised(true);
     request.setRawText("Give me books I would like");

@@ -10,7 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ConversationTurn;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.gen3.recommenderagent.response.ResponseGenerator;
@@ -33,10 +34,11 @@ class RequestGatewayTest {
 
   @Test
   void standardApiDoesNotBuildOrCollectDemoMetrics() throws Exception {
-    var parsed = new SessionRequest();
+    var parsed = new ConversationDraft();
+    var completed = ConversationTurn.fromDraft(parsed);
     when(inputParser.parse("more")).thenReturn(parsed);
-    when(sessionTransitionService.process("session", "user", parsed)).thenReturn(parsed);
-    when(responseGenerator.generate(null, parsed)).thenReturn("No more recommendations.");
+    when(sessionTransitionService.process("session", "user", parsed)).thenReturn(completed);
+    when(responseGenerator.generate(null, completed)).thenReturn("No more recommendations.");
     var gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
     MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
@@ -56,15 +58,15 @@ class RequestGatewayTest {
     order.verify(telemetry).start();
     order.verify(inputParser).parse("more");
     order.verify(sessionTransitionService).process("session", "user", parsed);
-    order.verify(responseGenerator).generate(null, parsed);
-    order.verify(telemetry).complete(parsed);
+    order.verify(responseGenerator).generate(null, completed);
+    order.verify(telemetry).complete(completed);
     org.mockito.Mockito.verifyNoMoreInteractions(telemetry);
   }
 
   @Test
   void demoUsesTheExistingPipelineAndReturnsResolvedDetailsWithMetrics() throws Exception {
-    SessionRequest parsed = new SessionRequest();
-    SessionRequest resolved = new SessionRequest();
+    ConversationDraft parsed = new ConversationDraft();
+    ConversationTurn resolved = new ConversationTurn();
     resolved.setRequestId("request-1");
     resolved.setPersonalised(true);
     resolved.setIntent(com.gen3.recommenderagent.domain.Intent.MORE_RESULTS);
@@ -184,7 +186,7 @@ class RequestGatewayTest {
                 .string(
                     "I'm having trouble processing your request right now. Please try again in a moment."));
     org.mockito.Mockito.reset(inputParser);
-    var parsed = new SessionRequest();
+    var parsed = new ConversationDraft();
     when(inputParser.parse("fantasy")).thenReturn(parsed);
     when(sessionTransitionService.process("session", "user", parsed))
         .thenThrow(
@@ -236,7 +238,7 @@ class RequestGatewayTest {
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {"/api/v1/recommendations", "/api/v1/recommendations/demo"})
   void returnsServiceUnavailableWhenCandidateRetrievalFails(String endpoint) throws Exception {
-    SessionRequest parsedRequest = new SessionRequest();
+    ConversationDraft parsedRequest = new ConversationDraft();
     when(inputParser.parse("recommend science fiction")).thenReturn(parsedRequest);
     when(sessionTransitionService.process("session", "user", parsedRequest))
         .thenThrow(new CandidateRetrievalException("Qdrant", new RuntimeException("timed out")));
@@ -264,7 +266,7 @@ class RequestGatewayTest {
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {"/api/v1/recommendations", "/api/v1/recommendations/demo"})
   void returnsRetryAdviceWhenTheSessionIsBusy(String endpoint) throws Exception {
-    SessionRequest parsedRequest = new SessionRequest();
+    ConversationDraft parsedRequest = new ConversationDraft();
     when(inputParser.parse("recommend science fiction")).thenReturn(parsedRequest);
     when(sessionTransitionService.process("session", "user", parsedRequest))
         .thenThrow(new com.gen3.recommenderagent.storage.session.SessionBusyException());
@@ -289,7 +291,7 @@ class RequestGatewayTest {
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {"/api/v1/recommendations", "/api/v1/recommendations/demo"})
   void returnsServiceUnavailableWhenTheSessionCommitFails(String endpoint) throws Exception {
-    SessionRequest parsedRequest = new SessionRequest();
+    ConversationDraft parsedRequest = new ConversationDraft();
     when(inputParser.parse("recommend science fiction")).thenReturn(parsedRequest);
     when(sessionTransitionService.process("session", "user", parsedRequest))
         .thenThrow(new SessionCommitException());

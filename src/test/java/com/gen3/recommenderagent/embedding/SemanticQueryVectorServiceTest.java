@@ -6,8 +6,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -18,7 +18,7 @@ class SemanticQueryVectorServiceTest {
     QueryEmbeddingService indexer = mock(QueryEmbeddingService.class);
     SemanticQuery positive = query("space opera");
     SemanticQuery negative = query("gore");
-    SessionRequest request = new SessionRequest();
+    ConversationDraft request = new ConversationDraft();
     request.setPositiveSemanticQuery(positive);
     request.setNegativeSemanticQuery(negative);
     when(indexer.embedSemanticQueries(List.of(positive, negative)))

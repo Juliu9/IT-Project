@@ -9,9 +9,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectors;
 import com.gen3.recommenderagent.ranker.Ranker;
@@ -34,7 +34,7 @@ class AudiobookRecommendationWorkflowTest {
     Ranker ranker = mock(Ranker.class);
     SemanticQueryVectorService vectorService = mock(SemanticQueryVectorService.class);
     UserPreferenceVectorRepository userPreferences = mock(UserPreferenceVectorRepository.class);
-    SessionRequest request = new SessionRequest();
+    ConversationDraft request = new ConversationDraft();
     request.setBookCount(3);
     Session session = new Session();
     session.setUserId("user-1");

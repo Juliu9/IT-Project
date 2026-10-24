@@ -1,8 +1,12 @@
 package com.gen3.recommenderagent.retrieval.plan;
 
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ConversationHistory;
 import com.gen3.recommenderagent.domain.session.MustInclude;
 import com.gen3.recommenderagent.domain.session.MustNotInclude;
+import com.gen3.recommenderagent.domain.session.Session;
+import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
@@ -54,11 +58,10 @@ public class ExactFilterPolicy {
 
   public void resolveFilterCorrections(
       SessionRequest resolved, SessionRequest incoming, SessionRequest previousSearch) {
-    if (resolved.isSearchClarificationRequired()
-        || (resolved.getIntent() != Intent.RECOMMENDATION
-            && resolved.getIntent() != Intent.REFINE
-            && resolved.getIntent() != Intent.MORE_RESULTS
-            && resolved.getIntent() != Intent.UPDATE_PREFERENCES)) {
+    if ((resolved.getIntent() != Intent.RECOMMENDATION
+        && resolved.getIntent() != Intent.REFINE
+        && resolved.getIntent() != Intent.MORE_RESULTS
+        && resolved.getIntent() != Intent.UPDATE_PREFERENCES)) {
       return;
     }
     var own = filters(incoming, Set.of());
@@ -317,6 +320,52 @@ public class ExactFilterPolicy {
   private record RangeBounds(Integer minimum, Integer maximum) {
     private static RangeBounds empty() {
       return new RangeBounds(null, null);
+    }
+  }
+
+  public void validateTransition(
+      ConversationDraft resolved, SessionRequest original, Session session) {
+    if (resolved.getIntent() == Intent.UPDATE_PREFERENCES) {
+      if (resolved.getDecision()
+          == com.gen3.recommenderagent.domain.session.ConversationDecision
+              .PREFERENCE_UPDATE_CLARIFICATION) {
+        return;
+      }
+      var proposed = resolved.getPreferenceUpdates().asRequest();
+      var updates =
+          original != null && original.getPreferenceUpdates() != null
+              ? original.getPreferenceUpdates().asRequest()
+              : original == null
+                  ? new SessionRequest()
+                  : SessionPreferences.fromRequest(original).asRequest();
+      resolveFilterCorrections(proposed, updates);
+      resolved.getPreferenceUpdates().setMustInclude(proposed.getMustInclude());
+      resolved.getPreferenceUpdates().setMustNotInclude(proposed.getMustNotInclude());
+      return;
+    }
+    if (resolved.isSearchClarificationRequired()) {
+      return;
+    }
+    var previousSearch =
+        original != null
+                && (original.getIntent() == Intent.REFINE
+                    || original.getIntent() == Intent.MORE_RESULTS)
+            ? ConversationHistory.latestSearch(session)
+            : null;
+    SessionRequest previous =
+        previousSearch != null
+                && original.getIntent() == Intent.REFINE
+                && previousSearch.getSearchCriteria() != null
+            ? previousSearch.getSearchCriteria().asRequest()
+            : previousSearch;
+    resolveFilterCorrections(resolved, original, previous);
+    if (resolved.getSearchCriteria() != null
+        && (resolved.getIntent() == Intent.RECOMMENDATION
+            || resolved.getIntent() == Intent.REFINE
+            || resolved.getIntent() == Intent.MORE_RESULTS)) {
+      var criteria = resolved.getSearchCriteria().asRequest();
+      resolveFilterCorrections(criteria, original, previous);
+      resolved.setSearchCriteria(SessionPreferences.fromRequest(criteria));
     }
   }
 }

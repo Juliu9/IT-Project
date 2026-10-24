@@ -8,8 +8,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ConversationTurn;
 import com.gen3.recommenderagent.domain.session.Recommendation;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
 import java.util.List;
 import java.util.stream.Stream;
@@ -24,15 +25,18 @@ import org.springframework.ai.chat.model.Generation;
 class ResponseGeneratorFailureTest {
   private final List<Recommendation> books =
       List.of(new Recommendation("book-1", 1, 0.9, "A Book"));
-  private final SessionRequest request = new SessionRequest();
+  private final ConversationDraft request = new ConversationDraft();
 
   @Test
   void replacementProviderFailureUsesTheExistingFallback() {
     ChatClient client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(client.prompt().system(anyString()).user(anyString()).call().chatResponse())
         .thenThrow(new IllegalStateException("replacement provider unavailable"));
-    assertThat(new AiResponseGenerator(client, AiOperationObserver.noop()).generate(books, request))
-        .isEqualTo(new AiResponseGenerator(null).generate(books, request));
+    assertThat(
+            new AiResponseGenerator(client, AiOperationObserver.noop())
+                .generate(books, ConversationTurn.fromDraft(request)))
+        .isEqualTo(
+            new AiResponseGenerator(null).generate(books, ConversationTurn.fromDraft(request)));
   }
 
   @ParameterizedTest
@@ -41,8 +45,11 @@ class ResponseGeneratorFailureTest {
     ChatClient client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(client.prompt().system(anyString()).user(anyString()).call().chatResponse())
         .thenReturn(response);
-    assertThat(new AiResponseGenerator(client, AiOperationObserver.noop()).generate(books, request))
-        .isEqualTo(new AiResponseGenerator(null).generate(books, request));
+    assertThat(
+            new AiResponseGenerator(client, AiOperationObserver.noop())
+                .generate(books, ConversationTurn.fromDraft(request)))
+        .isEqualTo(
+            new AiResponseGenerator(null).generate(books, ConversationTurn.fromDraft(request)));
   }
 
   @Test
@@ -53,7 +60,7 @@ class ResponseGeneratorFailureTest {
     assertThatThrownBy(
             () ->
                 new AiResponseGenerator(client, AiOperationObserver.noop())
-                    .generate(List.of(broken), request))
+                    .generate(List.of(broken), ConversationTurn.fromDraft(request)))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessage("invalid recommendation");
     verifyNoInteractions(client);

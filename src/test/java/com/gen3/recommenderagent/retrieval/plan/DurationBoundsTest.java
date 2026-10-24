@@ -3,9 +3,9 @@ package com.gen3.recommenderagent.retrieval.plan;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.MustInclude;
 import com.gen3.recommenderagent.domain.session.MustNotInclude;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import java.util.Set;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -36,7 +36,7 @@ class DurationBoundsTest {
       nullValues = "null")
   void preservesDurationMeaningForRequiredAndExcludedRanges(
       String text, Integer minimum, Integer maximum) {
-    SessionRequest request = new SessionRequest();
+    ConversationDraft request = new ConversationDraft();
     MustInclude include = new MustInclude();
     include.setDuration(text);
     request.setMustInclude(include);
@@ -67,7 +67,7 @@ class DurationBoundsTest {
         "between 2 hours and 3"
       })
   void rejectsInvalidOrAmbiguousDurationWithoutDroppingTheFilter(String text) {
-    SessionRequest request = new SessionRequest();
+    ConversationDraft request = new ConversationDraft();
     MustInclude include = new MustInclude();
     include.setDuration(text);
     request.setMustInclude(include);
