@@ -68,9 +68,60 @@ class UserPreferenceAggregatorServiceTest {
             .toList();
     new UserPreferenceAggregatorService(books, users).aggregateAndSave(favourites, List.of());
     ArgumentCaptor<List<UserPreferenceEmbedding>> saved = ArgumentCaptor.forClass(List.class);
+    verify(users, org.mockito.Mockito.times(6)).saveAll(saved.capture());
+    org.assertj.core.api.Assertions.assertThat(saved.getAllValues())
+        .extracting(List::size)
+        .containsExactly(100, 100, 100, 100, 100, 1);
+  }
+
+  @Test
+  void capsDistinctBookIdsAcrossFavouritesAndHistoryAndKeepsUsersWhole() throws IOException {
+    var books = mock(AudiobookVectorRepository.class);
+    var users = mock(UserPreferenceVectorRepository.class);
+    var requested = new java.util.ArrayList<Set<String>>();
+    when(books.findEmbeddingsByBookIds(org.mockito.ArgumentMatchers.anyCollection()))
+        .thenAnswer(
+            call -> {
+              java.util.Collection<String> ids = call.getArgument(0);
+              requested.add(Set.copyOf(ids));
+              return ids.stream()
+                  .collect(java.util.stream.Collectors.toMap(id -> id, id -> new float[] {1, 0}));
+            });
+    new UserPreferenceAggregatorService(books, users, 100, 2)
+        .aggregateAndSave(
+            List.of(
+                new UserFavourite("a", "one"),
+                new UserFavourite("a", "one"),
+                new UserFavourite("b", "two"),
+                new UserFavourite("c", "three")),
+            List.of(new UserHistory("a", "two", Instant.now())));
+    org.assertj.core.api.Assertions.assertThat(requested)
+        .containsExactly(Set.of("one", "two"), Set.of("three"));
+    ArgumentCaptor<List<UserPreferenceEmbedding>> saved = ArgumentCaptor.forClass(List.class);
     verify(users, org.mockito.Mockito.times(2)).saveAll(saved.capture());
     org.assertj.core.api.Assertions.assertThat(saved.getAllValues())
         .extracting(List::size)
-        .containsExactly(500, 1);
+        .containsExactly(2, 1);
+  }
+
+  @Test
+  void rejectsAnOversizedUserBeforeAnyReadsOrWrites() {
+    var books = mock(AudiobookVectorRepository.class);
+    var users = mock(UserPreferenceVectorRepository.class);
+    var input =
+        List.of(
+            new UserFavourite("a-small", "one"),
+            new UserFavourite("z-large", "one"),
+            new UserFavourite("z-large", "two"),
+            new UserFavourite("z-large", "three"));
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () ->
+                new UserPreferenceAggregatorService(books, users, 1, 2)
+                    .aggregateAndSave(input, List.of()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("z-large")
+        .hasMessageContaining("3")
+        .hasMessageContaining("2");
+    org.mockito.Mockito.verifyNoInteractions(books, users);
   }
 }

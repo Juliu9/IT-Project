@@ -10,12 +10,14 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -24,9 +26,26 @@ public class UserPreferenceAggregatorService {
   private final AudiobookVectorRepository audiobookVectorRepository;
   private final UserPreferenceVectorRepository userPreferenceVectorRepository;
 
+  private final int maximumUsers;
+  private final int maximumBookIds;
+
   public UserPreferenceAggregatorService(
       AudiobookVectorRepository audiobookVectorRepository,
       UserPreferenceVectorRepository userPreferenceVectorRepository) {
+    this(audiobookVectorRepository, userPreferenceVectorRepository, 100, 10_000);
+  }
+
+  @Autowired
+  public UserPreferenceAggregatorService(
+      AudiobookVectorRepository audiobookVectorRepository,
+      UserPreferenceVectorRepository userPreferenceVectorRepository,
+      @Value("${user.preferences.import.max-users-per-group:100}") int maximumUsers,
+      @Value("${user.preferences.import.max-book-ids-per-group:10000}") int maximumBookIds) {
+    if (maximumUsers < 1 || maximumBookIds < 1) {
+      throw new IllegalArgumentException("Preference import group limits must be positive");
+    }
+    this.maximumUsers = maximumUsers;
+    this.maximumBookIds = maximumBookIds;
     this.audiobookVectorRepository = audiobookVectorRepository;
     this.userPreferenceVectorRepository = userPreferenceVectorRepository;
   }
@@ -39,16 +58,59 @@ public class UserPreferenceAggregatorService {
     Map<String, List<UserHistory>> histByUser =
         history.stream().collect(Collectors.groupingBy(UserHistory::userId));
 
-    Set<String> allUserIds = new HashSet<>();
+    Set<String> allUserIds = new TreeSet<>();
     allUserIds.addAll(favsByUser.keySet());
     allUserIds.addAll(histByUser.keySet());
-    Map<String, float[]> vectors =
-        audiobookVectorRepository.findEmbeddingsByBookIds(bookIds(favourites, history));
-
-    Instant now = Instant.now();
-
-    List<UserPreferenceEmbedding> pending = new ArrayList<>();
+    // Validate the entire input before any writes; never truncate one user's history.
     for (String userId : allUserIds) {
+      int count =
+          bookIds(
+                  favsByUser.getOrDefault(userId, List.of()),
+                  histByUser.getOrDefault(userId, List.of()))
+              .size();
+      if (count > maximumBookIds) {
+        throw new IllegalArgumentException(
+            "User "
+                + userId
+                + " references "
+                + count
+                + " distinct book IDs; configured limit is "
+                + maximumBookIds);
+      }
+    }
+    Instant now = Instant.now();
+    List<String> group = new ArrayList<>();
+    Set<String> groupBooks = new LinkedHashSet<>();
+    for (String userId : allUserIds) {
+      Set<String> ids =
+          bookIds(
+              favsByUser.getOrDefault(userId, List.of()),
+              histByUser.getOrDefault(userId, List.of()));
+      long additions = ids.stream().filter(id -> !groupBooks.contains(id)).count();
+      if (!group.isEmpty()
+          && (group.size() == maximumUsers || groupBooks.size() + additions > maximumBookIds)) {
+        aggregateGroup(group, groupBooks, favsByUser, histByUser, now);
+        group.clear();
+        groupBooks.clear();
+      }
+      group.add(userId);
+      groupBooks.addAll(ids);
+    }
+    if (!group.isEmpty()) {
+      aggregateGroup(group, groupBooks, favsByUser, histByUser, now);
+    }
+  }
+
+  private void aggregateGroup(
+      List<String> userIds,
+      Set<String> bookIds,
+      Map<String, List<UserFavourite>> favsByUser,
+      Map<String, List<UserHistory>> histByUser,
+      Instant now)
+      throws IOException {
+    Map<String, float[]> vectors = audiobookVectorRepository.findEmbeddingsByBookIds(bookIds);
+    List<UserPreferenceEmbedding> pending = new ArrayList<>();
+    for (String userId : userIds) {
       // 1. Process Favourites (Standard Average)
       List<float[]> favVectors = new ArrayList<>();
       for (UserFavourite fav : favsByUser.getOrDefault(userId, List.of())) {

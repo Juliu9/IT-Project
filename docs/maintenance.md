@@ -183,6 +183,14 @@ Both Solr and Qdrant supply the required adapters. Set `AUDIOBOOK_DATABASE=solr`
 reads and writes stay within that database. For Solr, prepare the separate preference collection and
 schema described in [Solr setup](configuration.md#solr). Solr writes at most 500 user updates per
 batch and commits once per batch; earlier batches remain saved if a later batch fails.
+
+The importer loads vectors for at most 100 users and 10,000 distinct book IDs per group by default.
+Either limit closes a group; repeated book IDs count once across favourites and history. Each user
+stays whole, and groups release their vectors before the next fetch. Both limits are configurable
+under `user.preferences.import` (see [configuration](configuration.md#user-preference-import)).
+Before any reads or writes, every user is checked against the book-ID limit. An oversized user
+stops the job with their ID, count and limit; no history is truncated. CSV records still reside in
+memory. Database failures can leave earlier groups saved; reruns recompute and overwrite preferences.
 Favourites use a normalized average; history
 weights halve every 180 days before the result is normalized.
 
