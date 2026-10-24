@@ -15,13 +15,9 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class RequestExceptionHandler {
 
-  @ExceptionHandler({
-    org.springframework.web.client.RestClientException.class,
-    org.springframework.core.retry.RetryException.class,
-    com.openai.errors.OpenAIIoException.class,
-    com.openai.errors.OpenAIServiceException.class
-  })
-  public ResponseEntity<String> handleUnavailableAi(Exception exception) {
+  @ExceptionHandler(com.gen3.recommenderagent.ai.AiProviderException.class)
+  public ResponseEntity<String> handleUnavailableAi(
+      com.gen3.recommenderagent.ai.AiProviderException exception) {
     return ResponseEntity.status(503)
         .contentType(new MediaType(MediaType.TEXT_PLAIN, StandardCharsets.UTF_8))
         .body(

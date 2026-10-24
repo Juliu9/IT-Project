@@ -22,15 +22,18 @@ class ResponseGeneratorTest {
     request.setIntent(Intent.HELP);
     request.setDecision(
         com.gen3.recommenderagent.domain.session.ConversationDecision.NO_MORE_RESULTS);
-    var generator = new AiResponseGenerator(null);
+    var ai = org.mockito.Mockito.mock(AiResponseGenerator.class);
+    var generator = new ConversationResponseGenerator(ai);
     assertEquals(
         "There are no more audiobooks matching your current search. Try changing your criteria.",
         generator.generate(List.of(), ConversationTurn.fromDraft(request)));
+    org.mockito.Mockito.verifyNoInteractions(ai);
   }
 
   @Test
   void emptyMoreAndItsRepeatExplicitlySayThereAreNoMoreMatches() {
-    AiResponseGenerator generator = new AiResponseGenerator(null);
+    ConversationResponseGenerator generator =
+        new ConversationResponseGenerator(new AiResponseGenerator(null));
     ConversationDraft request = new ConversationDraft();
     request.setIntent(Intent.MORE_RESULTS);
     String more = generator.generate(List.of(), ConversationTurn.fromDraft(request));
@@ -42,7 +45,8 @@ class ResponseGeneratorTest {
 
   @Test
   void followUpPromptContainsResolvedCriteriaAndNoSearchAsksForOne() {
-    AiResponseGenerator generator = new AiResponseGenerator(null);
+    ConversationResponseGenerator generator =
+        new ConversationResponseGenerator(new AiResponseGenerator(null));
     ConversationDraft request = new ConversationDraft();
     request.setIntent(Intent.MORE_RESULTS);
     request.setRawText("more please");
@@ -58,10 +62,11 @@ class ResponseGeneratorTest {
     filter.setDuration("under 3 hours");
     request.setMustInclude(filter);
     String prompt =
-        generator.compilePrompt(
-            List.of(new Recommendation("id", 1, 0.9, "Title", "An expedition.")),
-            ConversationTurn.fromDraft(request),
-            "");
+        new AiResponseGenerator(null)
+            .compilePrompt(
+                List.of(new Recommendation("id", 1, 0.9, "Title", "An expedition.")),
+                ConversationTurn.fromDraft(request),
+                "");
     for (String value :
         List.of(
             "expeditions",
@@ -80,7 +85,8 @@ class ResponseGeneratorTest {
 
   @Test
   void repeatRendersThePreviousBooksOrExplainsThatThereAreNone() {
-    AiResponseGenerator generator = new AiResponseGenerator(null);
+    ConversationResponseGenerator generator =
+        new ConversationResponseGenerator(new AiResponseGenerator(null));
     ConversationDraft request = new ConversationDraft();
     request.setIntent(Intent.REPEAT);
     assertEquals(
@@ -95,7 +101,8 @@ class ResponseGeneratorTest {
 
   @Test
   void shouldBuildAHumanReadableRecommendationMessage() {
-    AiResponseGenerator generator = new AiResponseGenerator(null);
+    ConversationResponseGenerator generator =
+        new ConversationResponseGenerator(new AiResponseGenerator(null));
 
     ConversationDraft request = new ConversationDraft();
     request.setIntent(Intent.RECOMMENDATION);
@@ -122,7 +129,8 @@ class ResponseGeneratorTest {
 
   @Test
   void shouldIncludeStoredShortDescriptionsInFallbackResponses() {
-    AiResponseGenerator generator = new AiResponseGenerator(null);
+    ConversationResponseGenerator generator =
+        new ConversationResponseGenerator(new AiResponseGenerator(null));
     ConversationDraft request = new ConversationDraft();
     request.setIntent(Intent.RECOMMENDATION);
 
@@ -142,7 +150,8 @@ class ResponseGeneratorTest {
 
   @Test
   void shouldExplainTheLimitAndReturnFiveRecommendationsWhenCountIsExplicit() {
-    AiResponseGenerator generator = new AiResponseGenerator(null);
+    ConversationResponseGenerator generator =
+        new ConversationResponseGenerator(new AiResponseGenerator(null));
 
     ConversationDraft request = new ConversationDraft();
     request.setIntent(Intent.RECOMMENDATION);
@@ -170,7 +179,8 @@ class ResponseGeneratorTest {
 
   @Test
   void shouldIgnoreAnOversizedCountNotStatedByTheUser() {
-    AiResponseGenerator generator = new AiResponseGenerator(null);
+    ConversationResponseGenerator generator =
+        new ConversationResponseGenerator(new AiResponseGenerator(null));
     ConversationDraft request = new ConversationDraft();
     request.setIntent(Intent.RECOMMENDATION);
     request.setRawText("fantasy");
@@ -187,7 +197,8 @@ class ResponseGeneratorTest {
 
   @Test
   void shouldRecognizeAnExplicitSpelledOutCount() {
-    AiResponseGenerator generator = new AiResponseGenerator(null);
+    ConversationResponseGenerator generator =
+        new ConversationResponseGenerator(new AiResponseGenerator(null));
     ConversationDraft request = new ConversationDraft();
     request.setIntent(Intent.RECOMMENDATION);
     request.setRawText("Give me ten fantasy audiobooks");
@@ -204,17 +215,19 @@ class ResponseGeneratorTest {
 
   @Test
   void shouldGiveTheAiTheLimitNoticeAndActualRecommendationCount() {
-    AiResponseGenerator generator = new AiResponseGenerator(null);
+    ConversationResponseGenerator generator =
+        new ConversationResponseGenerator(new AiResponseGenerator(null));
     ConversationDraft request = new ConversationDraft();
     request.setIntent(Intent.RECOMMENDATION);
     request.setRawText("Give me 10 recommendations");
     request.setBookCount(10);
 
     String prompt =
-        generator.compilePrompt(
-            List.of(new Recommendation("book-101", 1, 0.91, "Book1")),
-            ConversationTurn.fromDraft(request),
-            "I can give up to 5 recommendations at a time. ");
+        new AiResponseGenerator(null)
+            .compilePrompt(
+                List.of(new Recommendation("book-101", 1, 0.91, "Book1")),
+                ConversationTurn.fromDraft(request),
+                "I can give up to 5 recommendations at a time. ");
 
     assertTrue(prompt.contains("Recommendation count: 1"));
     assertTrue(prompt.contains("Limit notice: I can give up to 5 recommendations at a time."));
@@ -222,7 +235,8 @@ class ResponseGeneratorTest {
 
   @Test
   void shouldReturnFriendlyFallbackWhenNoDataIsAvailable() {
-    AiResponseGenerator generator = new AiResponseGenerator(null);
+    ConversationResponseGenerator generator =
+        new ConversationResponseGenerator(new AiResponseGenerator(null));
 
     String response = generator.generate(null, null);
 
@@ -232,7 +246,8 @@ class ResponseGeneratorTest {
 
   @Test
   void shouldNotBlameTheYearWhenCombinedFiltersReturnNoMatches() {
-    AiResponseGenerator generator = new AiResponseGenerator(null);
+    ConversationResponseGenerator generator =
+        new ConversationResponseGenerator(new AiResponseGenerator(null));
     ConversationDraft request = new ConversationDraft();
     request.setIntent(Intent.RECOMMENDATION);
     MustInclude publicationYear = new MustInclude();
@@ -248,7 +263,8 @@ class ResponseGeneratorTest {
 
   @Test
   void shouldAcknowledgeChangingTheRecommendationCount() {
-    AiResponseGenerator generator = new AiResponseGenerator(null);
+    ConversationResponseGenerator generator =
+        new ConversationResponseGenerator(new AiResponseGenerator(null));
     ConversationDraft request = new ConversationDraft();
     request.setIntent(Intent.CHANGE_COUNT);
     request.setBookCount(3);
@@ -260,7 +276,8 @@ class ResponseGeneratorTest {
 
   @Test
   void shouldCapAnExplicitChangeCountRequest() {
-    AiResponseGenerator generator = new AiResponseGenerator(null);
+    ConversationResponseGenerator generator =
+        new ConversationResponseGenerator(new AiResponseGenerator(null));
     ConversationDraft request = new ConversationDraft();
     request.setIntent(Intent.CHANGE_COUNT);
     request.setRawText("Show me 10 recommendations at a time");
@@ -273,7 +290,8 @@ class ResponseGeneratorTest {
 
   @Test
   void shouldAcknowledgeUpdatingSessionPreferences() {
-    AiResponseGenerator generator = new AiResponseGenerator(null);
+    ConversationResponseGenerator generator =
+        new ConversationResponseGenerator(new AiResponseGenerator(null));
     ConversationDraft request = new ConversationDraft();
     request.setIntent(Intent.UPDATE_PREFERENCES);
 
@@ -285,7 +303,8 @@ class ResponseGeneratorTest {
 
   @Test
   void shouldExplainSupportedActionsForHelpIntent() {
-    AiResponseGenerator generator = new AiResponseGenerator(null);
+    ConversationResponseGenerator generator =
+        new ConversationResponseGenerator(new AiResponseGenerator(null));
     ConversationDraft request = new ConversationDraft();
     request.setIntent(Intent.HELP);
 

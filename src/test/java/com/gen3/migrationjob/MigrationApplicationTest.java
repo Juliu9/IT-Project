@@ -3,8 +3,8 @@ package com.gen3.migrationjob;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
+import com.gen3.catalogue.qdrant.QdrantAudiobookRepository;
+import com.gen3.catalogue.solr.SolrAudiobookRepository;
 import io.qdrant.client.QdrantClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;

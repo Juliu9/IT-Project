@@ -1,7 +1,7 @@
 package com.gen3.recommenderagent.ranker.scorer;
 
+import com.gen3.catalogue.model.AudiobookCandidate;
 import com.gen3.recommenderagent.ranker.RankingContext;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import org.springframework.stereotype.Component;
 
 /** Normalizes the backend's retrieval score within the current candidate set. */

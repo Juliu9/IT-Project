@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.gen3.catalogue.model.AudiobookFilterConditions;
+import com.gen3.catalogue.model.AudiobookFilters;
+import com.gen3.catalogue.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.api.RequestGateway;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendationWorkflow;
@@ -18,11 +21,9 @@ import com.gen3.recommenderagent.ranker.scorer.RankingScoringProperties;
 import com.gen3.recommenderagent.ranker.scorer.UserPreferenceScorer;
 import com.gen3.recommenderagent.ranker.scorer.WeightedScorer;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
+import com.gen3.recommenderagent.response.ConversationResponseGenerator;
 import com.gen3.recommenderagent.retrieval.CandidateRetrievalService;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.solr.SolrUserPreferenceRepository;
 import com.gen3.recommenderagent.testsupport.SolrContainerTestSupport;
@@ -153,7 +154,7 @@ class SolrBackendIntegrationTest {
             users());
     var sessions = new RecommendationFlowTestSupport.InMemorySessionRepository();
     var service = ConversationTestSupport.transitions(sessions, workflow);
-    var responses = new AiResponseGenerator(null);
+    var responses = new ConversationResponseGenerator(new AiResponseGenerator(null));
     var gateway =
         new RequestGateway(
             raw -> {

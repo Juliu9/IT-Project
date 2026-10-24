@@ -1,7 +1,7 @@
 package com.gen3.shortdescriptionjob.store;
 
-import com.gen3.recommenderagent.storage.audiobook.model.StoredAudiobook;
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
+import com.gen3.catalogue.model.StoredAudiobook;
+import com.gen3.catalogue.solr.SolrAudiobookRepository;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;

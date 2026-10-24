@@ -10,6 +10,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.gen3.catalogue.model.AudiobookFilters;
+import com.gen3.catalogue.qdrant.QdrantAudiobookRepository;
 import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendationWorkflow;
@@ -27,10 +29,9 @@ import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.ranker.Ranker;
 import com.gen3.recommenderagent.ranker.RankingContext;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
+import com.gen3.recommenderagent.response.ConversationResponseGenerator;
 import com.gen3.recommenderagent.retrieval.CandidateRetrievalService;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
-import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
 import java.io.IOException;
@@ -54,7 +55,8 @@ class PersonalisedRecommendationFlowTest {
   private final Ranker ranker = mock(Ranker.class);
   private final RecommendationFlowTestSupport.InMemorySessionRepository sessions =
       new RecommendationFlowTestSupport.InMemorySessionRepository();
-  private final AiResponseGenerator responseGenerator = new AiResponseGenerator(null);
+  private final ConversationResponseGenerator responseGenerator =
+      new ConversationResponseGenerator(new AiResponseGenerator(null));
   private final SessionTransitionService application;
 
   PersonalisedRecommendationFlowTest() throws Exception {

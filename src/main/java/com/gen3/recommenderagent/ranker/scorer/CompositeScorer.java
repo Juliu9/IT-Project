@@ -1,7 +1,7 @@
 package com.gen3.recommenderagent.ranker.scorer;
 
+import com.gen3.catalogue.model.AudiobookCandidate;
 import com.gen3.recommenderagent.ranker.RankingContext;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import java.util.List;
 
 /** Combines available scorer results as a normalized weighted average. */

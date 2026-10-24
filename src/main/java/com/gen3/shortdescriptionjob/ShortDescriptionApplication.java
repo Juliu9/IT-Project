@@ -1,10 +1,10 @@
 package com.gen3.shortdescriptionjob;
 
-import com.gen3.recommenderagent.storage.audiobook.qdrant.Bm25SparseTextEncoder;
-import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantConfig;
-import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantPointMapper;
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrConfig;
+import com.gen3.catalogue.qdrant.Bm25SparseTextEncoder;
+import com.gen3.catalogue.qdrant.QdrantConfig;
+import com.gen3.catalogue.qdrant.QdrantPointMapper;
+import com.gen3.catalogue.solr.SolrAudiobookRepository;
+import com.gen3.catalogue.solr.SolrConfig;
 import com.gen3.shortdescriptionjob.provider.OpenAiShortDescriptionBatchProvider;
 import com.gen3.shortdescriptionjob.store.QdrantShortDescriptionStore;
 import com.gen3.shortdescriptionjob.store.SolrShortDescriptionStore;

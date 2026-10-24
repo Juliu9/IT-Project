@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.gen3.catalogue.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.api.RequestGateway;
 import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
@@ -27,10 +28,10 @@ import com.gen3.recommenderagent.ranker.scorer.RetrievalRelevanceScorer;
 import com.gen3.recommenderagent.ranker.scorer.UserPreferenceScorer;
 import com.gen3.recommenderagent.ranker.scorer.WeightedScorer;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
+import com.gen3.recommenderagent.response.ConversationResponseGenerator;
 import com.gen3.recommenderagent.retrieval.CandidateRetrievalService;
 import com.gen3.recommenderagent.retrieval.CandidateRetriever;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.testsupport.SolrContainerTestSupport;
 import java.util.List;
 import java.util.Set;
@@ -170,7 +171,10 @@ class RecommendationFlowIntegrationTest {
         ConversationTestSupport.transitions(sessionRepository, workflow);
 
     RequestGateway gateway =
-        new RequestGateway(inputParser, applicationService, new AiResponseGenerator(null));
+        new RequestGateway(
+            inputParser,
+            applicationService,
+            new ConversationResponseGenerator(new AiResponseGenerator(null)));
 
     return MockMvcBuilders.standaloneSetup(gateway).build();
   }

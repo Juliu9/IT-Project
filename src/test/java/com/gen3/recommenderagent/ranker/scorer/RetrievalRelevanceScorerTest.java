@@ -3,9 +3,9 @@ package com.gen3.recommenderagent.ranker.scorer;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
+import com.gen3.catalogue.model.AudiobookCandidate;
+import com.gen3.catalogue.model.AudiobookRecord;
 import com.gen3.recommenderagent.ranker.RankingContext;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;

@@ -18,6 +18,7 @@ import com.gen3.recommenderagent.domain.session.ConversationTurn;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
+import com.gen3.recommenderagent.response.ConversationResponseGenerator;
 import java.util.List;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
@@ -31,7 +32,8 @@ class RepeatRequestFlowTest {
       new RecommendationFlowTestSupport.InMemorySessionRepository();
   private final SessionTransitionService service =
       ConversationTestSupport.transitions(sessions, workflow);
-  private final AiResponseGenerator responses = new AiResponseGenerator(null);
+  private final ConversationResponseGenerator responses =
+      new ConversationResponseGenerator(new AiResponseGenerator(null));
 
   @Test
   void helpCanBeRepeatedBeforeAnyRecommendationSearch() {

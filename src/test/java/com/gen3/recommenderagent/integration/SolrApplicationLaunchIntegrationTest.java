@@ -6,9 +6,9 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.gen3.catalogue.solr.SolrAudiobookRepository;
 import com.gen3.embeddingjob.EmbeddingIndexApplication;
 import com.gen3.recommenderagent.RecommenderAgentApplication;
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.storage.user.solr.SolrUserPreferenceRepository;
 import com.gen3.recommenderagent.testsupport.SolrContainerTestSupport;
 import com.gen3.shortdescriptionjob.ShortDescriptionApplication;
@@ -174,16 +174,12 @@ class SolrApplicationLaunchIntegrationTest {
           .isEqualTo(1);
     }
 
-    var copied =
-        new java.util.ArrayList<
-            com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding>();
-    var destination =
-        mock(com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository.class);
+    var copied = new java.util.ArrayList<com.gen3.catalogue.model.AudiobookEmbedding>();
+    var destination = mock(com.gen3.catalogue.qdrant.QdrantAudiobookRepository.class);
     when(destination.importStoredBooks(anyList()))
         .thenAnswer(
             invocation -> {
-              List<com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding> records =
-                  invocation.getArgument(0);
+              List<com.gen3.catalogue.model.AudiobookEmbedding> records = invocation.getArgument(0);
               copied.addAll(records);
               return records.size();
             });
@@ -342,7 +338,9 @@ class SolrApplicationLaunchIntegrationTest {
                       new Generation(
                           new AssistantMessage(
                               "{\"intent\":\"RECOMMENDATION\",\"bookCount\":1}")))))
-          .thenThrow(new IllegalStateException("Use the built-in response"));
+          .thenThrow(
+              new org.springframework.web.client.ResourceAccessException(
+                  "Use the built-in response"));
       return model;
     }
   }

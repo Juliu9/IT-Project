@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.gen3.catalogue.model.AudiobookCandidate;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
@@ -17,7 +18,6 @@ import com.gen3.recommenderagent.embedding.SemanticQueryVectors;
 import com.gen3.recommenderagent.ranker.Ranker;
 import com.gen3.recommenderagent.ranker.RankingContext;
 import com.gen3.recommenderagent.retrieval.CandidateRetriever;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
 import java.util.List;

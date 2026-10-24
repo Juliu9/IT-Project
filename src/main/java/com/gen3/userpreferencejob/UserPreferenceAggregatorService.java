@@ -1,7 +1,7 @@
 package com.gen3.userpreferencejob;
 
-import com.gen3.recommenderagent.embedding.VectorMath;
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorRepository;
+import com.gen3.catalogue.port.AudiobookVectorRepository;
+import com.gen3.catalogue.vector.VectorMath;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
 import com.gen3.userpreferencejob.model.UserFavourite;

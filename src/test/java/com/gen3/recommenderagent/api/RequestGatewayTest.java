@@ -176,7 +176,7 @@ class RequestGatewayTest {
             .build();
     when(inputParser.parse("fantasy"))
         .thenThrow(
-            new RuntimeException(
+            new com.gen3.recommenderagent.ai.AiProviderException(
                 new org.springframework.core.retry.RetryException(
                     "private retry detail",
                     new com.openai.errors.OpenAIIoException("private provider detail"))));
@@ -200,7 +200,9 @@ class RequestGatewayTest {
             .setControllerAdvice(new RequestExceptionHandler())
             .build();
     when(inputParser.parse("fantasy"))
-        .thenThrow(new com.openai.errors.OpenAIIoException("private provider detail"));
+        .thenThrow(
+            new com.gen3.recommenderagent.ai.AiProviderException(
+                new com.openai.errors.OpenAIIoException("private provider detail")));
     mvc.perform(
             post("/api/v1/recommendations")
                 .header("X-Session-Id", "session")
@@ -220,8 +222,9 @@ class RequestGatewayTest {
             org.mockito.ArgumentMatchers.eq(parsed),
             org.mockito.ArgumentMatchers.any()))
         .thenThrow(
-            new org.springframework.web.client.HttpServerErrorException(
-                org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE));
+            new com.gen3.recommenderagent.ai.AiProviderException(
+                new org.springframework.web.client.HttpServerErrorException(
+                    org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE)));
     mvc.perform(
             post("/api/v1/recommendations")
                 .header("X-Session-Id", "session")

@@ -1,9 +1,9 @@
 package com.gen3.recommenderagent.retrieval;
 
+import com.gen3.catalogue.port.AudiobookCandidateSearch;
+import com.gen3.catalogue.port.AudiobookVectorRepository;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorRepository;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;

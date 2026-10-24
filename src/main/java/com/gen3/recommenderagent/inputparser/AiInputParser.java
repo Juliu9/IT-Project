@@ -1,5 +1,6 @@
 package com.gen3.recommenderagent.inputparser;
 
+import com.gen3.recommenderagent.ai.AiProviderCalls;
 import com.gen3.recommenderagent.domain.conversation.ConversationRules;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
@@ -57,13 +58,15 @@ public class AiInputParser implements InputParser {
     ResponseEntity<ChatResponse, ParsedRequest> aiResponse;
     try {
       aiResponse =
-          aiOperationObserver.observe(
-              "parse",
+          AiProviderCalls.call(
               () ->
-                  this.chatClient
-                      .prompt()
-                      .system(
-                          """
+                  aiOperationObserver.observe(
+                      "parse",
+                      () ->
+                          this.chatClient
+                              .prompt()
+                              .system(
+                                  """
                         Extract only stated audiobook criteria; never invent values, report contradictions, or choose retrieval mode.
                         Intents: RECOMMENDATION=new search; REFINE=context-dependent change to an earlier search or taste reply;
                         Self-contained criteria ("fantasy", "fantasy under five hours") are RECOMMENDATION, even without a verb.
@@ -100,10 +103,10 @@ public class AiInputParser implements InputParser {
                         both null means whole page. These selectors belong only to EXPLAIN_RECOMMENDATION, never bookCount.
                         Bare ordinals ("fourth") are not explanation requests.
                         """)
-                      .user(rawText)
-                      .call()
-                      .responseEntity(REQUEST_CONVERTER),
-              response -> AiOperationObserver.AiUsage.from(response.response()));
+                              .user(rawText)
+                              .call()
+                              .responseEntity(REQUEST_CONVERTER),
+                      response -> AiOperationObserver.AiUsage.from(response.response())));
     } catch (JacksonException exception) {
       throw new InvalidRequestException(
           "I couldn't understand that request. Please use whole numbers for book positions and counts, and keep numbers short.");

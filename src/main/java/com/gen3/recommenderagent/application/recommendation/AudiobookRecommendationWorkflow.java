@@ -2,13 +2,13 @@ package com.gen3.recommenderagent.application.recommendation;
 
 import static com.gen3.recommenderagent.domain.RecommendationPolicy.RECOMMENDATION_BATCH_SIZE;
 
+import com.gen3.catalogue.vector.VectorMath;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectors;
-import com.gen3.recommenderagent.embedding.VectorMath;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.gen3.recommenderagent.ranker.Ranker;
 import com.gen3.recommenderagent.ranker.RankingContext;

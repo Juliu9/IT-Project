@@ -6,7 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorRepository;
+import com.gen3.catalogue.port.AudiobookVectorRepository;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
 import com.gen3.userpreferencejob.model.UserFavourite;

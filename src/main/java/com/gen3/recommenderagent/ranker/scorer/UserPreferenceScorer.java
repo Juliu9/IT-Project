@@ -1,8 +1,8 @@
 package com.gen3.recommenderagent.ranker.scorer;
 
-import com.gen3.recommenderagent.embedding.VectorMath;
+import com.gen3.catalogue.model.AudiobookCandidate;
+import com.gen3.catalogue.vector.VectorMath;
 import com.gen3.recommenderagent.ranker.RankingContext;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import java.util.ArrayList;
 import java.util.List;

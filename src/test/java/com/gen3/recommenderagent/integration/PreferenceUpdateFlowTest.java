@@ -31,6 +31,7 @@ import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import com.gen3.recommenderagent.ranker.Ranker;
 import com.gen3.recommenderagent.ranker.RankingContext;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
+import com.gen3.recommenderagent.response.ConversationResponseGenerator;
 import com.gen3.recommenderagent.retrieval.CandidateRetriever;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
@@ -132,7 +133,9 @@ class PreferenceUpdateFlowTest {
     var question = process(update(null));
     assertThat(question.getDecision())
         .isEqualTo(ConversationDecision.PREFERENCE_UPDATE_CLARIFICATION);
-    assertThat(new AiResponseGenerator(null).generate(question.getRecommendations(), question))
+    assertThat(
+            new ConversationResponseGenerator(new AiResponseGenerator(null))
+                .generate(question.getRecommendations(), question))
         .contains("What would you like to change");
     assertThat(saved()).isNull();
     var reply = request(Intent.RECOMMENDATION);

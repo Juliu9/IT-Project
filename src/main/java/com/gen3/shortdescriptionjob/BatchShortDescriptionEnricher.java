@@ -1,6 +1,6 @@
 package com.gen3.shortdescriptionjob;
 
-import com.gen3.recommenderagent.storage.audiobook.model.StoredAudiobook;
+import com.gen3.catalogue.model.StoredAudiobook;
 import com.gen3.shortdescriptionjob.provider.ShortDescriptionBatchProvider;
 import com.gen3.shortdescriptionjob.store.AudiobookEnrichmentStore;
 import java.io.IOException;

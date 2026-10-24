@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
+import com.gen3.catalogue.model.AudiobookRecord;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.embedding.EmbeddingModel;

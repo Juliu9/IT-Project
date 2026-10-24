@@ -32,7 +32,9 @@ class ExplanationResponseTest {
     org.mockito.Mockito.clearInvocations(client.prompt());
     var request = request();
     var books = List.of(book(true), book(false));
-    var generator = new AiResponseGenerator(client, AiOperationObserver.noop());
+    var generator =
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(client, AiOperationObserver.noop()));
     assertThat(generator.generate(books, ConversationTurn.fromDraft(request)))
         .isEqualTo("An explanation.");
     var system = ArgumentCaptor.forClass(String.class);
@@ -46,7 +48,8 @@ class ExplanationResponseTest {
             "Keep the actual ranks",
             "only when readingPreferencesUsed=true",
             "Never infer reasons from numerical scores");
-    String prompt = generator.compilePrompt(books, ConversationTurn.fromDraft(request), "");
+    String prompt =
+        new AiResponseGenerator(null).compilePrompt(books, ConversationTurn.fromDraft(request), "");
     assertThat(prompt)
         .contains("fantasy", "readingPreferencesUsed=true", "readingPreferencesUsed=false");
   }
@@ -55,11 +58,13 @@ class ExplanationResponseTest {
   void unavailableModelFallsBackWithoutInventingPreferencesOrMissingDescription() {
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(client.prompt().system(anyString()).user(anyString()).call().chatResponse())
-        .thenThrow(new IllegalStateException("offline"));
+        .thenThrow(new org.springframework.web.client.ResourceAccessException("offline"));
     var known = book(true);
     var unknown = book(false);
     unknown.setShortDescription(null);
-    var generator = new AiResponseGenerator(client, AiOperationObserver.noop());
+    var generator =
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(client, AiOperationObserver.noop()));
     String response =
         generator.generate(List.of(known, unknown), ConversationTurn.fromDraft(request()));
     assertThat(response)
@@ -68,7 +73,7 @@ class ExplanationResponseTest {
             "school of magic",
             "not enough description information");
     assertThat(
-            new AiResponseGenerator(null)
+            new ConversationResponseGenerator(new AiResponseGenerator(null))
                 .generate(List.of(unknown), ConversationTurn.fromDraft(request())))
         .doesNotContain("Your reading preferences were used");
   }
@@ -84,7 +89,8 @@ class ExplanationResponseTest {
                         new AssistantMessage(
                             "4. **Harry Potter** (rank 4): A school of magic fits your fantasy request.")))));
     String result =
-        new AiResponseGenerator(client, AiOperationObserver.noop())
+        new ConversationResponseGenerator(
+                new AiResponseGenerator(client, AiOperationObserver.noop()))
             .generate(List.of(book(false)), ConversationTurn.fromDraft(request()));
     assertThat(result).isEqualTo("4. Harry Potter A school of magic fits your fantasy request.");
   }
@@ -111,7 +117,9 @@ class ExplanationResponseTest {
                   return book;
                 })
             .toList();
-    var generator = new AiResponseGenerator(client, AiOperationObserver.noop());
+    var generator =
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(client, AiOperationObserver.noop()));
     String result = generator.generate(books, ConversationTurn.fromDraft(request()));
     assertThat(result.split("\\s+")).hasSizeLessThanOrEqualTo(150);
     assertThat(result).doesNotContain("*", "(", ")", "verbose");
@@ -119,7 +127,8 @@ class ExplanationResponseTest {
       assertThat(result).contains("Number " + rank + ", Title " + rank);
     }
     String offline =
-        new AiResponseGenerator(null).generate(books, ConversationTurn.fromDraft(request()));
+        new ConversationResponseGenerator(new AiResponseGenerator(null))
+            .generate(books, ConversationTurn.fromDraft(request()));
     assertThat(offline).isEqualTo(result);
     assertThat(offline).contains(". Number 2,", ". Number 5,").endsWith(".");
   }

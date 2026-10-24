@@ -2,11 +2,11 @@ package com.gen3.recommenderagent.retrieval.plan;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.gen3.catalogue.model.AudiobookFilterConditions;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.MustInclude;
 import com.gen3.recommenderagent.domain.session.MustNotInclude;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;

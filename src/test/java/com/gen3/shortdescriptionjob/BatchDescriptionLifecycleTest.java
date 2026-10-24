@@ -11,8 +11,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.model.StoredAudiobook;
+import com.gen3.catalogue.model.AudiobookRecord;
+import com.gen3.catalogue.model.StoredAudiobook;
 import com.gen3.shortdescriptionjob.provider.OpenAiShortDescriptionBatchProvider;
 import com.gen3.shortdescriptionjob.provider.ShortDescriptionBatchProvider;
 import com.gen3.shortdescriptionjob.store.AudiobookEnrichmentStore;

@@ -31,12 +31,16 @@ class ResponseGeneratorFailureTest {
   void replacementProviderFailureUsesTheExistingFallback() {
     ChatClient client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(client.prompt().system(anyString()).user(anyString()).call().chatResponse())
-        .thenThrow(new IllegalStateException("replacement provider unavailable"));
+        .thenThrow(
+            new org.springframework.web.client.ResourceAccessException(
+                "replacement provider unavailable"));
     assertThat(
-            new AiResponseGenerator(client, AiOperationObserver.noop())
+            new ConversationResponseGenerator(
+                    new AiResponseGenerator(client, AiOperationObserver.noop()))
                 .generate(books, ConversationTurn.fromDraft(request)))
         .isEqualTo(
-            new AiResponseGenerator(null).generate(books, ConversationTurn.fromDraft(request)));
+            new ConversationResponseGenerator(new AiResponseGenerator(null))
+                .generate(books, ConversationTurn.fromDraft(request)));
   }
 
   @ParameterizedTest
@@ -46,10 +50,12 @@ class ResponseGeneratorFailureTest {
     when(client.prompt().system(anyString()).user(anyString()).call().chatResponse())
         .thenReturn(response);
     assertThat(
-            new AiResponseGenerator(client, AiOperationObserver.noop())
+            new ConversationResponseGenerator(
+                    new AiResponseGenerator(client, AiOperationObserver.noop()))
                 .generate(books, ConversationTurn.fromDraft(request)))
         .isEqualTo(
-            new AiResponseGenerator(null).generate(books, ConversationTurn.fromDraft(request)));
+            new ConversationResponseGenerator(new AiResponseGenerator(null))
+                .generate(books, ConversationTurn.fromDraft(request)));
   }
 
   @Test
@@ -59,11 +65,26 @@ class ResponseGeneratorFailureTest {
     when(broken.getTitle()).thenThrow(new IllegalArgumentException("invalid recommendation"));
     assertThatThrownBy(
             () ->
-                new AiResponseGenerator(client, AiOperationObserver.noop())
+                new ConversationResponseGenerator(
+                        new AiResponseGenerator(client, AiOperationObserver.noop()))
                     .generate(List.of(broken), ConversationTurn.fromDraft(request)))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessage("invalid recommendation");
     verifyNoInteractions(client);
+  }
+
+  @Test
+  void programmingErrorsInsideTheModelCallRemainVisible() {
+    ChatClient client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    var failure = new IllegalStateException("broken adapter");
+    when(client.prompt().system(anyString()).user(anyString()).call().chatResponse())
+        .thenThrow(failure);
+    assertThatThrownBy(
+            () ->
+                new ConversationResponseGenerator(
+                        new AiResponseGenerator(client, AiOperationObserver.noop()))
+                    .generate(books, ConversationTurn.fromDraft(request)))
+        .isSameAs(failure);
   }
 
   static Stream<ChatResponse> emptyResponses() {
