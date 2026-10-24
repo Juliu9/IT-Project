@@ -29,7 +29,8 @@ public final class ConversationState {
     SessionRequest request = resolve(session, original);
     validate.accept(request);
     // Invalidation uses the original action because clarification replies can become searches.
-    if (request.getIntent() != Intent.REPEAT
+    if (request.getIntent() != Intent.UPDATE_PREFERENCES
+        && request.getIntent() != Intent.REPEAT
         && request.getIntent() != Intent.EXPLAIN_RECOMMENDATION
         && request.getIntent() != Intent.CHANGE_COUNT
         && request.getIntent() != Intent.CANCEL
@@ -46,6 +47,18 @@ public final class ConversationState {
 
   /** Records the completed transition and resolves wording-independent response policy. */
   public void finish(Session session, SessionRequest request, SessionRequest original) {
+    if (request.getIntent() == Intent.UPDATE_PREFERENCES) {
+      boolean clarification =
+          request.getDecision() == ConversationDecision.PREFERENCE_UPDATE_CLARIFICATION;
+      session.setAwaitingPreferenceUpdate(clarification);
+      if (!clarification) {
+        session.setPreferences(request.getPreferenceUpdates().copy());
+      }
+      request.setRecommendations(List.of());
+      complete(request);
+      remember(session, request);
+      return;
+    }
     if (request.getIntent() == Intent.REPEAT) {
       complete(request);
       if (request.getDecision() == null) {
@@ -177,7 +190,6 @@ public final class ConversationState {
     }
     return intent == Intent.RECOMMENDATION
         || intent == Intent.REFINE
-        || intent == Intent.UPDATE_PREFERENCES
         || intent == Intent.CLEAR_HISTORY
         || (intent == Intent.MORE_RESULTS && hasSearchCriteria(filters));
   }
@@ -185,17 +197,20 @@ public final class ConversationState {
   private void applyTransition(Session session, SessionRequest request, Intent originalIntent) {
     // Persist a taste reply before history replacement removes the pending clarification.
     if (request.getIntent() != Intent.CANCEL
-        && (originalIntent == Intent.UPDATE_PREFERENCES
-            || ((originalIntent == Intent.REFINE || originalIntent == Intent.RECOMMENDATION)
-                && awaitingPreferences(session)
-                && !request.isPreferenceClarificationRequired()))) {
+        && ((originalIntent == Intent.REFINE || originalIntent == Intent.RECOMMENDATION)
+            && awaitingPreferences(session)
+            && !request.isPreferenceClarificationRequired())) {
       session.setPreferences(mergedPreferences(session, request));
     }
     if (request.getIntent() == Intent.CHANGE_COUNT) {
       session.setBookCount(resolveBookCount(request, session));
     }
     if (request.getIntent() == Intent.CANCEL) {
+      session.setAwaitingPreferenceUpdate(false);
       session.getRequests().forEach(previous -> previous.setPreferenceClarificationRequired(false));
+    }
+    if (isRecommendationIntent(request.getIntent())) {
+      session.setAwaitingPreferenceUpdate(false);
     }
     if (request.getIntent() == Intent.CLEAR_HISTORY) {
       session.clearHistory();
@@ -232,6 +247,10 @@ public final class ConversationState {
     entry.setRequestId(request.getRequestId());
     entry.setCreatedAt(request.getCreatedAt());
     entry.setIntent(request.getIntent());
+    entry.setSearchCriteria(
+        request.getSearchCriteria() == null ? null : request.getSearchCriteria().copy());
+    entry.setUserPreferenceSnapshot(request.getUserPreferenceSnapshot());
+    entry.setUserPreferencesLoaded(request.isUserPreferencesLoaded());
     entry.setPersonalised(request.isPersonalised());
     entry.setPreferenceClarificationRequired(request.isPreferenceClarificationRequired());
     entry.setPositiveSemanticQuery(request.getPositiveSemanticQuery());
@@ -265,6 +284,40 @@ public final class ConversationState {
     }
     if (effective.getIntent() == Intent.CANCEL) {
       return normalizeInput(effective);
+    }
+    if (effective.getIntent() == Intent.UPDATE_PREFERENCES
+        || (session.isAwaitingPreferenceUpdate()
+            && !effective.isExplicitSearch()
+            && (effective.getIntent() == Intent.RECOMMENDATION
+                || effective.getIntent() == Intent.REFINE
+                || effective.getIntent() == Intent.UNKNOWN))) {
+      effective.setIntent(Intent.UPDATE_PREFERENCES);
+      SessionPreferences updates = effective.getPreferenceUpdates();
+      if (updates == null) {
+        updates = SessionPreferences.fromRequest(effective);
+      }
+      boolean changes =
+          updates.hasValues()
+              || (effective.getPreferenceRemovals() != null
+                  && effective.getPreferenceRemovals().hasValues())
+              || (effective.getReplacePreferenceFields() != null
+                  && !effective.getReplacePreferenceFields().isEmpty());
+      effective.setMustInclude(null);
+      effective.setMustNotInclude(null);
+      normalizeInput(effective);
+      if (!changes) {
+        effective.setDecision(ConversationDecision.PREFERENCE_UPDATE_CLARIFICATION);
+      } else {
+        var base =
+            session.getPreferences() == null ? new SessionPreferences() : session.getPreferences();
+        effective.setPreferenceUpdates(
+            base.updated(
+                updates,
+                effective.getPreferenceRemovals(),
+                effective.getReplacePreferenceFields()));
+        effective.setDecision(ConversationDecision.PREFERENCES_UPDATED);
+      }
+      return effective;
     }
     // The parser has no session context; resolve short answers against the outstanding question.
     Integer selection = selectionReply(reply);
@@ -319,8 +372,9 @@ public final class ConversationState {
       }
       effective.setIntent(Intent.RECOMMENDATION);
     }
-    if (awaitingPreferences(session) && acceptsPreferences(effective.getIntent())) {
-      applyPreferences(effective, session);
+    if (awaitingPreferences(session)
+        && effective.getIntent() != Intent.MORE_RESULTS
+        && acceptsPreferences(effective.getIntent())) {
       effective.setIntent(Intent.RECOMMENDATION);
       effective.setPersonalised(true);
     }
@@ -328,11 +382,11 @@ public final class ConversationState {
       applyPreviousSearch(effective, session);
     }
     if (isRecommendationIntent(effective.getIntent())) {
-      applyPreferences(effective, session);
+      if (effective.getIntent() != Intent.MORE_RESULTS) {
+        effective.setSearchCriteria(SessionPreferences.fromRequest(effective));
+        applyPreferences(effective, session);
+      }
       effective.setBookCount(resolveBookCount(effective, session));
-    }
-    if (effective.getIntent() == Intent.UPDATE_PREFERENCES) {
-      applyPreferences(effective, session);
     }
     return effective;
   }
@@ -558,7 +612,18 @@ public final class ConversationState {
     for (int index = requests.size() - 1; index >= 0; index--) {
       SessionRequest previous = requests.get(index);
       if (isSearchContext(previous)) {
-        merge(previous, target);
+        if (target.getIntent() == Intent.REFINE && previous.getSearchCriteria() != null) {
+          merge(previous.getSearchCriteria().asRequest(), target);
+          target.setPersonalised(previous.isPersonalised() || target.isPersonalised());
+        } else {
+          merge(previous, target);
+        }
+        if (target.getIntent() == Intent.MORE_RESULTS) {
+          target.setSearchCriteria(
+              previous.getSearchCriteria() == null ? null : previous.getSearchCriteria().copy());
+          target.setUserPreferenceSnapshot(previous.getUserPreferenceSnapshot());
+          target.setUserPreferencesLoaded(previous.isUserPreferencesLoaded());
+        }
         return;
       }
     }
@@ -701,6 +766,15 @@ public final class ConversationState {
     if (source == null) {
       return copy;
     }
+    copy.setPreferenceUpdates(
+        source.getPreferenceUpdates() == null ? null : source.getPreferenceUpdates().copy());
+    copy.setPreferenceRemovals(
+        source.getPreferenceRemovals() == null ? null : source.getPreferenceRemovals().copy());
+    copy.setReplacePreferenceFields(
+        source.getReplacePreferenceFields() == null
+            ? null
+            : new ArrayList<>(source.getReplacePreferenceFields()));
+    copy.setExplicitSearch(source.isExplicitSearch());
     copy.setAddAuthors(source.isAddAuthors());
     copy.setAddNarrators(source.isAddNarrators());
     copy.setRequestId(source.getRequestId());

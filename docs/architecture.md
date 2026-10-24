@@ -61,6 +61,29 @@ Pending recommendations are catalogue snapshots. Edits and removals affect new b
 items are not rechecked on each page. Sessions without a pending queue refill normally. The queue
 needs no Redis-specific keys or additional storage-adapter operations.
 
+### Session preference updates and search snapshots
+
+The parser supplies `preferenceUpdates` and `preferenceRemovals`, both `SessionPreferences` values.
+Likes add to the positive query; dislikes add to the negative query. Removing a like does not add a
+dislike. “Avoid romance” supplies both positive removal and negative addition. Explicit replacements
+name only the affected fields in `replacePreferenceFields`, for example `positiveSemanticQuery.genres`;
+replacement without a new value clears that field. Other preferences remain unchanged.
+
+An empty update asks what to change and sets `Session.awaitingPreferenceUpdate`. A short taste reply
+completes the update without retrieving books. Explicit search commands (`explicitSearch=true`) start
+normal recommendation work instead; cancel and clear-history end the pending update.
+
+Successful updates change only session preferences and the replay acknowledgement. They preserve the
+latest displayed page, shown IDs, search history and pending batch. Both repeat modes remain usable.
+New `RECOMMENDATION`/`REFINE` requests combine explicit `searchCriteria` with the latest preferences.
+The resolved search keeps its effective criteria for `MORE_RESULTS`; refills do not merge today's
+session preferences. `userPreferenceSnapshot` and `userPreferencesLoaded` also freeze stored reading
+vectors (including their absence) for retrieval and ranking. New searches/refinements reload them.
+
+Older sessions without explicit criteria metadata retain their saved resolved criteria as the fallback;
+the original explicit/preference split cannot be reconstructed. Missing vector snapshots load once on
+the first refill. New searches record the full snapshot metadata; no database migration is required.
+
 ### Refinements and exact-filter corrections
 
 Self-contained criteria, such as “fantasy under five hours”, route to `RECOMMENDATION`.
@@ -172,8 +195,10 @@ Supported intents are `RECOMMENDATION`, `REFINE`, `MORE_RESULTS`, `REPEAT`, `REP
 
 Only `RECOMMENDATION` and `REFINE` accept newly parsed positive/negative semantic queries or the
 personalised flag. Other intents discard these fields. `MORE_RESULTS`, `REPEAT_RECOMMENDATIONS`, and
-`EXPLAIN_RECOMMENDATION` inherit saved search context; `REPEAT` restores its retained request context; semantic changes use `REFINE`. `UPDATE_PREFERENCES` can still update exact filters.
-A semantic reply to a taste-clarification question uses `REFINE`.
+`EXPLAIN_RECOMMENDATION` inherit saved search context; `REPEAT` restores its retained request context; semantic search changes use `REFINE`.
+`UPDATE_PREFERENCES` carries semantic and exact changes through separate `SessionPreferences` values;
+its search-semantic fields remain empty. Standalone criteria route to `RECOMMENDATION`; context can
+resolve them as an answer to a pending preference question.
 
 ## Explaining recommendations
 

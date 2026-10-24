@@ -6,6 +6,7 @@ import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationState;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
+import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
@@ -50,17 +51,7 @@ public class SessionTransitionService {
   private SessionRequest apply(Session session, SessionRequest original) {
     SessionRequest result =
         CONVERSATION_STATE.begin(
-            session,
-            original,
-            resolved ->
-                planner.resolveFilterCorrections(
-                    resolved,
-                    original,
-                    original != null
-                            && (original.getIntent() == Intent.REFINE
-                                || original.getIntent() == Intent.MORE_RESULTS)
-                        ? CONVERSATION_STATE.latestSearch(session)
-                        : null));
+            session, original, resolved -> validate(resolved, original, session));
     if (CONVERSATION_STATE.needsRecommendations(result)) {
       result.setRecommendations(recommendationPage(result, session));
     }
@@ -78,6 +69,44 @@ public class SessionTransitionService {
       RequestTelemetry.retrieval("SESSION_EXPLANATION", result.getRecommendations().size());
     }
     return result;
+  }
+
+  private void validate(SessionRequest resolved, SessionRequest original, Session session) {
+    if (resolved.getIntent() == Intent.UPDATE_PREFERENCES) {
+      if (resolved.getDecision()
+          == com.gen3.recommenderagent.domain.session.ConversationDecision
+              .PREFERENCE_UPDATE_CLARIFICATION) {
+        return;
+      }
+      var proposed = resolved.getPreferenceUpdates().asRequest();
+      var updates =
+          original != null && original.getPreferenceUpdates() != null
+              ? original.getPreferenceUpdates().asRequest()
+              : original == null
+                  ? new SessionRequest()
+                  : SessionPreferences.fromRequest(original).asRequest();
+      planner.resolveFilterCorrections(proposed, updates);
+      resolved.getPreferenceUpdates().setMustInclude(proposed.getMustInclude());
+      resolved.getPreferenceUpdates().setMustNotInclude(proposed.getMustNotInclude());
+      return;
+    }
+    var previous =
+        original != null
+                && (original.getIntent() == Intent.REFINE
+                    || original.getIntent() == Intent.MORE_RESULTS)
+            ? CONVERSATION_STATE.latestSearch(session)
+            : null;
+    if (previous != null
+        && original.getIntent() == Intent.REFINE
+        && previous.getSearchCriteria() != null) {
+      previous = previous.getSearchCriteria().asRequest();
+    }
+    planner.resolveFilterCorrections(resolved, original, previous);
+    if (resolved.getSearchCriteria() != null && resolved.getIntent() != Intent.MORE_RESULTS) {
+      var criteria = resolved.getSearchCriteria().asRequest();
+      planner.resolveFilterCorrections(criteria, original, previous);
+      resolved.setSearchCriteria(SessionPreferences.fromRequest(criteria));
+    }
   }
 
   private List<Recommendation> recommendationPage(SessionRequest request, Session session) {

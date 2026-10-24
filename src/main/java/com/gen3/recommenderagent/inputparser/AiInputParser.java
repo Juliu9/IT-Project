@@ -88,6 +88,13 @@ public class AiInputParser implements InputParser {
                         stated criteria ("Recommend an audiobook", "Recommend an audiobook for me", "books I would like");
                         do not invent criteria. Only RECOMMENDATION/REFINE allow semantic queries or personalised=true;
                         leave semantic queries empty and personalised=false for other intents.
+                        UPDATE_PREFERENCES uses preferenceUpdates and preferenceRemovals (SessionPreferences shape), never search semantic fields.
+                        Likes add to positiveSemanticQuery; dislikes/avoidances add to negativeSemanticQuery and remove the matching positive value.
+                        "No longer like romance" only removes positive romance; "avoid romance" also adds negative romance.
+                        Explicit replacement uses replacePreferenceFields paths, e.g. positiveSemanticQuery.genres or mustInclude.authors;
+                        replace only named fields, not the whole profile. Clearing a field uses its replacement path and no new value.
+                        Empty update commands leave changes empty. For standalone taste replies also supply preferenceUpdates.
+                        explicitSearch=true only for explicit search commands ("recommend horror books", "find books"), false for short taste replies ("horror").
                         For EXPLAIN_RECOMMENDATION ("why these books", "why the second book", "why Harry Potter"),
                         referenceRank=stated ordinal, even invalid (sixth=6); referenceTitle=stated title. Preserve both if supplied;
                         both null means whole page. These selectors belong only to EXPLAIN_RECOMMENDATION, never bookCount.
@@ -110,6 +117,10 @@ public class AiInputParser implements InputParser {
 
     SessionRequest request = new SessionRequest();
     request.setIntent(parsed.getIntent());
+    request.setPreferenceUpdates(parsed.getPreferenceUpdates());
+    request.setPreferenceRemovals(parsed.getPreferenceRemovals());
+    request.setReplacePreferenceFields(parsed.getReplacePreferenceFields());
+    request.setExplicitSearch(parsed.isExplicitSearch());
     request.setAddAuthors(parsed.isAddAuthors());
     request.setAddNarrators(parsed.isAddNarrators());
     request.setReferenceRank(boundedInteger(parsed.getReferenceRank()));

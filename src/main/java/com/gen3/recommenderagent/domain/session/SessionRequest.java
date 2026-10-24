@@ -2,6 +2,7 @@ package com.gen3.recommenderagent.domain.session;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import java.time.Instant;
 import java.util.List;
 
@@ -58,6 +59,73 @@ public class SessionRequest {
 
   public void setAddNarrators(boolean value) {
     addNarrators = value;
+  }
+
+  private SessionPreferences preferenceUpdates;
+  private SessionPreferences preferenceRemovals;
+  private List<String> replacePreferenceFields;
+  private boolean explicitSearch;
+
+  public SessionPreferences getPreferenceUpdates() {
+    return preferenceUpdates;
+  }
+
+  public void setPreferenceUpdates(SessionPreferences value) {
+    preferenceUpdates = value;
+  }
+
+  public SessionPreferences getPreferenceRemovals() {
+    return preferenceRemovals;
+  }
+
+  public void setPreferenceRemovals(SessionPreferences value) {
+    preferenceRemovals = value;
+  }
+
+  public List<String> getReplacePreferenceFields() {
+    return replacePreferenceFields;
+  }
+
+  public void setReplacePreferenceFields(List<String> value) {
+    replacePreferenceFields = value;
+  }
+
+  public boolean isExplicitSearch() {
+    return explicitSearch;
+  }
+
+  public void setExplicitSearch(boolean value) {
+    explicitSearch = value;
+  }
+
+  // Keep explicit criteria separate so a refinement can apply today's session preferences.
+  private SessionPreferences searchCriteria;
+  private UserPreferenceEmbedding userPreferenceSnapshot;
+  // Freeze absence too: a MORE refill must not pick up a newly imported reading profile.
+  private boolean userPreferencesLoaded;
+
+  public SessionPreferences getSearchCriteria() {
+    return searchCriteria;
+  }
+
+  public void setSearchCriteria(SessionPreferences value) {
+    searchCriteria = value;
+  }
+
+  public UserPreferenceEmbedding getUserPreferenceSnapshot() {
+    return userPreferenceSnapshot;
+  }
+
+  public void setUserPreferenceSnapshot(UserPreferenceEmbedding value) {
+    userPreferenceSnapshot = value;
+  }
+
+  public boolean isUserPreferencesLoaded() {
+    return userPreferencesLoaded;
+  }
+
+  public void setUserPreferencesLoaded(boolean value) {
+    userPreferencesLoaded = value;
   }
 
   private Intent intent;

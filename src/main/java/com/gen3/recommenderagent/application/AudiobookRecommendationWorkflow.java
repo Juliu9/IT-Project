@@ -2,6 +2,7 @@ package com.gen3.recommenderagent.application;
 
 import static com.gen3.recommenderagent.domain.RecommendationPolicy.RECOMMENDATION_BATCH_SIZE;
 
+import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
@@ -51,7 +52,18 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
   /** Builds retrieval text, lets the retriever select its mode, and ranks the candidates. */
   @Override
   public List<Recommendation> recommend(SessionRequest request, Session session) {
-    UserPreferenceEmbedding preferences = userPreferences(session).orElse(null);
+    UserPreferenceEmbedding preferences;
+    if (request != null
+        && request.getIntent() == Intent.MORE_RESULTS
+        && request.isUserPreferencesLoaded()) {
+      preferences = request.getUserPreferenceSnapshot();
+    } else {
+      preferences = userPreferences(session).orElse(null);
+      if (request != null) {
+        request.setUserPreferenceSnapshot(preferences);
+        request.setUserPreferencesLoaded(true);
+      }
+    }
     SemanticQueryVectors vectors =
         RequestTelemetry.measure("embedMs", () -> retrievalVectors(request, preferences));
     if (request != null && request.isPersonalised()) {

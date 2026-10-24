@@ -25,6 +25,38 @@ import tools.jackson.databind.ObjectMapper;
 
 class InputParserTest {
   @Test
+  void mapsPreferenceEditsWithoutPuttingThemInControlSearchSemantics() {
+    var parsed =
+        AiInputParser.REQUEST_CONVERTER.convert(
+            """
+        {"intent":"UPDATE_PREFERENCES",
+         "preferenceUpdates":{"negativeSemanticQuery":{"genres":["romance"]}},
+         "preferenceRemovals":{"positiveSemanticQuery":{"genres":["romance"]}},
+         "replacePreferenceFields":["mustInclude.language"], "explicitSearch":false}
+        """);
+    var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    when(client
+            .prompt()
+            .system(anyString())
+            .user("avoid romance and any language is fine")
+            .call()
+            .responseEntity(AiInputParser.REQUEST_CONVERTER))
+        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+    var result =
+        new AiInputParser(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
+            .parse("avoid romance and any language is fine");
+    assertEquals(Intent.UPDATE_PREFERENCES, result.getIntent());
+    assertEquals(null, result.getPositiveSemanticQuery());
+    assertEquals(null, result.getNegativeSemanticQuery());
+    assertEquals(
+        List.of("romance"), result.getPreferenceUpdates().getNegativeSemanticQuery().getGenres());
+    assertEquals(
+        List.of("romance"), result.getPreferenceRemovals().getPositiveSemanticQuery().getGenres());
+    assertEquals(List.of("mustInclude.language"), result.getReplacePreferenceFields());
+  }
+
+  @Test
   void mapsExplicitAdditionsAndRoutesStandaloneCriteriaToRecommendation() {
     var parsed = new ParsedRequest();
     parsed.setIntent(Intent.RECOMMENDATION);

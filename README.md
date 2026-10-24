@@ -85,13 +85,15 @@ its ID, title, short description, score, and whether stored reading preferences 
 | “Repeat that” | Replay the latest request, including help, explanations and clarifications; do not rerun searches or actions. |
 | “Repeat the books” | Replay the latest recommendation page, even after help or an explanation; leave the queue untouched. |
 | Refine or start a search | Discard the queue and retrieve using resolved criteria. |
+| Update preferences | Save changes for the next new search/refinement; keep the displayed page and pending batch. |
 | Change the result count or ask for help | Keep the pending batch. |
 | Clear history | Clear search history, shown IDs, and the queue; keep preferences and result count. |
 
 A full cached page skips preference lookup, embedding, retrieval, and ranking. Parsing and response
 generation still run. Short “more” pages are allowed. If none remain, the response explicitly says there are no more
-matches for the current search. New exact filters supplied with “more”, or preference updates,
-also invalidate the pending batch.
+matches for the current search. New exact filters supplied with “more” invalidate the pending batch.
+Preference updates do not: “more”, including refills, retains the original search preferences.
+New searches and refinements apply the latest session preferences.
 
 Explanation requests use `EXPLAIN_RECOMMENDATION`. Invalid ranks, unmatched or ambiguous titles, or
 conflicting rank/title references list the actual page in rank order and ask which book. An

@@ -84,7 +84,9 @@ class RecommendationBatchFlowTest {
     SessionRequest preferences = request(Intent.UPDATE_PREFERENCES);
     SemanticQuery tastes = new SemanticQuery();
     tastes.setGenres(List.of("romance"));
-    preferences.setPositiveSemanticQuery(tastes);
+    var updates = new com.gen3.recommenderagent.domain.session.SessionPreferences();
+    updates.setPositiveSemanticQuery(tastes);
+    preferences.setPreferenceUpdates(updates);
     process(preferences);
     assertThat(process(request(Intent.MORE_RESULTS)).isSearchClarificationRequired()).isTrue();
     org.mockito.Mockito.verifyNoInteractions(ranker, retriever, vectors, users);
@@ -207,7 +209,7 @@ class RecommendationBatchFlowTest {
   @ParameterizedTest
   @EnumSource(
       value = Intent.class,
-      names = {"RECOMMENDATION", "REFINE", "UPDATE_PREFERENCES", "CLEAR_HISTORY"})
+      names = {"RECOMMENDATION", "REFINE", "CLEAR_HISTORY"})
   void changedSearchStateDiscardsThePreviousBatch(Intent intent) {
     process(request(Intent.RECOMMENDATION));
     process(request(intent));

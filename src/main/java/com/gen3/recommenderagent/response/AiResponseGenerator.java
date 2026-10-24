@@ -371,6 +371,8 @@ public class AiResponseGenerator implements ResponseGenerator {
         int count = Math.clamp(currentRequest.getBookCount(), 1, MAX_BOOK_COUNT);
         yield "I'll show " + count + " recommendation" + (count == 1 ? "" : "s") + " at a time.";
       }
+      case PREFERENCE_UPDATE_CLARIFICATION ->
+          "What would you like to change about your preferences?";
       case PREFERENCES_UPDATED -> "Thanks, I've updated your preferences for this session.";
       case HISTORY_CLEARED -> "All set, I've cleared this session's recommendation history.";
       case CANCELLED -> "Okay, cancelled. Let me know what you would like next.";

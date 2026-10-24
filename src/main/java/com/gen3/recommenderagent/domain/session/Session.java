@@ -18,6 +18,16 @@ public class Session {
   private Instant updatedAt;
   private Instant expiresAt;
   private long version;
+  private boolean awaitingPreferenceUpdate;
+
+  public boolean isAwaitingPreferenceUpdate() {
+    return awaitingPreferenceUpdate;
+  }
+
+  public void setAwaitingPreferenceUpdate(boolean value) {
+    awaitingPreferenceUpdate = value;
+  }
+
   private Integer bookCount = MAX_BOOK_COUNT;
   private List<String> shownBooks;
   private List<SessionRequest> requests = new ArrayList<>();
@@ -162,6 +172,7 @@ public class Session {
   }
 
   public void clearHistory() {
+    this.awaitingPreferenceUpdate = false;
     this.lastRequest = null;
     this.lastDecision = null;
     this.pendingRecommendations.clear();
