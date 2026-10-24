@@ -22,6 +22,26 @@ public class Session {
   private List<String> shownBooks;
   private List<SessionRequest> requests = new ArrayList<>();
   private SessionPreferences preferences;
+  // REPEAT needs the latest resolved action, separately from reusable search/preference history.
+  private SessionRequest lastRequest;
+  private ConversationDecision lastDecision;
+
+  public SessionRequest getLastRequest() {
+    return lastRequest;
+  }
+
+  public void setLastRequest(SessionRequest request) {
+    lastRequest = request;
+  }
+
+  public ConversationDecision getLastDecision() {
+    return lastDecision;
+  }
+
+  public void setLastDecision(ConversationDecision decision) {
+    lastDecision = decision;
+  }
+
   // shortcut: cached details are snapshots; validate the catalogue if live removals must take
   // effect.
   private List<Recommendation> pendingRecommendations = new ArrayList<>();
@@ -142,6 +162,8 @@ public class Session {
   }
 
   public void clearHistory() {
+    this.lastRequest = null;
+    this.lastDecision = null;
     this.pendingRecommendations.clear();
     this.requests.clear();
     if (this.shownBooks != null) {

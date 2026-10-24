@@ -7,6 +7,16 @@ public class Recommendation {
   private Double score;
   private String title;
   private String shortDescription;
+  // Retained with each queued book so later explanations use the evidence from its retrieval.
+  private boolean readingPreferencesUsed;
+
+  public boolean isReadingPreferencesUsed() {
+    return readingPreferencesUsed;
+  }
+
+  public void setReadingPreferencesUsed(boolean used) {
+    readingPreferencesUsed = used;
+  }
 
   /** Required to read recommendations retained in Redis session JSON. */
   public Recommendation() {}

@@ -17,14 +17,16 @@ concise response explaining why the books fit.
 4. **Respond:** A separate chat client explains the selected books using their stored short descriptions.
 
 Catalogue embedding generation, short-description generation, migration, and preference imports
-run as separate, explicit maintenance jobs. Normal requests only generate search-query embeddings.
+run as separate, explicit maintenance jobs. Live requests generate query embeddings only when
+needed for retrieval; they never generate catalogue embeddings or summaries.
 
 ## How the recommender agent works
 
 ### 1. Turn the message into a structured request
 
 `RequestGateway` accepts text at `/api/v1/recommendations`, along with user and session IDs.
-`AiInputParser` asks its chat model to produce a `SessionRequest` containing:
+`AiInputParser` asks its chat model for a `ParsedRequest`, then converts it into the internal
+`SessionRequest`. It captures:
 
 - An **intent**, such as a new recommendation, a refinement, “more”, or “repeat”.
 - Positive and negative **semantic criteria**: concepts the user wants or wants to avoid.
@@ -44,8 +46,8 @@ at the same time. `ConversationState` then resolves the request against saved se
 preferences, and history, and discards cached recommendations when the search changes.
 
 Some intents need no search: help, count changes, clearing history, and repeat are handled from
-conversation state. “More” without an earlier search asks what the user wants instead of
-embedding or retrieving anything. A personalised request without usable taste information asks
+conversation state. Explanations also reuse the latest recommendation page. “More” without an
+earlier search asks what the user wants instead of embedding or retrieving anything. A personalised request without usable taste information asks
 for preferences.
 
 ### 3. Retrieve candidates when the cache cannot supply the page
@@ -70,12 +72,14 @@ duration plausibility. Their weights are configured in `application.properties`.
 
 The service retains up to **20 ranked recommendations**, serves up to **five** according to the
 requested count, and saves the unused recommendations in the session. Each saved item includes
-its ID, title, short description, and score, so cached pages do not need another catalogue lookup.
+its ID, title, short description, score, and whether stored reading preferences contributed, so cached pages do not need another catalogue lookup.
 
 | Follow-up | Behavior |
 | --- | --- |
 | “More please” | Serve the next cached page; refill when short, keeping the cached tail. |
-| “Repeat those” | Reuse the last page or empty “more” outcome; leave the queue untouched. |
+| “Why these books?” / “Why the second book?” / “Why Harry Potter?” | Explain the latest page or a uniquely selected book, without searching or consuming the queue. |
+| “Repeat that” | Replay the latest request, including help, explanations and clarifications; do not rerun searches or actions. |
+| “Repeat the books” | Replay the latest recommendation page, even after help or an explanation; leave the queue untouched. |
 | Refine or start a search | Discard the queue and retrieve using resolved criteria. |
 | Change the result count or ask for help | Keep the pending batch. |
 | Clear history | Clear search history, shown IDs, and the queue; keep preferences and result count. |
@@ -85,6 +89,14 @@ generation still run. Short “more” pages are allowed. If none remain, the re
 matches for the current search. New exact filters supplied with “more”, or preference updates,
 also invalidate the pending batch.
 
+Explanation requests use `EXPLAIN_RECOMMENDATION`. Invalid ranks, unmatched or ambiguous titles, or
+conflicting rank/title references list the actual page in rank order and ask which book. An
+explicit retry such as “Why the fourth book?” uses that same page. No earlier page is selected
+after an empty MORE, and clearing history removes explanation context. Explanations connect the
+saved search criteria to descriptions and mention stored reading preferences only when recorded
+as having contributed; they do not invent exact metadata or specific favourites. Generated
+explanations use plain text and punctuation, with a maximum of 150 words across the selected books.
+
 ### 5. Commit the session, then explain the books
 
 Queue consumption, shown IDs, and conversation changes commit together before a response is
@@ -92,7 +104,8 @@ written. The Redis adapter checks lock ownership and session version before savi
 locks, and refreshes the session's 24-hour expiry. A failed transition leaves the saved queue
 unchanged; response generation runs after the lock is released.
 
-`ConversationState` supplies a temporary `ConversationDecision` describing the resolved action.
+`ConversationState` supplies a `ConversationDecision` describing the resolved action. The session
+saves the latest resolved request and decision so a repeat can replay it without reapplying changes.
 `AiResponseGenerator` uses built-in wording for actions and clarification, or asks its separate
 chat client to explain the selected books using the resolved criteria and stored short descriptions.
 The response model does not choose the books. If it fails, built-in wording returns the selected
@@ -120,10 +133,12 @@ from the recommendation server. Matching tests live under `src/test/java/com/gen
 | Location | Purpose |
 | --- | --- |
 | `src/main/resources/application.properties` | Backend selection, model choices, scoring, connections, and job settings |
+| `src/main/resources/application-dev.properties` | Optional local `.env` import for the dev profile |
+| `src/main/resources/demo/index.html` | Test website, served only with the dev profile |
 | `compose.yaml` | Local Redis and Qdrant services |
 | `compose.observability.yaml` / `observability/` | Optional Grafana Alloy log collector |
 | `solr/vector-field-schema.xml` | Manual Solr vector-field schema snippet |
-| `docs/` | Detailed behavior, maintenance instructions, and system diagrams |
+| `docs/` | Configuration reference, detailed behavior, maintenance instructions, and system diagrams |
 | `.github/workflows/ci.yml` | Build and test checks |
 
 ## Run locally
@@ -138,10 +153,73 @@ export OPENAI_API_KEY="your-key"
 ./mvnw spring-boot:run
 ```
 
-The server defaults to `http://localhost:8080`, Redis to `localhost:6379`, and Qdrant to
-`http://localhost:6333` with gRPC on port `6334`. Docker publishes these database ports on
-`127.0.0.1` only. Set credentials in your shell or IDE; the application does not automatically load
-a repository `.env` file.
+The server is backend-only by default: the demo page and JSON demo endpoint are unavailable.
+
+### Local `.env` configuration
+
+Use **one `.env` file in the repository root**, beside `pom.xml` and `compose.yaml`. No separate
+`.env.dev` or `.env.production` is loaded automatically. The file itself is optional if you already
+provide the required values through your shell or IDE. Keep secrets out of Git; `.env` is ignored.
+
+| Variable | Needed when / purpose |
+| --- | --- |
+| `OPENAI_API_KEY` | Required by the recommendation server for parsing, query embeddings, and AI responses. |
+| `QDRANT_URL` | Set for remote Qdrant; defaults to `http://localhost:6333`. |
+| `QDRANT_GRPC_PORT` | Qdrant query connection port; defaults to `6334`. |
+| `QDRANT_API_KEY` | Required when your Qdrant server requires authentication; optional for the local Compose service. |
+| `QDRANT_COLLECTION` | Existing audiobook collection; defaults to `audiobooks_hybrid`. |
+| `QDRANT_USER_PREFERENCE_COLLECTION` | Stored favourite/history vectors used for personalisation and ranking; defaults to `user`. |
+| `REDIS_HOST`, `REDIS_PORT` | Session storage and locking; defaults to `localhost` and `6379`. |
+| `REDIS_USERNAME`, `REDIS_PASSWORD` | Set only if your Redis service requires authentication. |
+| `GRAFANA_LOKI_URL`, `GRAFANA_LOKI_USER`, `GRAFANA_LOKI_TOKEN` | Required only for optional Grafana log shipping with `compose.observability.yaml`; see [observability setup](docs/observability.md#setup). |
+
+For a local Compose setup with a populated catalogue, the minimum `.env` is:
+
+```properties
+OPENAI_API_KEY=your-key
+```
+
+Add the Qdrant connection, key, and collection values when using a remote catalogue. Use Java
+properties syntax: no `export` prefix or surrounding quotes. The `dev` profile loads this file
+from the working directory as Spring configuration; it does not export process environment variables.
+The checked-in `src/main/resources/application-dev.properties` enables this import and contains no secrets.
+
+Existing environment variables take precedence. Missing `.env` files are allowed. Outside the
+`dev` profile, supply configuration through your shell or IDE. Docker Compose independently reads
+the root `.env` for variable substitution; it does not export those values to Maven or Java.
+
+Start the dev server with:
+
+```bash
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+```
+
+Keep this profile disabled in production. Open `http://localhost:8080/` to test the website. It shows the
+response, resolved request, stage timings, and token usage (including query embeddings).
+The browser tab keeps its conversation across reloads using session storage.
+The demo uses a generated user ID, so it has no imported user preference profile.
+The JSON demo endpoint is `POST /api/v1/recommendations/demo`; the existing endpoint still
+returns plain text. Demo metric collection is enabled only for `/demo` requests.
+Both use the same recommendation flow. Timings overlap in the detailed
+logs; the website measures the recommendation stage as a whole. Costs are not estimated.
+
+The server defaults to port `8080`. Docker publishes Redis and Qdrant ports on `127.0.0.1` only.
+Parser and response models can be configured independently with `INPUT_PARSER_CHAT_MODEL` and
+`RESPONSE_GENERATOR_CHAT_MODEL`; unset values inherit `OPENAI_CHAT_MODEL` (default `gpt-4o-mini`).
+
+To export a trusted, shell-compatible `.env` for Maven and tests, run this from the repository
+folder before your Maven command. Values remain exported in the current terminal session:
+
+```bash
+set -a
+source .env
+set +a
+```
+
+Only source a trusted file: `source` executes shell commands. With live-service credentials
+exported, `./mvnw clean verify` can run the live integration test and incur API charges. That test
+requires nonempty `OPENAI_API_KEY`, `QDRANT_URL`, and `QDRANT_API_KEY` in the process environment,
+even though the application itself has a default Qdrant URL and supports unauthenticated local Qdrant.
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/recommendations \
@@ -151,14 +229,15 @@ curl -X POST http://localhost:8080/api/v1/recommendations \
   -d "Recommend a dark fantasy audiobook under ten hours, but no romance."
 ```
 
-Reuse the same user and session IDs for follow-ups such as “more please” and “repeat those”.
+Reuse the same user and session IDs for follow-ups such as “more please”, “repeat that”, and
+“repeat the books”.
 
 ## Important commands
 
 ### Local verification
 
 Run formatting/build checks, unit tests, and container integration tests without live AI calls.
-Docker must be available:
+This includes Spotless, Checkstyle, and Maven build validation. Docker must be available:
 
 ```bash
 OPENAI_API_KEY=ci-placeholder ./mvnw clean verify -DexcludedGroups=external
@@ -167,7 +246,9 @@ OPENAI_API_KEY=ci-placeholder ./mvnw clean verify -DexcludedGroups=external
 ### Entire test suite
 
 Run live integration tests as well, with valid `OPENAI_API_KEY`,
-`QDRANT_URL`, and `QDRANT_API_KEY` values and Redis available locally:
+`QDRANT_URL`, and `QDRANT_API_KEY` exported in the terminal, an accessible populated Qdrant
+catalogue, and Redis available locally. Without the required environment variables, the live test
+is skipped:
 
 ```bash
 ./mvnw clean verify
@@ -202,21 +283,24 @@ runs on `main` also run the entire suite with repository secrets. Fork PRs run t
 - **Existing data:** Maintenance jobs are opt-in, write data, and must run individually. Migration
   copies existing supported values; it does not generate embeddings or summaries. Preserve pending
   summary manifests so interrupted jobs can be recovered safely.
-- **Session behavior:** Responses contain at most five books. The session retains up to 500 shown
+- **Session behavior:** Recommendation pages contain at most five books. The session retains up to 500 shown
   IDs, so older books may eventually reappear. Cached book details are snapshots. Session changes
   commit before response generation; a response failure does not roll them back.
 - **Input limits:** Requests allow up to 10,000 Java characters, with a 40,000-byte HTTP body cap.
   Oversized input is rejected before model calls.
 - **Client exposure:** User/session headers are caller-supplied; they are not authentication.
   Establish a verified identity boundary before exposing the service to untrusted clients.
-- **Qdrant upgrades:** Local Docker uses server 1.19.1. Back up older volumes and upgrade through
-  consecutive minor versions; do not attach a 1.15.x volume directly to 1.19.1.
+- **Qdrant version:** Local Docker pins server 1.19.1. Check server compatibility and the vendor
+  upgrade instructions before reusing an older data volume.
 - **Secrets:** Never commit API keys, `.env` files, local logs, or generated maintenance data.
 
 ## Further reading
 
+- [Configuration reference](docs/configuration.md): property defaults, environment overrides,
+  model choices, technology connections, and job opt-ins.
+
 - [Architecture and behavior](docs/architecture.md): terminology, conversation rules, internal
-  packages, configuration, and adapter guarantees.
+  packages and adapter guarantees.
 - [Maintenance jobs](docs/maintenance.md): commands, database prerequisites, progress, and recovery.
 - [Grafana Cloud logs](docs/observability.md): optional collector setup and exported log fields.
 - [System diagrams](docs/diagrams/README.md): overview, request sequence, and maintenance jobs.

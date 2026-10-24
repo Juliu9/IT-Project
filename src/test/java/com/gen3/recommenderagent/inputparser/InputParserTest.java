@@ -25,6 +25,25 @@ import tools.jackson.databind.ObjectMapper;
 
 class InputParserTest {
   @Test
+  void mapsExplanationSelectorsWithoutTreatingRankAsBookCount() {
+    var parsed = new ParsedRequest();
+    parsed.setIntent(Intent.EXPLAIN_RECOMMENDATION);
+    parsed.setReferenceRank(6);
+    parsed.setReferenceTitle("Harry Potter");
+    var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    when(client.prompt().system(anyString()).user("why").call().responseEntity(ParsedRequest.class))
+        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+    var result =
+        new AiInputParser(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
+            .parse("why");
+    assertEquals(Intent.EXPLAIN_RECOMMENDATION, result.getIntent());
+    assertEquals(6, result.getReferenceRank());
+    assertEquals("Harry Potter", result.getReferenceTitle());
+    assertEquals(null, result.getBookCount());
+  }
+
+  @Test
   void rejectsOversizedInputBeforeCallingTheModel() {
     var client = mock(ChatClient.class);
     var parser =
@@ -42,6 +61,8 @@ class InputParserTest {
       names = {
         "MORE_RESULTS",
         "REPEAT",
+        "REPEAT_RECOMMENDATIONS",
+        "EXPLAIN_RECOMMENDATION",
         "CHANGE_COUNT",
         "UPDATE_PREFERENCES",
         "CLEAR_HISTORY",
