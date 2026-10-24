@@ -114,7 +114,7 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
       blended.add(combined);
       return new SemanticQueryVectors(blended, current.negative());
     }
-    return semanticQueryVectorService.createPersonalised(request);
+    return semanticQueryVectorService.create(request);
   }
 
   private void addVector(List<float[]> vectors, float[] vector) {

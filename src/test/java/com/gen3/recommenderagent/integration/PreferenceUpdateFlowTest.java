@@ -57,7 +57,6 @@ class PreferenceUpdateFlowTest {
     when(users.findEmbeddingByUserId("user")).thenReturn(Optional.empty());
     var encoded = new SemanticQueryVectors(List.of(new float[] {1, 0}), List.of());
     when(vectors.create(any())).thenReturn(encoded);
-    when(vectors.createPersonalised(any())).thenReturn(encoded);
     when(retriever.getCandidates(any(), any(), eq(50), anySet())).thenReturn(List.of());
     var next = new java.util.concurrent.atomic.AtomicInteger();
     when(ranker.rank(anyList(), anyInt(), any(RankingContext.class)))

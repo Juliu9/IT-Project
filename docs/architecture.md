@@ -122,6 +122,11 @@ For personalised retrieval with stored taste:
 If either positive source is absent, the other contributes at full strength. Exact filters are
 never relaxed to fill the result count.
 
+Without stored user vectors, personalised retrieval requires positive or negative semantic taste.
+Exact constraints remain mandatory filters and are never embedded as a substitute for taste. Short
+answers to the taste question merge with the pending search and retain its count; explicit searches
+abandon it. Corrections and contradictions use the existing exact-filter policy before retrieval.
+
 ### Exact duration and year filters
 
 | Filter | Accepted expressions | Boundaries |

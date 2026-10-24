@@ -346,15 +346,18 @@ public class ExactFilterPolicy {
     if (resolved.isSearchClarificationRequired()) {
       return;
     }
+    boolean awaitingTaste = session != null && session.isAwaitingPersonalisedPreferences();
     var previousSearch =
         original != null
+                && !(awaitingTaste && original.isExplicitSearch())
                 && (original.getIntent() == Intent.REFINE
-                    || original.getIntent() == Intent.MORE_RESULTS)
+                    || original.getIntent() == Intent.MORE_RESULTS
+                    || (awaitingTaste && !original.isExplicitSearch()))
             ? ConversationHistory.latestSearch(session)
             : null;
     SessionRequest previous =
         previousSearch != null
-                && original.getIntent() == Intent.REFINE
+                && (original.getIntent() == Intent.REFINE || awaitingTaste)
                 && previousSearch.getSearchCriteria() != null
             ? previousSearch.getSearchCriteria().asRequest()
             : previousSearch;

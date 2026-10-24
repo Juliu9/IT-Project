@@ -51,8 +51,17 @@ public final class SearchContextResolver implements ConversationHandler {
     if (session.isAwaitingPersonalisedPreferences()
         && effective.getIntent() != Intent.MORE_RESULTS
         && acceptsPreferences(effective.getIntent())) {
+      if (!effective.isExplicitSearch()) {
+        var pending = latestSearch(session);
+        if (pending != null) {
+          merge(pending, effective);
+          if (effective.getBookCount() == null) {
+            effective.setBookCount(pending.getBookCount());
+          }
+        }
+        effective.setPersonalised(true);
+      }
       effective.setIntent(Intent.RECOMMENDATION);
-      effective.setPersonalised(true);
     }
     if (effective.getIntent() == Intent.REFINE || effective.getIntent() == Intent.MORE_RESULTS) {
       applyPreviousSearch(effective, session);
@@ -153,6 +162,7 @@ public final class SearchContextResolver implements ConversationHandler {
     Intent originalIntent = original == null ? Intent.UNKNOWN : original.getIntent();
     if ((originalIntent == Intent.REFINE || originalIntent == Intent.RECOMMENDATION)
         && session.isAwaitingPersonalisedPreferences()
+        && !original.isExplicitSearch()
         && !request.isPreferenceClarificationRequired()) {
       session.setPreferences(SessionPreferences.fromRequest(request));
     }
