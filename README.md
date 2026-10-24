@@ -115,9 +115,10 @@ request cannot advance the page during generation. An overlapping session update
 The completed `ConversationTurn` carries a `ConversationDecision` describing the resolved action.
 It is separate from the parser’s incoming `SessionRequest`. The session saves the latest turn and
 decision so a repeat can replay it without reapplying changes.
-`AiResponseGenerator` uses built-in wording for actions and clarification, or asks its separate
-chat client to explain the selected books using the resolved criteria and stored short descriptions.
-The response model does not choose the books. If it fails, built-in wording returns the selected
+`ConversationResponseGenerator` uses built-in wording for actions and clarification, and delegates
+book narration to `AiResponseGenerator`, which uses its separate chat client, resolved criteria,
+and stored short descriptions.
+The response model does not choose the books. If its provider fails, built-in wording returns the selected
 recommendations; the committed session is preserved.
 
 Request logs record stage timings, retrieval mode, and AI token usage. See
@@ -130,13 +131,15 @@ Java sources live under `src/main/java/com/gen3/`:
 
 | Package | Responsibility |
 | --- | --- |
-| `recommenderagent` | Live API: parsing, conversation state, retrieval, ranking, responses, storage adapters, and telemetry |
+| `catalogue` | Shared audiobook models, storage contracts, Solr/Qdrant adapters, and vector utilities |
+| `recommenderagent` | Live API: parsing, conversation state, retrieval, ranking, responses, session/user storage, and telemetry |
 | `embeddingjob` | Read existing catalogue records and generate their vector embeddings |
 | `shortdescriptionjob` | Submit and import generated short descriptions |
 | `migrationjob` | Copy existing supported fields and vectors from Solr to Qdrant |
 | `userpreferencejob` | Read CSV favourites/history and aggregate existing book vectors into user preferences |
 
-The jobs reuse storage models and adapters from `recommenderagent`. Their launchers are separate
+The recommendation server and jobs reuse audiobook models and adapters from `catalogue`.
+User-preference storage remains in `recommenderagent.storage.user`. Job launchers are separate
 from the recommendation server. Matching tests live under `src/test/java/com/gen3/`.
 
 | Location | Purpose |

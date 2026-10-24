@@ -52,7 +52,7 @@ AUDIOBOOK_EMBEDDING_INDEX_ENABLED=true AUDIOBOOK_DATABASE=solr \
 - The process closes its clients when finished. It cannot run alongside migration or summary generation.
 
 Implementation lives in `com.gen3.embeddingjob`. Another database implements
-`AudiobookEmbeddingStore`; shared catalogue records and persistence remain in storage packages.
+`AudiobookEmbeddingStore`; shared catalogue records and persistence live in `com.gen3.catalogue`.
 The old `solr.embedding-index-on-startup` and `solr.embedding-index-page-size` settings are replaced
 by the settings above. Live search-query embeddings are independent of this job.
 

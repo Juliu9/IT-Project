@@ -21,7 +21,7 @@ package "migrationjob" {
 package "userpreferencejob" {
   component "UserPreferenceApplication\nCSV readers + preference aggregation" as Preferences #DBEAFE
 }
-component "Shared code in recommenderagent\nStorage ports, database adapters,\nmodels and vector utilities" as Shared #FEF3C7
+component "catalogue\nAudiobook ports, adapters,\nmodels and vector utilities" as Shared #FEF3C7
 database "Selected catalogue\nSolr OR Qdrant" as Catalogue
 database "Solr source" as SolrSource
 database "Qdrant destination" as QdrantTarget
@@ -47,7 +47,8 @@ Preferences --> UserStore : read existing book vectors / save taste vectors
 note bottom of Shared
   Jobs do not call one another.
   recommenderagent does not depend on the jobs.
-  Their shared code currently lives inside recommenderagent.
+  Catalogue code has no dependency on recommenderagent.
+  User-preference storage remains in recommenderagent.storage.user.
 end note
 legend bottom
   Migration copies existing data; it generates no embeddings or summaries.

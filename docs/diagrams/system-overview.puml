@@ -19,10 +19,11 @@ package "recommenderagent — live requests" {
   component "AudiobookRecommendationWorkflow\nBuilds a new recommendation batch" as Workflow #DCFCE7
   component "CandidateRetrievalService\nSelects and executes search" as Retrieval #DCFCE7
   component "RankingService\nRanks up to 20 recommendations" as Ranking #DCFCE7
-  component "AiResponseGenerator\nExplains the selected books" as Response #DBEAFE
-  component "Database adapter\nQdrant OR Solr" as Adapter #FEF3C7
+  component "ConversationResponseGenerator\nFixed replies or AI narration" as Response #DBEAFE
+  component "User preference adapter\nQdrant OR Solr" as UserAdapter #FEF3C7
   component "SessionRepository adapter\nCurrent runtime: Redis" as SessionStore #FEF3C7
 }
+component "catalogue\nAudiobook adapter: Qdrant OR Solr" as Adapter #FEF3C7
 database "Selected database\nQdrant OR Solr\nCatalogue + book vectors\nUser preference vectors" as Qdrant
 database "Redis\nSearch context + last page\nPending recommendations + shown IDs" as Redis
 
@@ -33,7 +34,8 @@ Session --> SessionStore : lock / load / commit / release
 SessionStore --> Redis
 Session --> Engine : apply within session update
 Engine --> Workflow : only when a new batch is needed
-Workflow --> Adapter : load user preferences
+Workflow --> UserAdapter : load user preferences
+UserAdapter --> Qdrant
 Workflow --> Retrieval : retrieve up to 50 candidates
 Retrieval --> Adapter : semantic / keyword / hybrid / filters
 Adapter --> Qdrant

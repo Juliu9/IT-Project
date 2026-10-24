@@ -13,7 +13,7 @@ participant SessionTransitionService as Transition
 participant "ConversationEngine\nIntent handlers + RecommendationPager" as Engine
 participant "SessionRepository\nRedis adapter" as Sessions
 participant "RecommendationWorkflow\nEmbedding → retrieval → ranking" as Workflow
-participant AiResponseGenerator as Response
+participant "ConversationResponseGenerator\nAI narration when needed" as Response
 
 User -> Gateway : Natural-language request
 Gateway -> Parser : Parse intent, criteria and count

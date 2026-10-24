@@ -155,12 +155,26 @@ The recommendation server is under `com.gen3.recommenderagent`:
 | `domain.conversation` | Intent dispatch, handlers, clarification, criteria merging and history policy |
 | `domain.session` | Input, working-draft, search-context, completed-turn and session models |
 | `inputparser` / `response` | Structured request parsing and response wording |
-| `embedding` | QueryEmbeddingService, positive/negative query vectors and shared vector math |
+| `embedding` | QueryEmbeddingService, positive/negative query vectors |
 | `retrieval` / `retrieval.plan` | Candidate search execution, retrieval plans and filter parsing |
 | `ranker` / `ranker.scorer` | Candidate ranking and scoring rules |
-| `storage.audiobook` / `storage.user` | Storage contracts, models and database adapters |
+| `storage.user` | Reading-preference storage contracts, models and database adapters |
+| `ai` | Provider-error translation for live parsing, embedding, and response calls |
 | `storage.session` | Session contract, commit errors and Redis adapter |
 | `observability` | Request timing and AI usage telemetry |
+
+Shared audiobook code lives in sibling `com.gen3.catalogue`: `model`, `port`, `solr`,
+`qdrant`, and `vector`. It has no dependency on `recommenderagent`. The server scans both
+packages; maintenance launchers explicitly import the adapters they need. This is a package
+boundary within the existing Maven module, with unchanged database and configuration formats.
+
+`ConversationResponseGenerator` handles fixed decision messages and delegates recommendation
+and explanation narration to `AiResponseGenerator`. The AI implementation owns prompts, output
+validation, and built-in narration fallbacks. `ResponseGenerator` remains the API-facing contract.
+Known provider failures are translated by the live AI adapters into `AiProviderException`:
+parser/query-embedding failures return the existing 503 message, while response failures use the
+built-in fallback. Unexpected programming exceptions propagate as server errors. Maintenance
+jobs retain their independent retry and recovery policies.
 
 The sibling maintenance packages remain separate runnable jobs. CSV interaction records
 (`UserFavourite` and `UserHistory`) belong to `userpreferencejob.model`. Catalogue embedding
@@ -180,7 +194,7 @@ generation remains in `embeddingjob`; the query embedding module only embeds liv
 | `ExactFilterPolicy` | Exact-filter parsing, inherited corrections and conflict validation |
 | `RecommendationPager` | Cached pages, refill, duplicate exclusion and displayed ranks |
 | `ConversationHistory` | Retained searches, metadata and replay snapshots |
-| `AiResponseGenerator` | Wording after the session commits |
+| `ConversationResponseGenerator` / `AiResponseGenerator` | Fixed wording and AI narration after the session commits |
 
 The parser returns `SessionRequest`, which contains incoming intent, criteria and edit instructions.
 Provider responses and token usage stay inside the parser. A `ConversationDraft` holds working state
