@@ -45,6 +45,8 @@ class CompositeScorerTest {
         new CompositeScorer(
             List.of(new WeightedScorer((book, context) -> ScoreResult.unavailable(), 1.0)));
 
-    assertFalse(composite.score(candidate, RankingContext.empty()).available());
+    var result = composite.score(candidate, RankingContext.empty());
+    assertFalse(result.available());
+    assertFalse(result.readingPreferencesUsed());
   }
 }

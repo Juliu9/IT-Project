@@ -42,7 +42,8 @@ public class UserPreferenceScorer implements CandidateScorer {
 
     double total = similarities.stream().mapToDouble(WeightedSimilarity::weightedScore).sum();
     double availableWeight = similarities.stream().mapToDouble(WeightedSimilarity::weight).sum();
-    return ScoreResult.available(Math.clamp(total / availableWeight, 0.0, 1.0));
+    double score = Math.clamp(total / availableWeight, 0.0, 1.0);
+    return ScoreResult.available(score, score > 0.0);
   }
 
   private void addSimilarity(

@@ -273,7 +273,9 @@ recommendations, not confirmation that a client displayed or spoke them.
 
 Each retained/queued `Recommendation.readingPreferencesUsed` records whether stored preference
 vectors contributed to personalised retrieval or a positive active preference ranking score. It is
-copied when batch items receive page ranks; old session JSON defaults to false. Explanations never
+copied when batch items receive page ranks; old session JSON defaults to false. Each scorer returns
+its evidence in `ScoreResult`; the composite combines available contributions, and ranking reuses
+that result without detecting scorer classes or scoring selected books again. Explanations never
 reload today's preference profile to justify an older selection. They may mention reading preferences
 when recorded, but cannot infer favourite genres or specific books from that flag. Descriptions and
 saved criteria support semantic explanations; filter requests alone cannot prove actual book metadata.
