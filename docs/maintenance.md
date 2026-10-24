@@ -138,6 +138,7 @@ Repeat submission/import for the remaining catalogue.
 | --- | --- |
 | Input upload fails | Retry submission; no generation batch or pending manifest was created. |
 | Submission outcome is unknown | Keep the manifest, reconcile the batch ID with the provider, and set `AUDIOBOOK_SHORT_DESCRIPTION_BATCH_ID` before import. |
+| Invalid or conflicting summary output | Import refuses all writes and retains the manifest. Inspect the provider output; retrying unchanged invalid output fails again. |
 | Import times out or a database write fails | Retry import with the retained manifest; already-written summaries are preserved. |
 | Solr version conflict | Retry import; each write checks the current record version. |
 | Provider or dataset mismatch | Restore the original configuration; import refuses to write. |
