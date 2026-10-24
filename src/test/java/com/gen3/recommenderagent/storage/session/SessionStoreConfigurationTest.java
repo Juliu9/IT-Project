@@ -5,12 +5,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.gen3.recommenderagent.application.RecommendationPager;
 import com.gen3.recommenderagent.application.RecommendationWorkflow;
 import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
+import com.gen3.recommenderagent.retrieval.plan.ExactFilterPolicy;
 import com.gen3.recommenderagent.storage.session.redis.RedisConfig;
 import com.gen3.recommenderagent.storage.session.redis.RedisSessionRepository;
 import java.util.function.Function;
@@ -32,7 +34,9 @@ class SessionStoreConfigurationTest {
               RedisConfig.class,
               RedisSessionRepository.class,
               SessionTransitionService.class,
-              AudiobookRetrievalPlanner.class)
+              AudiobookRetrievalPlanner.class,
+              ExactFilterPolicy.class,
+              RecommendationPager.class)
           .withBean(RecommendationWorkflow.class, () -> mock(RecommendationWorkflow.class));
 
   @TestConfiguration(proxyBeanMethods = false)

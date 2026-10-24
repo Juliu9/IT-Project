@@ -14,7 +14,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 class ExactFilterCorrectionTest {
-  private final AudiobookRetrievalPlanner planner = new AudiobookRetrievalPlanner();
+  private final ExactFilterPolicy planner = new ExactFilterPolicy();
 
   private SessionRequest request(String field, String required, String forbidden) {
     var request = new SessionRequest();
@@ -77,9 +77,9 @@ class ExactFilterCorrectionTest {
   @CsvSource({"duration,between 2 and 5 hours,under 3 hours", "year,between 2020 and 2025,2024"})
   void partialRangeExclusionsStillAllowMatches(String field, String include, String exclude) {
     var resolved = request(field, include, exclude);
-    var before = planner.plan(1, resolved, Set.of()).filters();
+    var before = planner.filters(resolved, Set.of());
     planner.resolveFilterCorrections(resolved, request(field, include, exclude));
-    assertThat(planner.plan(1, resolved, Set.of()).filters()).isEqualTo(before);
+    assertThat(planner.filters(resolved, Set.of())).isEqualTo(before);
   }
 
   @ParameterizedTest
@@ -88,8 +88,7 @@ class ExactFilterCorrectionTest {
       String field, String include, String exclude) {
     var resolved = request(field, include, exclude);
     planner.resolveFilterCorrections(resolved, request(field, include, null));
-    assertThat(planner.plan(1, resolved, Set.of()).filters().mustNotInclude().hasConditions())
-        .isFalse();
+    assertThat(planner.filters(resolved, Set.of()).mustNotInclude().hasConditions()).isFalse();
   }
 
   @ParameterizedTest
@@ -98,7 +97,6 @@ class ExactFilterCorrectionTest {
       String field, String include, String exclude) {
     var resolved = request(field, include, exclude);
     planner.resolveFilterCorrections(resolved, request(field, null, exclude));
-    assertThat(planner.plan(1, resolved, Set.of()).filters().mustInclude().hasConditions())
-        .isFalse();
+    assertThat(planner.filters(resolved, Set.of()).mustInclude().hasConditions()).isFalse();
   }
 }
