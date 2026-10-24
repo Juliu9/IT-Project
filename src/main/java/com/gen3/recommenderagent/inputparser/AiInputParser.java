@@ -80,8 +80,9 @@ public class AiInputParser implements InputParser {
                         Desired/avoided concepts go in positiveSemanticQuery/negativeSemanticQuery. Liked authors/narrators
                         stay semantic unless exact matching is requested. mustInclude/mustNotInclude hold only exact author,
                         narrator, language, duration, publication-year or source requirements.
-                        Duration: preserve under/over/at most/at least/exactly/between comparisons, decimals, both endpoints
-                        and explicit hours/minutes ("under 1.5 hours", "between 2 and 3 hours"); never quantify vague duration.
+                        Duration: use digits and explicit hours/minutes; preserve under/over/at most/at least/exactly/between and both endpoints.
+                        Convert words/fractions: "under ten hours" -> "under 10 hours", "one and a half hours" -> "1.5 hours".
+                        Leave vague duration unset. Genre/mood stays semantic: "mystery, not too dark" -> positive genres=["mystery"], negative keywords=["dark"], never exact filters.
                         Years: preserve after/before/at least/at most/exactly/between YYYY and YYYY, including both endpoints.
                         Relative publication years: recent/recently means the last 5 years. Put "recent", "past year", or
                         "last 4 years" (preserving the stated count, including words) in publicationYear, never a guessed

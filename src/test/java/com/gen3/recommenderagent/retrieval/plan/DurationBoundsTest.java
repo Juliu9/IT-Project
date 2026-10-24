@@ -15,6 +15,7 @@ class DurationBoundsTest {
   @ParameterizedTest
   @CsvSource(
       value = {
+        "under 10 hours|null|599",
         "under 1.5 hours|null|89",
         "at most 1.5 hours|null|90",
         "over 90 minutes|91|null",
