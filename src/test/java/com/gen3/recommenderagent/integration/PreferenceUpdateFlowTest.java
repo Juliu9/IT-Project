@@ -20,8 +20,7 @@ import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDecision;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.MustInclude;
-import com.gen3.recommenderagent.domain.session.MustNotInclude;
+import com.gen3.recommenderagent.domain.session.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
@@ -169,7 +168,7 @@ class PreferenceUpdateFlowTest {
       throws Exception {
     process(update(tastes("romance")));
     var search = request(Intent.RECOMMENDATION);
-    var include = new MustInclude();
+    var include = new ExactCriteria();
     include.setDuration("under 5 hours");
     search.setMustInclude(include);
     assertThat(process(search).getRecommendations().getFirst().getBookId()).isEqualTo("book-1");
@@ -190,7 +189,7 @@ class PreferenceUpdateFlowTest {
     }
     verify(users).findEmbeddingByUserId("user");
     var refine = request(Intent.REFINE);
-    var shorter = new MustInclude();
+    var shorter = new ExactCriteria();
     shorter.setDuration("under 3 hours");
     refine.setMustInclude(shorter);
     var result = process(refine);
@@ -232,7 +231,7 @@ class PreferenceUpdateFlowTest {
     change.setReplacePreferenceFields(List.of("positiveSemanticQuery.genres"));
     process(change);
     var refine = request(Intent.REFINE);
-    var shorter = new MustInclude();
+    var shorter = new ExactCriteria();
     shorter.setDuration("under 3 hours");
     refine.setMustInclude(shorter);
     assertThat(process(refine).getPositiveSemanticQuery().getGenres())
@@ -262,12 +261,12 @@ class PreferenceUpdateFlowTest {
     process(update(tastes("romance")));
     process(request(Intent.RECOMMENDATION));
     var more = request(Intent.MORE_RESULTS);
-    var english = new MustInclude();
+    var english = new ExactCriteria();
     english.setLanguage("English");
     more.setMustInclude(english);
     process(more);
     var refine = request(Intent.REFINE);
-    var shorter = new MustInclude();
+    var shorter = new ExactCriteria();
     shorter.setDuration("under 5 hours");
     refine.setMustInclude(shorter);
     var result = process(refine);
@@ -302,8 +301,8 @@ class PreferenceUpdateFlowTest {
     process(request(Intent.RECOMMENDATION));
     String before = new ObjectMapper().writeValueAsString(sessions.getSession("session", "user"));
     var impossible = new SessionPreferences();
-    var include = new MustInclude();
-    var exclude = new MustNotInclude();
+    var include = new ExactCriteria();
+    var exclude = new ExactCriteria();
     include.setLanguage("English");
     exclude.setLanguage("English");
     impossible.setMustInclude(include);

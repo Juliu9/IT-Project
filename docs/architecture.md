@@ -111,7 +111,8 @@ This checks logical impossibility, not whether the current catalogue happens to 
 ### Semantic criteria and personalisation
 
 Author-only and narrator-only semantic criteria select semantic retrieval. Exact names in
-`MustInclude` and `MustNotInclude` remain mandatory database filters.
+`mustInclude` and `mustNotInclude` use separate `ExactCriteria` instances and remain mandatory
+database filters.
 
 For personalised retrieval with stored taste:
 
@@ -167,6 +168,9 @@ The recommendation server is under `com.gen3.recommenderagent`:
 | `ai` | Provider-error translation for live parsing, embedding, and response calls |
 | `storage.session` | Session contract, commit errors and Redis adapter |
 | `observability` | Request timing and AI usage telemetry |
+
+Vector lookup ports expose reads only. Embedding writes belong to `AudiobookEmbeddingStore`;
+migration uses its separate existing-data copy operation.
 
 Shared audiobook code lives in sibling `com.gen3.catalogue`: `model`, `port`, `solr`,
 `qdrant`, and `vector`. It has no dependency on `recommenderagent`. The server scans both

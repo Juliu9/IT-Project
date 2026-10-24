@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.MustInclude;
+import com.gen3.recommenderagent.domain.session.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import java.util.List;
@@ -57,7 +57,7 @@ class ResponseGeneratorTest {
     SemanticQuery avoided = new SemanticQuery();
     avoided.setKeywords(List.of("violence"));
     request.setNegativeSemanticQuery(avoided);
-    MustInclude filter = new MustInclude();
+    ExactCriteria filter = new ExactCriteria();
     filter.setLanguage("English");
     filter.setDuration("under 3 hours");
     request.setMustInclude(filter);
@@ -250,7 +250,7 @@ class ResponseGeneratorTest {
         new ConversationResponseGenerator(new AiResponseGenerator(null));
     ConversationDraft request = new ConversationDraft();
     request.setIntent(Intent.RECOMMENDATION);
-    MustInclude publicationYear = new MustInclude();
+    ExactCriteria publicationYear = new ExactCriteria();
     publicationYear.setPublicationYear("2024");
     publicationYear.setLanguage("French");
     publicationYear.setAuthors(List.of("An Author"));

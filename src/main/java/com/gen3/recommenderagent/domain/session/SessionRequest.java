@@ -20,8 +20,8 @@ public class SessionRequest {
   private boolean explicitSearch;
   private SemanticQuery positiveSemanticQuery;
   private SemanticQuery negativeSemanticQuery;
-  private MustInclude mustInclude;
-  private MustNotInclude mustNotInclude;
+  private ExactCriteria mustInclude;
+  private ExactCriteria mustNotInclude;
   private Integer bookCount;
   private boolean personalised;
 
@@ -137,19 +137,19 @@ public class SessionRequest {
     negativeSemanticQuery = value;
   }
 
-  public MustInclude getMustInclude() {
+  public ExactCriteria getMustInclude() {
     return mustInclude;
   }
 
-  public void setMustInclude(MustInclude value) {
+  public void setMustInclude(ExactCriteria value) {
     mustInclude = value;
   }
 
-  public MustNotInclude getMustNotInclude() {
+  public ExactCriteria getMustNotInclude() {
     return mustNotInclude;
   }
 
-  public void setMustNotInclude(MustNotInclude value) {
+  public void setMustNotInclude(ExactCriteria value) {
     mustNotInclude = value;
   }
 

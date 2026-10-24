@@ -112,7 +112,7 @@ class RecommendationFlowIntegrationTest {
   void returnsTheNoMatchesFallbackWhenTheCatalogueHasNoEligibleBooks() throws Exception {
     String rawText = "Recommend science fiction from a missing source";
     var request = parsedRequest(rawText);
-    var include = new com.gen3.recommenderagent.domain.session.MustInclude();
+    var include = new com.gen3.recommenderagent.domain.session.ExactCriteria();
     include.setSource("missing-test-source");
     request.setMustInclude(include);
     var sessions = new RecommendationFlowTestSupport.InMemorySessionRepository();

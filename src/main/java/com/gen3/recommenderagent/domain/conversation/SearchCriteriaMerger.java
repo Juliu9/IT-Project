@@ -5,8 +5,7 @@ import static com.gen3.recommenderagent.domain.conversation.ConversationRules.ha
 
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.MustInclude;
-import com.gen3.recommenderagent.domain.session.MustNotInclude;
+import com.gen3.recommenderagent.domain.session.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.util.ArrayList;
@@ -25,10 +24,10 @@ public final class SearchCriteriaMerger {
         merge(base.getPositiveSemanticQuery(), target.getPositiveSemanticQuery()));
     target.setNegativeSemanticQuery(
         merge(base.getNegativeSemanticQuery(), target.getNegativeSemanticQuery()));
-    MustInclude explicitInclude = target.getMustInclude();
-    MustNotInclude explicitExclude = target.getMustNotInclude();
-    MustInclude included = merge(base.getMustInclude(), explicitInclude);
-    MustNotInclude excluded = merge(base.getMustNotInclude(), explicitExclude);
+    ExactCriteria explicitInclude = target.getMustInclude();
+    ExactCriteria explicitExclude = target.getMustNotInclude();
+    ExactCriteria included = merge(base.getMustInclude(), explicitInclude);
+    ExactCriteria excluded = merge(base.getMustNotInclude(), explicitExclude);
     if (explicitInclude != null) {
       if (!target.isAddAuthors() && hasTerms(explicitInclude.getAuthors())) {
         included.setAuthors(union(null, explicitInclude.getAuthors()));
@@ -72,43 +71,11 @@ public final class SearchCriteriaMerger {
     return merged;
   }
 
-  private static MustInclude merge(MustInclude base, MustInclude override) {
+  private static ExactCriteria merge(ExactCriteria base, ExactCriteria override) {
     if (base == null && override == null) {
       return null;
     }
-    MustInclude merged = new MustInclude();
-    merged.setAuthors(
-        union(
-            base == null ? null : base.getAuthors(),
-            override == null ? null : override.getAuthors()));
-    merged.setNarrators(
-        union(
-            base == null ? null : base.getNarrators(),
-            override == null ? null : override.getNarrators()));
-    merged.setLanguage(
-        preferred(
-            base == null ? null : base.getLanguage(),
-            override == null ? null : override.getLanguage()));
-    merged.setDuration(
-        preferred(
-            base == null ? null : base.getDuration(),
-            override == null ? null : override.getDuration()));
-    merged.setPublicationYear(
-        preferred(
-            base == null ? null : base.getPublicationYear(),
-            override == null ? null : override.getPublicationYear()));
-    merged.setSource(
-        preferred(
-            base == null ? null : base.getSource(),
-            override == null ? null : override.getSource()));
-    return merged;
-  }
-
-  private static MustNotInclude merge(MustNotInclude base, MustNotInclude override) {
-    if (base == null && override == null) {
-      return null;
-    }
-    MustNotInclude merged = new MustNotInclude();
+    ExactCriteria merged = new ExactCriteria();
     merged.setAuthors(
         union(
             base == null ? null : base.getAuthors(),
@@ -178,11 +145,7 @@ public final class SearchCriteriaMerger {
     return merge(null, source);
   }
 
-  private static MustInclude copy(MustInclude source) {
-    return merge(null, source);
-  }
-
-  private static MustNotInclude copy(MustNotInclude source) {
+  private static ExactCriteria copy(ExactCriteria source) {
     return merge(null, source);
   }
 

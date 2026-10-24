@@ -4,8 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.MustInclude;
-import com.gen3.recommenderagent.domain.session.MustNotInclude;
+import com.gen3.recommenderagent.domain.session.ExactCriteria;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import java.util.Set;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -37,10 +36,10 @@ class DurationBoundsTest {
   void preservesDurationMeaningForRequiredAndExcludedRanges(
       String text, Integer minimum, Integer maximum) {
     ConversationDraft request = new ConversationDraft();
-    MustInclude include = new MustInclude();
+    ExactCriteria include = new ExactCriteria();
     include.setDuration(text);
     request.setMustInclude(include);
-    MustNotInclude exclude = new MustNotInclude();
+    ExactCriteria exclude = new ExactCriteria();
     exclude.setDuration(text);
     request.setMustNotInclude(exclude);
     var filters = new AudiobookRetrievalPlanner().plan(50, request, Set.of()).filters();
@@ -68,7 +67,7 @@ class DurationBoundsTest {
       })
   void rejectsInvalidOrAmbiguousDurationWithoutDroppingTheFilter(String text) {
     ConversationDraft request = new ConversationDraft();
-    MustInclude include = new MustInclude();
+    ExactCriteria include = new ExactCriteria();
     include.setDuration(text);
     request.setMustInclude(include);
     assertThatThrownBy(() -> new AudiobookRetrievalPlanner().plan(50, request, Set.of()))

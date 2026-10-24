@@ -1,8 +1,7 @@
 package com.gen3.recommenderagent.inputparser;
 
 import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.MustInclude;
-import com.gen3.recommenderagent.domain.session.MustNotInclude;
+import com.gen3.recommenderagent.domain.session.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import java.math.BigInteger;
@@ -89,8 +88,8 @@ public class ParsedRequest {
   private Intent intent;
   private SemanticQuery positiveSemanticQuery;
   private SemanticQuery negativeSemanticQuery;
-  private MustInclude mustInclude;
-  private MustNotInclude mustNotInclude;
+  private ExactCriteria mustInclude;
+  private ExactCriteria mustNotInclude;
   private BigInteger bookCount;
   private boolean personalised;
 
@@ -128,19 +127,19 @@ public class ParsedRequest {
     this.negativeSemanticQuery = negativeSemanticQuery;
   }
 
-  public MustInclude getMustInclude() {
+  public ExactCriteria getMustInclude() {
     return mustInclude;
   }
 
-  public void setMustInclude(MustInclude mustInclude) {
+  public void setMustInclude(ExactCriteria mustInclude) {
     this.mustInclude = mustInclude;
   }
 
-  public MustNotInclude getMustNotInclude() {
+  public ExactCriteria getMustNotInclude() {
     return mustNotInclude;
   }
 
-  public void setMustNotInclude(MustNotInclude mustNotInclude) {
+  public void setMustNotInclude(ExactCriteria mustNotInclude) {
     this.mustNotInclude = mustNotInclude;
   }
 

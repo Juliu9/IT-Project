@@ -4,8 +4,7 @@ import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDecision;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.MustInclude;
-import com.gen3.recommenderagent.domain.session.MustNotInclude;
+import com.gen3.recommenderagent.domain.session.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
@@ -107,8 +106,8 @@ public final class ConversationRules {
     if (request == null) {
       return false;
     }
-    MustInclude include = request.getMustInclude();
-    MustNotInclude exclude = request.getMustNotInclude();
+    ExactCriteria include = request.getMustInclude();
+    ExactCriteria exclude = request.getMustNotInclude();
     return request.isPersonalised()
         || hasQuery(request.getPositiveSemanticQuery())
         || hasQuery(request.getNegativeSemanticQuery())

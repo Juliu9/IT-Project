@@ -13,7 +13,7 @@ import com.gen3.catalogue.model.AudiobookFilters;
 import com.gen3.catalogue.model.AudiobookRecord;
 import com.gen3.catalogue.port.AudiobookCandidateSearch;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.MustInclude;
+import com.gen3.recommenderagent.domain.session.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectors;
@@ -34,7 +34,7 @@ class CandidateRetrievalServiceTest {
     AudiobookCandidateSearch candidateSearch = mock(AudiobookCandidateSearch.class);
     QueryEmbeddingService embeddingIndexer = mock(QueryEmbeddingService.class);
     ConversationDraft request = requestWithTopic("desert");
-    MustInclude filter = new MustInclude();
+    ExactCriteria filter = new ExactCriteria();
     filter.setLanguage("English");
     request.setMustInclude(filter);
     float[] vector = {0.6f, 0.8f};

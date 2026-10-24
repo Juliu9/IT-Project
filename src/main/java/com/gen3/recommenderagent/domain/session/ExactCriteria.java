@@ -2,8 +2,8 @@ package com.gen3.recommenderagent.domain.session;
 
 import java.util.List;
 
-/** Exact catalogue values that every retrieved audiobook must satisfy. */
-public class MustInclude {
+/** Exact catalogue constraints; inclusion or exclusion is determined by the containing property. */
+public class ExactCriteria {
 
   private List<String> authors;
   private List<String> narrators;
@@ -12,7 +12,7 @@ public class MustInclude {
   private String publicationYear;
   private String source;
 
-  public MustInclude() {}
+  public ExactCriteria() {}
 
   public List<String> getAuthors() {
     return authors;

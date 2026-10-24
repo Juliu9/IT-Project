@@ -11,8 +11,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.MustInclude;
-import com.gen3.recommenderagent.domain.session.MustNotInclude;
+import com.gen3.recommenderagent.domain.session.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.util.List;
@@ -289,7 +288,7 @@ class InputParserTest {
       String raw, String window, int years) {
     var parsed = new ParsedRequest();
     parsed.setIntent(Intent.RECOMMENDATION);
-    var include = new MustInclude();
+    var include = new ExactCriteria();
     include.setPublicationYear(window);
     parsed.setMustInclude(include);
     var query = new SemanticQuery();
@@ -356,10 +355,10 @@ class InputParserTest {
     parsedRequest.setIntent(Intent.RECOMMENDATION);
     parsedRequest.setPositiveSemanticQuery(semanticQuery);
     parsedRequest.setNegativeSemanticQuery(negativeSemanticQuery);
-    MustInclude mustInclude = new MustInclude();
+    ExactCriteria mustInclude = new ExactCriteria();
     mustInclude.setLanguage("English");
     mustInclude.setSource("NLS");
-    MustNotInclude mustNotInclude = new MustNotInclude();
+    ExactCriteria mustNotInclude = new ExactCriteria();
     mustNotInclude.setLanguage("French");
     parsedRequest.setMustInclude(mustInclude);
     parsedRequest.setMustNotInclude(mustNotInclude);
@@ -446,5 +445,42 @@ class InputParserTest {
     assertEquals("French", request.getMustNotInclude().getLanguage());
     assertEquals("before 2000", request.getMustNotInclude().getPublicationYear());
     assertEquals("Legacy", request.getMustNotInclude().getSource());
+  }
+
+  @Test
+  void sharedExactCriteriaRetainsBothParserSchemaPropertiesAndLegacySessionJson() {
+    var mapper = new ObjectMapper();
+    var schema = mapper.readTree(AiInputParser.REQUEST_CONVERTER.getJsonSchema());
+    for (String name : List.of("mustInclude", "mustNotInclude")) {
+      var criteria = schema.path("properties").path(name);
+      if (criteria.has("$ref")) {
+        criteria = schema.at(criteria.path("$ref").asText().substring(1));
+      }
+      org.assertj.core.api.Assertions.assertThat(criteria.path("properties").propertyNames())
+          .containsExactlyInAnyOrder(
+              "authors", "narrators", "language", "duration", "publicationYear", "source");
+    }
+    var session =
+        mapper.readValue(
+            """
+        {"requests":[{"intent":"RECOMMENDATION",
+          "mustInclude":{"authors":["Author"],"language":"English","duration":"under 5 hours","publicationYear":"recent","source":"catalogue"},
+          "mustNotInclude":{"narrators":["Narrator"],"language":"French"}}]}
+        """,
+            com.gen3.recommenderagent.domain.session.Session.class);
+    var turn = session.getRequests().getFirst();
+    org.assertj.core.api.Assertions.assertThat(turn.getMustInclude().getAuthors())
+        .containsExactly("Author");
+    org.assertj.core.api.Assertions.assertThat(turn.getMustNotInclude().getNarrators())
+        .containsExactly("Narrator");
+    turn.getMustInclude().setLanguage("German");
+    org.assertj.core.api.Assertions.assertThat(turn.getMustNotInclude().getLanguage())
+        .isEqualTo("French");
+    var json = mapper.readTree(mapper.writeValueAsString(session)).path("requests").get(0);
+    org.assertj.core.api.Assertions.assertThat(json.path("mustInclude").path("language").asText())
+        .isEqualTo("German");
+    org.assertj.core.api.Assertions.assertThat(
+            json.path("mustNotInclude").path("narrators").get(0).asText())
+        .isEqualTo("Narrator");
   }
 }

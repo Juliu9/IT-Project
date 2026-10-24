@@ -18,8 +18,7 @@ import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendat
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.MustInclude;
-import com.gen3.recommenderagent.domain.session.MustNotInclude;
+import com.gen3.recommenderagent.domain.session.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
@@ -153,7 +152,7 @@ class PersonalisedRecommendationFlowTest {
         .thenReturn(
             Optional.of(new UserPreferenceEmbedding("user", new float[0], new float[] {1, 0})));
     ConversationDraft request = personalisedRequest();
-    MustInclude filter = new MustInclude();
+    ExactCriteria filter = new ExactCriteria();
     filter.setLanguage("English");
     request.setMustInclude(filter);
 
@@ -254,7 +253,7 @@ class PersonalisedRecommendationFlowTest {
   @Test
   void exactOnlyPreferencesAskForSemanticTasteWithoutEmbeddingFilters() {
     Session session = sessionWithPreferences();
-    MustInclude include = new MustInclude();
+    ExactCriteria include = new ExactCriteria();
     include.setAuthors(List.of("Ursula Le Guin"));
     include.setLanguage("English");
     session.getPreferences().setMustInclude(include);
@@ -310,10 +309,10 @@ class PersonalisedRecommendationFlowTest {
     negative.setGenres(List.of("romance"));
     request.setPositiveSemanticQuery(positive);
     request.setNegativeSemanticQuery(negative);
-    MustInclude include = new MustInclude();
+    ExactCriteria include = new ExactCriteria();
     include.setLanguage("English");
     include.setDuration("at most 2 hours");
-    MustNotInclude exclude = new MustNotInclude();
+    ExactCriteria exclude = new ExactCriteria();
     exclude.setAuthors(List.of("Excluded Author"));
     request.setMustInclude(include);
     request.setMustNotInclude(exclude);
@@ -339,7 +338,7 @@ class PersonalisedRecommendationFlowTest {
   void shortTasteAnswerRetainsPendingConstraintsAndCountAcrossReload(boolean changesYear)
       throws Exception {
     var request = personalisedRequest();
-    var include = new MustInclude();
+    var include = new ExactCriteria();
     include.setPublicationYear("recent");
     request.setMustInclude(include);
     request.setBookCount(2);
@@ -354,7 +353,7 @@ class PersonalisedRecommendationFlowTest {
     taste.setGenres(List.of("fantasy"));
     answer.setPositiveSemanticQuery(taste);
     if (changesYear) {
-      var changed = new MustInclude();
+      var changed = new ExactCriteria();
       changed.setPublicationYear("2020");
       answer.setMustInclude(changed);
     }
@@ -370,7 +369,7 @@ class PersonalisedRecommendationFlowTest {
   @Test
   void explicitSearchAbandonsPendingPersonalisationAndConstraints() throws Exception {
     var request = personalisedRequest();
-    var include = new MustInclude();
+    var include = new ExactCriteria();
     include.setPublicationYear("recent");
     request.setMustInclude(include);
     process(request);
@@ -398,7 +397,7 @@ class PersonalisedRecommendationFlowTest {
           .thenReturn(Optional.of(new UserPreferenceEmbedding("user", new float[] {1, 0}, null)));
     }
     var request = personalisedRequest();
-    var include = new MustInclude();
+    var include = new ExactCriteria();
     include.setPublicationYear("recent");
     request.setMustInclude(include);
     var result = process(request);
@@ -413,7 +412,7 @@ class PersonalisedRecommendationFlowTest {
   @Test
   void tasteReplyUsesRefinementRulesForChangedAndConflictingConstraints() {
     var request = personalisedRequest();
-    var include = new MustInclude();
+    var include = new ExactCriteria();
     include.setLanguage("English");
     request.setMustInclude(include);
     process(request);
@@ -422,7 +421,7 @@ class PersonalisedRecommendationFlowTest {
     var taste = new SemanticQuery();
     taste.setGenres(List.of("fantasy"));
     answer.setPositiveSemanticQuery(taste);
-    var excluded = new MustNotInclude();
+    var excluded = new ExactCriteria();
     excluded.setLanguage("English");
     answer.setMustNotInclude(excluded);
     var result = process(answer);
@@ -445,7 +444,7 @@ class PersonalisedRecommendationFlowTest {
   @Test
   void contradictoryTasteReplyPreservesThePendingRequest() {
     var request = personalisedRequest();
-    var include = new MustInclude();
+    var include = new ExactCriteria();
     include.setPublicationYear("recent");
     request.setMustInclude(include);
     process(request);
@@ -454,10 +453,10 @@ class PersonalisedRecommendationFlowTest {
     var taste = new SemanticQuery();
     taste.setGenres(List.of("fantasy"));
     answer.setPositiveSemanticQuery(taste);
-    var both = new MustInclude();
+    var both = new ExactCriteria();
     both.setLanguage("English");
     answer.setMustInclude(both);
-    var excluded = new MustNotInclude();
+    var excluded = new ExactCriteria();
     excluded.setLanguage("English");
     answer.setMustNotInclude(excluded);
     org.assertj.core.api.Assertions.assertThatThrownBy(() -> process(answer))

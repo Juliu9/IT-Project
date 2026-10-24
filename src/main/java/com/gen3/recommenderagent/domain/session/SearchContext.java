@@ -10,8 +10,8 @@ public class SearchContext {
   private boolean personalised;
   private SemanticQuery positiveSemanticQuery;
   private SemanticQuery negativeSemanticQuery;
-  private MustInclude mustInclude;
-  private MustNotInclude mustNotInclude;
+  private ExactCriteria mustInclude;
+  private ExactCriteria mustNotInclude;
 
   public SessionPreferences getSearchCriteria() {
     return searchCriteria;
@@ -61,19 +61,19 @@ public class SearchContext {
     negativeSemanticQuery = value;
   }
 
-  public MustInclude getMustInclude() {
+  public ExactCriteria getMustInclude() {
     return mustInclude;
   }
 
-  public void setMustInclude(MustInclude value) {
+  public void setMustInclude(ExactCriteria value) {
     mustInclude = value;
   }
 
-  public MustNotInclude getMustNotInclude() {
+  public ExactCriteria getMustNotInclude() {
     return mustNotInclude;
   }
 
-  public void setMustNotInclude(MustNotInclude value) {
+  public void setMustNotInclude(ExactCriteria value) {
     mustNotInclude = value;
   }
 

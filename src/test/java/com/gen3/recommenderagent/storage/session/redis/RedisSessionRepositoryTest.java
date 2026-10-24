@@ -18,8 +18,7 @@ import com.gen3.recommenderagent.application.recommendation.RecommendationWorkfl
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.MustInclude;
-import com.gen3.recommenderagent.domain.session.MustNotInclude;
+import com.gen3.recommenderagent.domain.session.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
@@ -309,7 +308,7 @@ class RedisSessionRepositoryTest {
 
     SemanticQuery positiveQuery = new SemanticQuery();
     positiveQuery.setGenres(List.of("fantasy"));
-    MustInclude mustInclude = new MustInclude();
+    ExactCriteria mustInclude = new ExactCriteria();
     mustInclude.setLanguage("English");
 
     SessionPreferences preferences = new SessionPreferences();
@@ -406,12 +405,12 @@ class RedisSessionRepositoryTest {
 
     Session session = session("constraints-test");
 
-    MustInclude mustInclude = new MustInclude();
+    ExactCriteria mustInclude = new ExactCriteria();
     mustInclude.setDuration("under 10 hours");
     mustInclude.setLanguage("English");
     mustInclude.setPublicationYear("after 2020");
     mustInclude.setSource("NLS");
-    MustNotInclude mustNotInclude = new MustNotInclude();
+    ExactCriteria mustNotInclude = new ExactCriteria();
     mustNotInclude.setLanguage("French");
     mustNotInclude.setPublicationYear("before 2000");
     mustNotInclude.setSource("Legacy");

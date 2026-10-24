@@ -5,8 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.MustInclude;
-import com.gen3.recommenderagent.domain.session.MustNotInclude;
+import com.gen3.recommenderagent.domain.session.ExactCriteria;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import java.util.List;
 import java.util.Set;
@@ -19,8 +18,8 @@ class ExactFilterCorrectionTest {
   private ConversationDraft request(String field, String required, String forbidden) {
     var request = new ConversationDraft();
     request.setIntent(Intent.REFINE);
-    var include = new MustInclude();
-    var exclude = new MustNotInclude();
+    var include = new ExactCriteria();
+    var exclude = new ExactCriteria();
     switch (field) {
       case "authors" -> {
         include.setAuthors(required == null ? null : List.of(required));

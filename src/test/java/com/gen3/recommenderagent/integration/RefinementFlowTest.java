@@ -16,8 +16,7 @@ import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDecision;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.MustInclude;
-import com.gen3.recommenderagent.domain.session.MustNotInclude;
+import com.gen3.recommenderagent.domain.session.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
@@ -46,7 +45,7 @@ class RefinementFlowTest {
     return service.process("session", "user", request);
   }
 
-  private void search(MustInclude include, MustNotInclude exclude) {
+  private void search(ExactCriteria include, ExactCriteria exclude) {
     when(workflow.recommend(any(), any()))
         .thenReturn(
             List.of(
@@ -66,13 +65,13 @@ class RefinementFlowTest {
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   void replacesOrAddsExactAuthorsAndNarrators(boolean add) {
-    var previous = new MustInclude();
+    var previous = new ExactCriteria();
     previous.setAuthors(List.of("Author A"));
     previous.setNarrators(List.of("Narrator A"));
     previous.setLanguage("English");
     search(previous, null);
     var refinement = request(Intent.REFINE);
-    var include = new MustInclude();
+    var include = new ExactCriteria();
     include.setAuthors(List.of("Author B"));
     include.setNarrators(List.of("Narrator B"));
     refinement.setMustInclude(include);
@@ -90,11 +89,11 @@ class RefinementFlowTest {
 
   @Test
   void explicitExclusionOverridesInheritedRequirement() {
-    var include = new MustInclude();
+    var include = new ExactCriteria();
     include.setLanguage("English");
     search(include, null);
     var refinement = request(Intent.REFINE);
-    var exclude = new MustNotInclude();
+    var exclude = new ExactCriteria();
     exclude.setLanguage("English");
     refinement.setMustNotInclude(exclude);
     var result = process(refinement);
@@ -105,11 +104,11 @@ class RefinementFlowTest {
 
   @Test
   void explicitRequirementOverridesInheritedExclusionWithoutDroppingOtherAuthors() {
-    var exclude = new MustNotInclude();
+    var exclude = new ExactCriteria();
     exclude.setAuthors(List.of("Author A", "Author B"));
     search(null, exclude);
     var refinement = request(Intent.REFINE);
-    var include = new MustInclude();
+    var include = new ExactCriteria();
     include.setAuthors(List.of("Author A"));
     refinement.setMustInclude(include);
     var result = process(refinement);
@@ -123,9 +122,9 @@ class RefinementFlowTest {
     var mapper = new ObjectMapper();
     String before = mapper.writeValueAsString(sessions.getSession("session", "user"));
     var refinement = request(Intent.REFINE);
-    var include = new MustInclude();
+    var include = new ExactCriteria();
     include.setLanguage("English");
-    var exclude = new MustNotInclude();
+    var exclude = new ExactCriteria();
     exclude.setLanguage("English");
     refinement.setMustInclude(include);
     refinement.setMustNotInclude(exclude);
@@ -139,9 +138,9 @@ class RefinementFlowTest {
   @Test
   void partialAuthorExclusionAndSemanticMixturesRemainValid() {
     var request = request(Intent.RECOMMENDATION);
-    var include = new MustInclude();
+    var include = new ExactCriteria();
     include.setAuthors(List.of("A", "B"));
-    var exclude = new MustNotInclude();
+    var exclude = new ExactCriteria();
     exclude.setAuthors(List.of("A"));
     request.setMustInclude(include);
     request.setMustNotInclude(exclude);
@@ -178,14 +177,14 @@ class RefinementFlowTest {
     session.setSessionId("session");
     session.setUserId("user");
     var preferences = new SessionPreferences();
-    var defaults = new MustInclude();
+    var defaults = new ExactCriteria();
     defaults.setLanguage("English");
     preferences.setMustInclude(defaults);
     session.setPreferences(preferences);
     sessions.updateSession(session);
     search(null, null);
     var correction = request(Intent.REFINE);
-    var exclude = new MustNotInclude();
+    var exclude = new ExactCriteria();
     exclude.setLanguage("English");
     correction.setMustNotInclude(exclude);
     assertThat(process(correction).getMustInclude().getLanguage()).isNull();
@@ -225,7 +224,7 @@ class RefinementFlowTest {
     var query = new SemanticQuery();
     query.setGenres(List.of("fantasy"));
     request.setPositiveSemanticQuery(query);
-    var include = new MustInclude();
+    var include = new ExactCriteria();
     include.setDuration("under 5 hours");
     request.setMustInclude(include);
     when(workflow.recommend(any(), any())).thenReturn(List.of());

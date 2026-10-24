@@ -15,7 +15,7 @@ class SessionPreferencesTest {
     query.setGenres(List.of("Fantasy"));
     query.setAuthors(List.of("Author"));
     original.setPositiveSemanticQuery(query);
-    var exact = new MustInclude();
+    var exact = new ExactCriteria();
     exact.setLanguage("English");
     exact.setAuthors(List.of("A"));
     original.setMustInclude(exact);
@@ -23,7 +23,7 @@ class SessionPreferencesTest {
     var addedQuery = new SemanticQuery();
     addedQuery.setGenres(List.of(" fantasy ", "Horror"));
     additions.setPositiveSemanticQuery(addedQuery);
-    var addedExact = new MustInclude();
+    var addedExact = new ExactCriteria();
     addedExact.setAuthors(List.of("B"));
     additions.setMustInclude(addedExact);
     var removals = new SessionPreferences();

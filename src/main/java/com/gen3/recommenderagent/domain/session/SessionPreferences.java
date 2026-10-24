@@ -11,8 +11,8 @@ public class SessionPreferences {
 
   private SemanticQuery positiveSemanticQuery;
   private SemanticQuery negativeSemanticQuery;
-  private MustInclude mustInclude;
-  private MustNotInclude mustNotInclude;
+  private ExactCriteria mustInclude;
+  private ExactCriteria mustNotInclude;
 
   public SemanticQuery getPositiveSemanticQuery() {
     return positiveSemanticQuery;
@@ -30,19 +30,19 @@ public class SessionPreferences {
     this.negativeSemanticQuery = negativeSemanticQuery;
   }
 
-  public MustInclude getMustInclude() {
+  public ExactCriteria getMustInclude() {
     return mustInclude;
   }
 
-  public void setMustInclude(MustInclude mustInclude) {
+  public void setMustInclude(ExactCriteria mustInclude) {
     this.mustInclude = mustInclude;
   }
 
-  public MustNotInclude getMustNotInclude() {
+  public ExactCriteria getMustNotInclude() {
     return mustNotInclude;
   }
 
-  public void setMustNotInclude(MustNotInclude mustNotInclude) {
+  public void setMustNotInclude(ExactCriteria mustNotInclude) {
     this.mustNotInclude = mustNotInclude;
   }
 
@@ -105,81 +105,81 @@ public class SessionPreferences {
             replace);
     var mustIncludeAdds = get(additions, SessionPreferences::getMustInclude);
     var mustIncludeRemoves = get(removals, SessionPreferences::getMustInclude);
-    result.mustInclude = new MustInclude();
+    result.mustInclude = new ExactCriteria();
     result.mustInclude.setAuthors(
         terms(
-            get(mustInclude, MustInclude::getAuthors),
-            get(mustIncludeAdds, MustInclude::getAuthors),
-            get(mustIncludeRemoves, MustInclude::getAuthors),
+            get(mustInclude, ExactCriteria::getAuthors),
+            get(mustIncludeAdds, ExactCriteria::getAuthors),
+            get(mustIncludeRemoves, ExactCriteria::getAuthors),
             replace.contains("mustInclude.authors")));
     result.mustInclude.setNarrators(
         terms(
-            get(mustInclude, MustInclude::getNarrators),
-            get(mustIncludeAdds, MustInclude::getNarrators),
-            get(mustIncludeRemoves, MustInclude::getNarrators),
+            get(mustInclude, ExactCriteria::getNarrators),
+            get(mustIncludeAdds, ExactCriteria::getNarrators),
+            get(mustIncludeRemoves, ExactCriteria::getNarrators),
             replace.contains("mustInclude.narrators")));
     result.mustInclude.setLanguage(
         scalar(
-            get(mustInclude, MustInclude::getLanguage),
-            get(mustIncludeAdds, MustInclude::getLanguage),
-            get(mustIncludeRemoves, MustInclude::getLanguage),
+            get(mustInclude, ExactCriteria::getLanguage),
+            get(mustIncludeAdds, ExactCriteria::getLanguage),
+            get(mustIncludeRemoves, ExactCriteria::getLanguage),
             replace.contains("mustInclude.language")));
     result.mustInclude.setDuration(
         scalar(
-            get(mustInclude, MustInclude::getDuration),
-            get(mustIncludeAdds, MustInclude::getDuration),
-            get(mustIncludeRemoves, MustInclude::getDuration),
+            get(mustInclude, ExactCriteria::getDuration),
+            get(mustIncludeAdds, ExactCriteria::getDuration),
+            get(mustIncludeRemoves, ExactCriteria::getDuration),
             replace.contains("mustInclude.duration")));
     result.mustInclude.setPublicationYear(
         scalar(
-            get(mustInclude, MustInclude::getPublicationYear),
-            get(mustIncludeAdds, MustInclude::getPublicationYear),
-            get(mustIncludeRemoves, MustInclude::getPublicationYear),
+            get(mustInclude, ExactCriteria::getPublicationYear),
+            get(mustIncludeAdds, ExactCriteria::getPublicationYear),
+            get(mustIncludeRemoves, ExactCriteria::getPublicationYear),
             replace.contains("mustInclude.publicationYear")));
     result.mustInclude.setSource(
         scalar(
-            get(mustInclude, MustInclude::getSource),
-            get(mustIncludeAdds, MustInclude::getSource),
-            get(mustIncludeRemoves, MustInclude::getSource),
+            get(mustInclude, ExactCriteria::getSource),
+            get(mustIncludeAdds, ExactCriteria::getSource),
+            get(mustIncludeRemoves, ExactCriteria::getSource),
             replace.contains("mustInclude.source")));
     var mustNotIncludeAdds = get(additions, SessionPreferences::getMustNotInclude);
     var mustNotIncludeRemoves = get(removals, SessionPreferences::getMustNotInclude);
-    result.mustNotInclude = new MustNotInclude();
+    result.mustNotInclude = new ExactCriteria();
     result.mustNotInclude.setAuthors(
         terms(
-            get(mustNotInclude, MustNotInclude::getAuthors),
-            get(mustNotIncludeAdds, MustNotInclude::getAuthors),
-            get(mustNotIncludeRemoves, MustNotInclude::getAuthors),
+            get(mustNotInclude, ExactCriteria::getAuthors),
+            get(mustNotIncludeAdds, ExactCriteria::getAuthors),
+            get(mustNotIncludeRemoves, ExactCriteria::getAuthors),
             replace.contains("mustNotInclude.authors")));
     result.mustNotInclude.setNarrators(
         terms(
-            get(mustNotInclude, MustNotInclude::getNarrators),
-            get(mustNotIncludeAdds, MustNotInclude::getNarrators),
-            get(mustNotIncludeRemoves, MustNotInclude::getNarrators),
+            get(mustNotInclude, ExactCriteria::getNarrators),
+            get(mustNotIncludeAdds, ExactCriteria::getNarrators),
+            get(mustNotIncludeRemoves, ExactCriteria::getNarrators),
             replace.contains("mustNotInclude.narrators")));
     result.mustNotInclude.setLanguage(
         scalar(
-            get(mustNotInclude, MustNotInclude::getLanguage),
-            get(mustNotIncludeAdds, MustNotInclude::getLanguage),
-            get(mustNotIncludeRemoves, MustNotInclude::getLanguage),
+            get(mustNotInclude, ExactCriteria::getLanguage),
+            get(mustNotIncludeAdds, ExactCriteria::getLanguage),
+            get(mustNotIncludeRemoves, ExactCriteria::getLanguage),
             replace.contains("mustNotInclude.language")));
     result.mustNotInclude.setDuration(
         scalar(
-            get(mustNotInclude, MustNotInclude::getDuration),
-            get(mustNotIncludeAdds, MustNotInclude::getDuration),
-            get(mustNotIncludeRemoves, MustNotInclude::getDuration),
+            get(mustNotInclude, ExactCriteria::getDuration),
+            get(mustNotIncludeAdds, ExactCriteria::getDuration),
+            get(mustNotIncludeRemoves, ExactCriteria::getDuration),
             replace.contains("mustNotInclude.duration")));
     result.mustNotInclude.setPublicationYear(
         scalar(
-            get(mustNotInclude, MustNotInclude::getPublicationYear),
-            get(mustNotIncludeAdds, MustNotInclude::getPublicationYear),
-            get(mustNotIncludeRemoves, MustNotInclude::getPublicationYear),
+            get(mustNotInclude, ExactCriteria::getPublicationYear),
+            get(mustNotIncludeAdds, ExactCriteria::getPublicationYear),
+            get(mustNotIncludeRemoves, ExactCriteria::getPublicationYear),
             replace.contains("mustNotInclude.publicationYear")));
     result.mustNotInclude.setSource(
         scalar(
-            get(mustNotInclude, MustNotInclude::getSource),
-            get(mustNotIncludeAdds, MustNotInclude::getSource),
-            get(mustNotIncludeRemoves, MustNotInclude::getSource),
+            get(mustNotInclude, ExactCriteria::getSource),
+            get(mustNotIncludeAdds, ExactCriteria::getSource),
+            get(mustNotIncludeRemoves, ExactCriteria::getSource),
             replace.contains("mustNotInclude.source")));
     return result;
   }
@@ -187,19 +187,19 @@ public class SessionPreferences {
   public boolean hasValues() {
     return hasQuery(positiveSemanticQuery)
         || hasQuery(negativeSemanticQuery)
-        || hasTerms(get(mustInclude, MustInclude::getAuthors))
-        || hasTerms(get(mustInclude, MustInclude::getNarrators))
-        || hasTerms(get(mustNotInclude, MustNotInclude::getAuthors))
-        || hasTerms(get(mustNotInclude, MustNotInclude::getNarrators))
+        || hasTerms(get(mustInclude, ExactCriteria::getAuthors))
+        || hasTerms(get(mustInclude, ExactCriteria::getNarrators))
+        || hasTerms(get(mustNotInclude, ExactCriteria::getAuthors))
+        || hasTerms(get(mustNotInclude, ExactCriteria::getNarrators))
         || java.util.stream.Stream.of(
-                get(mustInclude, MustInclude::getLanguage),
-                    get(mustInclude, MustInclude::getSource),
-                get(mustInclude, MustInclude::getDuration),
-                    get(mustInclude, MustInclude::getPublicationYear),
-                get(mustNotInclude, MustNotInclude::getLanguage),
-                    get(mustNotInclude, MustNotInclude::getSource),
-                get(mustNotInclude, MustNotInclude::getDuration),
-                    get(mustNotInclude, MustNotInclude::getPublicationYear))
+                get(mustInclude, ExactCriteria::getLanguage),
+                    get(mustInclude, ExactCriteria::getSource),
+                get(mustInclude, ExactCriteria::getDuration),
+                    get(mustInclude, ExactCriteria::getPublicationYear),
+                get(mustNotInclude, ExactCriteria::getLanguage),
+                    get(mustNotInclude, ExactCriteria::getSource),
+                get(mustNotInclude, ExactCriteria::getDuration),
+                    get(mustNotInclude, ExactCriteria::getPublicationYear))
             .anyMatch(value -> value != null && !value.isBlank());
   }
 

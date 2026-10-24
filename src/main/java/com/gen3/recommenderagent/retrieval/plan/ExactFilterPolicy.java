@@ -5,8 +5,7 @@ import com.gen3.catalogue.model.AudiobookFilters;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.conversation.ConversationHistory;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.MustInclude;
-import com.gen3.recommenderagent.domain.session.MustNotInclude;
+import com.gen3.recommenderagent.domain.session.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
@@ -46,8 +45,8 @@ public class ExactFilterPolicy {
 
   public AudiobookFilters filters(SessionRequest request, Set<String> excludedBookIds) {
     return new AudiobookFilters(
-        includeConditions(request == null ? null : request.getMustInclude()),
-        excludeConditions(request == null ? null : request.getMustNotInclude()),
+        conditions(request == null ? null : request.getMustInclude()),
+        conditions(request == null ? null : request.getMustNotInclude()),
         excludedBookIds == null ? List.of() : List.copyOf(excludedBookIds));
   }
 
@@ -76,9 +75,9 @@ public class ExactFilterPolicy {
       boolean newInclude = supplied(priority.mustInclude(), field);
       boolean newExclude = supplied(priority.mustNotInclude(), field);
       if (newInclude && !newExclude) {
-        clearExcluded(resolved, field, priority.mustInclude());
+        clear(resolved.getMustNotInclude(), field, priority.mustInclude());
       } else if (newExclude && !newInclude) {
-        clearIncluded(resolved, field, priority.mustNotInclude());
+        clear(resolved.getMustInclude(), field, priority.mustNotInclude());
       }
     }
     requireCompatible(filters(resolved, Set.of()));
@@ -179,52 +178,20 @@ public class ExactFilterPolicy {
             .toList();
   }
 
-  private void clearIncluded(
-      SessionRequest request, String field, AudiobookFilterConditions correction) {
-    var include = request.getMustInclude();
+  private void clear(ExactCriteria criteria, String field, AudiobookFilterConditions correction) {
     switch (field) {
-      case "authors" -> include.setAuthors(without(include.getAuthors(), correction, field));
-      case "narrators" -> include.setNarrators(without(include.getNarrators(), correction, field));
-      case "language" -> include.setLanguage(null);
-      case "source" -> include.setSource(null);
-      case "duration" -> include.setDuration(null);
-      case "publication year" -> include.setPublicationYear(null);
+      case "authors" -> criteria.setAuthors(without(criteria.getAuthors(), correction, field));
+      case "narrators" ->
+          criteria.setNarrators(without(criteria.getNarrators(), correction, field));
+      case "language" -> criteria.setLanguage(null);
+      case "source" -> criteria.setSource(null);
+      case "duration" -> criteria.setDuration(null);
+      case "publication year" -> criteria.setPublicationYear(null);
       default -> throw new IllegalArgumentException(field);
     }
   }
 
-  private void clearExcluded(
-      SessionRequest request, String field, AudiobookFilterConditions correction) {
-    var exclude = request.getMustNotInclude();
-    switch (field) {
-      case "authors" -> exclude.setAuthors(without(exclude.getAuthors(), correction, field));
-      case "narrators" -> exclude.setNarrators(without(exclude.getNarrators(), correction, field));
-      case "language" -> exclude.setLanguage(null);
-      case "source" -> exclude.setSource(null);
-      case "duration" -> exclude.setDuration(null);
-      case "publication year" -> exclude.setPublicationYear(null);
-      default -> throw new IllegalArgumentException(field);
-    }
-  }
-
-  private AudiobookFilterConditions includeConditions(MustInclude filter) {
-    if (filter == null) {
-      return AudiobookFilterConditions.empty();
-    }
-    DurationRange bounds = DurationRange.parse(filter.getDuration());
-    RangeBounds years = yearBounds(filter.getPublicationYear());
-    return new AudiobookFilterConditions(
-        copy(filter.getAuthors()),
-        copy(filter.getNarrators()),
-        filter.getLanguage(),
-        filter.getSource(),
-        bounds.minimum(),
-        bounds.maximum(),
-        years.minimum(),
-        years.maximum());
-  }
-
-  private AudiobookFilterConditions excludeConditions(MustNotInclude filter) {
+  private AudiobookFilterConditions conditions(ExactCriteria filter) {
     if (filter == null) {
       return AudiobookFilterConditions.empty();
     }

@@ -8,7 +8,7 @@ import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDecision;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.MustInclude;
+import com.gen3.recommenderagent.domain.session.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
@@ -91,7 +91,7 @@ class ConversationStructureTest {
     assertThat(empty.getMustNotInclude()).isNull();
     var draft = new ConversationDraft();
     draft.setIntent(Intent.RECOMMENDATION);
-    var include = new MustInclude();
+    var include = new ExactCriteria();
     include.setLanguage("English");
     draft.setMustInclude(include);
     var turn = ConversationTurn.fromDraft(draft);

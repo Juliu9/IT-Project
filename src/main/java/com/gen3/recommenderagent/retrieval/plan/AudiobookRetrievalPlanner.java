@@ -41,8 +41,7 @@ public class AudiobookRetrievalPlanner {
 
   /** Derives retrieval solely from searchable request content. */
   RetrievalMode modeFor(SemanticQuery positive, SemanticQuery negative, AudiobookFilters filters) {
-    boolean hasSemantic =
-        hasPositiveSemanticContent(positive) || hasNegativeSemanticContent(negative);
+    boolean hasSemantic = hasSemanticContent(positive) || hasSemanticContent(negative);
     boolean hasFilters = filters != null && filters.hasConditions();
     if (hasSemantic && hasFilters) {
       return RetrievalMode.HYBRID;
@@ -75,18 +74,13 @@ public class AudiobookRetrievalPlanner {
     }
   }
 
-  private boolean hasPositiveSemanticContent(SemanticQuery query) {
+  private boolean hasSemanticContent(SemanticQuery query) {
     return query != null
         && (hasValues(query.getTopics())
             || hasValues(query.getGenres())
             || hasValues(query.getKeywords())
             || hasValues(query.getAuthors())
             || hasValues(query.getNarrators()));
-  }
-
-  private boolean hasNegativeSemanticContent(SemanticQuery query) {
-    return hasPositiveSemanticContent(query)
-        || (query != null && (hasValues(query.getAuthors()) || hasValues(query.getNarrators())));
   }
 
   private boolean hasValues(List<String> values) {

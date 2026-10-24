@@ -4,8 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gen3.catalogue.model.AudiobookFilterConditions;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.MustInclude;
-import com.gen3.recommenderagent.domain.session.MustNotInclude;
+import com.gen3.recommenderagent.domain.session.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import java.util.List;
 import java.util.Set;
@@ -20,13 +19,13 @@ class AudiobookRetrievalPlannerTest {
     SemanticQuery semanticQuery = new SemanticQuery();
     semanticQuery.setGenres(List.of("fantasy"));
     semanticQuery.setTopics(List.of("deserts"));
-    MustInclude filter = new MustInclude();
+    ExactCriteria filter = new ExactCriteria();
     filter.setNarrators(List.of("Stephen Fry"));
     filter.setLanguage("English");
     filter.setDuration("under 10 hours");
     filter.setPublicationYear("after 2020");
     filter.setSource("NLS");
-    MustNotInclude excluded = new MustNotInclude();
+    ExactCriteria excluded = new ExactCriteria();
     excluded.setLanguage("French");
     excluded.setPublicationYear("before 2000");
     excluded.setSource("Legacy");
@@ -63,7 +62,7 @@ class AudiobookRetrievalPlannerTest {
     assertThat(planner.plan(10, semanticOnly, Set.of()).mode()).isEqualTo(RetrievalMode.SEMANTIC);
 
     ConversationDraft filterOnly = new ConversationDraft();
-    MustInclude duration = new MustInclude();
+    ExactCriteria duration = new ExactCriteria();
     duration.setDuration("under 3 hours");
     filterOnly.setMustInclude(duration);
     assertThat(planner.plan(10, filterOnly, Set.of()).mode()).isEqualTo(RetrievalMode.FILTER_ONLY);
@@ -98,7 +97,7 @@ class AudiobookRetrievalPlannerTest {
   @Test
   void preservesYearRangesAndInclusiveComparisonsAndRejectsInvalidYears() {
     ConversationDraft request = new ConversationDraft();
-    MustInclude filter = new MustInclude();
+    ExactCriteria filter = new ExactCriteria();
     request.setMustInclude(filter);
     var planner = new AudiobookRetrievalPlanner();
     filter.setPublicationYear("between 2000 and 2010");
@@ -136,10 +135,10 @@ class AudiobookRetrievalPlannerTest {
             java.time.Instant.parse("2026-10-24T00:00:00Z"), java.time.ZoneOffset.UTC);
     var planner = new AudiobookRetrievalPlanner(clock);
     var request = new ConversationDraft();
-    var include = new MustInclude();
+    var include = new ExactCriteria();
     include.setPublicationYear(text);
     request.setMustInclude(include);
-    var exclude = new MustNotInclude();
+    var exclude = new ExactCriteria();
     exclude.setPublicationYear(text);
     request.setMustNotInclude(exclude);
     var filters = planner.plan(50, request, Set.of()).filters();
@@ -152,7 +151,7 @@ class AudiobookRetrievalPlannerTest {
   @Test
   void relativeYearsAdvanceWithTheClockIncludingAtNewYear() {
     var request = new ConversationDraft();
-    var include = new MustInclude();
+    var include = new ExactCriteria();
     include.setPublicationYear("recent");
     request.setMustInclude(include);
     for (int year : List.of(2026, 2027, 2031)) {
@@ -177,7 +176,7 @@ class AudiobookRetrievalPlannerTest {
       })
   void rejectsInvalidRelativeYearWindowsWithoutOverflow(String text) {
     var request = new ConversationDraft();
-    var include = new MustInclude();
+    var include = new ExactCriteria();
     include.setPublicationYear(text);
     request.setMustInclude(include);
     var clock =
@@ -191,7 +190,7 @@ class AudiobookRetrievalPlannerTest {
   @Test
   void treatsAnUnqualifiedPublicationYearAsAnExactYear() {
     ConversationDraft request = new ConversationDraft();
-    MustInclude publicationYear = new MustInclude();
+    ExactCriteria publicationYear = new ExactCriteria();
     publicationYear.setPublicationYear("2020");
     request.setMustInclude(publicationYear);
 

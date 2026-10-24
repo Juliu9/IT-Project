@@ -177,19 +177,19 @@ public class ConversationTurn {
     searchContext.setNegativeSemanticQuery(value);
   }
 
-  public MustInclude getMustInclude() {
+  public ExactCriteria getMustInclude() {
     return searchContext.getMustInclude();
   }
 
-  public void setMustInclude(MustInclude value) {
+  public void setMustInclude(ExactCriteria value) {
     searchContext.setMustInclude(value);
   }
 
-  public MustNotInclude getMustNotInclude() {
+  public ExactCriteria getMustNotInclude() {
     return searchContext.getMustNotInclude();
   }
 
-  public void setMustNotInclude(MustNotInclude value) {
+  public void setMustNotInclude(ExactCriteria value) {
     searchContext.setMustNotInclude(value);
   }
 

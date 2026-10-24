@@ -19,8 +19,7 @@ import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendat
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.MustInclude;
-import com.gen3.recommenderagent.domain.session.MustNotInclude;
+import com.gen3.recommenderagent.domain.session.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
@@ -105,7 +104,7 @@ class RecommendationBatchFlowTest {
     SemanticQuery avoid = new SemanticQuery();
     avoid.setKeywords(List.of("violence"));
     search.setNegativeSemanticQuery(avoid);
-    MustInclude include = new MustInclude();
+    ExactCriteria include = new ExactCriteria();
     include.setLanguage("English");
     search.setMustInclude(include);
     process(search);
@@ -231,11 +230,11 @@ class RecommendationBatchFlowTest {
     empty.setGenres(java.util.Arrays.asList(null, "", "  "));
     more.setPositiveSemanticQuery(empty);
     more.setNegativeSemanticQuery(new SemanticQuery());
-    MustInclude include = new MustInclude();
+    ExactCriteria include = new ExactCriteria();
     include.setLanguage("  ");
     include.setAuthors(List.of());
     more.setMustInclude(include);
-    MustNotInclude exclude = new MustNotInclude();
+    ExactCriteria exclude = new ExactCriteria();
     exclude.setSource("");
     more.setMustNotInclude(exclude);
     assertIds(process(more), 6, 5);
@@ -248,7 +247,7 @@ class RecommendationBatchFlowTest {
   void moreWithNewExactFiltersRetrievesAFreshBatch() {
     process(request(Intent.RECOMMENDATION));
     ConversationDraft more = request(Intent.MORE_RESULTS);
-    MustInclude include = new MustInclude();
+    ExactCriteria include = new ExactCriteria();
     include.setLanguage("French");
     more.setMustInclude(include);
     assertIds(process(more), 21, 5);
