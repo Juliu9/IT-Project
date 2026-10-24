@@ -1,5 +1,6 @@
 package com.gen3.recommenderagent.retrieval.plan;
 
+import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.MustInclude;
 import com.gen3.recommenderagent.domain.session.MustNotInclude;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
@@ -38,6 +39,163 @@ public class AudiobookRetrievalPlanner {
 
   AudiobookRetrievalPlanner(Clock clock) {
     this.clock = clock;
+  }
+
+  /** Checks the new message before reconciling corrections against inherited filters. */
+  public void resolveFilterCorrections(SessionRequest resolved, SessionRequest incoming) {
+    resolveFilterCorrections(resolved, incoming, null);
+  }
+
+  public void resolveFilterCorrections(
+      SessionRequest resolved, SessionRequest incoming, SessionRequest previousSearch) {
+    if (resolved.isSearchClarificationRequired()
+        || (resolved.getIntent() != Intent.RECOMMENDATION
+            && resolved.getIntent() != Intent.REFINE
+            && resolved.getIntent() != Intent.MORE_RESULTS
+            && resolved.getIntent() != Intent.UPDATE_PREFERENCES)) {
+      return;
+    }
+    var own = plan(1, incoming, Set.of()).filters();
+    requireCompatible(own);
+    var inherited = plan(1, resolved, Set.of()).filters();
+    var previous = plan(1, previousSearch, Set.of()).filters();
+    for (String field : conflicts(inherited)) {
+      var priority = own;
+      if (!supplied(own.mustInclude(), field) && !supplied(own.mustNotInclude(), field)) {
+        priority = previous;
+      }
+      boolean newInclude = supplied(priority.mustInclude(), field);
+      boolean newExclude = supplied(priority.mustNotInclude(), field);
+      if (newInclude && !newExclude) {
+        clearExcluded(resolved, field, priority.mustInclude());
+      } else if (newExclude && !newInclude) {
+        clearIncluded(resolved, field, priority.mustNotInclude());
+      }
+    }
+    requireCompatible(plan(1, resolved, Set.of()).filters());
+  }
+
+  private void requireCompatible(AudiobookFilters filters) {
+    var fields = conflicts(filters);
+    if (!fields.isEmpty()) {
+      throw new InvalidRequestException(
+          "Your "
+              + String.join(" and ", fields)
+              + " requirements conflict. Which requirement would you like to keep?");
+    }
+  }
+
+  private List<String> conflicts(AudiobookFilters filters) {
+    var include = filters.mustInclude();
+    var exclude = filters.mustNotInclude();
+    List<String> fields = new ArrayList<>();
+    for (String field : List.of("authors", "narrators", "language", "source")) {
+      var required = exactValues(include, field);
+      var forbidden = exactValues(exclude, field);
+      if (!required.isEmpty() && forbidden.containsAll(required)) {
+        fields.add(field);
+      }
+    }
+    if (supplied(include, "duration")
+        && supplied(exclude, "duration")
+        && covers(
+            exclude.minimumDurationMinutes(),
+            exclude.maximumDurationMinutes(),
+            include.minimumDurationMinutes(),
+            include.maximumDurationMinutes(),
+            1,
+            Integer.MAX_VALUE)) {
+      fields.add("duration");
+    }
+    if (supplied(include, "publication year")
+        && supplied(exclude, "publication year")
+        && covers(
+            exclude.minimumPublicationYear(),
+            exclude.maximumPublicationYear(),
+            include.minimumPublicationYear(),
+            include.maximumPublicationYear(),
+            0,
+            9999)) {
+      fields.add("publication year");
+    }
+    return fields;
+  }
+
+  private boolean covers(
+      Integer outerMin,
+      Integer outerMax,
+      Integer innerMin,
+      Integer innerMax,
+      int floor,
+      int ceiling) {
+    return (outerMin == null ? floor : outerMin) <= (innerMin == null ? floor : innerMin)
+        && (outerMax == null ? ceiling : outerMax) >= (innerMax == null ? ceiling : innerMax);
+  }
+
+  private List<String> exactValues(AudiobookFilterConditions filters, String field) {
+    List<String> values =
+        switch (field) {
+          case "authors" -> filters.authors();
+          case "narrators" -> filters.narrators();
+          case "language" -> filters.language() == null ? List.of() : List.of(filters.language());
+          case "source" -> filters.source() == null ? List.of() : List.of(filters.source());
+          default -> List.of();
+        };
+    return values.stream()
+        .filter(this::hasText)
+        .map(String::trim)
+        .map(value -> value.toLowerCase(Locale.ROOT))
+        .distinct()
+        .toList();
+  }
+
+  private boolean supplied(AudiobookFilterConditions filters, String field) {
+    return switch (field) {
+      case "duration" ->
+          filters.minimumDurationMinutes() != null || filters.maximumDurationMinutes() != null;
+      case "publication year" ->
+          filters.minimumPublicationYear() != null || filters.maximumPublicationYear() != null;
+      default -> !exactValues(filters, field).isEmpty();
+    };
+  }
+
+  private List<String> without(
+      List<String> values, AudiobookFilterConditions correction, String field) {
+    var removed = exactValues(correction, field);
+    return values == null
+        ? null
+        : values.stream()
+            .filter(
+                value -> value != null && !removed.contains(value.trim().toLowerCase(Locale.ROOT)))
+            .toList();
+  }
+
+  private void clearIncluded(
+      SessionRequest request, String field, AudiobookFilterConditions correction) {
+    var include = request.getMustInclude();
+    switch (field) {
+      case "authors" -> include.setAuthors(without(include.getAuthors(), correction, field));
+      case "narrators" -> include.setNarrators(without(include.getNarrators(), correction, field));
+      case "language" -> include.setLanguage(null);
+      case "source" -> include.setSource(null);
+      case "duration" -> include.setDuration(null);
+      case "publication year" -> include.setPublicationYear(null);
+      default -> throw new IllegalArgumentException(field);
+    }
+  }
+
+  private void clearExcluded(
+      SessionRequest request, String field, AudiobookFilterConditions correction) {
+    var exclude = request.getMustNotInclude();
+    switch (field) {
+      case "authors" -> exclude.setAuthors(without(exclude.getAuthors(), correction, field));
+      case "narrators" -> exclude.setNarrators(without(exclude.getNarrators(), correction, field));
+      case "language" -> exclude.setLanguage(null);
+      case "source" -> exclude.setSource(null);
+      case "duration" -> exclude.setDuration(null);
+      case "publication year" -> exclude.setPublicationYear(null);
+      default -> throw new IllegalArgumentException(field);
+    }
   }
 
   /** Separates semantic text, lexical terms, and exact payload constraints. */

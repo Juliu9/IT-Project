@@ -65,7 +65,11 @@ public class AiInputParser implements InputParser {
                       .system(
                           """
                         Extract only stated audiobook criteria; never invent values, report contradictions, or choose retrieval mode.
-                        Intents: RECOMMENDATION=new search; REFINE=semantic follow-up or taste statement (including "fantasy");
+                        Intents: RECOMMENDATION=new search; REFINE=context-dependent change to an earlier search or taste reply;
+                        Self-contained criteria ("fantasy", "fantasy under five hours") are RECOMMENDATION, even without a verb.
+                        Newly stated exact author/narrator lists replace prior lists by default.
+                        addAuthors/addNarrators=true only for explicit additions ("also", "add"), otherwise false.
+                        Preserve stated include/exclude contradictions for clarification; do not silently repair the same message.
                         MORE_RESULTS=different books, including "2 more" with bookCount=2; REPEAT=repeat the latest request ("repeat that", "say that again"), including explanations/help.
                         REPEAT_RECOMMENDATIONS=repeat the latest book page ("repeat the books", "show those recommendations again");
                         EXPLAIN_RECOMMENDATION=why recommended;
@@ -106,6 +110,8 @@ public class AiInputParser implements InputParser {
 
     SessionRequest request = new SessionRequest();
     request.setIntent(parsed.getIntent());
+    request.setAddAuthors(parsed.isAddAuthors());
+    request.setAddNarrators(parsed.isAddNarrators());
     request.setReferenceRank(boundedInteger(parsed.getReferenceRank()));
     request.setReferenceTitle(parsed.getReferenceTitle());
     request.setPersonalised(parsed.isPersonalised());

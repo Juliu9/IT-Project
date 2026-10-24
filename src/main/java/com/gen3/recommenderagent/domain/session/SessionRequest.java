@@ -41,6 +41,25 @@ public class SessionRequest {
     this.referenceTitle = referenceTitle;
   }
 
+  private boolean addAuthors;
+  private boolean addNarrators;
+
+  public boolean isAddAuthors() {
+    return addAuthors;
+  }
+
+  public void setAddAuthors(boolean value) {
+    addAuthors = value;
+  }
+
+  public boolean isAddNarrators() {
+    return addNarrators;
+  }
+
+  public void setAddNarrators(boolean value) {
+    addNarrators = value;
+  }
+
   private Intent intent;
 
   private SemanticQuery positiveSemanticQuery;

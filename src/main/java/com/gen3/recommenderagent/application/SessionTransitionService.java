@@ -8,12 +8,14 @@ import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
+import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.storage.session.SessionRepository;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.IntStream;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /** Owns one ordered, all-or-nothing transition of a user's conversational session. */
@@ -24,9 +26,19 @@ public class SessionTransitionService {
 
   private final SessionRepository sessions;
   private final RecommendationWorkflow recommendationWorkflow;
+  private final AudiobookRetrievalPlanner planner;
 
   public SessionTransitionService(
       SessionRepository sessions, RecommendationWorkflow recommendationWorkflow) {
+    this(sessions, recommendationWorkflow, new AudiobookRetrievalPlanner());
+  }
+
+  @Autowired
+  public SessionTransitionService(
+      SessionRepository sessions,
+      RecommendationWorkflow recommendationWorkflow,
+      AudiobookRetrievalPlanner planner) {
+    this.planner = planner;
     this.sessions = sessions;
     this.recommendationWorkflow = recommendationWorkflow;
   }
@@ -36,7 +48,19 @@ public class SessionTransitionService {
   }
 
   private SessionRequest apply(Session session, SessionRequest original) {
-    SessionRequest result = CONVERSATION_STATE.begin(session, original);
+    SessionRequest result =
+        CONVERSATION_STATE.begin(
+            session,
+            original,
+            resolved ->
+                planner.resolveFilterCorrections(
+                    resolved,
+                    original,
+                    original != null
+                            && (original.getIntent() == Intent.REFINE
+                                || original.getIntent() == Intent.MORE_RESULTS)
+                        ? CONVERSATION_STATE.latestSearch(session)
+                        : null));
     if (CONVERSATION_STATE.needsRecommendations(result)) {
       result.setRecommendations(recommendationPage(result, session));
     }

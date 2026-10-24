@@ -38,7 +38,9 @@ avoided romance concepts, and an exact duration limit. Semantic criteria influen
 exact filters restrict which records are eligible. “Recent” means the last five years; “past year”
 and “last four years” also produce inclusive publication-year ranges ending in the current year.
 Only new searches and refinements introduce
-new semantic criteria; follow-up control intents can inherit the saved search.
+new semantic criteria; follow-up control intents can inherit the saved search. Exact author/narrator
+refinements replace the old list unless the user says “also” or “add”. Conflicting exact requirements
+ask for clarification before searching and preserve the saved search.
 
 ### 2. Resolve the conversation under a session lock
 

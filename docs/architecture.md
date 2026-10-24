@@ -61,6 +61,25 @@ Pending recommendations are catalogue snapshots. Edits and removals affect new b
 items are not rechecked on each page. Sessions without a pending queue refill normally. The queue
 needs no Redis-specific keys or additional storage-adapter operations.
 
+### Refinements and exact-filter corrections
+
+Self-contained criteria, such as “fantasy under five hours”, route to `RECOMMENDATION`.
+A context-dependent `REFINE` without a previous search asks for criteria without embedding or
+retrieval; stored user preferences alone are not a previous search. A self-contained request can
+still answer a pending preference question and save that taste for the session.
+
+New exact author/narrator lists replace the previous list by default. Explicit “also”/“add” wording
+sets the parser's `addAuthors`/`addNarrators` flags and extends that list instead. Unrelated filters
+and semantic criteria remain inherited for refinements.
+
+Before queue invalidation or recommendation work, the planner checks exact include/exclude
+constraints. Explicit new requirements override conflicting inherited exclusions, and vice versa.
+Contradictions within the new message return `400` with a clarification question; the saved search,
+queue, shown IDs and session version remain unchanged. Author/narrator alternatives are OR-based:
+allowing A or B while excluding A remains valid. A range conflicts only when its exclusion covers
+the entire required interval. Semantic combinations, such as romantic horror, are not conflicts.
+This checks logical impossibility, not whether the current catalogue happens to contain matches.
+
 ### Semantic criteria and personalisation
 
 Author-only and narrator-only semantic criteria select semantic retrieval. Exact names in

@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
@@ -20,7 +21,13 @@ public final class ConversationState {
 
   /** Resolves context and invalidates an obsolete queue before recommendation work begins. */
   public SessionRequest begin(Session session, SessionRequest original) {
+    return begin(session, original, request -> {});
+  }
+
+  public SessionRequest begin(
+      Session session, SessionRequest original, Consumer<SessionRequest> validate) {
     SessionRequest request = resolve(session, original);
+    validate.accept(request);
     // Invalidation uses the original action because clarification replies can become searches.
     if (request.getIntent() != Intent.REPEAT
         && request.getIntent() != Intent.EXPLAIN_RECOMMENDATION
@@ -179,7 +186,9 @@ public final class ConversationState {
     // Persist a taste reply before history replacement removes the pending clarification.
     if (request.getIntent() != Intent.CANCEL
         && (originalIntent == Intent.UPDATE_PREFERENCES
-            || (originalIntent == Intent.REFINE && awaitingPreferences(session)))) {
+            || ((originalIntent == Intent.REFINE || originalIntent == Intent.RECOMMENDATION)
+                && awaitingPreferences(session)
+                && !request.isPreferenceClarificationRequired()))) {
       session.setPreferences(mergedPreferences(session, request));
     }
     if (request.getIntent() == Intent.CHANGE_COUNT) {
@@ -301,6 +310,15 @@ public final class ConversationState {
       effective.setSearchClarificationRequired(true);
       return effective;
     }
+    if (effective.getIntent() == Intent.REFINE
+        && latestSearch(session) == null
+        && !awaitingPreferences(session)) {
+      if (!hasSearchCriteria(effective)) {
+        effective.setSearchClarificationRequired(true);
+        return effective;
+      }
+      effective.setIntent(Intent.RECOMMENDATION);
+    }
     if (awaitingPreferences(session) && acceptsPreferences(effective.getIntent())) {
       applyPreferences(effective, session);
       effective.setIntent(Intent.RECOMMENDATION);
@@ -312,6 +330,9 @@ public final class ConversationState {
     if (isRecommendationIntent(effective.getIntent())) {
       applyPreferences(effective, session);
       effective.setBookCount(resolveBookCount(effective, session));
+    }
+    if (effective.getIntent() == Intent.UPDATE_PREFERENCES) {
+      applyPreferences(effective, session);
     }
     return effective;
   }
@@ -377,7 +398,7 @@ public final class ConversationState {
     return repeated;
   }
 
-  private SessionRequest latestSearch(Session session) {
+  public SessionRequest latestSearch(Session session) {
     return session.getRequests() == null
         ? null
         : session.getRequests().stream()
@@ -450,7 +471,6 @@ public final class ConversationState {
 
   private SessionPreferences mergedPreferences(Session session, SessionRequest request) {
     SessionRequest combined = copyOf(request);
-    applyPreferences(combined, session);
     SessionPreferences preferences = new SessionPreferences();
     preferences.setPositiveSemanticQuery(copy(combined.getPositiveSemanticQuery()));
     preferences.setNegativeSemanticQuery(copy(combined.getNegativeSemanticQuery()));
@@ -563,8 +583,28 @@ public final class ConversationState {
         merge(base.getPositiveSemanticQuery(), target.getPositiveSemanticQuery()));
     target.setNegativeSemanticQuery(
         merge(base.getNegativeSemanticQuery(), target.getNegativeSemanticQuery()));
-    target.setMustInclude(merge(base.getMustInclude(), target.getMustInclude()));
-    target.setMustNotInclude(merge(base.getMustNotInclude(), target.getMustNotInclude()));
+    MustInclude explicitInclude = target.getMustInclude();
+    MustNotInclude explicitExclude = target.getMustNotInclude();
+    MustInclude included = merge(base.getMustInclude(), explicitInclude);
+    MustNotInclude excluded = merge(base.getMustNotInclude(), explicitExclude);
+    if (explicitInclude != null) {
+      if (!target.isAddAuthors() && hasTerms(explicitInclude.getAuthors())) {
+        included.setAuthors(union(null, explicitInclude.getAuthors()));
+      }
+      if (!target.isAddNarrators() && hasTerms(explicitInclude.getNarrators())) {
+        included.setNarrators(union(null, explicitInclude.getNarrators()));
+      }
+    }
+    if (explicitExclude != null) {
+      if (!target.isAddAuthors() && hasTerms(explicitExclude.getAuthors())) {
+        excluded.setAuthors(union(null, explicitExclude.getAuthors()));
+      }
+      if (!target.isAddNarrators() && hasTerms(explicitExclude.getNarrators())) {
+        excluded.setNarrators(union(null, explicitExclude.getNarrators()));
+      }
+    }
+    target.setMustInclude(included);
+    target.setMustNotInclude(excluded);
   }
 
   private SemanticQuery merge(SemanticQuery base, SemanticQuery override) {
@@ -661,6 +701,8 @@ public final class ConversationState {
     if (source == null) {
       return copy;
     }
+    copy.setAddAuthors(source.isAddAuthors());
+    copy.setAddNarrators(source.isAddNarrators());
     copy.setRequestId(source.getRequestId());
     copy.setRawText(source.getRawText());
     copy.setCreatedAt(source.getCreatedAt());

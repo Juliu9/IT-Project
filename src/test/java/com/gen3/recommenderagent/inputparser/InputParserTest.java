@@ -25,6 +25,35 @@ import tools.jackson.databind.ObjectMapper;
 
 class InputParserTest {
   @Test
+  void mapsExplicitAdditionsAndRoutesStandaloneCriteriaToRecommendation() {
+    var parsed = new ParsedRequest();
+    parsed.setIntent(Intent.RECOMMENDATION);
+    parsed.setAddAuthors(true);
+    parsed.setAddNarrators(false);
+    var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    when(client
+            .prompt()
+            .system(anyString())
+            .user("fantasy under five hours")
+            .call()
+            .responseEntity(AiInputParser.REQUEST_CONVERTER))
+        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+    var result =
+        new AiInputParser(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
+            .parse("fantasy under five hours");
+    assertEquals(Intent.RECOMMENDATION, result.getIntent());
+    org.junit.jupiter.api.Assertions.assertTrue(result.isAddAuthors());
+    org.junit.jupiter.api.Assertions.assertFalse(result.isAddNarrators());
+    org.mockito.Mockito.verify(client.prompt())
+        .system(
+            org.mockito.ArgumentMatchers.<String>argThat(
+                prompt ->
+                    prompt.contains("Self-contained criteria")
+                        && prompt.contains("addAuthors/addNarrators")));
+  }
+
+  @Test
   void mapsExplanationSelectorsWithoutTreatingRankAsBookCount() {
     var parsed = new ParsedRequest();
     parsed.setIntent(Intent.EXPLAIN_RECOMMENDATION);
