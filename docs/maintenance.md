@@ -45,6 +45,9 @@ AUDIOBOOK_EMBEDDING_INDEX_ENABLED=true AUDIOBOOK_DATABASE=solr \
 
 - IDs, metadata, custom fields, and short descriptions are preserved. Blank records are skipped.
 - An embedding failure prevents that page's writes; earlier pages remain saved.
+- Solr embedding writes require the version read before generation. A deleted or edited record
+  rejects the stale update instead of recreating a partial document or attaching an outdated vector.
+  Earlier updates may already be saved; rerun against the current catalogue after resolving the conflict.
 - Rerunning starts at the beginning and regenerates existing vectors, incurring charges again.
 - The process closes its clients when finished. It cannot run alongside migration or summary generation.
 

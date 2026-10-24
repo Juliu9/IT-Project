@@ -109,7 +109,8 @@ explanations use plain text and punctuation, with a maximum of 150 words across 
 Queue consumption, shown IDs, and conversation changes commit together before a response is
 written. The Redis adapter checks lock ownership and session version before saving, renews long
 locks, and refreshes the session's 24-hour expiry. A failed transition leaves the saved queue
-unchanged; response generation runs after the lock is released.
+unchanged. Response generation follows commit while the session lease remains held, so another
+request cannot advance the page during generation. An overlapping session update receives `409`.
 
 The completed `ConversationTurn` carries a `ConversationDecision` describing the resolved action.
 It is separate from the parser’s incoming `SessionRequest`. The session saves the latest turn and

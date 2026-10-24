@@ -107,6 +107,40 @@ class ExplanationFlowTest {
   }
 
   @ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = Intent.class,
+      names = {"UNKNOWN", "RECOMMENDATION", "REFINE"})
+  void titleReplyUsesThePageRegardlessOfParserLabel(Intent intent) throws Exception {
+    search();
+    explain(null, "Harry Potter");
+    String before = saved();
+    var reply = new ConversationDraft();
+    reply.setIntent(intent);
+    reply.setRawText("Harry Potter 1");
+    var result = service.process("session", "user", reply);
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(result.getRecommendations()).extracting(Recommendation::getRank).containsExactly(1);
+    assertThat(saved()).isEqualTo(before);
+    verify(workflow).recommend(any(), any());
+  }
+
+  @Test
+  void explicitSearchByTitleCanStartANewSearchDuringClarification() {
+    search();
+    explain(null, "Harry Potter");
+    var reply = new ConversationDraft();
+    reply.setIntent(Intent.RECOMMENDATION);
+    reply.setRawText("Recommend Harry Potter 1");
+    reply.setExplicitSearch(true);
+    var criteria = new SemanticQuery();
+    criteria.setKeywords(List.of("Harry Potter 1"));
+    reply.setPositiveSemanticQuery(criteria);
+    assertThat(service.process("session", "user", reply).getIntent())
+        .isEqualTo(Intent.RECOMMENDATION);
+    verify(workflow, times(2)).recommend(any(), any());
+  }
+
+  @ParameterizedTest
   @ValueSource(
       strings = {
         "first",

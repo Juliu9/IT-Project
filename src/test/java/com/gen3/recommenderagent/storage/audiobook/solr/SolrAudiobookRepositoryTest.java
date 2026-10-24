@@ -27,18 +27,6 @@ class SolrAudiobookRepositoryTest {
     solrClient = SolrContainerTestSupport.newClient(SOLR);
     SolrContainerTestSupport.configureSchema(solrClient);
     SolrContainerTestSupport.seedBooks(solrClient);
-  }
-
-  @AfterAll
-  static void closeSolrClient() throws Exception {
-    if (solrClient != null) {
-      solrClient.close();
-    }
-  }
-
-  @Test
-  void embeddingMaintenanceJobWritesVectorsWhilePreservingSummariesAndCustomFields()
-      throws Exception {
     String collection = SolrContainerTestSupport.COLLECTION;
     var type = new org.apache.solr.client.solrj.request.schema.FieldTypeDefinition();
     type.setAttributes(
@@ -57,6 +45,19 @@ class SolrAudiobookRepositoryTest {
             java.util.Map.of(
                 "name", "embedding", "type", "job_vector", "stored", true, "indexed", true))
         .process(solrClient, collection);
+  }
+
+  @AfterAll
+  static void closeSolrClient() throws Exception {
+    if (solrClient != null) {
+      solrClient.close();
+    }
+  }
+
+  @Test
+  void embeddingMaintenanceJobWritesVectorsWhilePreservingSummariesAndCustomFields()
+      throws Exception {
+    String collection = SolrContainerTestSupport.COLLECTION;
     var metadata = new org.apache.solr.common.SolrInputDocument();
     metadata.addField("id", "book-101");
     metadata.addField("short_description", java.util.Map.of("set", "Keep this summary"));
@@ -88,6 +89,53 @@ class SolrAudiobookRepositoryTest {
     org.assertj.core.api.Assertions.assertThat(repository.findStoredBooks(0, 1).getFirst().vector())
         .containsExactly(expected);
     org.mockito.Mockito.verify(model).embed(org.mockito.ArgumentMatchers.anyList());
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void embeddingUpdatesRejectRecordsDeletedOrEditedAfterReading(boolean deleted) throws Exception {
+    String collection = SolrContainerTestSupport.COLLECTION;
+    String id = deleted ? "raced-deletion" : "raced-edit";
+    var original = new org.apache.solr.common.SolrInputDocument();
+    original.addField("id", id);
+    original.addField("title", "Original");
+    original.addField("description", "Old description");
+    solrClient.add(collection, original);
+    solrClient.commit(collection);
+    var repository = new SolrAudiobookRepository(solrClient, collection);
+    var store = new com.gen3.embeddingjob.store.SolrEmbeddingStore(repository);
+    var source =
+        store.embeddingPage(null, 100).books().stream()
+            .filter(book -> id.equals(book.record().id()))
+            .findFirst()
+            .orElseThrow();
+    if (deleted) {
+      solrClient.deleteById(collection, id);
+    } else {
+      var edit = new org.apache.solr.common.SolrInputDocument();
+      edit.addField("id", id);
+      edit.addField("description", java.util.Map.of("set", "New description"));
+      solrClient.add(collection, edit);
+    }
+    solrClient.commit(collection);
+    float[] vector = new float[1536];
+    vector[0] = 1;
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () ->
+                store.updateEmbeddings(
+                    java.util.List.of(
+                        new com.gen3.embeddingjob.store.AudiobookEmbeddingStore.Update(
+                            source.storageReference(),
+                            new com.gen3.recommenderagent.storage.audiobook.model
+                                .AudiobookEmbedding(source.record(), vector)))))
+        .isInstanceOf(java.io.IOException.class);
+    var current = solrClient.getById(collection, id);
+    if (deleted) {
+      org.junit.jupiter.api.Assertions.assertNull(current);
+    } else {
+      assertEquals("New description", current.getFieldValue("description"));
+      org.assertj.core.api.Assertions.assertThat(current.getFieldValue("embedding")).isNull();
+    }
   }
 
   @Test

@@ -56,7 +56,14 @@ public final class ClarificationResolver {
       effective.setBookCount(selection);
     }
     if (session.getLastDecision() == ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
-        && (selection != null || (effective.getIntent() == Intent.UNKNOWN && !reply.isBlank()))) {
+        && (selection != null
+            || (!effective.isExplicitSearch()
+                && !reply.isBlank()
+                && (effective.getIntent() == Intent.UNKNOWN
+                    || ((effective.getIntent() == Intent.RECOMMENDATION
+                            || effective.getIntent() == Intent.REFINE)
+                        && ExplanationConversationHandler.matchesDisplayedTitle(
+                            session, reply)))))) {
       effective.setIntent(Intent.EXPLAIN_RECOMMENDATION);
       normalizeInput(effective);
       effective.setReferenceRank(selection);

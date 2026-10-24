@@ -6,6 +6,7 @@ import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
 import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
+import com.gen3.recommenderagent.storage.audiobook.model.StoredAudiobook;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCatalogueRepository;
 import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorRepository;
@@ -213,6 +214,17 @@ public class SolrAudiobookRepository
   /** Writes a batch of vector field updates and commits once. */
   @Override
   public void indexEmbeddings(List<AudiobookEmbedding> embeddings) throws IOException {
+    writeEmbeddings(embeddings, null);
+  }
+
+  /** Rejects stale or deleted catalogue records instead of creating partial documents. */
+  public void updateExistingEmbeddings(
+      List<AudiobookEmbedding> embeddings, Map<String, Long> versions) throws IOException {
+    writeEmbeddings(embeddings, java.util.Objects.requireNonNull(versions));
+  }
+
+  private void writeEmbeddings(List<AudiobookEmbedding> embeddings, Map<String, Long> versions)
+      throws IOException {
     if (embeddings == null || embeddings.isEmpty()) {
       return;
     }
@@ -230,6 +242,14 @@ public class SolrAudiobookRepository
                 embedding -> {
                   SolrInputDocument document = new SolrInputDocument();
                   document.addField("id", embedding.record().id());
+                  if (versions != null) {
+                    Long version = versions.get(embedding.record().id());
+                    if (version == null || version <= 1) {
+                      throw new IllegalArgumentException(
+                          "An exact source version is required for embedding updates");
+                    }
+                    document.addField("_version_", version);
+                  }
                   document.addField(vectorField, Map.of("set", toList(embedding.vector())));
                   return document;
                 })
@@ -250,6 +270,19 @@ public class SolrAudiobookRepository
   @Override
   public List<AudiobookRecord> findAllBooks(int offset, int limit) throws IOException {
     return cataloguePage(offset, limit, false).stream().map(this::toRecord).toList();
+  }
+
+  /** Retains each record's source version across the model call. */
+  public List<StoredAudiobook> findEmbeddingRecords(int offset, int limit) throws IOException {
+    var records = new ArrayList<StoredAudiobook>();
+    for (var document : cataloguePage(offset, limit, false)) {
+      Object version = document.getFieldValue("_version_");
+      if (!(version instanceof Number number) || number.longValue() <= 1) {
+        throw new IOException("Solr must return an exact _version_ for embedding maintenance");
+      }
+      records.add(new StoredAudiobook(toRecord(document), Long.toString(number.longValue())));
+    }
+    return records;
   }
 
   /** Reads existing catalogue values and vectors without generating or normalizing anything. */
@@ -295,7 +328,8 @@ public class SolrAudiobookRepository
         "language",
         "durationMinutes",
         "publicationYear",
-        "short_description");
+        "short_description",
+        "_version_");
     if (includeVectors) {
       solrQuery.addField(vectorField);
     }

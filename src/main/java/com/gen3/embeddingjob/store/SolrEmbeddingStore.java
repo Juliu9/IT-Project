@@ -1,6 +1,5 @@
 package com.gen3.embeddingjob.store;
 
-import com.gen3.recommenderagent.storage.audiobook.model.StoredAudiobook;
 import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
 import java.io.IOException;
 import java.util.List;
@@ -20,14 +19,17 @@ public class SolrEmbeddingStore implements AudiobookEmbeddingStore {
   @Override
   public Page embeddingPage(String cursor, int limit) throws IOException {
     int offset = cursor == null ? 0 : Integer.parseInt(cursor);
-    var records = repository.findAllBooks(offset, limit);
+    var records = repository.findEmbeddingRecords(offset, limit);
     return new Page(
-        records.stream().map(record -> new StoredAudiobook(record, record.id())).toList(),
-        records.size() < limit ? null : Integer.toString(offset + records.size()));
+        records, records.size() < limit ? null : Integer.toString(offset + records.size()));
   }
 
   @Override
   public void updateEmbeddings(List<Update> updates) throws IOException {
-    repository.indexEmbeddings(updates.stream().map(Update::embedding).toList());
+    var versions = new java.util.HashMap<String, Long>();
+    for (var update : updates) {
+      versions.put(update.embedding().record().id(), Long.parseLong(update.storageReference()));
+    }
+    repository.updateExistingEmbeddings(updates.stream().map(Update::embedding).toList(), versions);
   }
 }

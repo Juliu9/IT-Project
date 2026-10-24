@@ -836,7 +836,8 @@ class RedisSessionRepositoryTest {
     SessionRepository paused =
         new SessionRepository() {
           @Override
-          public <T> T update(String id, String user, Function<Session, T> change) {
+          public <T, R> R update(
+              String id, String user, Function<Session, T> change, Function<T, R> afterCommit) {
             return redisSessionCache.update(
                 id,
                 user,
@@ -845,7 +846,8 @@ class RedisSessionRepositoryTest {
                   consumed.countDown();
                   await(finish);
                   return result;
-                });
+                },
+                afterCommit);
           }
         };
     RecommendationWorkflow workflow = mock(RecommendationWorkflow.class);
@@ -883,6 +885,63 @@ class RedisSessionRepositoryTest {
       finish.countDown();
       worker.shutdownNow();
     }
+  }
+
+  @Test
+  void leaseCoversPostCommitResponseAcrossRepositoryInstances() throws Exception {
+    var generating = new CountDownLatch(1);
+    var release = new CountDownLatch(1);
+    var worker = Executors.newSingleThreadExecutor();
+    var other = new RedisSessionRepository(redisTemplate, stringRedisTemplate);
+    try {
+      Future<String> response =
+          worker.submit(
+              () ->
+                  redisSessionCache.update(
+                      "response-lease",
+                      USER_ID,
+                      session -> {
+                        session.setBookCount(2);
+                        return "saved";
+                      },
+                      result -> {
+                        generating.countDown();
+                        await(release);
+                        return result + " response";
+                      }));
+      assertTrue(generating.await(5, TimeUnit.SECONDS));
+      assertEquals(2, read("response-lease", USER_ID).getBookCount());
+      assertThrows(
+          SessionBusyException.class,
+          () -> other.update("response-lease", USER_ID, session -> null));
+      assertEquals("independent", other.update("other-session", USER_ID, session -> "independent"));
+      release.countDown();
+      assertEquals("saved response", response.get(5, TimeUnit.SECONDS));
+      assertEquals("next", other.update("response-lease", USER_ID, session -> "next"));
+    } finally {
+      release.countDown();
+      worker.shutdownNow();
+    }
+  }
+
+  @Test
+  void failingResponseReleasesLeaseWithoutRollingBackCommittedState() {
+    assertThrows(
+        IllegalStateException.class,
+        () ->
+            redisSessionCache.update(
+                "response-failure",
+                USER_ID,
+                session -> {
+                  session.setBookCount(3);
+                  return "saved";
+                },
+                result -> {
+                  throw new IllegalStateException("generation failed");
+                }));
+    assertEquals(3, read("response-failure", USER_ID).getBookCount());
+    assertEquals(
+        "retry", redisSessionCache.update("response-failure", USER_ID, session -> "retry"));
   }
 
   private Session read(String sessionId, String userId) {

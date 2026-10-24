@@ -22,7 +22,11 @@ expiry, and shared session error types. Queue consumption and shown IDs must com
 a cache providing only get/set needs additional coordination.
 
 Redis checks lock ownership and session version before saving and renews long-running locks.
-Response generation follows commit and cannot roll back history. Updates are not retried automatically.
+Response generation runs in the store's `afterCommit` callback while the same session lease remains
+held and renewed. Replacement adapters must keep excluding same-session updates until this callback
+finishes, including on failure. Generation cannot roll back committed history; neither callback is
+retried automatically. Other sessions are independent. `sessionLockMs` includes response generation;
+`recommendMs` and `responseMs` are nested within it and must not be added to it.
 
 | Failure | HTTP status |
 | --- | --- |
@@ -243,6 +247,9 @@ Model-provided ranks and counts accept large integers before conversion to bound
 oversized ranks clarify rather than overflow, and result counts retain the existing one-to-five cap.
 Fractional numeric fields and structured responses exceeding JSON limits return a friendly `400`
 validation message rather than truncating a position or returning a server error.
+
+Bare title replies to a pending explanation question match the displayed page even when the parser
+labels them RECOMMENDATION or REFINE. Explicit search commands still start a new search.
 
 The resolved explanation copies saved criteria and selects from the page inside the session update.
 It does not retrieve, embed, rank, consume the pending batch, add shown IDs, replace history, or clear

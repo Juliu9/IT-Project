@@ -85,7 +85,7 @@ class SolrAudiobookRepositoryUnitTest {
         .updateEmbeddings(
             List.of(
                 new com.gen3.embeddingjob.store.AudiobookEmbeddingStore.Update(
-                    "book",
+                    "123",
                     new com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding(
                         record, new float[] {0.6f, 0.8f}))));
     var documents = ArgumentCaptor.forClass(java.util.Collection.class);
@@ -93,8 +93,9 @@ class SolrAudiobookRepositoryUnitTest {
     var document =
         (org.apache.solr.common.SolrInputDocument) documents.getValue().iterator().next();
     assertEquals(
-        java.util.Set.of("id", "embedding"),
+        java.util.Set.of("id", "embedding", "_version_"),
         document.getFieldNames().stream().collect(java.util.stream.Collectors.toSet()));
+    assertEquals(123L, document.getFieldValue("_version_"));
     assertEquals(java.util.Map.of("set", List.of(0.6f, 0.8f)), document.getFieldValue("embedding"));
     verify(client).commit("books");
   }

@@ -37,7 +37,17 @@ class RequestGatewayTest {
     var parsed = new ConversationDraft();
     var completed = ConversationTurn.fromDraft(parsed);
     when(inputParser.parse("more")).thenReturn(parsed);
-    when(sessionTransitionService.process("session", "user", parsed)).thenReturn(completed);
+    when(sessionTransitionService.process(
+            org.mockito.ArgumentMatchers.eq("session"),
+            org.mockito.ArgumentMatchers.eq("user"),
+            org.mockito.ArgumentMatchers.eq(parsed),
+            org.mockito.ArgumentMatchers.any()))
+        .thenAnswer(
+            call ->
+                ((java.util.function.Function<
+                            com.gen3.recommenderagent.domain.session.ConversationTurn, Object>)
+                        call.getArgument(3))
+                    .apply(completed));
     when(responseGenerator.generate(null, completed)).thenReturn("No more recommendations.");
     var gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
@@ -57,7 +67,13 @@ class RequestGatewayTest {
             inputParser, sessionTransitionService, responseGenerator, telemetry);
     order.verify(telemetry).start();
     order.verify(inputParser).parse("more");
-    order.verify(sessionTransitionService).process("session", "user", parsed);
+    order
+        .verify(sessionTransitionService)
+        .process(
+            org.mockito.ArgumentMatchers.eq("session"),
+            org.mockito.ArgumentMatchers.eq("user"),
+            org.mockito.ArgumentMatchers.eq(parsed),
+            org.mockito.ArgumentMatchers.any());
     order.verify(responseGenerator).generate(null, completed);
     order.verify(telemetry).complete(completed);
     org.mockito.Mockito.verifyNoMoreInteractions(telemetry);
@@ -80,7 +96,17 @@ class RequestGatewayTest {
                       "parser", 10, 2, 12, true));
               return parsed;
             });
-    when(sessionTransitionService.process("session", "user", parsed)).thenReturn(resolved);
+    when(sessionTransitionService.process(
+            org.mockito.ArgumentMatchers.eq("session"),
+            org.mockito.ArgumentMatchers.eq("user"),
+            org.mockito.ArgumentMatchers.eq(parsed),
+            org.mockito.ArgumentMatchers.any()))
+        .thenAnswer(
+            call ->
+                ((java.util.function.Function<
+                            com.gen3.recommenderagent.domain.session.ConversationTurn, Object>)
+                        call.getArgument(3))
+                    .apply(RequestTelemetry.measure("recommendMs", () -> resolved)));
     when(responseGenerator.generate(null, resolved)).thenReturn("No more recommendations.");
     var realTelemetry = new RequestTelemetry(new tools.jackson.databind.ObjectMapper());
     var gateway =
@@ -188,7 +214,11 @@ class RequestGatewayTest {
     org.mockito.Mockito.reset(inputParser);
     var parsed = new ConversationDraft();
     when(inputParser.parse("fantasy")).thenReturn(parsed);
-    when(sessionTransitionService.process("session", "user", parsed))
+    when(sessionTransitionService.process(
+            org.mockito.ArgumentMatchers.eq("session"),
+            org.mockito.ArgumentMatchers.eq("user"),
+            org.mockito.ArgumentMatchers.eq(parsed),
+            org.mockito.ArgumentMatchers.any()))
         .thenThrow(
             new org.springframework.web.client.HttpServerErrorException(
                 org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE));
@@ -240,7 +270,11 @@ class RequestGatewayTest {
   void returnsServiceUnavailableWhenCandidateRetrievalFails(String endpoint) throws Exception {
     ConversationDraft parsedRequest = new ConversationDraft();
     when(inputParser.parse("recommend science fiction")).thenReturn(parsedRequest);
-    when(sessionTransitionService.process("session", "user", parsedRequest))
+    when(sessionTransitionService.process(
+            org.mockito.ArgumentMatchers.eq("session"),
+            org.mockito.ArgumentMatchers.eq("user"),
+            org.mockito.ArgumentMatchers.eq(parsedRequest),
+            org.mockito.ArgumentMatchers.any()))
         .thenThrow(new CandidateRetrievalException("Qdrant", new RuntimeException("timed out")));
     RequestGateway gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
@@ -268,7 +302,11 @@ class RequestGatewayTest {
   void returnsRetryAdviceWhenTheSessionIsBusy(String endpoint) throws Exception {
     ConversationDraft parsedRequest = new ConversationDraft();
     when(inputParser.parse("recommend science fiction")).thenReturn(parsedRequest);
-    when(sessionTransitionService.process("session", "user", parsedRequest))
+    when(sessionTransitionService.process(
+            org.mockito.ArgumentMatchers.eq("session"),
+            org.mockito.ArgumentMatchers.eq("user"),
+            org.mockito.ArgumentMatchers.eq(parsedRequest),
+            org.mockito.ArgumentMatchers.any()))
         .thenThrow(new com.gen3.recommenderagent.storage.session.SessionBusyException());
     RequestGateway gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
@@ -293,7 +331,11 @@ class RequestGatewayTest {
   void returnsServiceUnavailableWhenTheSessionCommitFails(String endpoint) throws Exception {
     ConversationDraft parsedRequest = new ConversationDraft();
     when(inputParser.parse("recommend science fiction")).thenReturn(parsedRequest);
-    when(sessionTransitionService.process("session", "user", parsedRequest))
+    when(sessionTransitionService.process(
+            org.mockito.ArgumentMatchers.eq("session"),
+            org.mockito.ArgumentMatchers.eq("user"),
+            org.mockito.ArgumentMatchers.eq(parsedRequest),
+            org.mockito.ArgumentMatchers.any()))
         .thenThrow(new SessionCommitException());
     RequestGateway gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);

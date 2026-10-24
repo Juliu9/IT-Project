@@ -66,10 +66,8 @@ Engine --> Transition : Completed ConversationTurn
 deactivate Engine
 Transition --> Sessions : Transition result
 deactivate Transition
-Sessions -> Sessions : Commit session if lock and version still match\nRelease lock
-Sessions --> Transition : Return only after successful commit
-deactivate Sessions
-Transition --> Gateway : Selected page + resolved ConversationDecision
+Sessions -> Sessions : Commit session if lock and version still match\nKeep lease held and renewed
+Sessions -> Gateway : Run afterCommit with selected page and decision
 Gateway -> Response : Generate wording using resolved decision and context
 note over Response
   Chat model for book explanations.
@@ -77,6 +75,11 @@ note over Response
   exhausted results and model failures.
 end note
 Response --> Gateway : Response text
+Gateway --> Sessions : Generated response
+Sessions -> Sessions : Release session lease
+Sessions --> Transition : Completed request
+Transition --> Gateway : Generated response
+deactivate Sessions
 Gateway --> User : Response
 note over Gateway, Sessions
   Commit precedes final response generation.

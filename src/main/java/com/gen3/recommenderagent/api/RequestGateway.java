@@ -92,18 +92,22 @@ public class RequestGateway {
     try {
       currentRequest = RequestTelemetry.measure("parseMs", () -> inputParser.parse(rawText));
       SessionRequest parsedRequest = currentRequest;
-      ConversationTurn result =
-          demo
-              ? RequestTelemetry.measure(
-                  "recommendMs",
-                  () -> sessionTransitionService.process(sessionId, userId, parsedRequest))
-              : sessionTransitionService.process(sessionId, userId, parsedRequest);
-      String response =
-          RequestTelemetry.measure(
-              "responseMs", () -> responseGenerator.generate(result.getRecommendations(), result));
-      T payload = formatResponse.apply(response, result);
+      record Generated(String text, ConversationTurn turn) {}
+      Generated generated =
+          sessionTransitionService.process(
+              sessionId,
+              userId,
+              parsedRequest,
+              result -> {
+                String response =
+                    RequestTelemetry.measure(
+                        "responseMs",
+                        () -> responseGenerator.generate(result.getRecommendations(), result));
+                return new Generated(response, result);
+              });
+      T payload = formatResponse.apply(generated.text(), generated.turn());
       if (telemetry != null) {
-        telemetry.complete(result);
+        telemetry.complete(generated.turn());
       }
       completed = true;
       return payload;

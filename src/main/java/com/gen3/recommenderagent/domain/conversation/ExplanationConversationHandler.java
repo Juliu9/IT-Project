@@ -53,14 +53,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
     String title = normalizeTitle(target.getReferenceTitle());
     List<Recommendation> matches = page;
     if (!title.isEmpty()) {
-      List<Recommendation> exact =
-          page.stream().filter(book -> normalizeTitle(book.getTitle()).equals(title)).toList();
-      matches =
-          exact.isEmpty()
-              ? page.stream()
-                  .filter(book -> normalizeTitle(book.getTitle()).contains(title))
-                  .toList()
-              : exact;
+      matches = matchingTitles(page, title);
     }
     // Resolve a title independently before applying rank; an ambiguous title needs clarification.
     if ((title.isEmpty()
@@ -78,7 +71,24 @@ public final class ExplanationConversationHandler implements ConversationHandler
     target.setDecision(ConversationDecision.EXPLANATION);
   }
 
-  private String normalizeTitle(String title) {
+  static boolean matchesDisplayedTitle(Session session, String title) {
+    var previous = latestSearch(session);
+    String normalized = normalizeTitle(title);
+    return previous != null
+        && previous.getRecommendations() != null
+        && !normalized.isEmpty()
+        && !matchingTitles(previous.getRecommendations(), normalized).isEmpty();
+  }
+
+  private static List<Recommendation> matchingTitles(List<Recommendation> page, String title) {
+    var exact =
+        page.stream().filter(book -> normalizeTitle(book.getTitle()).equals(title)).toList();
+    return exact.isEmpty()
+        ? page.stream().filter(book -> normalizeTitle(book.getTitle()).contains(title)).toList()
+        : exact;
+  }
+
+  private static String normalizeTitle(String title) {
     return title == null
         ? ""
         : title

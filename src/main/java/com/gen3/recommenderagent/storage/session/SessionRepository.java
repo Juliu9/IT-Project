@@ -15,5 +15,14 @@ public interface SessionRepository {
    * after the last successful commit. Rejected commits throw SessionCommitException; lost update
    * ownership may throw SessionLockLostException.
    */
-  <T> T update(String sessionId, String userId, Function<Session, T> change);
+  default <T> T update(String sessionId, String userId, Function<Session, T> change) {
+    return update(sessionId, userId, change, Function.identity());
+  }
+
+  /**
+   * Runs afterCommit only after saving, while still excluding same-session updates. Its failure
+   * cannot roll back the saved session. Neither callback is retried.
+   */
+  <T, R> R update(
+      String sessionId, String userId, Function<Session, T> change, Function<T, R> afterCommit);
 }
