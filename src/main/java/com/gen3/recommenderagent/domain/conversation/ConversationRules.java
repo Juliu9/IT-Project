@@ -1,6 +1,14 @@
-package com.gen3.recommenderagent.domain.session;
+package com.gen3.recommenderagent.domain.conversation;
 
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.ConversationDecision;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ConversationTurn;
+import com.gen3.recommenderagent.domain.session.MustInclude;
+import com.gen3.recommenderagent.domain.session.MustNotInclude;
+import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.session.SemanticQuery;
+import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -8,6 +16,8 @@ import java.util.stream.Stream;
  * Input normalization and fallback response decisions shared by parsing and conversation handlers.
  */
 public final class ConversationRules {
+  private ConversationRules() {}
+
   /** Shared eligibility rule for parsed inputs and restored conversation requests. */
   public static SessionRequest normalizeInput(SessionRequest request) {
     // Control intents may carry exact filters, but cannot introduce new semantic preferences.
@@ -86,10 +96,7 @@ public final class ConversationRules {
   }
 
   static boolean isSearchContext(ConversationDraft request) {
-    return request != null
-        && (request.getIntent() == Intent.RECOMMENDATION
-            || request.getIntent() == Intent.REFINE
-            || request.getIntent() == Intent.MORE_RESULTS);
+    return request != null && isRecommendationIntent(request.getIntent());
   }
 
   static boolean isSearchContext(ConversationTurn turn) {

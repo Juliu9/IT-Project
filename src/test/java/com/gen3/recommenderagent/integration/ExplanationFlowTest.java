@@ -8,8 +8,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.application.RecommendationWorkflow;
 import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDecision;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
@@ -28,7 +29,8 @@ class ExplanationFlowTest {
   private final RecommendationWorkflow workflow = mock(RecommendationWorkflow.class);
   private final RecommendationFlowTestSupport.InMemorySessionRepository sessions =
       new RecommendationFlowTestSupport.InMemorySessionRepository();
-  private final SessionTransitionService service = new SessionTransitionService(sessions, workflow);
+  private final SessionTransitionService service =
+      ConversationTestSupport.transitions(sessions, workflow);
   private final AiResponseGenerator responses = new AiResponseGenerator(null);
 
   @Test

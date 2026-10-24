@@ -1,6 +1,9 @@
-package com.gen3.recommenderagent.domain.session;
+package com.gen3.recommenderagent.domain.conversation;
 
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.Session;
+import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.util.Collection;
 import java.util.EnumMap;
 import java.util.EnumSet;
@@ -9,21 +12,11 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /** Dispatches conversation policy; persistence and retrieval are owned by the application layer. */
-public final class ConversationState {
+public final class ConversationDispatcher {
   private final Map<Intent, ConversationHandler> handlers = new EnumMap<>(Intent.class);
   private final ClarificationResolver clarification = new ClarificationResolver();
 
-  public ConversationState() {
-    this(
-        List.of(
-            new SearchContextResolver(),
-            new PreferenceConversationHandler(),
-            new ExplanationConversationHandler(),
-            new ReplayConversationHandler(),
-            new SessionActionHandler()));
-  }
-
-  public ConversationState(Collection<ConversationHandler> handlers) {
+  public ConversationDispatcher(Collection<ConversationHandler> handlers) {
     for (var handler : handlers) {
       for (var intent : handler.intents()) {
         if (this.handlers.putIfAbsent(intent, handler) != null) {
@@ -74,7 +67,7 @@ public final class ConversationState {
     handler.finish(session, request, original);
     ConversationHistory.complete(request);
     if (request.getDecision() == null) {
-      request.setDecision(decisionFor(request.getRecommendations(), request));
+      request.setDecision(ConversationRules.decisionFor(request.getRecommendations(), request));
     }
     if (handler.retainsHistory() && !request.isSearchClarificationRequired()) {
       ConversationHistory.retainRequest(session, ConversationHistory.historyEntry(request));
@@ -82,22 +75,5 @@ public final class ConversationState {
     if (handler.remembersTurn(request)) {
       ConversationHistory.remember(session, request);
     }
-  }
-
-  public ConversationDraft latestSearch(Session session) {
-    return ConversationHistory.latestSearch(session);
-  }
-
-  public static SessionRequest normalizeInput(SessionRequest request) {
-    return ConversationRules.normalizeInput(request);
-  }
-
-  public static ConversationDecision decisionFor(
-      List<Recommendation> recommendations, ConversationDraft request) {
-    return ConversationRules.decisionFor(recommendations, request);
-  }
-
-  static void retainRequest(Session session, ConversationTurn request) {
-    ConversationHistory.retainRequest(session, request);
   }
 }

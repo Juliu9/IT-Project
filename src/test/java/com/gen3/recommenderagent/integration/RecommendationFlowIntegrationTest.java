@@ -11,8 +11,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.gen3.recommenderagent.api.RequestGateway;
-import com.gen3.recommenderagent.application.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
@@ -166,7 +167,7 @@ class RecommendationFlowIntegrationTest {
             new SemanticQueryVectorService(embeddingIndexer),
             userPreferences);
     SessionTransitionService applicationService =
-        new SessionTransitionService(sessionRepository, workflow);
+        ConversationTestSupport.transitions(sessionRepository, workflow);
 
     RequestGateway gateway =
         new RequestGateway(inputParser, applicationService, new AiResponseGenerator(null));

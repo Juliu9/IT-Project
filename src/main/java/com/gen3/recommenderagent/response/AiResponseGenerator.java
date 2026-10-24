@@ -2,8 +2,8 @@ package com.gen3.recommenderagent.response;
 
 import static com.gen3.recommenderagent.domain.RecommendationPolicy.MAX_BOOK_COUNT;
 
+import com.gen3.recommenderagent.domain.conversation.ConversationRules;
 import com.gen3.recommenderagent.domain.session.ConversationDecision;
-import com.gen3.recommenderagent.domain.session.ConversationState;
 import com.gen3.recommenderagent.domain.session.ConversationTurn;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
@@ -71,7 +71,7 @@ public class AiResponseGenerator implements ResponseGenerator {
     var decision =
         currentRequest != null && currentRequest.getDecision() != null
             ? currentRequest.getDecision()
-            : ConversationState.decisionFor(
+            : ConversationRules.decisionFor(
                 recommendations, currentRequest == null ? null : currentRequest.toDraft());
     if (decision == ConversationDecision.SEARCH_CLARIFICATION) {
       RequestTelemetry.responseMode("SEARCH_CLARIFICATION");

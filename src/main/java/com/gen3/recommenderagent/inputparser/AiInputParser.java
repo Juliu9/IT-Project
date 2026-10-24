@@ -1,6 +1,6 @@
 package com.gen3.recommenderagent.inputparser;
 
-import com.gen3.recommenderagent.domain.session.ConversationState;
+import com.gen3.recommenderagent.domain.conversation.ConversationRules;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
 import java.math.BigInteger;
@@ -128,7 +128,7 @@ public class AiInputParser implements InputParser {
     request.setPersonalised(parsed.isPersonalised());
     request.setPositiveSemanticQuery(parsed.getPositiveSemanticQuery());
     request.setNegativeSemanticQuery(parsed.getNegativeSemanticQuery());
-    ConversationState.normalizeInput(request);
+    ConversationRules.normalizeInput(request);
     request.setMustInclude(parsed.getMustInclude());
     request.setMustNotInclude(parsed.getMustNotInclude());
     request.setBookCount(boundedInteger(parsed.getBookCount()));

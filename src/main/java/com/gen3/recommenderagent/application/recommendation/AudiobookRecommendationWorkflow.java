@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.application;
+package com.gen3.recommenderagent.application.recommendation;
 
 import static com.gen3.recommenderagent.domain.RecommendationPolicy.RECOMMENDATION_BATCH_SIZE;
 

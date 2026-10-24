@@ -57,7 +57,8 @@ public class Session {
   private List<Recommendation> pendingRecommendations = new ArrayList<>();
 
   public boolean isAwaitingPersonalisedPreferences() {
-    return ConversationHistory.awaitingPreferences(this);
+    return requests != null
+        && requests.stream().anyMatch(ConversationTurn::isPreferenceClarificationRequired);
   }
 
   public Session() {}

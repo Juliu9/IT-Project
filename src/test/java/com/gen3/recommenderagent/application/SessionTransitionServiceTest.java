@@ -10,6 +10,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.ConversationTurn;
@@ -24,7 +26,7 @@ import org.junit.jupiter.api.Test;
 class SessionTransitionServiceTest {
 
   @Test
-  void commitsRecommendationsAndConversationStateInOneTransition() {
+  void commitsRecommendationsAndConversationDispatcherInOneTransition() {
     SessionRepository sessions = mock(SessionRepository.class);
     RecommendationWorkflow workflow = mock(RecommendationWorkflow.class);
     Session session = new Session();
@@ -99,7 +101,7 @@ class SessionTransitionServiceTest {
 
   private SessionTransitionService service(
       SessionRepository sessions, RecommendationWorkflow workflow) {
-    return new SessionTransitionService(sessions, workflow);
+    return ConversationTestSupport.transitions(sessions, workflow);
   }
 
   private ConversationDraft request(Intent intent) {

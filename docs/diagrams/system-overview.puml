@@ -41,7 +41,7 @@ Workflow --> Ranking : rank candidates
 Gateway --> Response : 3. Generate response after commit
 
 note bottom of Session
-  ConversationState dispatches validated intent handlers.
+  ConversationDispatcher dispatches validated intent handlers.
   RecommendationPager consumes and refills the queue.
   ConversationTurn carries the resolved decision.
   MORE: use pending recommendations first.

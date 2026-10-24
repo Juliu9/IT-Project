@@ -8,8 +8,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.api.RequestGateway;
-import com.gen3.recommenderagent.application.RecommendationWorkflow;
-import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.Recommendation;
@@ -39,7 +39,8 @@ class SessionUpdateFlowTest {
               throw new IllegalStateException("response failed");
             });
     RequestGateway gateway =
-        new RequestGateway(parser, new SessionTransitionService(sessions, workflow), generator);
+        new RequestGateway(
+            parser, ConversationTestSupport.transitions(sessions, workflow), generator);
 
     assertThrows(
         IllegalStateException.class,

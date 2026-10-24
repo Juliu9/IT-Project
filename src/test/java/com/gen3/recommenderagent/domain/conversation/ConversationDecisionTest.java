@@ -1,14 +1,20 @@
-package com.gen3.recommenderagent.domain.session;
+package com.gen3.recommenderagent.domain.conversation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.ConversationDecision;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ConversationTurn;
+import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.session.Session;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
 class ConversationDecisionTest {
-  private final ConversationState policy = new ConversationState();
+  private final ConversationDispatcher policy = ConversationTestSupport.dispatcher();
 
   @Test
   void decisionPrecedenceIsClarificationThenActionThenResults() {
@@ -16,26 +22,26 @@ class ConversationDecisionTest {
     request.setIntent(Intent.HELP);
     request.setSearchClarificationRequired(true);
     request.setPreferenceClarificationRequired(true);
-    assertThat(ConversationState.decisionFor(List.of(), request))
+    assertThat(ConversationRules.decisionFor(List.of(), request))
         .isEqualTo(ConversationDecision.SEARCH_CLARIFICATION);
     request.setSearchClarificationRequired(false);
-    assertThat(ConversationState.decisionFor(List.of(), request))
+    assertThat(ConversationRules.decisionFor(List.of(), request))
         .isEqualTo(ConversationDecision.PREFERENCE_CLARIFICATION);
     request.setPreferenceClarificationRequired(false);
     request.setNoMoreRecommendations(true);
-    assertThat(ConversationState.decisionFor(List.of(), request))
+    assertThat(ConversationRules.decisionFor(List.of(), request))
         .isEqualTo(ConversationDecision.HELP);
     request.setIntent(Intent.REPEAT);
-    assertThat(ConversationState.decisionFor(List.of(), request))
+    assertThat(ConversationRules.decisionFor(List.of(), request))
         .isEqualTo(ConversationDecision.NO_MORE_RESULTS);
     request.setNoMoreRecommendations(false);
-    assertThat(ConversationState.decisionFor(List.of(), request))
+    assertThat(ConversationRules.decisionFor(List.of(), request))
         .isEqualTo(ConversationDecision.NOTHING_TO_REPEAT);
     request.setIntent(Intent.RECOMMENDATION);
-    assertThat(ConversationState.decisionFor(List.of(), request))
+    assertThat(ConversationRules.decisionFor(List.of(), request))
         .isEqualTo(ConversationDecision.NO_MATCHES);
     assertThat(
-            ConversationState.decisionFor(
+            ConversationRules.decisionFor(
                 List.of(new Recommendation("id", 1, 1.0, "Book")), request))
         .isEqualTo(ConversationDecision.RECOMMENDATIONS);
   }

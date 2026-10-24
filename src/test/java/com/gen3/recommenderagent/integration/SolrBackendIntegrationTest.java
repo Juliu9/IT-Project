@@ -5,8 +5,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.gen3.recommenderagent.api.RequestGateway;
-import com.gen3.recommenderagent.application.AudiobookRecommendationWorkflow;
-import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDecision;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
@@ -152,7 +152,7 @@ class SolrBackendIntegrationTest {
             new SemanticQueryVectorService(embeddings),
             users());
     var sessions = new RecommendationFlowTestSupport.InMemorySessionRepository();
-    var service = new SessionTransitionService(sessions, workflow);
+    var service = ConversationTestSupport.transitions(sessions, workflow);
     var responses = new AiResponseGenerator(null);
     var gateway =
         new RequestGateway(

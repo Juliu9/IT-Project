@@ -1,6 +1,7 @@
-package com.gen3.recommenderagent.application;
+package com.gen3.recommenderagent.application.recommendation;
 
 import static com.gen3.recommenderagent.domain.RecommendationPolicy.clampOrDefault;
+import static com.gen3.recommenderagent.domain.session.Recommendation.bookIds;
 
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.Recommendation;
@@ -27,7 +28,7 @@ public class RecommendationPager {
     List<Recommendation> page = takePending(session, limit);
     if (page.size() < limit) {
       // Exclude the cached tail too when refilling; all changes commit together or not at all.
-      session.addRecommendationIds(recommendationIds(page));
+      session.addRecommendationIds(bookIds(page));
       session.setPendingRecommendations(recommendationWorkflow.recommend(request, session));
       page.addAll(takePending(session, limit - page.size()));
     } else {
@@ -65,13 +66,5 @@ public class RecommendationPager {
       }
     }
     return page;
-  }
-
-  private List<String> recommendationIds(List<Recommendation> recommendations) {
-    return recommendations.stream()
-        .filter(recommendation -> recommendation != null)
-        .map(Recommendation::getBookId)
-        .filter(bookId -> bookId != null && !bookId.isBlank())
-        .toList();
   }
 }

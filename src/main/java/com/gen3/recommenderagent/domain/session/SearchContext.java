@@ -1,8 +1,17 @@
 package com.gen3.recommenderagent.domain.session;
 
+import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
+
 /** Explicit and effective search criteria together with the frozen reading-preference evidence. */
 public class SearchContext {
   private SessionPreferences searchCriteria;
+  private UserPreferenceEmbedding userPreferenceSnapshot;
+  private boolean userPreferencesLoaded;
+  private boolean personalised;
+  private SemanticQuery positiveSemanticQuery;
+  private SemanticQuery negativeSemanticQuery;
+  private MustInclude mustInclude;
+  private MustNotInclude mustNotInclude;
 
   public SessionPreferences getSearchCriteria() {
     return searchCriteria;
@@ -12,20 +21,13 @@ public class SearchContext {
     searchCriteria = value;
   }
 
-  private com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding
-      userPreferenceSnapshot;
-
-  public com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding
-      getUserPreferenceSnapshot() {
+  public UserPreferenceEmbedding getUserPreferenceSnapshot() {
     return userPreferenceSnapshot;
   }
 
-  public void setUserPreferenceSnapshot(
-      com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding value) {
+  public void setUserPreferenceSnapshot(UserPreferenceEmbedding value) {
     userPreferenceSnapshot = value;
   }
-
-  private boolean userPreferencesLoaded;
 
   public boolean isUserPreferencesLoaded() {
     return userPreferencesLoaded;
@@ -35,8 +37,6 @@ public class SearchContext {
     userPreferencesLoaded = value;
   }
 
-  private boolean personalised;
-
   public boolean isPersonalised() {
     return personalised;
   }
@@ -44,8 +44,6 @@ public class SearchContext {
   public void setPersonalised(boolean value) {
     personalised = value;
   }
-
-  private SemanticQuery positiveSemanticQuery;
 
   public SemanticQuery getPositiveSemanticQuery() {
     return positiveSemanticQuery;
@@ -55,8 +53,6 @@ public class SearchContext {
     positiveSemanticQuery = value;
   }
 
-  private SemanticQuery negativeSemanticQuery;
-
   public SemanticQuery getNegativeSemanticQuery() {
     return negativeSemanticQuery;
   }
@@ -65,8 +61,6 @@ public class SearchContext {
     negativeSemanticQuery = value;
   }
 
-  private MustInclude mustInclude;
-
   public MustInclude getMustInclude() {
     return mustInclude;
   }
@@ -74,8 +68,6 @@ public class SearchContext {
   public void setMustInclude(MustInclude value) {
     mustInclude = value;
   }
-
-  private MustNotInclude mustNotInclude;
 
   public MustNotInclude getMustNotInclude() {
     return mustNotInclude;
@@ -104,7 +96,7 @@ public class SearchContext {
       var favourites = userPreferenceSnapshot.favouritesVector();
       var history = userPreferenceSnapshot.historyVector();
       copy.userPreferenceSnapshot =
-          new com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding(
+          new UserPreferenceEmbedding(
               userPreferenceSnapshot.userId(),
               favourites == null ? null : favourites.clone(),
               history == null ? null : history.clone());

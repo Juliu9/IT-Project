@@ -1,10 +1,14 @@
-package com.gen3.recommenderagent.domain.session;
+package com.gen3.recommenderagent.domain.conversation;
 
-import static com.gen3.recommenderagent.domain.session.ConversationHistory.historyEntry;
-import static com.gen3.recommenderagent.domain.session.ConversationHistory.latestSearch;
-import static com.gen3.recommenderagent.domain.session.ConversationRules.decisionFor;
+import static com.gen3.recommenderagent.domain.conversation.ConversationHistory.historyEntry;
+import static com.gen3.recommenderagent.domain.conversation.ConversationHistory.latestSearch;
+import static com.gen3.recommenderagent.domain.conversation.ConversationRules.decisionFor;
 
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.ConversationDecision;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ConversationTurn;
+import com.gen3.recommenderagent.domain.session.Session;
 import java.util.List;
 
 /** Replays completed outcomes or the displayed page without running the original action again. */

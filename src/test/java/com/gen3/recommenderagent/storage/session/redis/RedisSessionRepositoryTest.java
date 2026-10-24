@@ -13,8 +13,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import com.gen3.recommenderagent.application.RecommendationWorkflow;
-import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.ConversationTurn;
@@ -849,9 +849,9 @@ class RedisSessionRepositoryTest {
           }
         };
     RecommendationWorkflow workflow = mock(RecommendationWorkflow.class);
-    var first = new SessionTransitionService(paused, workflow);
+    var first = ConversationTestSupport.transitions(paused, workflow);
     var second =
-        new SessionTransitionService(
+        ConversationTestSupport.transitions(
             new RedisSessionRepository(redisTemplate, stringRedisTemplate), workflow);
     ExecutorService worker = Executors.newSingleThreadExecutor();
     try {

@@ -1,9 +1,13 @@
-package com.gen3.recommenderagent.domain.session;
+package com.gen3.recommenderagent.domain.conversation;
 
-import static com.gen3.recommenderagent.domain.session.ConversationHistory.latestSearch;
-import static com.gen3.recommenderagent.domain.session.SearchCriteriaMerger.merge;
+import static com.gen3.recommenderagent.domain.conversation.ConversationHistory.latestSearch;
+import static com.gen3.recommenderagent.domain.conversation.SearchCriteriaMerger.merge;
 
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.ConversationDecision;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.session.Session;
 import java.util.List;
 import java.util.Locale;
 

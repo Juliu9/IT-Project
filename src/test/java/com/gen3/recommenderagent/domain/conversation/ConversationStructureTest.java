@@ -1,9 +1,17 @@
-package com.gen3.recommenderagent.domain.session;
+package com.gen3.recommenderagent.domain.conversation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.ConversationDecision;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ConversationTurn;
+import com.gen3.recommenderagent.domain.session.MustInclude;
+import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.session.Session;
+import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -14,10 +22,10 @@ class ConversationStructureTest {
   @Test
   void rejectsDuplicateAndMissingHandlerRegistrations() {
     var all = replacementHandler();
-    assertThatThrownBy(() -> new ConversationState(List.of(all, new SessionActionHandler())))
+    assertThatThrownBy(() -> new ConversationDispatcher(List.of(all, new SessionActionHandler())))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("Duplicate conversation handler");
-    assertThatThrownBy(() -> new ConversationState(List.of(new SessionActionHandler())))
+    assertThatThrownBy(() -> new ConversationDispatcher(List.of(new SessionActionHandler())))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("Missing conversation handlers")
         .hasMessageContaining("RECOMMENDATION");
@@ -25,10 +33,11 @@ class ConversationStructureTest {
 
   @Test
   void dispatchesAnIndependentHandlerWithoutChangingTheCoordinator() {
-    var state = new ConversationState(List.of(replacementHandler()));
+    var state = new ConversationDispatcher(List.of(replacementHandler()));
     var session = new Session();
     var input = new SessionRequest();
     input.setIntent(Intent.HELP);
+    input.setRawText("help");
     var result = state.begin(session, input);
     assertThat(state.needsRecommendations(result)).isFalse();
     state.finish(session, result, input);
@@ -36,6 +45,9 @@ class ConversationStructureTest {
     assertThat(session.getBookCount()).isEqualTo(3);
     assertThat(session.getLastDecision()).isEqualTo(ConversationDecision.HELP);
     assertThat(input.getBookCount()).isNull();
+    assertThat(result.getRawText()).isEqualTo("help");
+    assertThat(session.getLastRequest().getRawText()).isNull();
+    assertThat(session.getLastRequest().getDecision()).isNull();
   }
 
   @Test
@@ -62,7 +74,7 @@ class ConversationStructureTest {
     assertThat(search.getRecommendations())
         .extracting(Recommendation::getBookId)
         .containsExactly("42");
-    var repeated = new ConversationState().resolve(session, request(Intent.REPEAT));
+    var repeated = ConversationTestSupport.dispatcher().resolve(session, request(Intent.REPEAT));
     assertThat(repeated.getDecision()).isEqualTo(ConversationDecision.HELP);
     var json = mapper.readTree(mapper.writeValueAsString(session));
     var saved = json.get("requests").get(0);

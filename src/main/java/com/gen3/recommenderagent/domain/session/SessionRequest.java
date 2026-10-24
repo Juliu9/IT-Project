@@ -1,8 +1,29 @@
 package com.gen3.recommenderagent.domain.session;
 
+import com.gen3.recommenderagent.domain.Intent;
+import java.time.Instant;
+import java.util.List;
+
 /** Incoming conversation instructions, independent of results and persisted search snapshots. */
 public class SessionRequest {
   private String requestId;
+  private String rawText;
+  private Instant createdAt;
+  private Intent intent;
+  private Integer referenceRank;
+  private String referenceTitle;
+  private boolean addAuthors;
+  private boolean addNarrators;
+  private SessionPreferences preferenceUpdates;
+  private SessionPreferences preferenceRemovals;
+  private List<String> replacePreferenceFields;
+  private boolean explicitSearch;
+  private SemanticQuery positiveSemanticQuery;
+  private SemanticQuery negativeSemanticQuery;
+  private MustInclude mustInclude;
+  private MustNotInclude mustNotInclude;
+  private Integer bookCount;
+  private boolean personalised;
 
   public String getRequestId() {
     return requestId;
@@ -12,8 +33,6 @@ public class SessionRequest {
     requestId = value;
   }
 
-  private String rawText;
-
   public String getRawText() {
     return rawText;
   }
@@ -22,27 +41,21 @@ public class SessionRequest {
     rawText = value;
   }
 
-  private java.time.Instant createdAt;
-
-  public java.time.Instant getCreatedAt() {
+  public Instant getCreatedAt() {
     return createdAt;
   }
 
-  public void setCreatedAt(java.time.Instant value) {
+  public void setCreatedAt(Instant value) {
     createdAt = value;
   }
 
-  private com.gen3.recommenderagent.domain.Intent intent;
-
-  public com.gen3.recommenderagent.domain.Intent getIntent() {
+  public Intent getIntent() {
     return intent;
   }
 
-  public void setIntent(com.gen3.recommenderagent.domain.Intent value) {
+  public void setIntent(Intent value) {
     intent = value;
   }
-
-  private Integer referenceRank;
 
   public Integer getReferenceRank() {
     return referenceRank;
@@ -52,8 +65,6 @@ public class SessionRequest {
     referenceRank = value;
   }
 
-  private String referenceTitle;
-
   public String getReferenceTitle() {
     return referenceTitle;
   }
@@ -61,8 +72,6 @@ public class SessionRequest {
   public void setReferenceTitle(String value) {
     referenceTitle = value;
   }
-
-  private boolean addAuthors;
 
   public boolean isAddAuthors() {
     return addAuthors;
@@ -72,8 +81,6 @@ public class SessionRequest {
     addAuthors = value;
   }
 
-  private boolean addNarrators;
-
   public boolean isAddNarrators() {
     return addNarrators;
   }
@@ -81,8 +88,6 @@ public class SessionRequest {
   public void setAddNarrators(boolean value) {
     addNarrators = value;
   }
-
-  private SessionPreferences preferenceUpdates;
 
   public SessionPreferences getPreferenceUpdates() {
     return preferenceUpdates;
@@ -92,8 +97,6 @@ public class SessionRequest {
     preferenceUpdates = value;
   }
 
-  private SessionPreferences preferenceRemovals;
-
   public SessionPreferences getPreferenceRemovals() {
     return preferenceRemovals;
   }
@@ -102,17 +105,13 @@ public class SessionRequest {
     preferenceRemovals = value;
   }
 
-  private java.util.List<String> replacePreferenceFields;
-
-  public java.util.List<String> getReplacePreferenceFields() {
+  public List<String> getReplacePreferenceFields() {
     return replacePreferenceFields;
   }
 
-  public void setReplacePreferenceFields(java.util.List<String> value) {
+  public void setReplacePreferenceFields(List<String> value) {
     replacePreferenceFields = value;
   }
-
-  private boolean explicitSearch;
 
   public boolean isExplicitSearch() {
     return explicitSearch;
@@ -122,8 +121,6 @@ public class SessionRequest {
     explicitSearch = value;
   }
 
-  private SemanticQuery positiveSemanticQuery;
-
   public SemanticQuery getPositiveSemanticQuery() {
     return positiveSemanticQuery;
   }
@@ -131,8 +128,6 @@ public class SessionRequest {
   public void setPositiveSemanticQuery(SemanticQuery value) {
     positiveSemanticQuery = value;
   }
-
-  private SemanticQuery negativeSemanticQuery;
 
   public SemanticQuery getNegativeSemanticQuery() {
     return negativeSemanticQuery;
@@ -142,8 +137,6 @@ public class SessionRequest {
     negativeSemanticQuery = value;
   }
 
-  private MustInclude mustInclude;
-
   public MustInclude getMustInclude() {
     return mustInclude;
   }
@@ -151,8 +144,6 @@ public class SessionRequest {
   public void setMustInclude(MustInclude value) {
     mustInclude = value;
   }
-
-  private MustNotInclude mustNotInclude;
 
   public MustNotInclude getMustNotInclude() {
     return mustNotInclude;
@@ -162,8 +153,6 @@ public class SessionRequest {
     mustNotInclude = value;
   }
 
-  private Integer bookCount;
-
   public Integer getBookCount() {
     return bookCount;
   }
@@ -171,8 +160,6 @@ public class SessionRequest {
   public void setBookCount(Integer value) {
     bookCount = value;
   }
-
-  private boolean personalised;
 
   public boolean isPersonalised() {
     return personalised;

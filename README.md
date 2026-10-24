@@ -46,7 +46,7 @@ ask for clarification before searching and preserve the saved search.
 
 `SessionTransitionService` loads or creates the session through `SessionRepository.update`.
 The Redis adapter locks that user/session pair so separate server instances cannot update it
-at the same time. `ConversationEngine` dispatches the request through `ConversationState` to
+at the same time. `ConversationEngine` dispatches the request through `ConversationDispatcher` to
 handlers for search, preferences, explanations, replay, or simple session actions. These resolve
 saved criteria and history; a changed search discards obsolete cached recommendations.
 

@@ -5,9 +5,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.application.RecommendationPager;
-import com.gen3.recommenderagent.application.RecommendationWorkflow;
 import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.application.recommendation.RecommendationPager;
+import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.Session;
@@ -34,8 +34,8 @@ class SessionStoreConfigurationTest {
               RedisConfig.class,
               RedisSessionRepository.class,
               SessionTransitionService.class,
-              com.gen3.recommenderagent.application.ConversationEngine.class,
-              com.gen3.recommenderagent.application.ConversationConfiguration.class,
+              com.gen3.recommenderagent.application.conversation.ConversationEngine.class,
+              com.gen3.recommenderagent.application.conversation.ConversationConfiguration.class,
               AudiobookRetrievalPlanner.class,
               ExactFilterPolicy.class,
               RecommendationPager.class)

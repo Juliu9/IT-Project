@@ -10,8 +10,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.application.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.ConversationTurn;
@@ -72,7 +73,7 @@ class PersonalisedRecommendationFlowTest {
             ranker,
             new SemanticQueryVectorService(indexer),
             users);
-    application = new SessionTransitionService(sessions, workflow);
+    application = ConversationTestSupport.transitions(sessions, workflow);
   }
 
   @org.junit.jupiter.params.ParameterizedTest

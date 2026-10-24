@@ -1,8 +1,16 @@
 package com.gen3.recommenderagent.domain.session;
 
+import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
+import java.util.List;
+
 /** Private-to-conversation working state; never used as a persisted turn or response contract. */
 public class ConversationDraft extends SessionRequest {
   private SearchContext searchContext = new SearchContext();
+  private ConversationDecision decision;
+  private boolean preferenceClarificationRequired;
+  private boolean searchClarificationRequired;
+  private boolean noMoreRecommendations;
+  private List<Recommendation> recommendations;
 
   public SearchContext getSearchContext() {
     return searchContext;
@@ -12,8 +20,6 @@ public class ConversationDraft extends SessionRequest {
     searchContext = value;
   }
 
-  private ConversationDecision decision;
-
   public ConversationDecision getDecision() {
     return decision;
   }
@@ -21,8 +27,6 @@ public class ConversationDraft extends SessionRequest {
   public void setDecision(ConversationDecision value) {
     decision = value;
   }
-
-  private boolean preferenceClarificationRequired;
 
   public boolean isPreferenceClarificationRequired() {
     return preferenceClarificationRequired;
@@ -32,8 +36,6 @@ public class ConversationDraft extends SessionRequest {
     preferenceClarificationRequired = value;
   }
 
-  private boolean searchClarificationRequired;
-
   public boolean isSearchClarificationRequired() {
     return searchClarificationRequired;
   }
@@ -41,8 +43,6 @@ public class ConversationDraft extends SessionRequest {
   public void setSearchClarificationRequired(boolean value) {
     searchClarificationRequired = value;
   }
-
-  private boolean noMoreRecommendations;
 
   public boolean isNoMoreRecommendations() {
     return noMoreRecommendations;
@@ -52,13 +52,11 @@ public class ConversationDraft extends SessionRequest {
     noMoreRecommendations = value;
   }
 
-  private java.util.List<Recommendation> recommendations;
-
-  public java.util.List<Recommendation> getRecommendations() {
+  public List<Recommendation> getRecommendations() {
     return recommendations;
   }
 
-  public void setRecommendations(java.util.List<Recommendation> value) {
+  public void setRecommendations(List<Recommendation> value) {
     recommendations = value;
   }
 
@@ -70,13 +68,11 @@ public class ConversationDraft extends SessionRequest {
     searchContext.setSearchCriteria(value);
   }
 
-  public com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding
-      getUserPreferenceSnapshot() {
+  public UserPreferenceEmbedding getUserPreferenceSnapshot() {
     return searchContext.getUserPreferenceSnapshot();
   }
 
-  public void setUserPreferenceSnapshot(
-      com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding value) {
+  public void setUserPreferenceSnapshot(UserPreferenceEmbedding value) {
     searchContext.setUserPreferenceSnapshot(value);
   }
 

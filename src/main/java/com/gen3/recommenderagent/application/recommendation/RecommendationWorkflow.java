@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.application;
+package com.gen3.recommenderagent.application.recommendation;
 
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.Recommendation;

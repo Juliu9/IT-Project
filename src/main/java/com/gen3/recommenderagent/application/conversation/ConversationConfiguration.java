@@ -1,12 +1,12 @@
-package com.gen3.recommenderagent.application;
+package com.gen3.recommenderagent.application.conversation;
 
-import com.gen3.recommenderagent.domain.session.ConversationHandler;
-import com.gen3.recommenderagent.domain.session.ConversationState;
-import com.gen3.recommenderagent.domain.session.ExplanationConversationHandler;
-import com.gen3.recommenderagent.domain.session.PreferenceConversationHandler;
-import com.gen3.recommenderagent.domain.session.ReplayConversationHandler;
-import com.gen3.recommenderagent.domain.session.SearchContextResolver;
-import com.gen3.recommenderagent.domain.session.SessionActionHandler;
+import com.gen3.recommenderagent.domain.conversation.ConversationDispatcher;
+import com.gen3.recommenderagent.domain.conversation.ConversationHandler;
+import com.gen3.recommenderagent.domain.conversation.ExplanationConversationHandler;
+import com.gen3.recommenderagent.domain.conversation.PreferenceConversationHandler;
+import com.gen3.recommenderagent.domain.conversation.ReplayConversationHandler;
+import com.gen3.recommenderagent.domain.conversation.SearchContextResolver;
+import com.gen3.recommenderagent.domain.conversation.SessionActionHandler;
 import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -40,7 +40,7 @@ public class ConversationConfiguration {
   }
 
   @Bean
-  ConversationState conversationState(List<ConversationHandler> handlers) {
-    return new ConversationState(handlers);
+  ConversationDispatcher conversationDispatcher(List<ConversationHandler> handlers) {
+    return new ConversationDispatcher(handlers);
   }
 }

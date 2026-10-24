@@ -1,5 +1,7 @@
 package com.gen3.recommenderagent.domain.session;
 
+import java.util.List;
+
 public class Recommendation {
 
   private String bookId;
@@ -72,5 +74,13 @@ public class Recommendation {
 
   public void setScore(Double score) {
     this.score = score;
+  }
+
+  public static List<String> bookIds(List<Recommendation> recommendations) {
+    return recommendations.stream()
+        .filter(recommendation -> recommendation != null)
+        .map(Recommendation::getBookId)
+        .filter(bookId -> bookId != null && !bookId.isBlank())
+        .toList();
   }
 }

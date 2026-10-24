@@ -1,10 +1,29 @@
 package com.gen3.recommenderagent.domain.session;
 
-@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
+import java.time.Instant;
+import java.util.List;
+
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class ConversationTurn {
   private SearchContext searchContext = new SearchContext();
+  private String requestId;
+  private String rawText;
+  private Instant createdAt;
+  private Intent intent;
+  private Integer referenceRank;
+  private String referenceTitle;
+  private Integer bookCount;
+  private ConversationDecision decision;
+  private boolean preferenceClarificationRequired;
+  private boolean searchClarificationRequired;
+  private boolean noMoreRecommendations;
+  private List<Recommendation> recommendations;
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
+  @JsonIgnore
   public SearchContext getSearchContext() {
     return searchContext;
   }
@@ -12,8 +31,6 @@ public class ConversationTurn {
   public void setSearchContext(SearchContext value) {
     searchContext = value;
   }
-
-  private String requestId;
 
   public String getRequestId() {
     return requestId;
@@ -23,8 +40,6 @@ public class ConversationTurn {
     requestId = value;
   }
 
-  private String rawText;
-
   public String getRawText() {
     return rawText;
   }
@@ -33,27 +48,21 @@ public class ConversationTurn {
     rawText = value;
   }
 
-  private java.time.Instant createdAt;
-
-  public java.time.Instant getCreatedAt() {
+  public Instant getCreatedAt() {
     return createdAt;
   }
 
-  public void setCreatedAt(java.time.Instant value) {
+  public void setCreatedAt(Instant value) {
     createdAt = value;
   }
 
-  private com.gen3.recommenderagent.domain.Intent intent;
-
-  public com.gen3.recommenderagent.domain.Intent getIntent() {
+  public Intent getIntent() {
     return intent;
   }
 
-  public void setIntent(com.gen3.recommenderagent.domain.Intent value) {
+  public void setIntent(Intent value) {
     intent = value;
   }
-
-  private Integer referenceRank;
 
   public Integer getReferenceRank() {
     return referenceRank;
@@ -63,8 +72,6 @@ public class ConversationTurn {
     referenceRank = value;
   }
 
-  private String referenceTitle;
-
   public String getReferenceTitle() {
     return referenceTitle;
   }
@@ -72,8 +79,6 @@ public class ConversationTurn {
   public void setReferenceTitle(String value) {
     referenceTitle = value;
   }
-
-  private Integer bookCount;
 
   public Integer getBookCount() {
     return bookCount;
@@ -83,9 +88,7 @@ public class ConversationTurn {
     bookCount = value;
   }
 
-  private ConversationDecision decision;
-
-  @com.fasterxml.jackson.annotation.JsonIgnore
+  @JsonIgnore
   public ConversationDecision getDecision() {
     return decision;
   }
@@ -93,8 +96,6 @@ public class ConversationTurn {
   public void setDecision(ConversationDecision value) {
     decision = value;
   }
-
-  private boolean preferenceClarificationRequired;
 
   public boolean isPreferenceClarificationRequired() {
     return preferenceClarificationRequired;
@@ -104,8 +105,6 @@ public class ConversationTurn {
     preferenceClarificationRequired = value;
   }
 
-  private boolean searchClarificationRequired;
-
   public boolean isSearchClarificationRequired() {
     return searchClarificationRequired;
   }
@@ -113,8 +112,6 @@ public class ConversationTurn {
   public void setSearchClarificationRequired(boolean value) {
     searchClarificationRequired = value;
   }
-
-  private boolean noMoreRecommendations;
 
   public boolean isNoMoreRecommendations() {
     return noMoreRecommendations;
@@ -124,13 +121,11 @@ public class ConversationTurn {
     noMoreRecommendations = value;
   }
 
-  private java.util.List<Recommendation> recommendations;
-
-  public java.util.List<Recommendation> getRecommendations() {
+  public List<Recommendation> getRecommendations() {
     return recommendations;
   }
 
-  public void setRecommendations(java.util.List<Recommendation> value) {
+  public void setRecommendations(List<Recommendation> value) {
     recommendations = value;
   }
 
@@ -142,13 +137,11 @@ public class ConversationTurn {
     searchContext.setSearchCriteria(value);
   }
 
-  public com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding
-      getUserPreferenceSnapshot() {
+  public UserPreferenceEmbedding getUserPreferenceSnapshot() {
     return searchContext.getUserPreferenceSnapshot();
   }
 
-  public void setUserPreferenceSnapshot(
-      com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding value) {
+  public void setUserPreferenceSnapshot(UserPreferenceEmbedding value) {
     searchContext.setUserPreferenceSnapshot(value);
   }
 
@@ -234,11 +227,5 @@ public class ConversationTurn {
     draft.setNoMoreRecommendations(isNoMoreRecommendations());
     draft.setRecommendations(getRecommendations());
     return draft;
-  }
-
-  public ConversationTurn snapshot() {
-    var copy = fromDraft(toDraft());
-    copy.setRawText(null);
-    return copy;
   }
 }

@@ -1,9 +1,14 @@
-package com.gen3.recommenderagent.domain.session;
+package com.gen3.recommenderagent.domain.conversation;
 
-import static com.gen3.recommenderagent.domain.session.ConversationRules.normalizeInput;
-import static com.gen3.recommenderagent.domain.session.SearchCriteriaMerger.copyOf;
+import static com.gen3.recommenderagent.domain.conversation.ConversationRules.normalizeInput;
+import static com.gen3.recommenderagent.domain.conversation.SearchCriteriaMerger.copyOf;
 
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.ConversationDecision;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.Session;
+import com.gen3.recommenderagent.domain.session.SessionPreferences;
+import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.util.Locale;
 import java.util.regex.Pattern;
 

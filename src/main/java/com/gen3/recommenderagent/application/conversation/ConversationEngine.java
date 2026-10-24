@@ -1,7 +1,8 @@
-package com.gen3.recommenderagent.application;
+package com.gen3.recommenderagent.application.conversation;
 
+import com.gen3.recommenderagent.application.recommendation.RecommendationPager;
+import com.gen3.recommenderagent.domain.conversation.ConversationDispatcher;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.ConversationState;
 import com.gen3.recommenderagent.domain.session.ConversationTurn;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
@@ -12,13 +13,13 @@ import com.gen3.recommenderagent.retrieval.plan.ExactFilterPolicy;
 @org.springframework.stereotype.Component
 public class ConversationEngine {
 
-  private final ConversationState conversation;
+  private final ConversationDispatcher conversation;
 
   private final RecommendationPager pager;
   private final ExactFilterPolicy planner;
 
   public ConversationEngine(
-      ConversationState conversation, RecommendationPager pager, ExactFilterPolicy planner) {
+      ConversationDispatcher conversation, RecommendationPager pager, ExactFilterPolicy planner) {
     this.conversation = conversation;
     this.pager = pager;
     this.planner = planner;

@@ -1,11 +1,19 @@
-package com.gen3.recommenderagent.domain.session;
+package com.gen3.recommenderagent.domain.conversation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.ConversationDecision;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ConversationTurn;
+import com.gen3.recommenderagent.domain.session.MustInclude;
+import com.gen3.recommenderagent.domain.session.SemanticQuery;
+import com.gen3.recommenderagent.domain.session.Session;
+import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -13,17 +21,17 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-class ConversationStateTest {
+class ConversationDispatcherTest {
 
-  private final ConversationState conversationState = new ConversationState();
+  private final ConversationDispatcher conversationState = ConversationTestSupport.dispatcher();
 
   @ParameterizedTest
   @MethodSource("followUpIntents")
   void resolvesFollowUpsFromTheLatestRetainedSearch(Intent intent) {
     Session session = new Session();
-    ConversationState.retainRequest(
+    ConversationHistory.retainRequest(
         session, ConversationTurn.fromDraft(searchRequest(Intent.RECOMMENDATION, "fantasy")));
-    ConversationState.retainRequest(
+    ConversationHistory.retainRequest(
         session, ConversationTurn.fromDraft(searchRequest(Intent.RECOMMENDATION, "history")));
     ConversationDraft request = request(intent);
 
@@ -64,7 +72,7 @@ class ConversationStateTest {
     ConversationDraft pending = request(Intent.UNKNOWN);
     pending.setPersonalised(true);
     pending.setPreferenceClarificationRequired(true);
-    ConversationState.retainRequest(session, ConversationTurn.fromDraft(pending));
+    ConversationHistory.retainRequest(session, ConversationTurn.fromDraft(pending));
     ConversationDraft reply = request(Intent.REFINE);
     reply.setPositiveSemanticQuery(queryWithGenres("fantasy"));
 
@@ -84,7 +92,7 @@ class ConversationStateTest {
     ConversationDraft pending = request(Intent.UNKNOWN);
     pending.setPersonalised(true);
     pending.setPreferenceClarificationRequired(true);
-    ConversationState.retainRequest(session, ConversationTurn.fromDraft(pending));
+    ConversationHistory.retainRequest(session, ConversationTurn.fromDraft(pending));
 
     ConversationDraft help = conversationState.resolve(session, request(Intent.HELP));
     ConversationDraft recommendation =
@@ -124,9 +132,9 @@ class ConversationStateTest {
   @Test
   void helpWithCriteriaDoesNotReplaceTheRetainedSearch() {
     var session = new Session();
-    ConversationState.retainRequest(
+    ConversationHistory.retainRequest(
         session, ConversationTurn.fromDraft(searchRequest(Intent.RECOMMENDATION, "romance")));
-    ConversationState.retainRequest(
+    ConversationHistory.retainRequest(
         session, ConversationTurn.fromDraft(searchRequest(Intent.HELP, "horror")));
     var effective = conversationState.resolve(session, request(Intent.MORE_RESULTS));
     assertEquals(List.of("romance"), effective.getPositiveSemanticQuery().getTopics());
@@ -139,7 +147,7 @@ class ConversationStateTest {
     var pending = request(Intent.RECOMMENDATION);
     pending.setPreferenceClarificationRequired(true);
     pending.setPersonalised(true);
-    ConversationState.retainRequest(session, ConversationTurn.fromDraft(pending));
+    ConversationHistory.retainRequest(session, ConversationTurn.fromDraft(pending));
     var preferences = new SessionPreferences();
     session.setPreferences(preferences);
     session.setShownBooks(List.of("saved-book"));
@@ -163,7 +171,7 @@ class ConversationStateTest {
     var session = new Session();
     var pending = request(Intent.RECOMMENDATION);
     pending.setPreferenceClarificationRequired(true);
-    ConversationState.retainRequest(session, ConversationTurn.fromDraft(pending));
+    ConversationHistory.retainRequest(session, ConversationTurn.fromDraft(pending));
     var reply = request(Intent.UNKNOWN);
     reply.setRawText("huh?");
     assertEquals(Intent.UNKNOWN, conversationState.begin(session, reply).getIntent());
@@ -205,9 +213,9 @@ class ConversationStateTest {
     ConversationDraft help = new ConversationDraft();
     ConversationDraft latestSearch = searchRequest(Intent.RECOMMENDATION, "history");
 
-    ConversationState.retainRequest(session, ConversationTurn.fromDraft(firstSearch));
-    ConversationState.retainRequest(session, ConversationTurn.fromDraft(help));
-    ConversationState.retainRequest(session, ConversationTurn.fromDraft(latestSearch));
+    ConversationHistory.retainRequest(session, ConversationTurn.fromDraft(firstSearch));
+    ConversationHistory.retainRequest(session, ConversationTurn.fromDraft(help));
+    ConversationHistory.retainRequest(session, ConversationTurn.fromDraft(latestSearch));
 
     assertEquals(2, session.getRequests().size());
     assertEquals(help.getIntent(), session.getRequests().get(0).getIntent());
@@ -221,7 +229,7 @@ class ConversationStateTest {
     ConversationDraft pending = new ConversationDraft();
     pending.setPreferenceClarificationRequired(true);
 
-    ConversationState.retainRequest(session, ConversationTurn.fromDraft(pending));
+    ConversationHistory.retainRequest(session, ConversationTurn.fromDraft(pending));
     assertTrue(session.isAwaitingPersonalisedPreferences());
 
     session.clearHistory();

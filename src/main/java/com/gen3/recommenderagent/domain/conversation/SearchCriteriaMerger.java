@@ -1,9 +1,14 @@
-package com.gen3.recommenderagent.domain.session;
+package com.gen3.recommenderagent.domain.conversation;
 
-import static com.gen3.recommenderagent.domain.session.ConversationRules.acceptsSemanticInformation;
-import static com.gen3.recommenderagent.domain.session.ConversationRules.hasTerms;
+import static com.gen3.recommenderagent.domain.conversation.ConversationRules.acceptsSemanticInformation;
+import static com.gen3.recommenderagent.domain.conversation.ConversationRules.hasTerms;
 
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.MustInclude;
+import com.gen3.recommenderagent.domain.session.MustNotInclude;
+import com.gen3.recommenderagent.domain.session.SemanticQuery;
+import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -12,6 +17,8 @@ import java.util.Map;
 
 /** Copies and merges search criteria without changing parser input or retained history. */
 public final class SearchCriteriaMerger {
+  private SearchCriteriaMerger() {}
+
   static void merge(SessionRequest base, ConversationDraft target) {
     target.setPersonalised(base.isPersonalised() || target.isPersonalised());
     target.setPositiveSemanticQuery(
@@ -42,7 +49,7 @@ public final class SearchCriteriaMerger {
     target.setMustNotInclude(excluded);
   }
 
-  static SemanticQuery merge(SemanticQuery base, SemanticQuery override) {
+  private static SemanticQuery merge(SemanticQuery base, SemanticQuery override) {
     if (base == null && override == null) {
       return null;
     }
@@ -65,7 +72,7 @@ public final class SearchCriteriaMerger {
     return merged;
   }
 
-  static MustInclude merge(MustInclude base, MustInclude override) {
+  private static MustInclude merge(MustInclude base, MustInclude override) {
     if (base == null && override == null) {
       return null;
     }
@@ -97,7 +104,7 @@ public final class SearchCriteriaMerger {
     return merged;
   }
 
-  static MustNotInclude merge(MustNotInclude base, MustNotInclude override) {
+  private static MustNotInclude merge(MustNotInclude base, MustNotInclude override) {
     if (base == null && override == null) {
       return null;
     }
@@ -167,19 +174,19 @@ public final class SearchCriteriaMerger {
     return copy;
   }
 
-  static SemanticQuery copy(SemanticQuery source) {
+  private static SemanticQuery copy(SemanticQuery source) {
     return merge(null, source);
   }
 
-  static MustInclude copy(MustInclude source) {
+  private static MustInclude copy(MustInclude source) {
     return merge(null, source);
   }
 
-  static MustNotInclude copy(MustNotInclude source) {
+  private static MustNotInclude copy(MustNotInclude source) {
     return merge(null, source);
   }
 
-  static List<String> values(
+  private static List<String> values(
       SemanticQuery query, java.util.function.Function<SemanticQuery, List<String>> getter) {
     return query == null ? null : getter.apply(query);
   }
@@ -191,7 +198,7 @@ public final class SearchCriteriaMerger {
     return unique.isEmpty() ? null : new ArrayList<>(unique.values());
   }
 
-  static void add(Map<String, String> unique, List<String> values) {
+  private static void add(Map<String, String> unique, List<String> values) {
     if (values == null) {
       return;
     }
@@ -201,7 +208,7 @@ public final class SearchCriteriaMerger {
         .forEach(value -> unique.putIfAbsent(value.toLowerCase(Locale.ROOT), value));
   }
 
-  static String preferred(String base, String override) {
+  private static String preferred(String base, String override) {
     return override == null || override.isBlank() ? base : override;
   }
 }

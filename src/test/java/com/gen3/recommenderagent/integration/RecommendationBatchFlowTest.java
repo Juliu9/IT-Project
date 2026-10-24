@@ -13,8 +13,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.application.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.ConversationTurn;
@@ -44,7 +45,7 @@ class RecommendationBatchFlowTest {
   private final RecommendationFlowTestSupport.InMemorySessionRepository sessions =
       new RecommendationFlowTestSupport.InMemorySessionRepository();
   private final SessionTransitionService service =
-      new SessionTransitionService(
+      ConversationTestSupport.transitions(
           sessions, new AudiobookRecommendationWorkflow(retriever, ranker, vectors, users));
 
   RecommendationBatchFlowTest() throws Exception {

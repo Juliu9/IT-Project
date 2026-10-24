@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.application;
+package com.gen3.recommenderagent.application.recommendation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;

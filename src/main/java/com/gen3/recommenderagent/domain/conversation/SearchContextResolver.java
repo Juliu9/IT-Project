@@ -1,15 +1,19 @@
-package com.gen3.recommenderagent.domain.session;
+package com.gen3.recommenderagent.domain.conversation;
 
-import static com.gen3.recommenderagent.domain.session.ConversationHistory.awaitingPreferences;
-import static com.gen3.recommenderagent.domain.session.ConversationHistory.latestSearch;
-import static com.gen3.recommenderagent.domain.session.ConversationHistory.recommendationIds;
-import static com.gen3.recommenderagent.domain.session.ConversationRules.hasSearchCriteria;
-import static com.gen3.recommenderagent.domain.session.ConversationRules.isRecommendationIntent;
-import static com.gen3.recommenderagent.domain.session.ConversationRules.isSearchContext;
-import static com.gen3.recommenderagent.domain.session.SearchCriteriaMerger.copyOf;
-import static com.gen3.recommenderagent.domain.session.SearchCriteriaMerger.merge;
+import static com.gen3.recommenderagent.domain.conversation.ConversationHistory.latestSearch;
+import static com.gen3.recommenderagent.domain.conversation.ConversationRules.hasSearchCriteria;
+import static com.gen3.recommenderagent.domain.conversation.ConversationRules.isRecommendationIntent;
+import static com.gen3.recommenderagent.domain.conversation.ConversationRules.isSearchContext;
+import static com.gen3.recommenderagent.domain.conversation.SearchCriteriaMerger.copyOf;
+import static com.gen3.recommenderagent.domain.conversation.SearchCriteriaMerger.merge;
+import static com.gen3.recommenderagent.domain.session.Recommendation.bookIds;
 
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ConversationTurn;
+import com.gen3.recommenderagent.domain.session.Session;
+import com.gen3.recommenderagent.domain.session.SessionPreferences;
+import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.util.List;
 
 /** Owns search inheritance, frozen MORE context, current preferences and search completion. */
@@ -37,14 +41,14 @@ public final class SearchContextResolver implements ConversationHandler {
     }
     if (effective.getIntent() == Intent.REFINE
         && latestSearch(session) == null
-        && !awaitingPreferences(session)) {
+        && !session.isAwaitingPersonalisedPreferences()) {
       if (!hasSearchCriteria(effective)) {
         effective.setSearchClarificationRequired(true);
         return effective;
       }
       effective.setIntent(Intent.RECOMMENDATION);
     }
-    if (awaitingPreferences(session)
+    if (session.isAwaitingPersonalisedPreferences()
         && effective.getIntent() != Intent.MORE_RESULTS
         && acceptsPreferences(effective.getIntent())) {
       effective.setIntent(Intent.RECOMMENDATION);
@@ -148,13 +152,13 @@ public final class SearchContextResolver implements ConversationHandler {
     }
     Intent originalIntent = original == null ? Intent.UNKNOWN : original.getIntent();
     if ((originalIntent == Intent.REFINE || originalIntent == Intent.RECOMMENDATION)
-        && awaitingPreferences(session)
+        && session.isAwaitingPersonalisedPreferences()
         && !request.isPreferenceClarificationRequired()) {
       session.setPreferences(SessionPreferences.fromRequest(request));
     }
     session.setAwaitingPreferenceUpdate(false);
     request.setNoMoreRecommendations(
         request.getIntent() == Intent.MORE_RESULTS && request.getRecommendations().isEmpty());
-    session.addRecommendationIds(recommendationIds(request.getRecommendations()));
+    session.addRecommendationIds(bookIds(request.getRecommendations()));
   }
 }

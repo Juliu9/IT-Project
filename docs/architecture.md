@@ -144,8 +144,12 @@ The recommendation server is under `com.gen3.recommenderagent`:
 | Package | Responsibility |
 | --- | --- |
 | `api` | HTTP requests and error responses |
-| `application` | Session transitions, recommendation workflow and chat-client wiring |
-| `domain` | Intents, recommendation policy and conversational session models |
+| `application` | Session transaction boundary and shared chat-client wiring |
+| `application.conversation` | Conversation engine and handler composition |
+| `application.recommendation` | Recommendation workflow and cached-page management |
+| `domain` | Intents and recommendation limits |
+| `domain.conversation` | Intent dispatch, handlers, clarification, criteria merging and history policy |
+| `domain.session` | Input, working-draft, search-context, completed-turn and session models |
 | `inputparser` / `response` | Structured request parsing and response wording |
 | `embedding` | QueryEmbeddingService, positive/negative query vectors and shared vector math |
 | `retrieval` / `retrieval.plan` | Candidate search execution, retrieval plans and filter parsing |
@@ -165,7 +169,7 @@ generation remains in `embeddingjob`; the query embedding module only embeds liv
 | --- | --- |
 | `SessionTransitionService.process` | The single `SessionRepository.update` load, transition, and commit boundary |
 | `ConversationEngine` | Resolve, validate, retrieve when needed, then complete the turn inside that boundary |
-| `ConversationState` | Validated handler dispatch and shared completion ordering |
+| `ConversationDispatcher` | Validated handler dispatch and shared completion ordering |
 | `ClarificationResolver` | Short numeric/title replies, pending-question priority, and cancellation routing |
 | `SearchContextResolver` | Search inheritance, current preferences for new searches/refinements, and frozen preferences for MORE |
 | Preference, explanation, replay, and session-action handlers | Their own action rules; no independent saves or locks |
