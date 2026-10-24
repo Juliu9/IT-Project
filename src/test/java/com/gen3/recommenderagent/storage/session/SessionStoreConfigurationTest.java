@@ -10,6 +10,7 @@ import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.storage.session.redis.RedisConfig;
 import com.gen3.recommenderagent.storage.session.redis.RedisSessionRepository;
 import java.util.function.Function;
@@ -28,7 +29,10 @@ class SessionStoreConfigurationTest {
   private final ApplicationContextRunner runner =
       new ApplicationContextRunner()
           .withUserConfiguration(
-              RedisConfig.class, RedisSessionRepository.class, SessionTransitionService.class)
+              RedisConfig.class,
+              RedisSessionRepository.class,
+              SessionTransitionService.class,
+              AudiobookRetrievalPlanner.class)
           .withBean(RecommendationWorkflow.class, () -> mock(RecommendationWorkflow.class));
 
   @TestConfiguration(proxyBeanMethods = false)
