@@ -106,6 +106,7 @@ public class AiParser {
                         explicitSearch=true for explicit new-search commands; bare taste replies like "horror" are RECOMMENDATION/REFINE with explicitSearch=false, never UPDATE_PREFERENCES.
                         bookCount=null unless a recommendation count is requested ("2 more" -> MORE_RESULTS, bookCount=2).
                         Explanation ordinals select ONE book: "the second one’s reason" -> referenceRank=2; "why the sixth book" -> referenceRank=6; intent=EXPLAIN_RECOMMENDATION, omit bookCount.
+                        "Explain two more" and "explain book two more" mean explain rank 2 in more detail, not two books.
                         Preserve only explicitly stated rank (even invalid) or title in referenceRank/referenceTitle.
                         "Why did I get these recommendations?" and other whole-page explanations omit both references; never default to rank 1.
                         References are explanation-only; bare ordinals are not explanation requests.

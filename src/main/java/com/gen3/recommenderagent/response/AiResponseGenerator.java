@@ -86,8 +86,8 @@ public class AiResponseGenerator {
                             Use saved search criteria and short descriptions; the current question is not new search criteria.
                             Use at most 150 words TOTAL, including titles and ranks, even for a whole page.
                             Use complete conversational sentences addressed to "you", connecting each book to your request.
-                            Weave rank and title into the sentence: "For number 1, Title fits your request because..."
-                            Vary transitions, such as "Next, number 2..." and "Finally, number 5...". Keep the actual ranks.
+                            Use each supplied rank verbatim, even for one book: rank=2 means "For number 2, Title...".
+                            Never renumber selected books from 1. Vary transitions naturally.
                             Give one brief reason per book and end each sentence with a period. Avoid title-summary fragments.
                             No introduction, conclusion, headings, markdown, bullets, parentheses or repeated rank labels.
                             Use only plain words, numbers and ordinary sentence punctuation. Mention reading preferences

@@ -23,6 +23,24 @@ import org.springframework.ai.chat.model.ChatResponse;
 import tools.jackson.databind.ObjectMapper;
 
 class InputParserTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "explain two more",
+        "explain book two more",
+        "explain the second book in more detail",
+        "Could you explain number 2 more please?",
+        "explain 999999999999999999999 more"
+      })
+  void explanationMoreSelectsOneOriginalRankWithoutAi(String text) {
+    var parsed = new CommandParser().parse(text);
+    assertNotNull(parsed);
+    assertEquals(Intent.EXPLAIN_RECOMMENDATION, parsed.getIntent());
+    assertEquals(
+        text.contains("999") ? Integer.MAX_VALUE : 2, parsed.getReferenceRank().intValue());
+    assertEquals(null, parsed.getBookCount());
+  }
+
   @Test
   void referenceTitleAndAuthorAreSeparateFromExplanationAndResultFilters() {
     var result =
@@ -503,7 +521,7 @@ class InputParserTest {
                 + number
                 + "}");
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
-    String raw = "explain the " + number + "th one more";
+    String raw = "why was the " + number + "th book recommended";
     when(client
             .prompt()
             .system(anyString())

@@ -30,7 +30,8 @@ public class CommandParser {
       return parsed;
     }
     if (command.startsWith("explain ")) {
-      Integer rank = selectionReply(command.substring(8));
+      Integer rank =
+          selectionReply(command.substring(8).replaceFirst(" (?:more|in more detail)$", ""));
       if (rank != null) {
         var parsed = new ParsedRequest();
         parsed.setIntent(Intent.EXPLAIN_RECOMMENDATION);

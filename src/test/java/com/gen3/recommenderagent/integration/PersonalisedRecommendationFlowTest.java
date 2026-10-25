@@ -181,6 +181,39 @@ class PersonalisedRecommendationFlowTest {
     verifyNoInteractions(embeddingModel);
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = Intent.class,
+      names = {"CANCEL", "RESET_PREFERENCES"})
+  void abandoningANewTasteQuestionKeepsThePreviousSearchAndCachedBatch(Intent action) {
+    var search = new ConversationDraft();
+    search.setIntent(Intent.RECOMMENDATION);
+    var genre = new SemanticQuery();
+    genre.setGenres(List.of("fantasy"));
+    search.setPositiveSemanticQuery(genre);
+    process(search);
+    var session = sessions.getSession("session", "user");
+    session.setPendingRecommendations(
+        List.of(new Recommendation("remaining", 2, 0.8, "Remaining fantasy")));
+    sessions.updateSession(session);
+    var personalised = personalisedRequest();
+    personalised.setExplicitSearch(true);
+    assertThat(process(personalised).isPreferenceClarificationRequired()).isTrue();
+    var cancel = new ConversationDraft();
+    cancel.setIntent(action);
+    process(cancel);
+    org.mockito.Mockito.clearInvocations(books, embeddingModel, ranker);
+    var more = new ConversationDraft();
+    more.setIntent(Intent.MORE_RESULTS);
+    more.setBookCount(1);
+    var result = process(more);
+    assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
+    assertThat(result.getRecommendations())
+        .extracting(Recommendation::getBookId)
+        .containsExactly("remaining");
+    verifyNoInteractions(books, embeddingModel, ranker);
+  }
+
   @Test
   void cancellationSurvivesSessionReloadAndDoesNotRestartThePreferenceQuestion() {
     process(personalisedRequest());

@@ -16,9 +16,15 @@ public final class ConversationHistory {
     if (request == null) {
       return;
     }
-    // Keep one search and one non-search entry so actions do not erase follow-up context.
+    // Keep an unfinished preference search alongside the last completed search.
     boolean search = isSearchContext(request);
-    session.getRequests().removeIf(existing -> isSearchContext(existing) == search);
+    session
+        .getRequests()
+        .removeIf(
+            existing ->
+                isSearchContext(existing) == search
+                    && (!request.isPreferenceClarificationRequired()
+                        || existing.isPreferenceClarificationRequired()));
     session.getRequests().add(request);
     session.setUpdatedAt(Instant.now());
   }

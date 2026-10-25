@@ -22,6 +22,16 @@ public class Session {
     pendingQuestion = value;
   }
 
+  private ConversationDecision suspendedQuestion;
+
+  public ConversationDecision getSuspendedQuestion() {
+    return suspendedQuestion;
+  }
+
+  public void setSuspendedQuestion(ConversationDecision value) {
+    suspendedQuestion = value;
+  }
+
   private PendingSimilarBook pendingSimilarBook;
 
   public PendingSimilarBook getPendingSimilarBook() {
@@ -173,7 +183,11 @@ public class Session {
 
   public void clearPreferenceQuestions() {
     awaitingPreferenceUpdate = false;
-    requests.forEach(previous -> previous.setPreferenceClarificationRequired(false));
+    requests.removeIf(ConversationTurn::isPreferenceClarificationRequired);
+    if (suspendedQuestion == ConversationDecision.PREFERENCE_CLARIFICATION
+        || suspendedQuestion == ConversationDecision.PREFERENCE_UPDATE_CLARIFICATION) {
+      suspendedQuestion = null;
+    }
     if (pendingQuestion == ConversationDecision.PREFERENCE_CLARIFICATION
         || pendingQuestion == ConversationDecision.PREFERENCE_UPDATE_CLARIFICATION) {
       pendingQuestion = null;
@@ -212,6 +226,7 @@ public class Session {
   public void clearHistory() {
     pendingSimilarBook = null;
     pendingQuestion = null;
+    suspendedQuestion = null;
     this.awaitingPreferenceUpdate = false;
     this.lastRequest = null;
     this.lastDecision = null;

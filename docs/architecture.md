@@ -101,13 +101,16 @@ field remain readable.
 
 `Session.pendingQuestion` tracks an unanswered question independently of the latest response used
 by REPEAT. HELP preserves it and repeats the question after the help text; REPEAT leaves it alone.
-Count changes preserve book-selection and genre questions, and preference updates preserve unrelated
-questions. A semantic preference update can answer the genre question and resume its pending search.
+Count changes preserve book-selection and genre questions, including when a missing count needs its
+own clarification: `Session.suspendedQuestion` restores the original question after the count answer.
+Preference updates preserve unrelated questions. Both direct semantic updates and answers to an update
+question can supply the missing genres and resume the waiting personalised search.
 New recommendations/refinements replace the pending selection; MORE and REPEAT_RECOMMENDATIONS clear
 selection questions when showing a page. While genres are still required, MORE (including counted
 variants) repeats the genre question without embedding, retrieving, consuming cached books, or
 saving inherited criteria as preferences. CANCEL/CLEAR_HISTORY clear the question; RESET_PREFERENCES
-clears preference questions while preserving unrelated book selections.
+clears preference questions while preserving unrelated book selections. Abandoning a genre question
+discards its unfinished search; any earlier completed search and cached batch remain available.
 
 `ConversationText` owns courtesy normalization and ordinal parsing, shared by CommandParser and
 ClarificationResolver. The resolver owns session decisions; Session owns preference merging and
@@ -402,8 +405,9 @@ ignores case/punctuation and uses exact matches before unique partial matches. M
 out-of-range or conflicting references produce a ranked-title clarification. A bare ordinal is not
 an explanation request on its own. While a book-selection clarification is pending, a numeric
 reply such as “1”, “1.”, “first”, or “the first one” selects that rank from the retained page;
-invalid numbers ask again. An otherwise unrecognized reply can also identify a displayed title. Other actions
-such as help or a new search end this context. “Why the fourth book?” also resolves independently.
+invalid numbers ask again. An otherwise unrecognized reply can also identify a displayed title. HELP preserves this context; a new search replaces it. “Why the fourth book?” also resolves independently.
+“Explain two more” and “explain book two more” both select book 2 for more detail, never two additional
+books. Single-book explanations retain the original displayed rank.
 Model-provided ranks and counts accept large integers before conversion to bounded internal values:
 oversized ranks clarify rather than overflow, and result counts retain the existing one-to-five cap.
 Fractional numeric fields and structured responses exceeding JSON limits return a friendly `400`

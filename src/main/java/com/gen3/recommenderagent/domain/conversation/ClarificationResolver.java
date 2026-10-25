@@ -41,7 +41,21 @@ public final class ClarificationResolver {
       return effective;
     }
     if (effective.getIntent() == Intent.UPDATE_PREFERENCES
-        && session.getPendingQuestion() == ConversationDecision.PREFERENCE_CLARIFICATION
+        || (session.isAwaitingPreferenceUpdate()
+            && session.getPendingQuestion() != ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
+            && session.getPendingQuestion() != ConversationDecision.COUNT_CLARIFICATION
+            && session.getPendingQuestion() != ConversationDecision.SHORTER_DURATION_CLARIFICATION
+            && !effective.isExplicitSearch()
+            && (effective.getIntent() == Intent.RECOMMENDATION
+                || effective.getIntent() == Intent.REFINE
+                || effective.getIntent() == Intent.UNKNOWN))) {
+      effective.setIntent(Intent.UPDATE_PREFERENCES);
+      if (effective.getPreferenceUpdates() == null) {
+        effective.setPreferenceUpdates(SessionPreferences.fromRequest(effective));
+      }
+    }
+    if (effective.getIntent() == Intent.UPDATE_PREFERENCES
+        && session.isAwaitingPersonalisedPreferences()
         && effective.getPreferenceUpdates() != null
         && (ConversationRules.hasQuery(effective.getPreferenceUpdates().getPositiveSemanticQuery())
             || ConversationRules.hasQuery(
@@ -99,19 +113,7 @@ public final class ClarificationResolver {
         return resolved;
       }
     }
-    if (effective.getIntent() == Intent.UPDATE_PREFERENCES
-        || (session.isAwaitingPreferenceUpdate()
-            && session.getPendingQuestion() != ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
-            && session.getPendingQuestion() != ConversationDecision.COUNT_CLARIFICATION
-            && session.getPendingQuestion() != ConversationDecision.SHORTER_DURATION_CLARIFICATION
-            && !effective.isExplicitSearch()
-            && (effective.getIntent() == Intent.RECOMMENDATION
-                || effective.getIntent() == Intent.REFINE
-                || effective.getIntent() == Intent.UNKNOWN))) {
-      effective.setIntent(Intent.UPDATE_PREFERENCES);
-      if (effective.getPreferenceUpdates() == null) {
-        effective.setPreferenceUpdates(SessionPreferences.fromRequest(effective));
-      }
+    if (effective.getIntent() == Intent.UPDATE_PREFERENCES) {
       return effective;
     }
     boolean tasteReply =
@@ -124,12 +126,14 @@ public final class ClarificationResolver {
             || (effective.getIntent() == Intent.REFINE && !tasteReply);
     if (newSearch) {
       session.setPendingQuestion(null);
+      session.setSuspendedQuestion(null);
       session.setPendingSimilarBook(null);
       session.clearPreferenceQuestions();
     } else if ((effective.getIntent() == Intent.MORE_RESULTS
             || effective.getIntent() == Intent.REPEAT_RECOMMENDATIONS)
         && session.getPendingQuestion() != ConversationDecision.PREFERENCE_CLARIFICATION) {
       session.setPendingQuestion(null);
+      session.setSuspendedQuestion(null);
       session.setPendingSimilarBook(null);
     }
     return effective;
@@ -271,6 +275,19 @@ public final class ClarificationResolver {
         && request.getBookCount() != null
         && session.getPendingQuestion() != ConversationDecision.COUNT_CLARIFICATION) {
       return;
+    }
+    if (request.getDecision() == ConversationDecision.COUNT_CLARIFICATION
+        && session.getPendingQuestion() != ConversationDecision.COUNT_CLARIFICATION) {
+      session.setSuspendedQuestion(session.getPendingQuestion());
+    } else if (intent == Intent.CHANGE_COUNT
+        && request.getBookCount() != null
+        && session.getPendingQuestion() == ConversationDecision.COUNT_CLARIFICATION) {
+      session.setPendingQuestion(session.getSuspendedQuestion());
+      session.setSuspendedQuestion(null);
+      return;
+    }
+    if (intent == Intent.CANCEL) {
+      session.setSuspendedQuestion(null);
     }
     if (isQuestion(request.getDecision())) {
       session.setPendingQuestion(request.getDecision());

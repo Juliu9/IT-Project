@@ -178,6 +178,87 @@ class ConversationDispatcherTest {
     assertFalse(conversationState.needsRecommendations(conversationState.begin(session, reply)));
   }
 
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = Intent.class,
+      names = {"CANCEL", "RESET_PREFERENCES"})
+  void abandonedPreferenceSearchCannotBeUsedByMore(Intent action) {
+    var session = new Session();
+    var pending = searchRequest(Intent.RECOMMENDATION, "horror");
+    pending.setPersonalised(true);
+    pending.setPreferenceClarificationRequired(true);
+    ConversationHistory.retainRequest(session, ConversationTurn.fromDraft(pending));
+    var input = request(action);
+    var result = conversationState.begin(session, input);
+    conversationState.finish(session, result, input);
+    var more = conversationState.begin(session, request(Intent.MORE_RESULTS));
+    assertTrue(more.isSearchClarificationRequired());
+    assertFalse(conversationState.needsRecommendations(more));
+  }
+
+  @Test
+  void abandoningPreferenceSearchRestoresCompletedSearchIncludingZeroMatches() {
+    var session = new Session();
+    ConversationHistory.retainRequest(
+        session, ConversationTurn.fromDraft(searchRequest(Intent.RECOMMENDATION, "fantasy")));
+    var pending = searchRequest(Intent.RECOMMENDATION, "horror");
+    pending.setPreferenceClarificationRequired(true);
+    ConversationHistory.retainRequest(session, ConversationTurn.fromDraft(pending));
+    session.clearPreferenceQuestions();
+    var more = conversationState.begin(session, request(Intent.MORE_RESULTS));
+    assertFalse(more.isSearchClarificationRequired());
+    assertEquals(List.of("fantasy"), more.getPositiveSemanticQuery().getTopics());
+  }
+
+  @Test
+  void countClarificationRestoresTheOutstandingBookSelection() {
+    var session = new Session();
+    session.setPendingQuestion(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+    var input = request(Intent.CHANGE_COUNT);
+    var count = conversationState.begin(session, input);
+    conversationState.finish(session, count, input);
+    assertEquals(ConversationDecision.COUNT_CLARIFICATION, session.getPendingQuestion());
+    var mapper = tools.jackson.databind.json.JsonMapper.builder().build();
+    session = mapper.readValue(mapper.writeValueAsString(session), Session.class);
+    var answer = request(Intent.UNKNOWN);
+    answer.setRawText("2");
+    var changed = conversationState.begin(session, answer);
+    conversationState.finish(session, changed, answer);
+    assertEquals(2, session.getBookCount());
+    assertEquals(
+        ConversationDecision.EXPLANATION_TARGET_CLARIFICATION, session.getPendingQuestion());
+    var selected = new ClarificationResolver().resolve(session, answer);
+    assertEquals(Intent.EXPLAIN_RECOMMENDATION, selected.getIntent());
+    assertEquals(2, selected.getReferenceRank());
+    assertNull(session.getSuspendedQuestion());
+  }
+
+  @Test
+  void contextualPreferenceUpdateResumesTheWaitingPersonalisedSearch() {
+    var session = new Session();
+    var pending = request(Intent.RECOMMENDATION);
+    pending.setPersonalised(true);
+    pending.setPreferenceClarificationRequired(true);
+    ConversationHistory.retainRequest(session, ConversationTurn.fromDraft(pending));
+    session.setPendingQuestion(ConversationDecision.PREFERENCE_CLARIFICATION);
+    var update = request(Intent.UPDATE_PREFERENCES);
+    var question = conversationState.begin(session, update);
+    conversationState.finish(session, question, update);
+    var answer = request(Intent.RECOMMENDATION);
+    answer.setRawText("horror");
+    answer.setPositiveSemanticQuery(queryWithGenres("horror"));
+    var resumed = conversationState.begin(session, answer);
+    assertEquals(Intent.RECOMMENDATION, resumed.getIntent());
+    assertTrue(resumed.isPersonalised());
+    assertTrue(conversationState.needsRecommendations(resumed));
+    assertEquals(
+        List.of("horror"), session.getPreferences().getPositiveSemanticQuery().getGenres());
+    resumed.setRecommendations(List.of());
+    conversationState.finish(session, resumed, answer);
+    assertFalse(session.isAwaitingPersonalisedPreferences());
+    assertNull(session.getPendingQuestion());
+  }
+
   private static Stream<Arguments> followUpIntents() {
     return Stream.of(Arguments.of(Intent.REFINE), Arguments.of(Intent.MORE_RESULTS));
   }

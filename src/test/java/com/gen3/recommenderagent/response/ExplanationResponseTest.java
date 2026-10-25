@@ -45,13 +45,28 @@ class ExplanationResponseTest {
             "150 words TOTAL",
             "complete conversational sentences",
             "Vary transitions",
-            "Keep the actual ranks",
+            "Never renumber selected books from 1",
             "only when readingPreferencesUsed=true",
             "Never infer reasons from numerical scores");
     String prompt =
         new AiResponseGenerator(null).compilePrompt(books, ConversationTurn.fromDraft(request), "");
     assertThat(prompt)
         .contains("fantasy", "readingPreferencesUsed=true", "readingPreferencesUsed=false");
+  }
+
+  @Test
+  void aSingleSelectedBookKeepsItsDisplayedRankInThePromptAndFallback() {
+    var selected = book(false);
+    selected.setRank(2);
+    var request = request();
+    request.setReferenceRank(2);
+    var snapshot = ConversationTurn.fromDraft(request);
+    var generator = new AiResponseGenerator(null);
+    assertThat(generator.compilePrompt(List.of(selected), snapshot, ""))
+        .contains("rank=2 title=\"Harry Potter\"")
+        .doesNotContain("rank=1 ");
+    assertThat(new ConversationResponseGenerator(generator).generate(List.of(selected), snapshot))
+        .startsWith("Number 2, Harry Potter");
   }
 
   @Test

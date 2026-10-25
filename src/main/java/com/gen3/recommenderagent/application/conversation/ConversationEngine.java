@@ -8,6 +8,7 @@ import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.gen3.recommenderagent.retrieval.plan.ExactFilterPolicy;
+import java.util.ArrayList;
 
 /** Coordinates conversation policy and retrieval within the caller-owned session transaction. */
 @org.springframework.stereotype.Component
@@ -36,6 +37,7 @@ public class ConversationEngine {
   }
 
   private ConversationDraft apply(Session session, SessionRequest original) {
+    var previousBatch = new ArrayList<>(session.getPendingRecommendations());
     ConversationDraft result =
         conversation.begin(
             session,
@@ -46,6 +48,10 @@ public class ConversationEngine {
             });
     if (conversation.needsRecommendations(result)) {
       result.setRecommendations(pager.page(result, session));
+    }
+    // An unanswered taste question must not consume the previous completed search's batch.
+    if (result.isPreferenceClarificationRequired()) {
+      session.setPendingRecommendations(previousBatch);
     }
     conversation.finish(session, result, original);
     String retrievalMode = conversation.retrievalMode(result);
