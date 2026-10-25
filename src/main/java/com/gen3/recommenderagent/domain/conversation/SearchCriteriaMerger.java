@@ -150,6 +150,8 @@ public final class SearchCriteriaMerger {
     }
     if (source instanceof ConversationDraft draft) {
       copy.setDecision(draft.getDecision());
+      copy.setPendingQuestion(draft.getPendingQuestion());
+      copy.setPreferenceAnswer(draft.isPreferenceAnswer());
       copy.setSearchClarificationRequired(draft.isSearchClarificationRequired());
       copy.setSimilarBookChoices(draft.getSimilarBookChoices());
       copy.getSearchContext().setSimilarBook(draft.getSearchContext().getSimilarBook());

@@ -33,10 +33,8 @@ public final class PreferenceConversationHandler implements ConversationHandler 
     if (!changes) {
       effective.setDecision(ConversationDecision.PREFERENCE_UPDATE_CLARIFICATION);
     } else {
-      var base =
-          session.getPreferences() == null ? new SessionPreferences() : session.getPreferences();
       effective.setPreferenceUpdates(
-          base.updated(
+          session.updatedPreferences(
               updates, effective.getPreferenceRemovals(), effective.getReplacePreferenceFields()));
       effective.setDecision(ConversationDecision.PREFERENCES_UPDATED);
     }

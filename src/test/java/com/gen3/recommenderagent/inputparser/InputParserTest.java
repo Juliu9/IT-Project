@@ -328,7 +328,6 @@ class InputParserTest {
         "please do not clear history",
         "could you repeat the recommendations but exclude romance please",
         "no more please",
-        "please explain the second book",
         "hello please help me find fantasy books thanks",
         "no more, thanks",
         "more British authors, cheers",
@@ -339,7 +338,6 @@ class InputParserTest {
         "would you mind recommending fantasy audiobooks",
         "repeat your last response but shorter",
         "repeat those recommendations except the first",
-        "explain the second recommendation",
         "clear my history of horror preferences",
         "cancel that and recommend romance"
       })

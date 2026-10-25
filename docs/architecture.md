@@ -97,6 +97,24 @@ normaliser for case, punctuation and catalogue `$b` markers across reference and
 Pending choices are stored once in their request snapshot; older snapshots with a duplicate choices
 field remain readable.
 
+### Outstanding questions
+
+`Session.pendingQuestion` tracks an unanswered question independently of the latest response used
+by REPEAT. HELP preserves it and repeats the question after the help text; REPEAT leaves it alone.
+Count changes preserve book-selection and genre questions, and preference updates preserve unrelated
+questions. A semantic preference update can answer the genre question and resume its pending search.
+New recommendations/refinements replace the pending selection; MORE and REPEAT_RECOMMENDATIONS clear
+selection questions when showing a page. While genres are still required, MORE (including counted
+variants) repeats the genre question without embedding, retrieving, consuming cached books, or
+saving inherited criteria as preferences. CANCEL/CLEAR_HISTORY clear the question; RESET_PREFERENCES
+clears preference questions while preserving unrelated book selections.
+
+`ConversationText` owns courtesy normalization and ordinal parsing, shared by CommandParser and
+ClarificationResolver. The resolver owns session decisions; Session owns preference merging and
+preference-question cleanup. For example, "please, the second
+one" selects rank 2 after a question, while "could you explain number two, please" explicitly requests
+an explanation. Titles and search criteria still use their original text.
+
 ### Shorter follow-ups
 
 "Make them shorter" is a `REFINE` command, not a saved-preference edit. It skips AI, preserves the
@@ -162,8 +180,12 @@ answers to a newer book-selection or count question take priority over an older 
 `RESET_PREFERENCES` clears saved session preferences and pending preference questions, and resets
 the result count to 5. It preserves stored user vectors, shown-book history, the displayed page,
 and the remaining cached batch. MORE uses the reset count; REPEAT_RECOMMENDATIONS retains the old
-page. Replies to a personalised taste question (for example "horror") are saved in SessionPreferences
-when the pending search resumes, so later personalised requests reuse them.
+page. A cache refill for MORE continues with that search's original criteria and stored-vector
+snapshot even after preferences are reset; it does not apply the new-search personalisation gate.
+Replies to a personalised taste question (for example "horror") are saved in SessionPreferences
+when the pending search resumes, so later personalised requests reuse them. Only the reply's semantic
+preferences are saved; the original search's author, duration and other one-off constraints remain
+search-specific. Exact preferences are saved through explicit preference updates.
 
 Successful updates change only session preferences and the replay acknowledgement. They preserve the
 latest displayed page, shown IDs, search history and pending batch. Both repeat modes remain usable.

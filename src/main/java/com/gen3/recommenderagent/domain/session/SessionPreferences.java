@@ -204,12 +204,7 @@ public class SessionPreferences {
   }
 
   private static boolean hasQuery(SemanticQuery query) {
-    return query != null
-        && (hasTerms(query.getGenres())
-            || hasTerms(query.getTopics())
-            || hasTerms(query.getKeywords())
-            || hasTerms(query.getAuthors())
-            || hasTerms(query.getNarrators()));
+    return query != null && query.hasValues();
   }
 
   private static boolean hasTerms(List<String> terms) {

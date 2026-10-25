@@ -1,8 +1,10 @@
 package com.gen3.recommenderagent.inputparser;
 
+import static com.gen3.recommenderagent.domain.conversation.ConversationText.normalizeCommand;
+import static com.gen3.recommenderagent.domain.conversation.ConversationText.selectionReply;
+
 import com.gen3.recommenderagent.domain.Intent;
 import java.math.BigInteger;
-import java.util.Locale;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 
@@ -21,29 +23,20 @@ public class CommandParser {
               + "(?: books?| audiobooks?| recommendations?)?");
 
   public ParsedRequest parse(String rawText) {
-    String command =
-        rawText
-            .strip()
-            .toLowerCase(Locale.ROOT)
-            .replace('’', '\'')
-            .replace('‘', '\'')
-            .replaceAll("\\b(?:please|kindly)\\b", " ")
-            .replaceAll("(?U)\\s+", " ")
-            .strip()
-            .replaceFirst(
-                "^(?:(?:hi|hello|hey|sorry|excuse me|just|can you|could you|would you)[\\s,!.?…–—:;]+)+",
-                "")
-            .replaceFirst(
-                "(?:[\\s,!.?…–—:;]+(?:cheers|ta|many thanks|thanks|thank you(?: very much)?))+[\\s,!.?…–—:;]*$",
-                "")
-            .replaceFirst("[.!?,…]+$", "")
-            .stripTrailing();
-    if (com.gen3.recommenderagent.domain.conversation.ClarificationResolver.selectionReply(
-            rawText.strip())
-        != null) {
+    String command = normalizeCommand(rawText);
+    if (selectionReply(rawText.strip()) != null) {
       var parsed = new ParsedRequest();
       parsed.setIntent(Intent.UNKNOWN);
       return parsed;
+    }
+    if (command.startsWith("explain ")) {
+      Integer rank = selectionReply(command.substring(8));
+      if (rank != null) {
+        var parsed = new ParsedRequest();
+        parsed.setIntent(Intent.EXPLAIN_RECOMMENDATION);
+        parsed.setReferenceRank(BigInteger.valueOf(rank));
+        return parsed;
+      }
     }
     if (java.util.Set.of(
             "make them shorter",
@@ -71,9 +64,7 @@ public class CommandParser {
               ? BigInteger.ONE
               : Character.isDigit(count.charAt(0))
                   ? new BigInteger(count)
-                  : BigInteger.valueOf(
-                      com.gen3.recommenderagent.domain.conversation.ClarificationResolver
-                          .selectionReply(count)));
+                  : BigInteger.valueOf(selectionReply(count)));
       return parsed;
     }
     Intent intent =

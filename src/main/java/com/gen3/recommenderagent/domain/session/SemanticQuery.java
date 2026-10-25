@@ -10,6 +10,13 @@ public class SemanticQuery {
   private List<String> narrators;
   private List<String> keywords;
 
+  public boolean hasValues() {
+    return java.util.stream.Stream.of(topics, genres, authors, narrators, keywords)
+        .filter(java.util.Objects::nonNull)
+        .flatMap(List::stream)
+        .anyMatch(value -> value != null && !value.isBlank());
+  }
+
   public SemanticQuery() {}
 
   public List<String> getTopics() {
@@ -36,7 +43,7 @@ public class SemanticQuery {
     this.authors = authors;
   }
 
-  /** Returns narrator names that should become exact catalogue filters. */
+  /** Returns narrator names used as semantic preferences. */
   public List<String> getNarrators() {
     return narrators;
   }

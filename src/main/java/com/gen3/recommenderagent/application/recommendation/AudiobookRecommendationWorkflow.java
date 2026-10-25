@@ -69,15 +69,12 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
         request.setUserPreferencesLoaded(true);
       }
     }
-    boolean answeringTasteQuestion =
-        session != null
-            && session.isAwaitingPersonalisedPreferences()
-            && request != null
-            && !request.isExplicitSearch();
+    boolean answeringTasteQuestion = request != null && request.isPreferenceAnswer();
     boolean hasSavedPreferences =
         session != null && session.getPreferences() != null && session.getPreferences().hasValues();
     if (request != null
         && request.isPersonalised()
+        && request.getIntent() != Intent.MORE_RESULTS
         && preferences == null
         && !hasSavedPreferences
         && !answeringTasteQuestion) {

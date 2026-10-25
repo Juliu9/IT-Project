@@ -32,23 +32,22 @@ public final class SessionActionHandler implements ConversationHandler {
       case CHANGE_COUNT -> {
         if (request.getBookCount() != null) {
           session.setBookCount(request.getBookCount());
+          session.getRequests().stream()
+              .filter(
+                  com.gen3.recommenderagent.domain.session.ConversationTurn
+                      ::isPreferenceClarificationRequired)
+              .forEach(pending -> pending.setBookCount(session.getBookCount()));
         }
       }
       case CANCEL -> {
         session.setPendingSimilarBook(null);
-        session.setAwaitingPreferenceUpdate(false);
-        session
-            .getRequests()
-            .forEach(previous -> previous.setPreferenceClarificationRequired(false));
+        session.clearPreferenceQuestions();
       }
       case RESET_PREFERENCES -> {
         session.setPreferences(null);
         session.setBookCount(null);
         request.setBookCount(session.getBookCount());
-        session.setAwaitingPreferenceUpdate(false);
-        session
-            .getRequests()
-            .forEach(previous -> previous.setPreferenceClarificationRequired(false));
+        session.clearPreferenceQuestions();
       }
       case CLEAR_HISTORY -> session.clearHistory();
       default -> {}

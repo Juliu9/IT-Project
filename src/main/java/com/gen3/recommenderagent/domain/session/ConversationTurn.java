@@ -9,6 +9,16 @@ import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ConversationTurn {
+  private ConversationDecision pendingQuestion;
+
+  public ConversationDecision getPendingQuestion() {
+    return pendingQuestion;
+  }
+
+  public void setPendingQuestion(ConversationDecision value) {
+    pendingQuestion = value;
+  }
+
   private List<com.gen3.catalogue.model.AudiobookTitle> similarBookChoices = List.of();
 
   public List<com.gen3.catalogue.model.AudiobookTitle> getSimilarBookChoices() {
@@ -231,6 +241,7 @@ public class ConversationTurn {
     turn.setReferenceTitle(draft.getReferenceTitle());
     turn.setBookCount(draft.getBookCount());
     turn.setDecision(draft.getDecision());
+    turn.setPendingQuestion(draft.getPendingQuestion());
     turn.setPreferenceClarificationRequired(draft.isPreferenceClarificationRequired());
     turn.setSearchClarificationRequired(draft.isSearchClarificationRequired());
     turn.setNoMoreRecommendations(draft.isNoMoreRecommendations());
@@ -250,6 +261,7 @@ public class ConversationTurn {
     draft.setReferenceTitle(getReferenceTitle());
     draft.setBookCount(getBookCount());
     draft.setDecision(getDecision());
+    draft.setPendingQuestion(getPendingQuestion());
     draft.setPreferenceClarificationRequired(isPreferenceClarificationRequired());
     draft.setSearchClarificationRequired(isSearchClarificationRequired());
     draft.setNoMoreRecommendations(isNoMoreRecommendations());

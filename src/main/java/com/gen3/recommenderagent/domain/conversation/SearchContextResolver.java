@@ -23,6 +23,15 @@ public final class SearchContextResolver implements ConversationHandler {
   }
 
   public ConversationDraft resolve(Session session, ConversationDraft effective) {
+    if (session != null
+        && session.isAwaitingPersonalisedPreferences()
+        && effective.getIntent() == Intent.MORE_RESULTS) {
+      effective.setPreferenceClarificationRequired(true);
+      effective.setSearchClarificationRequired(true);
+      effective.setDecision(
+          com.gen3.recommenderagent.domain.session.ConversationDecision.PREFERENCE_CLARIFICATION);
+      return effective;
+    }
     if (effective.getIntent() == Intent.RECOMMENDATION && !hasSearchCriteria(effective)) {
       effective.setPersonalised(true);
     }
@@ -53,6 +62,9 @@ public final class SearchContextResolver implements ConversationHandler {
         && effective.getIntent() != Intent.MORE_RESULTS
         && acceptsPreferences(effective.getIntent())) {
       if (!effective.isExplicitSearch()) {
+        effective.setPreferenceAnswer(
+            ConversationRules.hasQuery(effective.getPositiveSemanticQuery())
+                || ConversationRules.hasQuery(effective.getNegativeSemanticQuery()));
         var pending = latestSearch(session);
         if (pending != null) {
           merge(pending, effective);
@@ -205,8 +217,12 @@ public final class SearchContextResolver implements ConversationHandler {
     if ((originalIntent == Intent.REFINE || originalIntent == Intent.RECOMMENDATION)
         && session.isAwaitingPersonalisedPreferences()
         && !original.isExplicitSearch()
+        && request.isPreferenceAnswer()
         && !request.isPreferenceClarificationRequired()) {
-      session.setPreferences(SessionPreferences.fromRequest(request));
+      var taste = new SessionPreferences();
+      taste.setPositiveSemanticQuery(original.getPositiveSemanticQuery());
+      taste.setNegativeSemanticQuery(original.getNegativeSemanticQuery());
+      session.setPreferences(session.updatedPreferences(taste, null, List.of()));
     }
     session.setAwaitingPreferenceUpdate(false);
     request.setNoMoreRecommendations(

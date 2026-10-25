@@ -5,6 +5,26 @@ import java.util.List;
 
 /** Private-to-conversation working state; never used as a persisted turn or response contract. */
 public class ConversationDraft extends SessionRequest {
+  private boolean preferenceAnswer;
+
+  public boolean isPreferenceAnswer() {
+    return preferenceAnswer;
+  }
+
+  public void setPreferenceAnswer(boolean value) {
+    preferenceAnswer = value;
+  }
+
+  private ConversationDecision pendingQuestion;
+
+  public ConversationDecision getPendingQuestion() {
+    return pendingQuestion;
+  }
+
+  public void setPendingQuestion(ConversationDecision value) {
+    pendingQuestion = value;
+  }
+
   private List<com.gen3.catalogue.model.AudiobookTitle> similarBookChoices = List.of();
 
   public List<com.gen3.catalogue.model.AudiobookTitle> getSimilarBookChoices() {

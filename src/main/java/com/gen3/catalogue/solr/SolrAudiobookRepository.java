@@ -44,6 +44,18 @@ public class SolrAudiobookRepository
         AudiobookVectorRepository,
         com.gen3.catalogue.port.AudiobookTitleLookup {
 
+  private static final String[] CATALOGUE_FIELDS = {
+    "id",
+    "source",
+    "title",
+    "authors",
+    "description",
+    "narrators",
+    "language",
+    "durationMinutes",
+    "publicationYear",
+    "short_description"
+  };
   private static final double KEYWORD_WEIGHT = 0.4;
   private static final double VECTOR_WEIGHT = 0.6;
 
@@ -84,19 +96,9 @@ public class SolrAudiobookRepository
     solrQuery.set("qf", "all");
     solrQuery.set("uf", "all");
     solrQuery.setRows(limit);
-    solrQuery.setFields(
-        "id",
-        "source",
-        "title",
-        "authors",
-        "description",
-        "narrators",
-        "language",
-        "durationMinutes",
-        "publicationYear",
-        "short_description",
-        "score",
-        vectorField);
+    solrQuery.setFields(CATALOGUE_FIELDS);
+    solrQuery.addField("score");
+    solrQuery.addField(vectorField);
     addFilters(solrQuery, filters);
 
     return solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
@@ -280,17 +282,7 @@ public class SolrAudiobookRepository
       return List.of();
     }
     var query = new SolrQuery();
-    query.setFields(
-        "id",
-        "source",
-        "title",
-        "authors",
-        "description",
-        "narrators",
-        "language",
-        "durationMinutes",
-        "publicationYear",
-        "short_description");
+    query.setFields(CATALOGUE_FIELDS);
     try {
       return solrClient.getById(collection, bookIds, query).stream().map(this::toRecord).toList();
     } catch (SolrServerException | SolrException exception) {
@@ -350,18 +342,8 @@ public class SolrAudiobookRepository
     solrQuery.setStart(Math.max(offset, 0));
     solrQuery.setRows(Math.max(limit, 1));
     solrQuery.setSort("id", SolrQuery.ORDER.asc);
-    solrQuery.setFields(
-        "id",
-        "source",
-        "title",
-        "authors",
-        "description",
-        "narrators",
-        "language",
-        "durationMinutes",
-        "publicationYear",
-        "short_description",
-        "_version_");
+    solrQuery.setFields(CATALOGUE_FIELDS);
+    solrQuery.addField("_version_");
     if (includeVectors) {
       solrQuery.addField(vectorField);
     }
@@ -379,19 +361,9 @@ public class SolrAudiobookRepository
     solrQuery.setQuery(
         "{!knn f=" + vectorField + " topK=" + limit + "}" + vectorLiteral(queryVector));
     solrQuery.setRows(limit);
-    solrQuery.setFields(
-        "id",
-        "source",
-        "title",
-        "authors",
-        "description",
-        "narrators",
-        "language",
-        "durationMinutes",
-        "publicationYear",
-        "short_description",
-        "score",
-        vectorField);
+    solrQuery.setFields(CATALOGUE_FIELDS);
+    solrQuery.addField("score");
+    solrQuery.addField(vectorField);
     addFilters(solrQuery, filters);
     return solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
   }

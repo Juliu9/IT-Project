@@ -73,6 +73,7 @@ public final class ConversationDispatcher {
     if (request.getDecision() == null) {
       request.setDecision(ConversationRules.decisionFor(request.getRecommendations(), request));
     }
+    clarification.complete(session, request);
     if (handler.retainsHistory() && !request.isSearchClarificationRequired()) {
       ConversationHistory.retainRequest(session, ConversationHistory.historyEntry(request));
     }

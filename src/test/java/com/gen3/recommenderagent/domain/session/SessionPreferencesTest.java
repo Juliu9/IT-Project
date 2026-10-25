@@ -8,6 +8,38 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class SessionPreferencesTest {
+  static java.util.stream.Stream<java.util.function.BiConsumer<SemanticQuery, List<String>>>
+      semanticFields() {
+    return java.util.stream.Stream.of(
+        SemanticQuery::setTopics,
+        SemanticQuery::setGenres,
+        SemanticQuery::setAuthors,
+        SemanticQuery::setNarrators,
+        SemanticQuery::setKeywords);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.MethodSource("semanticFields")
+  void semanticValueChecksIgnoreEmptyTermsAndRecogniseEveryField(
+      java.util.function.BiConsumer<SemanticQuery, List<String>> field) {
+    var query = new SemanticQuery();
+    var preferences = new SessionPreferences();
+    preferences.setPositiveSemanticQuery(query);
+    assertThat(query.hasValues()).isFalse();
+    assertThat(preferences.hasValues()).isFalse();
+    field.accept(query, List.of());
+    assertThat(query.hasValues()).isFalse();
+    var terms = new java.util.ArrayList<String>(java.util.Arrays.asList(null, "", " \t "));
+    field.accept(query, terms);
+    assertThat(query.hasValues()).isFalse();
+    assertThat(preferences.hasValues()).isFalse();
+    terms.add("taste");
+    assertThat(query.hasValues()).isTrue();
+    assertThat(preferences.hasValues()).isTrue();
+    var json = new tools.jackson.databind.ObjectMapper().valueToTree(query);
+    assertThat(json.has("values")).isFalse();
+  }
+
   @Test
   void changesAreCopiedDeduplicatedAndLimitedToTheNamedFields() {
     var original = new SessionPreferences();

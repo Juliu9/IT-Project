@@ -12,21 +12,25 @@ import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.domain.session.SimilarBookReference;
 import java.util.List;
-import java.util.Locale;
-import java.util.regex.Pattern;
 
 /**
  * Resolves short replies and cancellation against the outstanding question before intent dispatch.
  */
 public final class ClarificationResolver {
-  private static final Pattern SELECTION_REPLY =
-      Pattern.compile(
-          "(?i)^(?:the\\s+)?(?:(?:book|audiobook)\\s+)?(?:number\\s+)?([0-9]+(?:st|nd|rd|th)?|one|two|three|four|five|six|seven|eight|nine|ten|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)(?:\\s+(?:one|book|audiobook))?(?:\\s+please)?[.!?]?$");
 
   public ConversationDraft resolve(Session session, SessionRequest input) {
     ConversationDraft effective = copyOf(input);
     if (session == null) {
       return effective;
+    }
+    if (session.getPendingQuestion() == null) {
+      if (isQuestion(session.getLastDecision())) {
+        session.setPendingQuestion(session.getLastDecision());
+      } else if (session.isAwaitingPersonalisedPreferences()) {
+        session.setPendingQuestion(ConversationDecision.PREFERENCE_CLARIFICATION);
+      } else if (session.isAwaitingPreferenceUpdate()) {
+        session.setPendingQuestion(ConversationDecision.PREFERENCE_UPDATE_CLARIFICATION);
+      }
     }
     String reply = effective.getRawText() == null ? "" : effective.getRawText().strip();
     if (reply.matches("(?i)(?:never mind|nevermind|cancel|stop|forget it)[.!?]?")) {
@@ -36,16 +40,32 @@ public final class ClarificationResolver {
       normalizeInput(effective);
       return effective;
     }
+    if (effective.getIntent() == Intent.UPDATE_PREFERENCES
+        && session.getPendingQuestion() == ConversationDecision.PREFERENCE_CLARIFICATION
+        && effective.getPreferenceUpdates() != null
+        && (ConversationRules.hasQuery(effective.getPreferenceUpdates().getPositiveSemanticQuery())
+            || ConversationRules.hasQuery(
+                effective.getPreferenceUpdates().getNegativeSemanticQuery()))) {
+      var updates = effective.getPreferenceUpdates();
+      session.setPreferences(
+          session.updatedPreferences(
+              updates, effective.getPreferenceRemovals(), effective.getReplacePreferenceFields()));
+      effective.setIntent(Intent.RECOMMENDATION);
+      effective.setExplicitSearch(false);
+      effective.setPositiveSemanticQuery(updates.getPositiveSemanticQuery());
+      effective.setNegativeSemanticQuery(updates.getNegativeSemanticQuery());
+      return effective;
+    }
     // The parser has no session context; resolve short answers against the outstanding question.
-    Integer selection = selectionReply(reply);
-    if (session.getLastDecision() == ConversationDecision.COUNT_CLARIFICATION
+    Integer selection = ConversationText.selectionReply(reply);
+    if (session.getPendingQuestion() == ConversationDecision.COUNT_CLARIFICATION
         && selection != null) {
       effective.setIntent(Intent.CHANGE_COUNT);
       normalizeInput(effective);
       effective.setBookCount(selection);
       return effective;
     }
-    if (session.getLastDecision() == ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
+    if (session.getPendingQuestion() == ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
         && (selection != null
             || (!effective.isExplicitSearch()
                 && !reply.isBlank()
@@ -60,7 +80,7 @@ public final class ClarificationResolver {
       effective.setReferenceTitle(selection == null ? reply : null);
       return effective;
     }
-    if (session.getLastDecision() == ConversationDecision.SHORTER_DURATION_CLARIFICATION
+    if (session.getPendingQuestion() == ConversationDecision.SHORTER_DURATION_CLARIFICATION
         && !effective.isExplicitSearch()
         && effective.getMustInclude() != null
         && effective.getMustInclude().getDuration() != null
@@ -71,19 +91,9 @@ public final class ClarificationResolver {
       normalizeInput(effective);
       return effective;
     }
-    boolean anotherQuestion =
-        session.getLastDecision() != null
-            && switch (session.getLastDecision()) {
-              case COUNT_CLARIFICATION,
-                  EXPLANATION_TARGET_CLARIFICATION,
-                  PREFERENCE_CLARIFICATION,
-                  PREFERENCE_UPDATE_CLARIFICATION,
-                  SEARCH_CLARIFICATION,
-                  SHORTER_DURATION_CLARIFICATION ->
-                  true;
-              default -> false;
-            };
-    if (session.getPendingSimilarBook() != null && !anotherQuestion) {
+    if (session.getPendingSimilarBook() != null
+        && (session.getPendingQuestion() == null
+            || session.getPendingQuestion() == session.getPendingSimilarBook().decision())) {
       var resolved = resolveSimilarBook(session, effective, reply, selection);
       if (resolved != effective) {
         return resolved;
@@ -91,9 +101,9 @@ public final class ClarificationResolver {
     }
     if (effective.getIntent() == Intent.UPDATE_PREFERENCES
         || (session.isAwaitingPreferenceUpdate()
-            && session.getLastDecision() != ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
-            && session.getLastDecision() != ConversationDecision.COUNT_CLARIFICATION
-            && session.getLastDecision() != ConversationDecision.SHORTER_DURATION_CLARIFICATION
+            && session.getPendingQuestion() != ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
+            && session.getPendingQuestion() != ConversationDecision.COUNT_CLARIFICATION
+            && session.getPendingQuestion() != ConversationDecision.SHORTER_DURATION_CLARIFICATION
             && !effective.isExplicitSearch()
             && (effective.getIntent() == Intent.RECOMMENDATION
                 || effective.getIntent() == Intent.REFINE
@@ -103,6 +113,24 @@ public final class ClarificationResolver {
         effective.setPreferenceUpdates(SessionPreferences.fromRequest(effective));
       }
       return effective;
+    }
+    boolean tasteReply =
+        session.isAwaitingPersonalisedPreferences()
+            && !effective.isExplicitSearch()
+            && (ConversationRules.hasQuery(effective.getPositiveSemanticQuery())
+                || ConversationRules.hasQuery(effective.getNegativeSemanticQuery()));
+    boolean newSearch =
+        (effective.getIntent() == Intent.RECOMMENDATION && effective.isExplicitSearch())
+            || (effective.getIntent() == Intent.REFINE && !tasteReply);
+    if (newSearch) {
+      session.setPendingQuestion(null);
+      session.setPendingSimilarBook(null);
+      session.clearPreferenceQuestions();
+    } else if ((effective.getIntent() == Intent.MORE_RESULTS
+            || effective.getIntent() == Intent.REPEAT_RECOMMENDATIONS)
+        && session.getPendingQuestion() != ConversationDecision.PREFERENCE_CLARIFICATION) {
+      session.setPendingQuestion(null);
+      session.setPendingSimilarBook(null);
     }
     return effective;
   }
@@ -196,29 +224,58 @@ public final class ClarificationResolver {
     return resumed;
   }
 
-  public static Integer selectionReply(String reply) {
-    var match = SELECTION_REPLY.matcher(reply);
-    if (!match.matches()) {
-      return null;
+  private static boolean isQuestion(ConversationDecision decision) {
+    if (decision == null) {
+      return false;
     }
-    return switch (match.group(1).toLowerCase(Locale.ROOT)) {
-      case "one", "first" -> 1;
-      case "two", "second" -> 2;
-      case "three", "third" -> 3;
-      case "four", "fourth" -> 4;
-      case "five", "fifth" -> 5;
-      case "six", "sixth" -> 6;
-      case "seven", "seventh" -> 7;
-      case "eight", "eighth" -> 8;
-      case "nine", "ninth" -> 9;
-      case "ten", "tenth" -> 10;
-      default -> {
-        try {
-          yield Integer.valueOf(match.group(1).replaceFirst("(?i)(st|nd|rd|th)$", ""));
-        } catch (NumberFormatException ignored) {
-          yield Integer.MAX_VALUE;
-        }
-      }
+    return switch (decision) {
+      case COUNT_CLARIFICATION,
+          EXPLANATION_TARGET_CLARIFICATION,
+          PREFERENCE_CLARIFICATION,
+          PREFERENCE_UPDATE_CLARIFICATION,
+          SEARCH_CLARIFICATION,
+          SHORTER_DURATION_CLARIFICATION,
+          SIMILAR_BOOK_SELECTION,
+          SIMILAR_BOOK_NOT_FOUND,
+          SIMILAR_BOOK_REQUIRED ->
+          true;
+      default -> false;
     };
+  }
+
+  public void complete(Session session, ConversationDraft request) {
+    Intent intent = request.getIntent();
+    if (intent == Intent.REPEAT) {
+      return;
+    }
+    if (intent == Intent.HELP) {
+      request.setPendingQuestion(session.getPendingQuestion());
+      if (session.getPendingQuestion() == ConversationDecision.EXPLANATION_TARGET_CLARIFICATION) {
+        var search = ConversationHistory.latestSearch(session);
+        if (search != null) {
+          request.setRecommendations(search.getRecommendations());
+        }
+      } else if (session.getPendingSimilarBook() != null) {
+        request.setSimilarBookChoices(
+            session.getPendingSimilarBook().request().getSimilarBookChoices());
+      }
+      return;
+    }
+    if (intent == Intent.RESET_PREFERENCES) {
+      return;
+    }
+    if (intent == Intent.UPDATE_PREFERENCES && session.getPendingQuestion() != null) {
+      return;
+    }
+    if (intent == Intent.CHANGE_COUNT
+        && request.getBookCount() != null
+        && session.getPendingQuestion() != ConversationDecision.COUNT_CLARIFICATION) {
+      return;
+    }
+    if (isQuestion(request.getDecision())) {
+      session.setPendingQuestion(request.getDecision());
+    } else if (intent != Intent.UNKNOWN) {
+      session.setPendingQuestion(null);
+    }
   }
 }

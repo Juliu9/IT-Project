@@ -71,6 +71,163 @@ class PreferenceUpdateFlowTest {
             });
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void moreAfterResetRefillsTheFrozenSearchWithoutLosingTheCachedTail(boolean refill)
+      throws Exception {
+    if (!refill) {
+      when(ranker.rank(anyList(), anyInt(), any(RankingContext.class)))
+          .thenReturn(
+              IntStream.rangeClosed(1, 20)
+                  .mapToObj(i -> new Recommendation("book-" + i, i, 1.0, "Title " + i))
+                  .toList(),
+              List.of());
+    }
+    process(update(tastes("horror")));
+    var count = request(Intent.CHANGE_COUNT);
+    count.setBookCount(2);
+    process(count);
+    var search = request(Intent.RECOMMENDATION);
+    search.setPersonalised(true);
+    process(search);
+    process(request(Intent.RESET_PREFERENCES));
+    for (int page = 0; page < 3; page++) {
+      process(request(Intent.MORE_RESULTS));
+    }
+    var result = process(request(Intent.MORE_RESULTS));
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
+    assertThat(result.isPreferenceClarificationRequired()).isFalse();
+    assertThat(result.getRecommendations())
+        .extracting(Recommendation::getBookId)
+        .containsExactlyElementsOf(
+            refill
+                ? List.of("book-18", "book-19", "book-20", "book-21", "book-22")
+                : List.of("book-18", "book-19", "book-20"));
+    assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("horror");
+    assertThat(sessions.getSession("session", "user").getPreferences()).isNull();
+    verify(users).findEmbeddingByUserId("user");
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"more", "another", "2 more", "another five"})
+  void moreCannotAnswerThePendingGenreQuestion(String text) {
+    var search = request(Intent.RECOMMENDATION);
+    search.setPersonalised(true);
+    search.setExplicitSearch(true);
+    search.setPositiveSemanticQuery(tastes("horror").getPositiveSemanticQuery());
+    assertThat(process(search).getDecision())
+        .isEqualTo(ConversationDecision.PREFERENCE_CLARIFICATION);
+    org.mockito.Mockito.clearInvocations(vectors, retriever, ranker);
+    var parser = new InputParser(new CommandParser(), mock(AiParser.class));
+    var result = service.process("session", "user", parser.parse(text));
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.PREFERENCE_CLARIFICATION);
+    assertThat(result.getRecommendations()).isEmpty();
+    assertThat(sessions.getSession("session", "user").isAwaitingPersonalisedPreferences()).isTrue();
+    assertThat(sessions.getSession("session", "user").getPreferences()).isNull();
+    verifyNoInteractions(vectors, retriever, ranker);
+    var answer = request(Intent.REFINE);
+    answer.setPositiveSemanticQuery(tastes("adventure").getPositiveSemanticQuery());
+    var resumed = process(answer);
+    assertThat(resumed.isPreferenceClarificationRequired()).isFalse();
+    assertThat(resumed.getRecommendations()).hasSize(5);
+    assertThat(
+            sessions
+                .getSession("session", "user")
+                .getPreferences()
+                .getPositiveSemanticQuery()
+                .getGenres())
+        .containsExactly("adventure");
+  }
+
+  @Test
+  void tasteReplyDoesNotPromotePendingSearchConstraintsOrSemanticsToSavedPreferences() {
+    var search = request(Intent.RECOMMENDATION);
+    search.setPersonalised(true);
+    search.setExplicitSearch(true);
+    var filter = new ExactCriteria();
+    filter.setAuthors(List.of("Suzanne Collins"));
+    filter.setDuration("under 3 hours");
+    search.setMustInclude(filter);
+    search.setPositiveSemanticQuery(tastes("fantasy").getPositiveSemanticQuery());
+    process(search);
+    var reply = request(Intent.RECOMMENDATION);
+    reply.setPositiveSemanticQuery(tastes("horror").getPositiveSemanticQuery());
+    var resumed = process(reply);
+    assertThat(resumed.getMustInclude().getAuthors()).containsExactly("Suzanne Collins");
+    assertThat(resumed.getMustInclude().getDuration()).isEqualTo("under 3 hours");
+    var saved = sessions.getSession("session", "user").getPreferences();
+    assertThat(saved.getPositiveSemanticQuery().getGenres()).containsExactly("horror");
+    assertThat(saved.getMustInclude().getAuthors()).isNullOrEmpty();
+    assertThat(saved.getMustInclude().getDuration()).isNull();
+    var next = request(Intent.RECOMMENDATION);
+    next.setExplicitSearch(true);
+    next.setPositiveSemanticQuery(tastes("adventure").getPositiveSemanticQuery());
+    var result = process(next);
+    assertThat(result.getMustInclude().getAuthors()).isNullOrEmpty();
+    assertThat(result.getMustInclude().getDuration()).isNull();
+    assertThat(result.getPositiveSemanticQuery().getGenres()).doesNotContain("fantasy");
+  }
+
+  @Test
+  void explicitPreferenceUpdateAnswersPendingGenreQuestionAndResumesSearch() {
+    var search = request(Intent.RECOMMENDATION);
+    search.setPersonalised(true);
+    var filter = new ExactCriteria();
+    filter.setAuthors(List.of("Suzanne Collins"));
+    search.setMustInclude(filter);
+    process(search);
+    process(request(Intent.HELP));
+    var result = process(update(tastes("horror")));
+    assertThat(result.getRecommendations()).hasSize(5);
+    assertThat(result.getMustInclude().getAuthors()).containsExactly("Suzanne Collins");
+    assertThat(
+            sessions
+                .getSession("session", "user")
+                .getPreferences()
+                .getPositiveSemanticQuery()
+                .getGenres())
+        .containsExactly("horror");
+    assertThat(sessions.getSession("session", "user").getPendingQuestion()).isNull();
+  }
+
+  @Test
+  void countAndHelpPreservePendingGenreQuestionAndCountChoice() {
+    var search = request(Intent.RECOMMENDATION);
+    search.setPersonalised(true);
+    process(search);
+    var count = request(Intent.CHANGE_COUNT);
+    count.setBookCount(2);
+    process(count);
+    process(request(Intent.HELP));
+    assertThat(sessions.getSession("session", "user").getPendingQuestion())
+        .isEqualTo(ConversationDecision.PREFERENCE_CLARIFICATION);
+    var reply = request(Intent.RECOMMENDATION);
+    reply.setPositiveSemanticQuery(tastes("horror").getPositiveSemanticQuery());
+    assertThat(process(reply).getRecommendations()).hasSize(2);
+  }
+
+  @Test
+  void unrelatedPreferenceEditPreservesThePendingGenreQuestion() {
+    var search = request(Intent.RECOMMENDATION);
+    search.setPersonalised(true);
+    process(search);
+    var filterPreferences = new SessionPreferences();
+    var filter = new ExactCriteria();
+    filter.setLanguage("English");
+    filterPreferences.setMustInclude(filter);
+    var result = process(update(filterPreferences));
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.PREFERENCES_UPDATED);
+    assertThat(sessions.getSession("session", "user").getPendingQuestion())
+        .isEqualTo(ConversationDecision.PREFERENCE_CLARIFICATION);
+    var answer = request(Intent.RECOMMENDATION);
+    answer.setPositiveSemanticQuery(tastes("horror").getPositiveSemanticQuery());
+    assertThat(process(answer).getRecommendations()).hasSize(5);
+    assertThat(
+            sessions.getSession("session", "user").getPreferences().getMustInclude().getLanguage())
+        .isEqualTo("English");
+  }
+
   @Test
   void resetClearsPreferencesAndCountButPreservesDisplayedAndPendingBooks() {
     process(update(tastes("horror")));

@@ -143,12 +143,7 @@ public final class ConversationRules {
   }
 
   static boolean hasQuery(SemanticQuery query) {
-    return query != null
-        && (hasTerms(query.getTopics())
-            || hasTerms(query.getGenres())
-            || hasTerms(query.getAuthors())
-            || hasTerms(query.getNarrators())
-            || hasTerms(query.getKeywords()));
+    return query != null && query.hasValues();
   }
 
   static boolean hasTerms(List<String> terms) {

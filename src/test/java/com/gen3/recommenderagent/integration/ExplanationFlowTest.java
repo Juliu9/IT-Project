@@ -38,6 +38,100 @@ class ExplanationFlowTest {
   private final ConversationResponseGenerator responses =
       new ConversationResponseGenerator(new AiResponseGenerator(null));
 
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "please, the second one",
+        "Could you please explain number two?",
+        "Hello, could you please choose number two? Thanks!"
+      })
+  void politeSelectionsWorkAfterHelpAndSessionReload(String reply) {
+    search();
+    explain(6, null);
+    var help = process(Intent.HELP);
+    assertThat(responses.generate(help.getRecommendations(), help))
+        .contains("Which one did you mean?");
+    var repeated = process(Intent.REPEAT);
+    assertThat(responses.generate(repeated.getRecommendations(), repeated))
+        .isEqualTo(responses.generate(help.getRecommendations(), help));
+    var mapper = new ObjectMapper();
+    sessions.updateSession(
+        mapper.readValue(
+            mapper.writeValueAsString(sessions.getSession("session", "user")),
+            com.gen3.recommenderagent.domain.session.Session.class));
+    var client = mock(org.springframework.ai.chat.client.ChatClient.class);
+    var parser =
+        new InputParser(
+            new CommandParser(),
+            new AiParser(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
+    var result = service.process("session", "user", parser.parse(reply));
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(result.getRecommendations()).extracting(Recommendation::getRank).containsExactly(2);
+    assertThat(sessions.getSession("session", "user").getPendingQuestion()).isNull();
+    verifyNoInteractions(client);
+    verify(workflow).recommend(any(), any());
+  }
+
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = Intent.class,
+      names = {"CHANGE_COUNT", "UPDATE_PREFERENCES", "RESET_PREFERENCES"})
+  void settingsChangesPreservePendingBookSelection(Intent action) {
+    search();
+    explain(6, null);
+    var request = new ConversationDraft();
+    request.setIntent(action);
+    if (action == Intent.CHANGE_COUNT) {
+      request.setBookCount(2);
+    }
+    if (action == Intent.UPDATE_PREFERENCES) {
+      var preferences = new com.gen3.recommenderagent.domain.session.SessionPreferences();
+      var query = new SemanticQuery();
+      query.setGenres(List.of("horror"));
+      preferences.setPositiveSemanticQuery(query);
+      request.setPreferenceUpdates(preferences);
+    }
+    service.process("session", "user", request);
+    var selection = new ConversationDraft();
+    selection.setIntent(Intent.UNKNOWN);
+    selection.setRawText("2");
+    assertThat(service.process("session", "user", selection).getRecommendations())
+        .extracting(Recommendation::getRank)
+        .containsExactly(2);
+  }
+
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = Intent.class,
+      names = {
+        "RECOMMENDATION",
+        "REFINE",
+        "MORE_RESULTS",
+        "REPEAT_RECOMMENDATIONS",
+        "CANCEL",
+        "CLEAR_HISTORY"
+      })
+  void searchAndPageActionsReplacePendingSelection(Intent action) {
+    search();
+    explain(6, null);
+    var request = new ConversationDraft();
+    request.setIntent(action);
+    if (action == Intent.RECOMMENDATION || action == Intent.REFINE) {
+      request.setExplicitSearch(true);
+      var query = new SemanticQuery();
+      query.setGenres(List.of("horror"));
+      request.setPositiveSemanticQuery(query);
+    }
+    service.process("session", "user", request);
+    assertThat(sessions.getSession("session", "user").getPendingQuestion()).isNull();
+    var selection = new ConversationDraft();
+    selection.setIntent(Intent.UNKNOWN);
+    selection.setRawText("2");
+    assertThat(service.process("session", "user", selection).getDecision())
+        .isEqualTo(ConversationDecision.UNKNOWN);
+  }
+
   @Test
   void explainsPageRankAndTitleWithoutChangingHistoryOrConsumingMore() throws Exception {
     search();
@@ -398,7 +492,7 @@ class ExplanationFlowTest {
 
   @ParameterizedTest
   @ValueSource(strings = {"1", "the second audiobook", "book number 2"})
-  void numericReplyOnlySelectsABookWhileClarificationIsPending(String text) {
+  void numericReplyNeedsAQuestionAndHelpPreservesThatQuestion(String text) {
     search();
     var reply = new ConversationDraft();
     reply.setIntent(Intent.UNKNOWN);
@@ -408,7 +502,7 @@ class ExplanationFlowTest {
     explain(null, "Harry Potter");
     process(Intent.HELP);
     assertThat(service.process("session", "user", reply).getDecision())
-        .isEqualTo(ConversationDecision.UNKNOWN);
+        .isEqualTo(ConversationDecision.EXPLANATION);
     verify(workflow).recommend(any(), any());
   }
 

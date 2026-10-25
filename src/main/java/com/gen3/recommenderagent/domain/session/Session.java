@@ -11,6 +11,17 @@ import java.util.List;
 
 public class Session {
 
+  // Outstanding questions survive HELP and settings changes independently of REPEAT's snapshot.
+  private ConversationDecision pendingQuestion;
+
+  public ConversationDecision getPendingQuestion() {
+    return pendingQuestion;
+  }
+
+  public void setPendingQuestion(ConversationDecision value) {
+    pendingQuestion = value;
+  }
+
   private PendingSimilarBook pendingSimilarBook;
 
   public PendingSimilarBook getPendingSimilarBook() {
@@ -153,6 +164,22 @@ public class Session {
     this.preferences = preferences;
   }
 
+  /** Calculates a preference edit without changing the saved profile during resolution. */
+  public SessionPreferences updatedPreferences(
+      SessionPreferences additions, SessionPreferences removals, List<String> replacementFields) {
+    var current = preferences == null ? new SessionPreferences() : preferences;
+    return current.updated(additions, removals, replacementFields);
+  }
+
+  public void clearPreferenceQuestions() {
+    awaitingPreferenceUpdate = false;
+    requests.forEach(previous -> previous.setPreferenceClarificationRequired(false));
+    if (pendingQuestion == ConversationDecision.PREFERENCE_CLARIFICATION
+        || pendingQuestion == ConversationDecision.PREFERENCE_UPDATE_CLARIFICATION) {
+      pendingQuestion = null;
+    }
+  }
+
   public List<Recommendation> getPendingRecommendations() {
     return pendingRecommendations;
   }
@@ -184,6 +211,7 @@ public class Session {
 
   public void clearHistory() {
     pendingSimilarBook = null;
+    pendingQuestion = null;
     this.awaitingPreferenceUpdate = false;
     this.lastRequest = null;
     this.lastDecision = null;

@@ -42,18 +42,22 @@ public class ConversationResponseGenerator implements ResponseGenerator {
             ? currentRequest.getDecision()
             : ConversationRules.decisionFor(
                 recommendations, currentRequest == null ? null : currentRequest.toDraft());
-    if (decision == ConversationDecision.SEARCH_CLARIFICATION) {
-      RequestTelemetry.responseMode("SEARCH_CLARIFICATION");
-      return "What kind of audiobook would you like?";
-    }
-    if (decision == ConversationDecision.PREFERENCE_CLARIFICATION) {
-      RequestTelemetry.responseMode("PREFERENCE_CLARIFICATION");
-      return "What genres do you like?";
+    if (decision == ConversationDecision.SEARCH_CLARIFICATION
+        || decision == ConversationDecision.PREFERENCE_CLARIFICATION) {
+      RequestTelemetry.responseMode(decision.name());
+      return generateOutcomeResponse(decision, currentRequest);
     }
     String limitNotice =
         decision == ConversationDecision.EXPLANATION ? "" : limitNotice(currentRequest);
     String fixedResponse = generateOutcomeResponse(decision, currentRequest);
     if (fixedResponse != null) {
+      if (decision == ConversationDecision.HELP && currentRequest.getPendingQuestion() != null) {
+        String question =
+            generateOutcomeResponse(currentRequest.getPendingQuestion(), currentRequest);
+        if (question != null) {
+          fixedResponse += " " + question;
+        }
+      }
       boolean noResults =
           switch (decision) {
             case NO_MORE_RESULTS, NOTHING_TO_REPEAT, NO_RECOMMENDATIONS_TO_REPEAT, NO_MATCHES ->
@@ -140,7 +144,9 @@ public class ConversationResponseGenerator implements ResponseGenerator {
           "There is no previous request to repeat. Ask me for recommendations or help first.";
       case NO_MATCHES -> generateFallbackResponse(currentRequest);
       case UNAVAILABLE -> PROCESSING_FALLBACK;
-      case SEARCH_CLARIFICATION, PREFERENCE_CLARIFICATION, RECOMMENDATIONS, EXPLANATION -> null;
+      case SEARCH_CLARIFICATION -> "What kind of audiobook would you like?";
+      case PREFERENCE_CLARIFICATION -> "What genres do you like?";
+      case RECOMMENDATIONS, EXPLANATION -> null;
     };
   }
 
