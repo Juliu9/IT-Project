@@ -69,6 +69,21 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
         request.setUserPreferencesLoaded(true);
       }
     }
+    boolean answeringTasteQuestion =
+        session != null
+            && session.isAwaitingPersonalisedPreferences()
+            && request != null
+            && !request.isExplicitSearch();
+    boolean hasSavedPreferences =
+        session != null && session.getPreferences() != null && session.getPreferences().hasValues();
+    if (request != null
+        && request.isPersonalised()
+        && preferences == null
+        && !hasSavedPreferences
+        && !answeringTasteQuestion) {
+      request.setPreferenceClarificationRequired(true);
+      return List.of();
+    }
     SemanticQueryVectors vectors =
         RequestTelemetry.measure("embedMs", () -> retrievalVectors(request, preferences));
     if (request != null && request.isPersonalised()) {

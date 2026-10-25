@@ -71,6 +71,53 @@ class PreferenceUpdateFlowTest {
             });
   }
 
+  @Test
+  void resetClearsPreferencesAndCountButPreservesDisplayedAndPendingBooks() {
+    process(update(tastes("horror")));
+    var count = request(Intent.CHANGE_COUNT);
+    count.setBookCount(2);
+    process(count);
+    var page = process(request(Intent.RECOMMENDATION));
+    var session = sessions.getSession("session", "user");
+    var pending = List.copyOf(session.getPendingRecommendations());
+    var shown = List.copyOf(session.getShownBooks());
+    org.mockito.Mockito.clearInvocations(users, vectors, retriever, ranker);
+    var parser = new InputParser(new CommandParser(), mock(AiParser.class));
+    var reset = service.process("session", "user", parser.parse("reset my preferences"));
+    session = sessions.getSession("session", "user");
+    assertThat(reset.getIntent()).isEqualTo(Intent.RESET_PREFERENCES);
+    assertThat(reset.getDecision()).isEqualTo(ConversationDecision.PREFERENCES_RESET);
+    assertThat(session.getPreferences()).isNull();
+    assertThat(session.getBookCount()).isEqualTo(5);
+    assertThat(session.getPendingRecommendations()).usingRecursiveComparison().isEqualTo(pending);
+    assertThat(session.getShownBooks()).containsExactlyElementsOf(shown);
+    verifyNoInteractions(users, vectors, retriever, ranker);
+    var response = new ConversationResponseGenerator(new AiResponseGenerator(null));
+    assertThat(response.generate(reset.getRecommendations(), reset)).contains("reset", "5");
+    var replay = process(request(Intent.REPEAT));
+    assertThat(replay.getDecision()).isEqualTo(ConversationDecision.PREFERENCES_RESET);
+    assertThat(process(request(Intent.REPEAT_RECOMMENDATIONS)).getRecommendations())
+        .extracting(Recommendation::getBookId)
+        .containsExactlyElementsOf(Recommendation.bookIds(page.getRecommendations()));
+    assertThat(process(request(Intent.MORE_RESULTS)).getRecommendations()).hasSize(5);
+    var personalised = request(Intent.RECOMMENDATION);
+    personalised.setPersonalised(true);
+    assertThat(process(personalised).isPreferenceClarificationRequired()).isTrue();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void resetCancelsPendingPreferenceQuestions(boolean personalisation) {
+    var pending = request(personalisation ? Intent.RECOMMENDATION : Intent.UPDATE_PREFERENCES);
+    pending.setPersonalised(personalisation);
+    process(pending);
+    process(request(Intent.RESET_PREFERENCES));
+    var session = sessions.getSession("session", "user");
+    assertThat(session.isAwaitingPreferenceUpdate()).isFalse();
+    assertThat(session.isAwaitingPersonalisedPreferences()).isFalse();
+    assertThat(session.getPreferences()).isNull();
+  }
+
   private ConversationDraft request(Intent intent) {
     var request = new ConversationDraft();
     request.setIntent(intent);

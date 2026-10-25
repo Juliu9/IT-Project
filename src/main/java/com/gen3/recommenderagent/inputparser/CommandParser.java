@@ -140,6 +140,14 @@ public class CommandParser {
               "explain these books",
               "why were these books recommended" ->
               Intent.EXPLAIN_RECOMMENDATION;
+          case "reset preferences",
+              "reset my preferences",
+              "reset session preferences",
+              "clear preferences",
+              "clear my preferences",
+              "reset my tastes",
+              "reset preferences and count" ->
+              Intent.RESET_PREFERENCES;
           case "clear history",
               "clear my history",
               "clear recommendation history",

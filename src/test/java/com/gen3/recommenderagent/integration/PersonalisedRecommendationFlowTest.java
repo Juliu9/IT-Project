@@ -93,6 +93,79 @@ class PersonalisedRecommendationFlowTest {
     verifyNoInteractions(books, embeddingModel, ranker);
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"none", "constraints", "semantic", "both"})
+  void firstPersonalisedRequestNeedsSavedTasteEvenWhenCurrentRequestHasCriteria(String criteria)
+      throws Exception {
+    var request = personalisedRequest();
+    request.setExplicitSearch(true);
+    if (criteria.equals("constraints") || criteria.equals("both")) {
+      var include = new ExactCriteria();
+      include.setAuthors(List.of("Suzanne Collins"));
+      request.setMustInclude(include);
+    }
+    if (criteria.equals("semantic") || criteria.equals("both")) {
+      var query = new SemanticQuery();
+      query.setGenres(List.of("fantasy"));
+      request.setPositiveSemanticQuery(query);
+    }
+    var result = process(request);
+    assertThat(result.isPreferenceClarificationRequired()).isTrue();
+    assertThat(result.getRecommendations()).isEmpty();
+    assertThat(responseGenerator.generate(result.getRecommendations(), result))
+        .isEqualTo("What genres do you like?");
+    verifyNoInteractions(books, embeddingModel, ranker);
+    var answer = new ConversationDraft();
+    answer.setIntent(Intent.REFINE);
+    var taste = new SemanticQuery();
+    taste.setGenres(List.of("adventure"));
+    answer.setPositiveSemanticQuery(taste);
+    var resumed = process(answer);
+    assertThat(resumed.isPreferenceClarificationRequired()).isFalse();
+    assertThat(resumed.getRecommendations()).hasSize(1);
+    if (criteria.equals("constraints") || criteria.equals("both")) {
+      assertThat(resumed.getMustInclude().getAuthors()).containsExactly("Suzanne Collins");
+    }
+    if (criteria.equals("semantic") || criteria.equals("both")) {
+      assertThat(resumed.getPositiveSemanticQuery().getGenres()).contains("fantasy", "adventure");
+    }
+    assertThat(sessions.getSession("session", "user").getPreferences()).isNotNull();
+  }
+
+  @Test
+  void horrorAnswerIsSavedAndReusedAfterSessionReload() {
+    assertThat(process(personalisedRequest()).isPreferenceClarificationRequired()).isTrue();
+    var ai = mock(com.gen3.recommenderagent.inputparser.AiParser.class);
+    var parsed = new com.gen3.recommenderagent.inputparser.ParsedRequest();
+    parsed.setIntent(Intent.RECOMMENDATION);
+    var query = new SemanticQuery();
+    query.setGenres(List.of("horror"));
+    parsed.setPositiveSemanticQuery(query);
+    when(ai.parse("horror")).thenReturn(parsed);
+    var parser =
+        new com.gen3.recommenderagent.inputparser.InputParser(
+            new com.gen3.recommenderagent.inputparser.CommandParser(), ai);
+    var result = application.process("session", "user", parser.parse("horror"));
+    assertThat(result.getRecommendations()).hasSize(1);
+    assertThat(result.isPreferenceClarificationRequired()).isFalse();
+    var mapper = JsonMapper.builder().build();
+    var restored =
+        mapper.readValue(
+            mapper.writeValueAsString(sessions.getSession("session", "user")), Session.class);
+    assertThat(restored.getPreferences().getPositiveSemanticQuery().getGenres())
+        .containsExactly("horror");
+    sessions.updateSession(restored);
+    assertThat(process(personalisedRequest()).isPreferenceClarificationRequired()).isFalse();
+    assertThat(
+            sessions
+                .getSession("session", "user")
+                .getPreferences()
+                .getPositiveSemanticQuery()
+                .getGenres())
+        .containsExactly("horror");
+  }
+
   @Test
   void genericRequestForKnownUserUsesStoredTaste() throws Exception {
     when(users.findEmbeddingByUserId("user"))
@@ -191,8 +264,7 @@ class PersonalisedRecommendationFlowTest {
 
     assertThat(first.getRecommendations()).isEmpty();
     assertThat(responseGenerator.generate(first.getRecommendations(), first))
-        .isEqualTo(
-            "I'd love to find something you'll enjoy. What genres, authors, or narrators do you like?");
+        .isEqualTo("What genres do you like?");
     verifyNoInteractions(books, embeddingModel, ranker);
     assertThat(sessions.getSession("session", "user").isAwaitingPersonalisedPreferences()).isTrue();
 
@@ -431,14 +503,13 @@ class PersonalisedRecommendationFlowTest {
   }
 
   @Test
-  void negativeSemanticTasteAlsoSatisfiesPersonalisation() throws Exception {
+  void negativeTasteInFirstRequestStillAsksForSavedPreferences() throws Exception {
     var request = personalisedRequest();
     var avoided = new SemanticQuery();
     avoided.setGenres(List.of("romance"));
     request.setNegativeSemanticQuery(avoided);
-    assertThat(process(request).isPreferenceClarificationRequired()).isFalse();
-    verify(embeddingModel).embedForResponse(List.of("Genres: romance"));
-    verify(books).searchSemantic(any(), eq(AudiobookFilters.empty()), eq(50));
+    assertThat(process(request).isPreferenceClarificationRequired()).isTrue();
+    verifyNoInteractions(books, embeddingModel, ranker);
   }
 
   @Test

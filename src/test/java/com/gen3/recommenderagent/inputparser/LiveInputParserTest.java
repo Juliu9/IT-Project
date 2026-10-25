@@ -32,6 +32,7 @@ class LiveInputParserTest {
   @ParameterizedTest
   @CsvSource({
     "Which operations do you support,HELP,,",
+    "Start my session preferences and recommendation count over from scratch,RESET_PREFERENCES,,",
     "Could you explain how this service works,HELP,,",
     "the second one’s reason,EXPLAIN_RECOMMENDATION,2,",
     "the second one's reason,EXPLAIN_RECOMMENDATION,2,",
@@ -163,6 +164,15 @@ class LiveInputParserTest {
     assertThat(result.getMustInclude().getAuthors()).hasSize(1);
     assertThat(result.getMustInclude().getAuthors().getFirst())
         .isEqualToIgnoringCase("Suzanne Collins");
+  }
+
+  @org.junit.jupiter.api.Test
+  void bareHorrorIsATasteReplyRatherThanAnExplicitNewSearch() {
+    var result = parser.parse("horror");
+    assertThat(result.getIntent()).isIn(Intent.RECOMMENDATION, Intent.REFINE);
+    assertThat(result.isExplicitSearch()).isFalse();
+    assertThat(result.getPositiveSemanticQuery()).isNotNull();
+    assertThat(result.getPositiveSemanticQuery().getGenres()).contains("horror");
   }
 
   @Configuration(proxyBeanMethods = false)

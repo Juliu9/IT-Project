@@ -159,6 +159,12 @@ completes the update without retrieving books. Explicit search commands (`explic
 normal recommendation work instead; cancel and clear-history end the pending update. Numeric
 answers to a newer book-selection or count question take priority over an older preference question.
 
+`RESET_PREFERENCES` clears saved session preferences and pending preference questions, and resets
+the result count to 5. It preserves stored user vectors, shown-book history, the displayed page,
+and the remaining cached batch. MORE uses the reset count; REPEAT_RECOMMENDATIONS retains the old
+page. Replies to a personalised taste question (for example "horror") are saved in SessionPreferences
+when the pending search resumes, so later personalised requests reuse them.
+
 Successful updates change only session preferences and the replay acknowledgement. They preserve the
 latest displayed page, shown IDs, search history and pending batch. Both repeat modes remain usable.
 New `RECOMMENDATION`/`REFINE` requests combine explicit `searchCriteria` with the latest preferences.
@@ -204,7 +210,11 @@ For personalised retrieval with stored taste:
 If either positive source is absent, the other contributes at full strength. Exact filters are
 never relaxed to fill the result count.
 
-Without stored user vectors, personalised retrieval requires positive or negative semantic taste.
+A first personalised request without stored user vectors or saved session preferences asks
+"What genres do you like?", even if that request includes semantic criteria or exact constraints.
+It does not embed or retrieve candidates until the user answers. The answer supplies taste and
+resumes the retained search. With saved preferences, positive or negative semantic taste is
+still required when no user vectors exist.
 Exact constraints remain mandatory filters and are never embedded as a substitute for taste. Short
 answers to the taste question merge with the pending search and retain its count; explicit searches
 abandon it. Corrections and contradictions use the existing exact-filter policy before retrieval.
@@ -352,7 +362,7 @@ personalisation.
 ## Semantic information and control intents
 
 Supported intents are `RECOMMENDATION`, `REFINE`, `MORE_RESULTS`, `REPEAT`, `REPEAT_RECOMMENDATIONS`, `CHANGE_COUNT`,
-`EXPLAIN_RECOMMENDATION`, `UPDATE_PREFERENCES`, `CLEAR_HISTORY`, `HELP`, `CANCEL`, and `UNKNOWN`.
+`EXPLAIN_RECOMMENDATION`, `UPDATE_PREFERENCES`, `RESET_PREFERENCES`, `CLEAR_HISTORY`, `HELP`, `CANCEL`, and `UNKNOWN`.
 
 Only `RECOMMENDATION` and `REFINE` accept newly parsed positive/negative semantic queries or the
 personalised flag. Other intents discard these fields. `MORE_RESULTS`, `REPEAT_RECOMMENDATIONS`, and

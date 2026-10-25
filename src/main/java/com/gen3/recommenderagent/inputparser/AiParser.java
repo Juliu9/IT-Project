@@ -80,6 +80,7 @@ public class AiParser {
                         "make them shorter" -> REFINE, shorter=true, explicitSearch=true; no invented genre or hour limit.
                         shorter=true only compares previous results' runtimes without an explicit numeric limit; Java uses their durations.
                         shorter refers to runtime, not response length. Never invent genres or numeric limits for an underspecified refinement.
+                        RESET_PREFERENCES=reset all session preferences and recommendation count to defaults; clearing one field is UPDATE_PREFERENCES.
                         CLEAR_HISTORY=clear history; CANCEL=abandon pending action;
                         UNKNOWN=unsupported/unrecognised, never a capability question.
 
@@ -102,7 +103,7 @@ public class AiParser {
                         Preserve contradictions. Author/narrator lists replace by default; addAuthors/addNarrators=true only for explicit additions.
                         personalised=true for taste/favourites/history or generic recommendations without criteria; never invent taste.
                         Personalisation never removes stated criteria: "books I would like by Suzanne Collins" -> personalised=true, mustInclude.authors=["Suzanne Collins"].
-                        explicitSearch=true for explicit search commands, false for short taste replies.
+                        explicitSearch=true for explicit new-search commands; bare taste replies like "horror" are RECOMMENDATION/REFINE with explicitSearch=false, never UPDATE_PREFERENCES.
                         bookCount=null unless a recommendation count is requested ("2 more" -> MORE_RESULTS, bookCount=2).
                         Explanation ordinals select ONE book: "the second one’s reason" -> referenceRank=2; "why the sixth book" -> referenceRank=6; intent=EXPLAIN_RECOMMENDATION, omit bookCount.
                         Preserve only explicitly stated rank (even invalid) or title in referenceRank/referenceTitle.

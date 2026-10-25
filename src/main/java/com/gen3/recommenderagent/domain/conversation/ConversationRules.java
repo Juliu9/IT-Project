@@ -70,6 +70,7 @@ public final class ConversationRules {
                       ? ConversationDecision.COUNT_CLARIFICATION
                       : ConversationDecision.COUNT_CHANGED;
               case UPDATE_PREFERENCES -> ConversationDecision.PREFERENCES_UPDATED;
+              case RESET_PREFERENCES -> ConversationDecision.PREFERENCES_RESET;
               case CLEAR_HISTORY -> ConversationDecision.HISTORY_CLEARED;
               case HELP -> ConversationDecision.HELP;
               case CANCEL -> ConversationDecision.CANCELLED;

@@ -10,7 +10,12 @@ import java.util.List;
 public final class SessionActionHandler implements ConversationHandler {
   public java.util.Set<Intent> intents() {
     return java.util.Set.of(
-        Intent.CHANGE_COUNT, Intent.CLEAR_HISTORY, Intent.HELP, Intent.CANCEL, Intent.UNKNOWN);
+        Intent.CHANGE_COUNT,
+        Intent.RESET_PREFERENCES,
+        Intent.CLEAR_HISTORY,
+        Intent.HELP,
+        Intent.CANCEL,
+        Intent.UNKNOWN);
   }
 
   public ConversationDraft resolve(Session session, ConversationDraft input) {
@@ -31,6 +36,15 @@ public final class SessionActionHandler implements ConversationHandler {
       }
       case CANCEL -> {
         session.setPendingSimilarBook(null);
+        session.setAwaitingPreferenceUpdate(false);
+        session
+            .getRequests()
+            .forEach(previous -> previous.setPreferenceClarificationRequired(false));
+      }
+      case RESET_PREFERENCES -> {
+        session.setPreferences(null);
+        session.setBookCount(null);
+        request.setBookCount(session.getBookCount());
         session.setAwaitingPreferenceUpdate(false);
         session
             .getRequests()
