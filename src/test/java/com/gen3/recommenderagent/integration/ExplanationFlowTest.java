@@ -17,6 +17,9 @@ import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.ConversationTurn;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
+import com.gen3.recommenderagent.inputparser.AiParser;
+import com.gen3.recommenderagent.inputparser.CommandParser;
+import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
 import com.gen3.recommenderagent.response.ConversationResponseGenerator;
 import java.util.List;
@@ -61,6 +64,26 @@ class ExplanationFlowTest {
   }
 
   @ParameterizedTest
+  @ValueSource(strings = {"why these recommendations", "why did I get these recommendations?"})
+  void wholePagePhrasesExplainEveryDisplayedBookWithoutAiParsing(String text) throws Exception {
+    search();
+    var client = mock(org.springframework.ai.chat.client.ChatClient.class);
+    var parser =
+        new InputParser(
+            new CommandParser(),
+            new AiParser(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
+    var result = service.process("session", "user", parser.parse(text));
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(result.getReferenceRank()).isNull();
+    assertThat(result.getReferenceTitle()).isNull();
+    assertThat(result.getRecommendations())
+        .extracting(Recommendation::getRank)
+        .containsExactly(1, 2, 3, 4, 5);
+    verifyNoInteractions(client);
+  }
+
+  @ParameterizedTest
   @ValueSource(ints = {1, 5})
   void bareExplainUsesTheDisplayedPageWithoutAiParsing(int requestedCount) throws Exception {
     search();
@@ -78,8 +101,10 @@ class ExplanationFlowTest {
     String before = saved();
     var client = mock(org.springframework.ai.chat.client.ChatClient.class);
     var parser =
-        new com.gen3.recommenderagent.inputparser.AiInputParser(
-            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+        new InputParser(
+            new CommandParser(),
+            new AiParser(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
     var result = service.process("session", "user", parser.parse("explain"));
     assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
     assertThat(result.getRecommendations())
@@ -97,8 +122,10 @@ class ExplanationFlowTest {
   void bareExplainWithoutHistoryReturnsTheExistingFallback() {
     var client = mock(org.springframework.ai.chat.client.ChatClient.class);
     var parser =
-        new com.gen3.recommenderagent.inputparser.AiInputParser(
-            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+        new InputParser(
+            new CommandParser(),
+            new AiParser(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
     var result = service.process("session", "user", parser.parse("explain"));
     assertThat(result.getDecision()).isEqualTo(ConversationDecision.NOTHING_TO_EXPLAIN);
     verifyNoInteractions(client, workflow);
@@ -204,8 +231,10 @@ class ExplanationFlowTest {
     explain(null, "Harry Potter");
     var client = mock(org.springframework.ai.chat.client.ChatClient.class);
     var parser =
-        new com.gen3.recommenderagent.inputparser.AiInputParser(
-            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+        new InputParser(
+            new CommandParser(),
+            new AiParser(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
     var result = service.process("session", "user", parser.parse(text));
     assertThat(result.getDecision()).isEqualTo(expected);
     if (expected == ConversationDecision.RECOMMENDATIONS) {
@@ -463,14 +492,17 @@ class ExplanationFlowTest {
   void apiClarifiesThenExplainsSelectionWithoutReplacingThePage(String reply) throws Exception {
     search();
     String before = saved();
-    com.gen3.recommenderagent.inputparser.InputParser parser =
-        raw -> {
-          var request = new ConversationDraft();
-          request.setIntent(raw.equals("1") ? Intent.UNKNOWN : Intent.EXPLAIN_RECOMMENDATION);
-          request.setReferenceRank(raw.contains("sixth") ? 6 : 4);
-          request.setRawText(raw);
-          return request;
-        };
+    InputParser parser = mock(InputParser.class);
+    when(parser.parse(any()))
+        .thenAnswer(
+            invocation -> {
+              String raw = invocation.getArgument(0);
+              var request = new ConversationDraft();
+              request.setIntent(raw.equals("1") ? Intent.UNKNOWN : Intent.EXPLAIN_RECOMMENDATION);
+              request.setReferenceRank(raw.contains("sixth") ? 6 : 4);
+              request.setRawText(raw);
+              return request;
+            });
     var gateway = new com.gen3.recommenderagent.api.RequestGateway(parser, service, responses);
     var mvc =
         org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(gateway).build();
@@ -539,8 +571,10 @@ class ExplanationFlowTest {
                                 + number
                                 + "}")));
     var parser =
-        new com.gen3.recommenderagent.inputparser.AiInputParser(
-            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+        new InputParser(
+            new CommandParser(),
+            new AiParser(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
     var gateway = new com.gen3.recommenderagent.api.RequestGateway(parser, service, responses);
     var mvc =
         org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(

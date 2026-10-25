@@ -1,17 +1,7 @@
 package com.gen3.recommenderagent.inputparser;
 
 import com.gen3.recommenderagent.ai.AiProviderCalls;
-import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.conversation.ConversationRules;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
-import java.math.BigInteger;
-import java.security.SecureRandom;
-import java.util.Locale;
-import java.util.UUID;
-import java.util.concurrent.TimeUnit;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ResponseEntity;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -26,7 +16,7 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 @Component
-public class AiInputParser implements InputParser {
+public class AiParser {
   static final BeanOutputConverter<ParsedRequest> REQUEST_CONVERTER =
       new BeanOutputConverter<>(
           ParsedRequest.class,
@@ -50,171 +40,22 @@ public class AiInputParser implements InputParser {
     }
   }
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(AiInputParser.class);
-
-  private static final SecureRandom RANDOM = new SecureRandom();
-
   private final ChatClient chatClient;
   private final AiOperationObserver aiOperationObserver;
 
   @Autowired
-  public AiInputParser(
+  public AiParser(
       @Qualifier("inputParserChatClient") ChatClient chatClient,
       AiOperationObserver aiOperationObserver) {
     this.chatClient = chatClient;
     this.aiOperationObserver = aiOperationObserver;
   }
 
-  public AiInputParser(ChatClient.Builder chatClientBuilder) {
+  public AiParser(ChatClient.Builder chatClientBuilder) {
     this(chatClientBuilder != null ? chatClientBuilder.build() : null, AiOperationObserver.noop());
   }
 
-  @Override
-  public SessionRequest parse(String rawText) {
-    long started = System.nanoTime();
-    String mode = "VALIDATION";
-    String outcome = "FAILURE";
-    try {
-      if (rawText == null || rawText.isBlank()) {
-        throw new InvalidRequestException("I didn't catch that. What would you like to listen to?");
-      }
-
-      if (rawText.length() > InputParser.MAX_REQUEST_CHARACTERS) {
-        throw new InvalidRequestException(
-            "Please keep your request to "
-                + InputParser.MAX_REQUEST_CHARACTERS
-                + " characters or fewer.");
-      }
-
-      Intent command = exactCommand(rawText);
-      mode = command == null ? "AI" : "FAST_PATH";
-      ParsedRequest parsed;
-      if (command == null) {
-        parsed = parseWithAi(rawText);
-      } else {
-        parsed = new ParsedRequest();
-        parsed.setIntent(command);
-      }
-
-      SessionRequest request = new SessionRequest();
-      request.setIntent(parsed.getIntent());
-      request.setPreferenceUpdates(parsed.getPreferenceUpdates());
-      request.setPreferenceRemovals(parsed.getPreferenceRemovals());
-      request.setReplacePreferenceFields(parsed.getReplacePreferenceFields());
-      request.setExplicitSearch(parsed.isExplicitSearch());
-      request.setAddAuthors(parsed.isAddAuthors());
-      request.setAddNarrators(parsed.isAddNarrators());
-      request.setReferenceRank(boundedInteger(parsed.getReferenceRank()));
-      request.setReferenceTitle(parsed.getReferenceTitle());
-      request.setPersonalised(parsed.isPersonalised());
-      request.setPositiveSemanticQuery(parsed.getPositiveSemanticQuery());
-      request.setNegativeSemanticQuery(parsed.getNegativeSemanticQuery());
-      ConversationRules.normalizeInput(request);
-      request.setMustInclude(parsed.getMustInclude());
-      request.setMustNotInclude(parsed.getMustNotInclude());
-      request.setBookCount(boundedInteger(parsed.getBookCount()));
-      request.setRequestId(createUuidV7().toString());
-      request.setRawText(rawText);
-
-      outcome = "SUCCESS";
-      return request;
-    } finally {
-      LOGGER.info(
-          "parser.completed mode={} outcome={} durationMs={}",
-          mode,
-          outcome,
-          TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
-    }
-  }
-
-  private Intent exactCommand(String rawText) {
-    String command =
-        rawText
-            .strip()
-            .toLowerCase(Locale.ROOT)
-            .replace('’', '\'')
-            .replace('‘', '\'')
-            .replaceAll("\\b(?:please|kindly)\\b", " ")
-            .replaceAll("(?U)\\s+", " ")
-            .strip()
-            .replaceFirst(
-                "^(?:(?:hi|hello|hey|sorry|excuse me|just|can you|could you|would you)[\\s,!.?…–—:;]+)+",
-                "")
-            .replaceFirst(
-                "(?:[\\s,!.?…–—:;]+(?:cheers|ta|many thanks|thanks|thank you(?: very much)?))+[\\s,!.?…–—:;]*$",
-                "")
-            .replaceFirst("[.!?,…]+$", "")
-            .stripTrailing();
-    return switch (command) {
-      case "help",
-          "show help",
-          "what can you do",
-          "what else can you do",
-          "what do you do",
-          "how do i use this",
-          "how does this work",
-          "what can i ask" ->
-          Intent.HELP;
-      case "more",
-          "some more",
-          "more recommendations",
-          "more books",
-          "more audiobooks",
-          "show me more",
-          "give me more",
-          "can i have more",
-          "can i have some more",
-          "could i have more",
-          "could i have some more",
-          "next",
-          "next batch",
-          "next page" ->
-          Intent.MORE_RESULTS;
-      case "repeat",
-          "repeat that",
-          "say that again",
-          "say it again",
-          "repeat yourself",
-          "repeat your last response",
-          "repeat the last response",
-          "repeat your last answer" ->
-          Intent.REPEAT;
-      case "repeat the books",
-          "repeat the recommendations",
-          "repeat recommendations",
-          "repeat the audiobooks",
-          "repeat those books",
-          "repeat those recommendations",
-          "show those recommendations again",
-          "show me the recommendations again",
-          "show those books again" ->
-          Intent.REPEAT_RECOMMENDATIONS;
-      case "explain",
-          "explain the recommendations",
-          "explain these recommendations",
-          "why these books",
-          "why these recommendations",
-          "why were these books recommended" ->
-          Intent.EXPLAIN_RECOMMENDATION;
-      case "clear history",
-          "clear my history",
-          "clear recommendation history",
-          "clear my recommendation history" ->
-          Intent.CLEAR_HISTORY;
-      case "cancel",
-          "cancel that",
-          "cancel this",
-          "cancel the request",
-          "never mind",
-          "nevermind",
-          "stop",
-          "forget it" ->
-          Intent.CANCEL;
-      default -> null;
-    };
-  }
-
-  private ParsedRequest parseWithAi(String rawText) {
+  public ParsedRequest parse(String rawText) {
     ResponseEntity<ChatResponse, ParsedRequest> aiResponse;
     try {
       aiResponse =
@@ -246,7 +87,8 @@ public class AiInputParser implements InputParser {
                         explicitSearch=true for explicit search commands, false for short taste replies.
                         bookCount=null unless a recommendation count is requested ("2 more" -> MORE_RESULTS, bookCount=2).
                         Explanation ordinals select ONE book: "the second one’s reason" -> EXPLAIN_RECOMMENDATION, referenceRank=2, bookCount=null.
-                        Preserve stated rank (even invalid) and title in referenceRank/referenceTitle; both null=whole page.
+                        Preserve only explicitly stated rank (even invalid) or title in referenceRank/referenceTitle.
+                        "Why did I get these recommendations?" and other whole-page explanations omit both references; never default to rank 1.
                         References are explanation-only; bare ordinals are not explanation requests.
 
                         Filters:
@@ -278,26 +120,5 @@ public class AiInputParser implements InputParser {
     }
 
     return aiResponse.entity();
-  }
-
-  // Keep oversized model numbers invalid without overflowing into a valid rank or count.
-  private Integer boundedInteger(BigInteger value) {
-    return value == null
-        ? null
-        : value
-            .max(BigInteger.valueOf(Integer.MIN_VALUE))
-            .min(BigInteger.valueOf(Integer.MAX_VALUE))
-            .intValue();
-  }
-
-  private UUID createUuidV7() {
-    long timestamp = System.currentTimeMillis() & 0xFFFFFFFFFFFFL;
-    long randomA = RANDOM.nextLong() & 0x0FFFL;
-    long randomB = RANDOM.nextLong() & 0x3FFFFFFFFFFFFFFFL;
-
-    long mostSignificantBits = (timestamp << 16) | 0x7000L | randomA;
-    long leastSignificantBits = 0x8000000000000000L | randomB;
-
-    return new UUID(mostSignificantBits, leastSignificantBits);
   }
 }

@@ -9,7 +9,9 @@ import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
-import com.gen3.recommenderagent.inputparser.AiInputParser;
+import com.gen3.recommenderagent.inputparser.AiParser;
+import com.gen3.recommenderagent.inputparser.CommandParser;
+import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -24,7 +26,11 @@ class AiProviderBoundaryTest {
     ChatClient client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(client.prompt().system(anyString()).user(anyString()).call())
         .thenThrow(new ResourceAccessException("private connection detail"));
-    assertThatThrownBy(() -> new AiInputParser(client, AiOperationObserver.noop()).parse("fantasy"))
+    assertThatThrownBy(
+            () ->
+                new InputParser(
+                        new CommandParser(), new AiParser(client, AiOperationObserver.noop()))
+                    .parse("fantasy"))
         .isInstanceOf(AiProviderException.class)
         .hasCauseInstanceOf(ResourceAccessException.class);
   }

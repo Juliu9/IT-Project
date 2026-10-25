@@ -68,7 +68,7 @@ class LiveInputParserTest {
   @Configuration(proxyBeanMethods = false)
   @Profile("live-parser-evaluation")
   @EnableAutoConfiguration
-  @Import({ChatClientConfiguration.class, AiInputParser.class})
+  @Import({ChatClientConfiguration.class, AiParser.class, InputParser.class, CommandParser.class})
   static class Config {
     @Bean
     AiOperationObserver aiOperationObserver() {

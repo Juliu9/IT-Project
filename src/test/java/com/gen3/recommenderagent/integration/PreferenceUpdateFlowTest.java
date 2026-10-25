@@ -26,6 +26,9 @@ import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectors;
+import com.gen3.recommenderagent.inputparser.AiParser;
+import com.gen3.recommenderagent.inputparser.CommandParser;
+import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import com.gen3.recommenderagent.ranker.Ranker;
 import com.gen3.recommenderagent.ranker.RankingContext;
@@ -183,8 +186,10 @@ class PreferenceUpdateFlowTest {
                         any()))
         .thenReturn(new org.springframework.ai.chat.client.ResponseEntity<>(null, parsed));
     var parser =
-        new com.gen3.recommenderagent.inputparser.AiInputParser(
-            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+        new InputParser(
+            new CommandParser(),
+            new AiParser(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
     var request = parser.parse(raw);
     assertThat(request.getPreferenceUpdates()).isNull();
     var result = service.process("session", "user", request);

@@ -7,7 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.Recommendation;
-import com.gen3.recommenderagent.inputparser.AiInputParser;
+import com.gen3.recommenderagent.inputparser.AiParser;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
 import com.gen3.recommenderagent.response.ConversationResponseGenerator;
@@ -46,7 +46,9 @@ class ChatClientConfigurationTest {
     new ApplicationContextRunner()
         .withUserConfiguration(
             ChatClientConfiguration.class,
-            AiInputParser.class,
+            AiParser.class,
+            com.gen3.recommenderagent.inputparser.InputParser.class,
+            com.gen3.recommenderagent.inputparser.CommandParser.class,
             AiResponseGenerator.class,
             ConversationResponseGenerator.class)
         .withBean(ChatClient.Builder.class, () -> shared)
@@ -56,7 +58,10 @@ class ChatClientConfigurationTest {
         .run(
             context -> {
               assertThat(context).hasNotFailed();
-              var parsed = context.getBean(AiInputParser.class).parse("Find an audiobook");
+              var parsed =
+                  context
+                      .getBean(com.gen3.recommenderagent.inputparser.InputParser.class)
+                      .parse("Find an audiobook");
               assertThat(parsed.getIntent()).isEqualTo(Intent.RECOMMENDATION);
               Recommendation recommendation = new Recommendation();
               recommendation.setTitle("Book");

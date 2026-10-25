@@ -13,7 +13,7 @@ skinparam wrapWidth 180
 actor User
 package "recommenderagent — live requests" {
   component "RequestGateway\nCoordinates the request" as Gateway #DBEAFE
-  component "AiInputParser\nText → intent + criteria" as Parser #DBEAFE
+  component "InputParser\nText → intent + criteria" as Parser #DBEAFE
   component "SessionTransitionService\nOwns session transaction" as Session #DBEAFE
   component "ConversationEngine + intent handlers\nResolve, validate and page" as Engine #DBEAFE
   component "AudiobookRecommendationWorkflow\nBuilds a new recommendation batch" as Workflow #DCFCE7

@@ -25,7 +25,7 @@ import tools.jackson.databind.ObjectMapper;
 class InputParserTest {
   @Test
   void parserSchemaRequiresOnlyIntentIncludingInsideNestedCriteria() {
-    var schema = new ObjectMapper().readTree(AiInputParser.REQUEST_CONVERTER.getJsonSchema());
+    var schema = new ObjectMapper().readTree(AiParser.REQUEST_CONVERTER.getJsonSchema());
     org.assertj.core.api.Assertions.assertThat(schema.path("required"))
         .containsExactly(new ObjectMapper().readTree("\"intent\""));
     org.assertj.core.api.Assertions.assertThat(schema.findValues("required")).hasSize(1);
@@ -96,13 +96,15 @@ class InputParserTest {
             .system(anyString())
             .user(text)
             .call()
-            .responseEntity(AiInputParser.REQUEST_CONVERTER))
+            .responseEntity(AiParser.REQUEST_CONVERTER))
         .thenReturn(
             new ResponseEntity<ChatResponse, ParsedRequest>(
-                null, AiInputParser.REQUEST_CONVERTER.convert(json)));
+                null, AiParser.REQUEST_CONVERTER.convert(json)));
     var request =
-        new AiInputParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
+        new InputParser(
+                new CommandParser(),
+                new AiParser(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse(text);
     org.mockito.Mockito.verify(client.prompt())
         .system(
@@ -116,7 +118,7 @@ class InputParserTest {
   @Test
   void mapsPreferenceEditsWithoutPuttingThemInControlSearchSemantics() {
     var parsed =
-        AiInputParser.REQUEST_CONVERTER.convert(
+        AiParser.REQUEST_CONVERTER.convert(
             """
         {"intent":"UPDATE_PREFERENCES",
          "preferenceUpdates":{"negativeSemanticQuery":{"genres":["romance"]}},
@@ -129,11 +131,13 @@ class InputParserTest {
             .system(anyString())
             .user("avoid romance and any language is fine")
             .call()
-            .responseEntity(AiInputParser.REQUEST_CONVERTER))
+            .responseEntity(AiParser.REQUEST_CONVERTER))
         .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
     var result =
-        new AiInputParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
+        new InputParser(
+                new CommandParser(),
+                new AiParser(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse("avoid romance and any language is fine");
     assertEquals(Intent.UPDATE_PREFERENCES, result.getIntent());
     assertEquals(null, result.getPositiveSemanticQuery());
@@ -157,11 +161,13 @@ class InputParserTest {
             .system(anyString())
             .user("fantasy under five hours")
             .call()
-            .responseEntity(AiInputParser.REQUEST_CONVERTER))
+            .responseEntity(AiParser.REQUEST_CONVERTER))
         .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
     var result =
-        new AiInputParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
+        new InputParser(
+                new CommandParser(),
+                new AiParser(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse("fantasy under five hours");
     assertEquals(Intent.RECOMMENDATION, result.getIntent());
     org.junit.jupiter.api.Assertions.assertTrue(result.isAddAuthors());
@@ -220,6 +226,16 @@ class InputParserTest {
     "explain these recommendations,EXPLAIN_RECOMMENDATION",
     "why these books,EXPLAIN_RECOMMENDATION",
     "why these recommendations,EXPLAIN_RECOMMENDATION",
+    "why those recommendations,EXPLAIN_RECOMMENDATION",
+    "why did i get these recommendations,EXPLAIN_RECOMMENDATION",
+    "why did i get these books,EXPLAIN_RECOMMENDATION",
+    "why did you recommend these books,EXPLAIN_RECOMMENDATION",
+    "why did you recommend these audiobooks,EXPLAIN_RECOMMENDATION",
+    "why did you recommend these,EXPLAIN_RECOMMENDATION",
+    "why were these recommended,EXPLAIN_RECOMMENDATION",
+    "why were these audiobooks recommended,EXPLAIN_RECOMMENDATION",
+    "explain all the recommendations,EXPLAIN_RECOMMENDATION",
+    "explain these books,EXPLAIN_RECOMMENDATION",
     "why were these books recommended,EXPLAIN_RECOMMENDATION",
     "clear history,CLEAR_HISTORY",
     "clear my history,CLEAR_HISTORY",
@@ -238,8 +254,10 @@ class InputParserTest {
   void exactCommandsSkipAiAndPreserveRequestMetadata(String text, Intent intent) {
     var client = mock(ChatClient.class);
     var parser =
-        new AiInputParser(
-            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+        new InputParser(
+            new CommandParser(),
+            new AiParser(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
     for (String raw :
         List.of(
             text,
@@ -255,6 +273,7 @@ class InputParserTest {
       assertEquals(7, UUID.fromString(result.getRequestId()).version());
       assertEquals(null, result.getBookCount());
       assertEquals(null, result.getReferenceRank());
+      assertEquals(null, result.getReferenceTitle());
       assertEquals(null, result.getPositiveSemanticQuery());
       assertEquals(null, result.getNegativeSemanticQuery());
       assertEquals(false, result.isPersonalised());
@@ -305,23 +324,27 @@ class InputParserTest {
             .system(anyString())
             .user(text)
             .call()
-            .responseEntity(AiInputParser.REQUEST_CONVERTER))
+            .responseEntity(AiParser.REQUEST_CONVERTER))
         .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
     var result =
-        new AiInputParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
+        new InputParser(
+                new CommandParser(),
+                new AiParser(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse(text);
     assertEquals(Intent.UNKNOWN, result.getIntent());
     org.mockito.Mockito.verify(client.prompt().system(anyString()).user(text).call())
-        .responseEntity(AiInputParser.REQUEST_CONVERTER);
+        .responseEntity(AiParser.REQUEST_CONVERTER);
   }
 
   @Test
   void ignoresPolitenessInsideACommandWithoutChangingItsRepeatMeaning() {
     var client = mock(ChatClient.class);
     var parser =
-        new AiInputParser(
-            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+        new InputParser(
+            new CommandParser(),
+            new AiParser(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
     assertEquals(
         Intent.REPEAT_RECOMMENDATIONS,
         parser.parse("repeat please the recommendations").getIntent());
@@ -342,11 +365,13 @@ class InputParserTest {
             .system(anyString())
             .user(text)
             .call()
-            .responseEntity(AiInputParser.REQUEST_CONVERTER))
+            .responseEntity(AiParser.REQUEST_CONVERTER))
         .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
     var result =
-        new AiInputParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
+        new InputParser(
+                new CommandParser(),
+                new AiParser(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse(text);
     assertEquals(Intent.EXPLAIN_RECOMMENDATION, result.getIntent());
     assertEquals(2, result.getReferenceRank());
@@ -371,11 +396,13 @@ class InputParserTest {
             .system(anyString())
             .user("why")
             .call()
-            .responseEntity(AiInputParser.REQUEST_CONVERTER))
+            .responseEntity(AiParser.REQUEST_CONVERTER))
         .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
     var result =
-        new AiInputParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
+        new InputParser(
+                new CommandParser(),
+                new AiParser(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse("why");
     assertEquals(Intent.EXPLAIN_RECOMMENDATION, result.getIntent());
     assertEquals(6, result.getReferenceRank());
@@ -388,7 +415,7 @@ class InputParserTest {
       strings = {"1008392481092349012389201382", "2147483648", "-2147483649"})
   void oversizedModelNumbersCannotOverflowRanksOrCounts(String number) {
     var parsed =
-        AiInputParser.REQUEST_CONVERTER.convert(
+        AiParser.REQUEST_CONVERTER.convert(
             "{\"intent\":\"EXPLAIN_RECOMMENDATION\",\"referenceRank\":"
                 + number
                 + ",\"bookCount\":"
@@ -401,11 +428,13 @@ class InputParserTest {
             .system(anyString())
             .user(raw)
             .call()
-            .responseEntity(AiInputParser.REQUEST_CONVERTER))
+            .responseEntity(AiParser.REQUEST_CONVERTER))
         .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
     var result =
-        new AiInputParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
+        new InputParser(
+                new CommandParser(),
+                new AiParser(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse(raw);
     assertEquals(
         number.startsWith("-") ? Integer.MIN_VALUE : Integer.MAX_VALUE, result.getReferenceRank());
@@ -423,20 +452,22 @@ class InputParserTest {
               .system(anyString())
               .user("bad number")
               .call()
-              .responseEntity(AiInputParser.REQUEST_CONVERTER))
+              .responseEntity(AiParser.REQUEST_CONVERTER))
           .thenAnswer(
               ignored ->
                   new ResponseEntity<>(
                       null,
-                      AiInputParser.REQUEST_CONVERTER.convert(
+                      AiParser.REQUEST_CONVERTER.convert(
                           "{\"intent\":\"EXPLAIN_RECOMMENDATION\",\""
                               + field
                               + "\":"
                               + value
                               + "}")));
       var parser =
-          new AiInputParser(
-              client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+          new InputParser(
+              new CommandParser(),
+              new AiParser(
+                  client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
       assertThrows(InvalidRequestException.class, () -> parser.parse("bad number"));
     }
   }
@@ -445,8 +476,10 @@ class InputParserTest {
   void rejectsOversizedInputBeforeCallingTheModel() {
     var client = mock(ChatClient.class);
     var parser =
-        new AiInputParser(
-            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+        new InputParser(
+            new CommandParser(),
+            new AiParser(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
     assertThrows(
         InvalidRequestException.class,
         () -> parser.parse("x".repeat(InputParser.MAX_REQUEST_CHARACTERS + 1)));
@@ -482,11 +515,11 @@ class InputParserTest {
             .system(anyString())
             .user("control")
             .call()
-            .responseEntity(AiInputParser.REQUEST_CONVERTER))
+            .responseEntity(AiParser.REQUEST_CONVERTER))
         .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
     var builder = mock(ChatClient.Builder.class);
     when(builder.build()).thenReturn(client);
-    var result = new AiInputParser(builder).parse("control");
+    var result = new InputParser(new CommandParser(), new AiParser(builder)).parse("control");
     assertEquals(null, result.getPositiveSemanticQuery());
     assertEquals(null, result.getNegativeSemanticQuery());
     assertEquals(false, result.isPersonalised());
@@ -510,14 +543,15 @@ class InputParserTest {
             .system(anyString())
             .user("Could you explain how this service works?")
             .call()
-            .responseEntity(AiInputParser.REQUEST_CONVERTER))
+            .responseEntity(AiParser.REQUEST_CONVERTER))
         .thenReturn(new ResponseEntity<>(response, parsed));
     var observer =
         new com.gen3.recommenderagent.observability.AiOperationObserver(
             new org.springframework.beans.factory.support.DefaultListableBeanFactory()
                 .getBeanProvider(org.springframework.core.retry.RetryTemplate.class));
     var result =
-        new AiInputParser(client, observer).parse("Could you explain how this service works?");
+        new InputParser(new CommandParser(), new AiParser(client, observer))
+            .parse("Could you explain how this service works?");
     assertEquals(Intent.HELP, result.getIntent());
     org.assertj.core.api.Assertions.assertThat(output.getOut())
         .contains(
@@ -538,16 +572,18 @@ class InputParserTest {
             .system(anyString())
             .user("2 more")
             .call()
-            .responseEntity(AiInputParser.REQUEST_CONVERTER))
+            .responseEntity(AiParser.REQUEST_CONVERTER))
         .thenAnswer(
             ignored ->
                 new ResponseEntity<>(
                     null,
-                    AiInputParser.REQUEST_CONVERTER.convert(
+                    AiParser.REQUEST_CONVERTER.convert(
                         "{\"intent\":\"MORE_RESULTS\",\"bookCount\":2}")));
     var result =
-        new AiInputParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
+        new InputParser(
+                new CommandParser(),
+                new AiParser(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse("2 more");
     assertEquals(Intent.MORE_RESULTS, result.getIntent());
     assertEquals(2, result.getBookCount());
@@ -577,11 +613,13 @@ class InputParserTest {
             .system(anyString())
             .user(raw)
             .call()
-            .responseEntity(AiInputParser.REQUEST_CONVERTER))
+            .responseEntity(AiParser.REQUEST_CONVERTER))
         .thenReturn(new ResponseEntity<>(null, parsed));
     var result =
-        new AiInputParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
+        new InputParser(
+                new CommandParser(),
+                new AiParser(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse(raw);
     assertEquals(window, result.getMustInclude().getPublicationYear());
     assertEquals(List.of("romance"), result.getPositiveSemanticQuery().getGenres());
@@ -607,12 +645,13 @@ class InputParserTest {
             .system(anyString())
             .user(rawText)
             .call()
-            .responseEntity(AiInputParser.REQUEST_CONVERTER))
+            .responseEntity(AiParser.REQUEST_CONVERTER))
         .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
     ChatClient.Builder builder = mock(ChatClient.Builder.class);
     when(builder.build()).thenReturn(client);
 
-    SessionRequest result = new AiInputParser(builder).parse(rawText);
+    SessionRequest result =
+        new InputParser(new CommandParser(), new AiParser(builder)).parse(rawText);
 
     assertEquals(true, result.isPersonalised());
     assertEquals(null, result.getPositiveSemanticQuery());
@@ -647,13 +686,14 @@ class InputParserTest {
             .system(anyString())
             .user(rawText)
             .call()
-            .responseEntity(AiInputParser.REQUEST_CONVERTER))
+            .responseEntity(AiParser.REQUEST_CONVERTER))
         .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsedRequest));
 
     ChatClient.Builder builder = mock(ChatClient.Builder.class);
     when(builder.build()).thenReturn(chatClient);
 
-    SessionRequest result = new AiInputParser(builder).parse(rawText);
+    SessionRequest result =
+        new InputParser(new CommandParser(), new AiParser(builder)).parse(rawText);
 
     assertNotNull(result);
     assertEquals(rawText, result.getRawText());
@@ -676,8 +716,10 @@ class InputParserTest {
       org.springframework.boot.test.system.CapturedOutput output) {
     var client = mock(ChatClient.class);
     var parser =
-        new AiInputParser(
-            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+        new InputParser(
+            new CommandParser(),
+            new AiParser(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
     parser.parse("help");
     org.assertj.core.api.Assertions.assertThat(output.getOut())
         .containsPattern("parser.completed mode=FAST_PATH outcome=SUCCESS durationMs=[0-9]+")
@@ -692,8 +734,10 @@ class InputParserTest {
       org.springframework.boot.test.system.CapturedOutput output) {
     var client = mock(ChatClient.class);
     var parser =
-        new AiInputParser(
-            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+        new InputParser(
+            new CommandParser(),
+            new AiParser(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
     assertThrows(InvalidRequestException.class, () -> parser.parse(" "));
     org.assertj.core.api.Assertions.assertThat(output.getOut())
         .containsPattern("parser.completed mode=VALIDATION outcome=FAILURE durationMs=[0-9]+")
@@ -705,8 +749,10 @@ class InputParserTest {
   void commandMatchingCannotBypassInputLengthValidation() {
     var client = mock(ChatClient.class);
     var parser =
-        new AiInputParser(
-            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+        new InputParser(
+            new CommandParser(),
+            new AiParser(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
     assertThrows(
         InvalidRequestException.class,
         () -> parser.parse("help" + " ".repeat(InputParser.MAX_REQUEST_CHARACTERS)));
@@ -719,7 +765,7 @@ class InputParserTest {
     ChatClient.Builder builder = mock(ChatClient.Builder.class);
     when(builder.build()).thenReturn(chatClient);
 
-    InputParser parser = new AiInputParser(builder);
+    InputParser parser = new InputParser(new CommandParser(), new AiParser(builder));
 
     InvalidRequestException exception =
         assertThrows(InvalidRequestException.class, () -> parser.parse("   "));
@@ -741,14 +787,16 @@ class InputParserTest {
             .system(anyString())
             .user(rawText)
             .call()
-            .responseEntity(AiInputParser.REQUEST_CONVERTER))
+            .responseEntity(AiParser.REQUEST_CONVERTER))
         .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, null));
 
     ChatClient.Builder builder = mock(ChatClient.Builder.class);
     when(builder.build()).thenReturn(chatClient);
 
     IllegalStateException exception =
-        assertThrows(IllegalStateException.class, () -> new AiInputParser(builder).parse(rawText));
+        assertThrows(
+            IllegalStateException.class,
+            () -> new InputParser(new CommandParser(), new AiParser(builder)).parse(rawText));
 
     assertEquals("AI did not return a ParsedRequest", exception.getMessage());
     org.assertj.core.api.Assertions.assertThat(output.getOut())
@@ -776,7 +824,7 @@ class InputParserTest {
   @Test
   void sharedExactCriteriaRetainsBothParserSchemaPropertiesAndLegacySessionJson() {
     var mapper = new ObjectMapper();
-    var schema = mapper.readTree(AiInputParser.REQUEST_CONVERTER.getJsonSchema());
+    var schema = mapper.readTree(AiParser.REQUEST_CONVERTER.getJsonSchema());
     for (String name : List.of("mustInclude", "mustNotInclude")) {
       var criteria = schema.path("properties").path(name);
       if (criteria.has("$ref")) {

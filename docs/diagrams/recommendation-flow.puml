@@ -8,7 +8,7 @@ hide footbox
 
 actor User
 participant RequestGateway as Gateway
-participant AiInputParser as Parser
+participant InputParser as Parser
 participant SessionTransitionService as Transition
 participant "ConversationEngine\nIntent handlers + RecommendationPager" as Engine
 participant "SessionRepository\nRedis adapter" as Sessions

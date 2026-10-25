@@ -43,14 +43,19 @@ class ResponseOrderingFlowTest {
             });
     var generating = new CountDownLatch(1);
     var release = new CountDownLatch(1);
-    var gateway =
-        new RequestGateway(
-            raw -> {
+    var parser = org.mockito.Mockito.mock(com.gen3.recommenderagent.inputparser.InputParser.class);
+    org.mockito.Mockito.when(parser.parse(org.mockito.ArgumentMatchers.anyString()))
+        .thenAnswer(
+            invocation -> {
+              String raw = invocation.getArgument(0);
               var request = new ConversationDraft();
               request.setIntent(Intent.MORE_RESULTS);
               request.setRawText(raw);
               return request;
-            },
+            });
+    var gateway =
+        new RequestGateway(
+            parser,
             service,
             (books, turn) -> {
               if (turn.getRawText().equals("first")) {

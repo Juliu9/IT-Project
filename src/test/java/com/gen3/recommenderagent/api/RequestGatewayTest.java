@@ -12,6 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.ConversationTurn;
+import com.gen3.recommenderagent.inputparser.AiParser;
+import com.gen3.recommenderagent.inputparser.CommandParser;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.gen3.recommenderagent.response.ResponseGenerator;
@@ -39,8 +41,10 @@ class RequestGatewayTest {
       boolean demo, org.springframework.boot.test.system.CapturedOutput output) {
     var client = mock(org.springframework.ai.chat.client.ChatClient.class);
     var parser =
-        new com.gen3.recommenderagent.inputparser.AiInputParser(
-            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+        new InputParser(
+            new CommandParser(),
+            new AiParser(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
     var completed = new ConversationTurn();
     completed.setIntent(com.gen3.recommenderagent.domain.Intent.HELP);
     when(sessionTransitionService.process(
@@ -284,8 +288,10 @@ class RequestGatewayTest {
   void returnsTheBlankInputFallbackWithoutModelOrSessionWork(String rawText) throws Exception {
     var model = mock(org.springframework.ai.chat.client.ChatClient.class);
     var realParser =
-        new com.gen3.recommenderagent.inputparser.AiInputParser(
-            model, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+        new InputParser(
+            new CommandParser(),
+            new AiParser(
+                model, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
     RequestGateway gateway =
         new RequestGateway(realParser, sessionTransitionService, responseGenerator, telemetry);
     MockMvc mockMvc =

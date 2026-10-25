@@ -7,7 +7,7 @@ For setup and commands, start with the [README](../README.md).
 
 ## Request pipeline
 
-1. `RequestGateway` accepts text plus user/session IDs. `AiInputParser` returns a structured
+1. `RequestGateway` accepts text plus user/session IDs. `InputParser` returns a structured
    `SessionRequest` through exact-command matching or model extraction.
 2. `SessionTransitionService` loads the session under its lock. `ConversationEngine` resolves the
    action through `ConversationDispatcher`, validates criteria, and requests a page only when needed.
@@ -249,8 +249,11 @@ The response generator consumes the resolved decision; direct callers without on
 
 ### Input parsing
 
-Exact commands skip the model but still use the normal session/conversation pipeline. The command
-switch in [`AiInputParser`](../src/main/java/com/gen3/recommenderagent/inputparser/AiInputParser.java)
+`InputParser` validates input, tries `CommandParser`, and falls back to `AiParser` when no exact
+command matches. It converts either result into a session request and logs the total parsing time.
+`AiParser` owns the model prompt, output schema, and provider calls. Exact commands skip the model
+but still use the normal session/conversation pipeline. The switch in
+[`CommandParser`](../src/main/java/com/gen3/recommenderagent/inputparser/CommandParser.java)
 is the authoritative alias list. It covers Help, More (including “next”), both repeat actions,
 page explanations, clear history and cancellation.
 

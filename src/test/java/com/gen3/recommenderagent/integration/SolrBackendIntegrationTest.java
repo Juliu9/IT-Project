@@ -155,17 +155,18 @@ class SolrBackendIntegrationTest {
     var sessions = new RecommendationFlowTestSupport.InMemorySessionRepository();
     var service = ConversationTestSupport.transitions(sessions, workflow);
     var responses = new ConversationResponseGenerator(new AiResponseGenerator(null));
-    var gateway =
-        new RequestGateway(
-            raw -> {
+    var parser = org.mockito.Mockito.mock(com.gen3.recommenderagent.inputparser.InputParser.class);
+    org.mockito.Mockito.when(parser.parse(org.mockito.ArgumentMatchers.anyString()))
+        .thenAnswer(
+            invocation -> {
+              String raw = invocation.getArgument(0);
               var request = new ConversationDraft();
               request.setRawText(raw);
               request.setBookCount(2);
               request.setIntent(raw.equals("2 more") ? Intent.MORE_RESULTS : Intent.RECOMMENDATION);
               return request;
-            },
-            service,
-            responses);
+            });
+    var gateway = new RequestGateway(parser, service, responses);
     var mvc = MockMvcBuilders.standaloneSetup(gateway).build();
     for (String raw : List.of("Recommend an audiobook", "2 more")) {
       mvc.perform(
