@@ -9,6 +9,16 @@ import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ConversationTurn {
+  private List<com.gen3.catalogue.model.AudiobookTitle> similarBookChoices = List.of();
+
+  public List<com.gen3.catalogue.model.AudiobookTitle> getSimilarBookChoices() {
+    return similarBookChoices;
+  }
+
+  public void setSimilarBookChoices(List<com.gen3.catalogue.model.AudiobookTitle> value) {
+    similarBookChoices = value;
+  }
+
   private SearchContext searchContext = new SearchContext();
   private String requestId;
   private String rawText;
@@ -193,9 +203,26 @@ public class ConversationTurn {
     searchContext.setMustNotInclude(value);
   }
 
+  public SimilarBookReference getSimilarBook() {
+    return searchContext.getSimilarBook();
+  }
+
+  public void setSimilarBook(SimilarBookReference value) {
+    searchContext.setSimilarBook(value);
+  }
+
+  public float[] getSimilarityQueryVector() {
+    return searchContext.getSimilarityQueryVector();
+  }
+
+  public void setSimilarityQueryVector(float[] value) {
+    searchContext.setSimilarityQueryVector(value);
+  }
+
   public static ConversationTurn fromDraft(ConversationDraft draft) {
     var turn = new ConversationTurn();
     turn.searchContext = draft.getSearchContext().copy();
+    turn.setSimilarBookChoices(draft.getSimilarBookChoices());
     turn.setRequestId(draft.getRequestId());
     turn.setRawText(draft.getRawText());
     turn.setCreatedAt(draft.getCreatedAt());
@@ -214,6 +241,7 @@ public class ConversationTurn {
   public ConversationDraft toDraft() {
     var draft = new ConversationDraft();
     draft.setSearchContext(searchContext.copy());
+    draft.setSimilarBookChoices(getSimilarBookChoices());
     draft.setRequestId(getRequestId());
     draft.setRawText(getRawText());
     draft.setCreatedAt(getCreatedAt());

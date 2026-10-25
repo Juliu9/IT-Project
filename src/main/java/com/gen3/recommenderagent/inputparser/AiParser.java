@@ -80,6 +80,14 @@ public class AiParser {
                         UNKNOWN=unsupported/unrecognised, never a capability question.
 
                         Fields:
+                        "books similar to The Hunger Games" -> RECOMMENDATION, similarToTitle="The Hunger Games".
+                        similarToAuthor identifies the reference's author, not a filter on recommended authors.
+                        Do not invent themes or embed the title as semantic criteria; only additional requested tastes go in semantic queries.
+                        A single named title always goes to catalogue lookup, even if it also names a series; never infer series scope from your knowledge.
+                        similarToClarificationRequired=true ONLY when the user explicitly requests a series/trilogy/saga as a whole or names multiple reference books.
+                        "a book similar to the hunger games" -> similarToTitle="The Hunger Games", omit similarToClarificationRequired.
+                        "books similar to the Hunger Games series" -> similarToClarificationRequired=true.
+                        Preserve extra constraints and explicit personalisation; a reference alone is not personalised=true.
                         Only RECOMMENDATION/REFINE allow positiveSemanticQuery/negativeSemanticQuery or personalised=true.
                         Desired/avoided concepts, including genre/mood and liked authors/narrators, stay semantic;
                         Explicit author/narrator/language/duration/publication-year/source constraints use mustInclude/mustNotInclude.

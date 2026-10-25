@@ -30,6 +30,7 @@ public final class SessionActionHandler implements ConversationHandler {
         }
       }
       case CANCEL -> {
+        session.setPendingSimilarBook(null);
         session.setAwaitingPreferenceUpdate(false);
         session
             .getRequests()

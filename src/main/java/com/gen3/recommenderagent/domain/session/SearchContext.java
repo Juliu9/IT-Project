@@ -4,6 +4,25 @@ import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 
 /** Explicit and effective search criteria together with the frozen reading-preference evidence. */
 public class SearchContext {
+  private SimilarBookReference similarBook;
+  private float[] similarityQueryVector;
+
+  public SimilarBookReference getSimilarBook() {
+    return similarBook;
+  }
+
+  public void setSimilarBook(SimilarBookReference value) {
+    similarBook = value;
+  }
+
+  public float[] getSimilarityQueryVector() {
+    return similarityQueryVector == null ? null : similarityQueryVector.clone();
+  }
+
+  public void setSimilarityQueryVector(float[] value) {
+    similarityQueryVector = value == null ? null : value.clone();
+  }
+
   private SessionPreferences searchCriteria;
   private UserPreferenceEmbedding userPreferenceSnapshot;
   private boolean userPreferencesLoaded;
@@ -79,6 +98,8 @@ public class SearchContext {
 
   public SearchContext copy() {
     var copy = new SearchContext();
+    copy.similarBook = similarBook;
+    copy.setSimilarityQueryVector(similarityQueryVector);
     var values = new SessionPreferences();
     values.setPositiveSemanticQuery(positiveSemanticQuery);
     values.setNegativeSemanticQuery(negativeSemanticQuery);

@@ -39,7 +39,11 @@ public final class ConversationDispatcher {
       Session session, SessionRequest original, Consumer<ConversationDraft> validate) {
     var request = resolve(session, original);
     validate.accept(request);
-    if (!request.isSearchClarificationRequired() && handler(request).invalidatesBatch(original)) {
+    // A selection can become a new search; unchanged MORE still checks only its incoming filters.
+    SessionRequest batchChange =
+        original == null || request.getIntent() != original.getIntent() ? request : original;
+    if (!request.isSearchClarificationRequired()
+        && handler(request).invalidatesBatch(batchChange)) {
       session.setPendingRecommendations(List.of());
     }
     return request;

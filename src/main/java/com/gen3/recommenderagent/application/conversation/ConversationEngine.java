@@ -15,11 +15,17 @@ public class ConversationEngine {
 
   private final ConversationDispatcher conversation;
 
+  private final com.gen3.recommenderagent.application.recommendation.SimilarBookResolver
+      similarBooks;
   private final RecommendationPager pager;
   private final ExactFilterPolicy planner;
 
   public ConversationEngine(
-      ConversationDispatcher conversation, RecommendationPager pager, ExactFilterPolicy planner) {
+      ConversationDispatcher conversation,
+      RecommendationPager pager,
+      ExactFilterPolicy planner,
+      com.gen3.recommenderagent.application.recommendation.SimilarBookResolver similarBooks) {
+    this.similarBooks = similarBooks;
     this.conversation = conversation;
     this.pager = pager;
     this.planner = planner;
@@ -32,7 +38,12 @@ public class ConversationEngine {
   private ConversationDraft apply(Session session, SessionRequest original) {
     ConversationDraft result =
         conversation.begin(
-            session, original, resolved -> planner.validateTransition(resolved, original, session));
+            session,
+            original,
+            resolved -> {
+              planner.validateTransition(resolved, original, session);
+              similarBooks.resolve(session, resolved);
+            });
     if (conversation.needsRecommendations(result)) {
       result.setRecommendations(pager.page(result, session));
     }

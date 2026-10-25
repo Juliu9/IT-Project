@@ -48,6 +48,9 @@ public class InputParser {
 
       SessionRequest request = new SessionRequest();
       request.setIntent(parsed.getIntent());
+      request.setSimilarToTitle(parsed.getSimilarToTitle());
+      request.setSimilarToAuthor(parsed.getSimilarToAuthor());
+      request.setSimilarToClarificationRequired(parsed.isSimilarToClarificationRequired());
       request.setPreferenceUpdates(parsed.getPreferenceUpdates());
       request.setPreferenceRemovals(parsed.getPreferenceRemovals());
       request.setReplacePreferenceFields(parsed.getReplacePreferenceFields());

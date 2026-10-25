@@ -6,6 +6,34 @@ import java.util.List;
 
 /** Incoming conversation instructions, independent of results and persisted search snapshots. */
 public class SessionRequest {
+  private String similarToTitle;
+  private String similarToAuthor;
+  private boolean similarToClarificationRequired;
+
+  public String getSimilarToTitle() {
+    return similarToTitle;
+  }
+
+  public void setSimilarToTitle(String value) {
+    similarToTitle = value;
+  }
+
+  public String getSimilarToAuthor() {
+    return similarToAuthor;
+  }
+
+  public void setSimilarToAuthor(String value) {
+    similarToAuthor = value;
+  }
+
+  public boolean isSimilarToClarificationRequired() {
+    return similarToClarificationRequired;
+  }
+
+  public void setSimilarToClarificationRequired(boolean value) {
+    similarToClarificationRequired = value;
+  }
+
   private String requestId;
   private String rawText;
   private Instant createdAt;

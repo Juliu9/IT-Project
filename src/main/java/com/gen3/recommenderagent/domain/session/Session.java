@@ -11,6 +11,16 @@ import java.util.List;
 
 public class Session {
 
+  private PendingSimilarBook pendingSimilarBook;
+
+  public PendingSimilarBook getPendingSimilarBook() {
+    return pendingSimilarBook;
+  }
+
+  public void setPendingSimilarBook(PendingSimilarBook value) {
+    pendingSimilarBook = value;
+  }
+
   private String sessionId;
   private String userId;
 
@@ -173,6 +183,7 @@ public class Session {
   }
 
   public void clearHistory() {
+    pendingSimilarBook = null;
     this.awaitingPreferenceUpdate = false;
     this.lastRequest = null;
     this.lastDecision = null;

@@ -55,6 +55,34 @@ class SolrAudiobookRepositoryTest {
   }
 
   @Test
+  void titleLookupUsesOnlyTitleAndReturnsEditionMetadata() throws Exception {
+    var document = new org.apache.solr.common.SolrInputDocument();
+    document.setField("id", "title-lookup");
+    document.setField("title", "The Hunger Games");
+    document.setField("authors", java.util.List.of("Suzanne Collins"));
+    solrClient.add(SolrContainerTestSupport.COLLECTION, document);
+    solrClient.commit(SolrContainerTestSupport.COLLECTION);
+    var repository = new SolrAudiobookRepository(solrClient, SolrContainerTestSupport.COLLECTION);
+    var results = repository.findBooksByTitle("the hunger games", null, 6);
+    org.assertj.core.api.Assertions.assertThat(results)
+        .extracting(com.gen3.catalogue.model.AudiobookTitle::bookId)
+        .containsExactly("title-lookup");
+    org.assertj.core.api.Assertions.assertThat(
+            repository.findBooksByTitle("the hunger games", "suzanne collins", 6))
+        .hasSize(1);
+    org.assertj.core.api.Assertions.assertThat(
+            repository.findBooksByTitle("the hunger games", "other author", 6))
+        .isEmpty();
+    org.assertj.core.api.Assertions.assertThat(results.getFirst().authors())
+        .containsExactly("Suzanne Collins");
+    org.assertj.core.api.Assertions.assertThat(
+            repository.findBooksByTitle("Suzanne Collins", null, 6))
+        .isEmpty();
+    org.assertj.core.api.Assertions.assertThat(repository.findBooksByTitle("\" OR *:*", null, 6))
+        .isEmpty();
+  }
+
+  @Test
   void embeddingMaintenanceJobWritesVectorsWhilePreservingSummariesAndCustomFields()
       throws Exception {
     String collection = SolrContainerTestSupport.COLLECTION;

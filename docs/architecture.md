@@ -61,6 +61,42 @@ Do not mix the two locking versions.
 
 ## Search and retrieval rules
 
+### Books similar to a reference
+
+"Books similar to The Hunger Games" remains `RECOMMENDATION`. The parser extracts `similarToTitle`
+and an optional `similarToAuthor`; this author identifies the reference and does not restrict the
+recommended authors. Extra tastes remain semantic criteria, and exact constraints remain filters.
+Explicit requests for a whole series or multiple references prompt for one individual book.
+A single named title goes to catalogue lookup even when it is also the name of a series.
+
+`SimilarBookResolver` uses the configured `AudiobookTitleLookup` adapter before replacing the active
+search. A unique exact title match (ignoring case/punctuation) selects the reference. Its author can
+narrow editions; otherwise the user chooses from at most five title/author matches using a number,
+ordinal, title or unique author. Partial title matches always need confirmation. Lookups are bounded;
+a truncated result set never automatically selects a reference. No match asks which aspects the user
+liked; a taste reply keeps the original exact constraints and starts a normal semantic search.
+
+The selected book must have a usable existing dense vector. Missing vectors produce a fixed response
+and warning, preserving the old search and cached page; no catalogue vectors are generated or written
+at request time. Storage failures follow the normal retrieval-error contract. Title and vector lookup
+are shared ports implemented by both Solr and Qdrant, without database types in conversation policy.
+
+The reference vector is combined with additional positive/negative semantic vectors using the normal
+vector math. The reference ID and shown IDs are excluded before candidate selection. Saved exact
+preferences still apply; saved semantic tastes/user vectors participate only with explicit
+personalisation. Retrieval uses dense similarity with the exact filters, followed by normal ranking.
+
+The session saves the original reference vector and effective query vector. Full cached More pages
+skip retrieval; a refill reuses the effective vector without title lookup or query embedding. Refine
+keeps the reference and rebuilds from its original vector, avoiding repeated blending. A new standalone
+search replaces the reference. Explain and Repeat retain the resolved reference as search evidence.
+Pending title clarification is separate from the displayed page; Cancel/Clear history remove it.
+`ClarificationResolver` routes replies to the current question before catalogue access, so a later
+explanation or count question takes priority over older title choices. Title matching shares one
+normaliser for case, punctuation and catalogue `$b` markers across reference and explanation flows.
+Pending choices are stored once in their request snapshot; older snapshots with a duplicate choices
+field remain readable.
+
 ### Context and cached results
 
 Retrieval excludes recently shown IDs before selecting up to 50 candidates. Ranking removes
@@ -260,8 +296,9 @@ page explanations, clear history and cancellation.
 Matching ignores case, extra whitespace, curly apostrophe differences, and boundary punctuation.
 It removes supported polite wording such as “please”/“kindly”, opening greetings or “sorry”/“excuse me”,
 and trailing “cheers”/“ta”/“many thanks”. The original input is preserved. Explicit numeric More commands such as “2 more”, “show me 2 more”
-and “2 more audiobooks” preserve their count without calling AI. Negations, book selectors and
-extra criteria still go through the model; “2 more but shorter” and “more British authors” are not
+and “2 more audiobooks” preserve their count without calling AI. Bare selections such as “1”,
+“one” and “the second audiobook” also skip AI as UNKNOWN; pending session context resolves their
+meaning. Without a pending question they stay UNKNOWN. Negations and extra criteria still go through the model; “2 more but shorter” and “more British authors” are not
 reduced to a plain More command.
 
 The parser schema and response vocabulary remain explicit contracts rather than dynamically

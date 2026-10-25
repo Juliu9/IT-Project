@@ -38,7 +38,10 @@ import org.springframework.stereotype.Repository;
 @ConditionalOnExpression(
     "'${audiobook.database:qdrant}' == 'solr' or '${audiobook.qdrant.migration.enabled:false}' == 'true'")
 public class SolrAudiobookRepository
-    implements AudiobookCatalogueRepository, AudiobookCandidateSearch, AudiobookVectorRepository {
+    implements AudiobookCatalogueRepository,
+        AudiobookCandidateSearch,
+        AudiobookVectorRepository,
+        com.gen3.catalogue.port.AudiobookTitleLookup {
 
   private static final double KEYWORD_WEIGHT = 0.4;
   private static final double VECTOR_WEIGHT = 0.6;
@@ -172,6 +175,33 @@ public class SolrAudiobookRepository
   }
 
   /** Runs lexical and vector retrieval while preserving the blended Solr score. */
+  @Override
+  public List<com.gen3.catalogue.model.AudiobookTitle> findBooksByTitle(
+      String title, String author, int limit) throws IOException {
+    if (title == null || title.isBlank() || limit <= 0) {
+      return List.of();
+    }
+    var query = new SolrQuery("title:\"" + ClientUtils.escapeQueryChars(title.strip()) + "\"");
+    if (author != null && !author.isBlank()) {
+      query.addFilterQuery("authors:\"" + ClientUtils.escapeQueryChars(author.strip()) + "\"");
+    }
+    query.setRows(limit);
+    query.setFields("id", "title", "authors");
+    query.setSort("id", SolrQuery.ORDER.asc);
+    try {
+      return solrClient.query(collection, query, SolrRequest.METHOD.POST).getResults().stream()
+          .map(
+              document ->
+                  new com.gen3.catalogue.model.AudiobookTitle(
+                      field(document, "id"),
+                      field(document, "title"),
+                      stringList(document.getFieldValue("authors"))))
+          .toList();
+    } catch (SolrServerException | SolrException exception) {
+      throw new IOException("Solr title lookup failed", exception);
+    }
+  }
+
   @Override
   public List<AudiobookCandidate> searchHybrid(
       float[] queryVector, String query, AudiobookFilters filters, int limit) throws IOException {

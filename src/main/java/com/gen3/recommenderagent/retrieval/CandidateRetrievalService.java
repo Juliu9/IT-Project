@@ -41,7 +41,14 @@ public class CandidateRetrievalService implements CandidateRetriever {
       RequestTelemetry.retrievalBackend(backend);
       AudiobookRetrievalPlan plan = retrievalPlanner.plan(limit, request, excludedBookIds);
       boolean personalised =
-          request != null && request.isPersonalised() && vectors != null && !vectors.isEmpty();
+          request != null
+              && (request.isPersonalised()
+                  || (request
+                          instanceof
+                          com.gen3.recommenderagent.domain.session.ConversationDraft draft
+                      && draft.getSearchContext().getSimilarBook() != null))
+              && vectors != null
+              && !vectors.isEmpty();
       List<AudiobookCandidate> candidates =
           personalised
               ? retrieveSemantic(plan, vectors)

@@ -24,6 +24,11 @@ public final class ConversationRules {
       request.setPositiveSemanticQuery(null);
       request.setNegativeSemanticQuery(null);
       request.setPersonalised(false);
+      request.setSimilarToTitle(null);
+      request.setSimilarToAuthor(null);
+      request.setSimilarToClarificationRequired(false);
+    } else if (hasText(request.getSimilarToTitle()) || request.isSimilarToClarificationRequired()) {
+      request.setExplicitSearch(true);
     }
     if (request.getIntent() != Intent.EXPLAIN_RECOMMENDATION) {
       request.setReferenceRank(null);
@@ -108,7 +113,10 @@ public final class ConversationRules {
     }
     ExactCriteria include = request.getMustInclude();
     ExactCriteria exclude = request.getMustNotInclude();
-    return request.isPersonalised()
+    return request.isSimilarToClarificationRequired()
+        || hasText(request.getSimilarToTitle())
+        || request.getSearchContext().getSimilarBook() != null
+        || request.isPersonalised()
         || hasQuery(request.getPositiveSemanticQuery())
         || hasQuery(request.getNegativeSemanticQuery())
         || (include != null

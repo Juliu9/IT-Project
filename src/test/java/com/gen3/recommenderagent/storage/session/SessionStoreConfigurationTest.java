@@ -39,7 +39,13 @@ class SessionStoreConfigurationTest {
               AudiobookRetrievalPlanner.class,
               ExactFilterPolicy.class,
               RecommendationPager.class)
-          .withBean(RecommendationWorkflow.class, () -> mock(RecommendationWorkflow.class));
+          .withBean(RecommendationWorkflow.class, () -> mock(RecommendationWorkflow.class))
+          .withBean(
+              com.gen3.recommenderagent.application.recommendation.SimilarBookResolver.class,
+              () ->
+                  new com.gen3.recommenderagent.application.recommendation.SimilarBookResolver(
+                      mock(com.gen3.catalogue.port.AudiobookTitleLookup.class),
+                      mock(com.gen3.catalogue.port.AudiobookVectorRepository.class)));
 
   @TestConfiguration(proxyBeanMethods = false)
   @EnableAutoConfiguration

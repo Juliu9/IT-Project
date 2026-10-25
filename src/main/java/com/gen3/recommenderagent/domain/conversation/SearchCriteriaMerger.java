@@ -18,7 +18,13 @@ import java.util.Map;
 public final class SearchCriteriaMerger {
   private SearchCriteriaMerger() {}
 
-  static void merge(SessionRequest base, ConversationDraft target) {
+  public static void merge(SessionRequest base, ConversationDraft target) {
+    if (base instanceof ConversationDraft previous
+        && target.getSimilarToTitle() == null
+        && !target.isSimilarToClarificationRequired()
+        && target.getSearchContext().getSimilarBook() == null) {
+      target.getSearchContext().setSimilarBook(previous.getSearchContext().getSimilarBook());
+    }
     target.setPersonalised(base.isPersonalised() || target.isPersonalised());
     target.setPositiveSemanticQuery(
         merge(base.getPositiveSemanticQuery(), target.getPositiveSemanticQuery()));
@@ -104,7 +110,7 @@ public final class SearchCriteriaMerger {
   }
 
   // Resolution must not mutate parser input or the saved criteria used by later requests.
-  static ConversationDraft copyOf(SessionRequest source) {
+  public static ConversationDraft copyOf(SessionRequest source) {
     ConversationDraft copy = new ConversationDraft();
     copy.setIntent(Intent.UNKNOWN);
     if (source == null) {
@@ -135,6 +141,19 @@ public final class SearchCriteriaMerger {
     if (copy.getIntent() == Intent.EXPLAIN_RECOMMENDATION) {
       copy.setReferenceRank(source.getReferenceRank());
       copy.setReferenceTitle(source.getReferenceTitle());
+    }
+    if (acceptsSemanticInformation(copy.getIntent())) {
+      copy.setSimilarToTitle(source.getSimilarToTitle());
+      copy.setSimilarToAuthor(source.getSimilarToAuthor());
+      copy.setSimilarToClarificationRequired(source.isSimilarToClarificationRequired());
+    }
+    if (source instanceof ConversationDraft draft) {
+      copy.setDecision(draft.getDecision());
+      copy.setSearchClarificationRequired(draft.isSearchClarificationRequired());
+      copy.setSimilarBookChoices(draft.getSimilarBookChoices());
+      copy.getSearchContext().setSimilarBook(draft.getSearchContext().getSimilarBook());
+      copy.getSearchContext()
+          .setSimilarityQueryVector(draft.getSearchContext().getSimilarityQueryVector());
     }
     copy.setBookCount(source.getBookCount());
 

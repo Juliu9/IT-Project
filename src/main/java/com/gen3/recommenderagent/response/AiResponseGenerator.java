@@ -189,31 +189,40 @@ public class AiResponseGenerator {
     }
     var include = request.getMustInclude();
     var exclude = request.getMustNotInclude();
-    return String.format(
-        "Resolved search: personalised=%s. Desired: %s. Avoided: %s. Must include: %s. Must exclude: %s. ",
-        request.isPersonalised(),
-        semanticSummary(request.getPositiveSemanticQuery()),
-        semanticSummary(request.getNegativeSemanticQuery()),
-        include == null
-            ? "none"
-            : String.format(
-                "authors=%s, narrators=%s, language=%s, duration=%s, publicationYear=%s, source=%s",
-                include.getAuthors(),
-                include.getNarrators(),
-                include.getLanguage(),
-                include.getDuration(),
-                include.getPublicationYear(),
-                include.getSource()),
-        exclude == null
-            ? "none"
-            : String.format(
-                "authors=%s, narrators=%s, language=%s, duration=%s, publicationYear=%s, source=%s",
-                exclude.getAuthors(),
-                exclude.getNarrators(),
-                exclude.getLanguage(),
-                exclude.getDuration(),
-                exclude.getPublicationYear(),
-                exclude.getSource()));
+    String reference =
+        request.getSimilarBook() == null
+            ? ""
+            : "Reference book: "
+                + request.getSimilarBook().title()
+                + " by "
+                + String.join(", ", request.getSimilarBook().authors())
+                + ". Similarity uses its catalogue embedding; no reference plot details are supplied. ";
+    return reference
+        + String.format(
+            "Resolved search: personalised=%s. Desired: %s. Avoided: %s. Must include: %s. Must exclude: %s. ",
+            request.isPersonalised(),
+            semanticSummary(request.getPositiveSemanticQuery()),
+            semanticSummary(request.getNegativeSemanticQuery()),
+            include == null
+                ? "none"
+                : String.format(
+                    "authors=%s, narrators=%s, language=%s, duration=%s, publicationYear=%s, source=%s",
+                    include.getAuthors(),
+                    include.getNarrators(),
+                    include.getLanguage(),
+                    include.getDuration(),
+                    include.getPublicationYear(),
+                    include.getSource()),
+            exclude == null
+                ? "none"
+                : String.format(
+                    "authors=%s, narrators=%s, language=%s, duration=%s, publicationYear=%s, source=%s",
+                    exclude.getAuthors(),
+                    exclude.getNarrators(),
+                    exclude.getLanguage(),
+                    exclude.getDuration(),
+                    exclude.getPublicationYear(),
+                    exclude.getSource()));
   }
 
   private String semanticSummary(SemanticQuery query) {

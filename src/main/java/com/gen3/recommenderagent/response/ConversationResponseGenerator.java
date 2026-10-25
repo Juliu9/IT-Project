@@ -85,6 +85,27 @@ public class ConversationResponseGenerator implements ResponseGenerator {
   private String generateOutcomeResponse(
       ConversationDecision decision, ConversationTurn currentRequest) {
     return switch (decision) {
+      case SIMILAR_BOOK_SELECTION ->
+          "Which book did you mean? "
+              + java.util.stream.IntStream.range(0, currentRequest.getSimilarBookChoices().size())
+                  .mapToObj(
+                      index -> {
+                        var book = currentRequest.getSimilarBookChoices().get(index);
+                        return (index + 1)
+                            + ". "
+                            + book.title()
+                            + (book.authors().isEmpty()
+                                ? ""
+                                : " by " + String.join(", ", book.authors()));
+                      })
+                  .collect(Collectors.joining(". "))
+              + ". Choose a number, or give a more specific title and author.";
+      case SIMILAR_BOOK_NOT_FOUND ->
+          "I couldn't find that book in the catalogue. What aspects of it did you enjoy?";
+      case SIMILAR_BOOK_REQUIRED ->
+          "Please name one individual book you'd like similar recommendations for.";
+      case SIMILAR_BOOK_UNAVAILABLE ->
+          "I can't use that book for similarity recommendations right now. Please try another title.";
       case COUNT_CLARIFICATION -> "How many recommendations would you like at a time?";
       case COUNT_CHANGED -> {
         int count = Math.clamp(currentRequest.getBookCount(), 1, MAX_BOOK_COUNT);

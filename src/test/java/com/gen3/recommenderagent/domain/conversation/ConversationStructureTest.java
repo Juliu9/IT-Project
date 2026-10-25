@@ -85,6 +85,24 @@ class ConversationStructureTest {
   }
 
   @Test
+  void legacyPendingChoicesAreReadButOnlyStoredInTheRequestSnapshot() {
+    var mapper = new ObjectMapper();
+    var session =
+        mapper.readValue(
+            """
+        {"pendingSimilarBook":{
+          "request":{"intent":"RECOMMENDATION","similarBookChoices":[{"bookId":"hunger","title":"The Hunger Games","authors":["Suzanne Collins"]}]},
+          "decision":"SIMILAR_BOOK_SELECTION",
+          "choices":[{"bookId":"hunger","title":"The Hunger Games","authors":["Suzanne Collins"]}]}}
+        """,
+            Session.class);
+    assertThat(session.getPendingSimilarBook().request().getSimilarBookChoices()).hasSize(1);
+    var pending = mapper.readTree(mapper.writeValueAsString(session)).get("pendingSimilarBook");
+    assertThat(pending.has("choices")).isFalse();
+    assertThat(pending.get("request").get("similarBookChoices").size()).isEqualTo(1);
+  }
+
+  @Test
   void completedTurnsOwnTheirSearchSnapshotAndInputHasNoOutputProperties() {
     var empty = ConversationTurn.fromDraft(new ConversationDraft());
     assertThat(empty.getMustInclude()).isNull();

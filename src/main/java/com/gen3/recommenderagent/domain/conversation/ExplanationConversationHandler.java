@@ -3,13 +3,13 @@ package com.gen3.recommenderagent.domain.conversation;
 import static com.gen3.recommenderagent.domain.conversation.ConversationHistory.latestSearch;
 import static com.gen3.recommenderagent.domain.conversation.SearchCriteriaMerger.merge;
 
+import com.gen3.catalogue.model.AudiobookTitle;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDecision;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import java.util.List;
-import java.util.Locale;
 
 /** Resolves explanation targets exclusively against the displayed recommendation page. */
 public final class ExplanationConversationHandler implements ConversationHandler {
@@ -50,7 +50,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
       return;
     }
     Integer rank = target.getReferenceRank();
-    String title = normalizeTitle(target.getReferenceTitle());
+    String title = AudiobookTitle.normalize(target.getReferenceTitle());
     List<Recommendation> matches = page;
     if (!title.isEmpty()) {
       matches = matchingTitles(page, title);
@@ -73,7 +73,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
 
   static boolean matchesDisplayedTitle(Session session, String title) {
     var previous = latestSearch(session);
-    String normalized = normalizeTitle(title);
+    String normalized = AudiobookTitle.normalize(title);
     return previous != null
         && previous.getRecommendations() != null
         && !normalized.isEmpty()
@@ -82,20 +82,14 @@ public final class ExplanationConversationHandler implements ConversationHandler
 
   private static List<Recommendation> matchingTitles(List<Recommendation> page, String title) {
     var exact =
-        page.stream().filter(book -> normalizeTitle(book.getTitle()).equals(title)).toList();
+        page.stream()
+            .filter(book -> AudiobookTitle.normalize(book.getTitle()).equals(title))
+            .toList();
     return exact.isEmpty()
-        ? page.stream().filter(book -> normalizeTitle(book.getTitle()).contains(title)).toList()
+        ? page.stream()
+            .filter(book -> AudiobookTitle.normalize(book.getTitle()).contains(title))
+            .toList()
         : exact;
-  }
-
-  private static String normalizeTitle(String title) {
-    return title == null
-        ? ""
-        : title
-            .replace("$b", "")
-            .toLowerCase(Locale.ROOT)
-            .replaceAll("[^\\p{L}\\p{N}]+", " ")
-            .trim();
   }
 
   public String retrievalMode(ConversationDraft result) {

@@ -24,6 +24,25 @@ import tools.jackson.databind.ObjectMapper;
 
 class InputParserTest {
   @Test
+  void referenceTitleAndAuthorAreSeparateFromExplanationAndResultFilters() {
+    var result =
+        parseModelJson(
+            "books similar to The Hunger Games by Suzanne Collins under ten hours",
+            """
+        {"intent":"RECOMMENDATION","similarToTitle":"The Hunger Games","similarToAuthor":"Suzanne Collins",
+         "mustInclude":{"duration":"under 10 hours"}}
+        """);
+    assertEquals("The Hunger Games", result.getSimilarToTitle());
+    assertEquals(true, result.isExplicitSearch());
+    assertEquals("Suzanne Collins", result.getSimilarToAuthor());
+    assertEquals("under 10 hours", result.getMustInclude().getDuration());
+    assertEquals(null, result.getReferenceTitle());
+    assertEquals(null, result.getPositiveSemanticQuery());
+    assertEquals(null, result.getMustInclude().getAuthors());
+    assertEquals(false, result.isPersonalised());
+  }
+
+  @Test
   void parserSchemaRequiresOnlyIntentIncludingInsideNestedCriteria() {
     var schema = new ObjectMapper().readTree(AiParser.REQUEST_CONVERTER.getJsonSchema());
     org.assertj.core.api.Assertions.assertThat(schema.path("required"))
@@ -292,8 +311,6 @@ class InputParserTest {
         "repeat books by X",
         "cancelled flight books",
         "clear history and recommend fantasy",
-        "2",
-        "the second audiobook",
         "help/more",
         "please do not clear history",
         "could you repeat the recommendations but exclude romance please",
@@ -334,6 +351,33 @@ class InputParserTest {
     assertEquals(Intent.UNKNOWN, result.getIntent());
     org.mockito.Mockito.verify(client.prompt().system(anyString()).user(text).call())
         .responseEntity(AiParser.REQUEST_CONVERTER);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "1",
+        "one",
+        "2",
+        "the second audiobook",
+        "the first one",
+        "999999999999999999999th"
+      })
+  void bareSelectionsSkipAiAndLeaveMeaningToPendingSessionContext(String text) {
+    var client = mock(ChatClient.class);
+    var result =
+        new InputParser(
+                new CommandParser(),
+                new AiParser(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
+            .parse(text);
+    assertEquals(Intent.UNKNOWN, result.getIntent());
+    assertEquals(text, result.getRawText());
+    assertEquals(null, result.getBookCount());
+    assertEquals(null, result.getReferenceRank());
+    assertEquals(null, result.getSimilarToTitle());
+    assertEquals(false, result.isExplicitSearch());
+    verifyNoInteractions(client);
   }
 
   @Test

@@ -23,6 +23,12 @@ public final class ConversationTestSupport {
     return new SessionTransitionService(
         sessions,
         new ConversationEngine(
-            dispatcher(), new RecommendationPager(workflow), new ExactFilterPolicy()));
+            dispatcher(),
+            new RecommendationPager(workflow),
+            new ExactFilterPolicy(),
+            new com.gen3.recommenderagent.application.recommendation.SimilarBookResolver(
+                org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookTitleLookup.class),
+                org.mockito.Mockito.mock(
+                    com.gen3.catalogue.port.AudiobookVectorRepository.class))));
   }
 }

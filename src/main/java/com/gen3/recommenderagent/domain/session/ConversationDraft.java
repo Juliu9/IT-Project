@@ -5,6 +5,16 @@ import java.util.List;
 
 /** Private-to-conversation working state; never used as a persisted turn or response contract. */
 public class ConversationDraft extends SessionRequest {
+  private List<com.gen3.catalogue.model.AudiobookTitle> similarBookChoices = List.of();
+
+  public List<com.gen3.catalogue.model.AudiobookTitle> getSimilarBookChoices() {
+    return similarBookChoices;
+  }
+
+  public void setSimilarBookChoices(List<com.gen3.catalogue.model.AudiobookTitle> value) {
+    similarBookChoices = value;
+  }
+
   private SearchContext searchContext = new SearchContext();
   private ConversationDecision decision;
   private boolean preferenceClarificationRequired;

@@ -39,7 +39,9 @@ import org.springframework.stereotype.Repository;
 @Primary
 @Repository
 public class QdrantAudiobookRepository
-    implements AudiobookCandidateSearch, AudiobookVectorRepository {
+    implements AudiobookCandidateSearch,
+        AudiobookVectorRepository,
+        com.gen3.catalogue.port.AudiobookTitleLookup {
 
   private final QdrantClient client;
   private final QdrantPointMapper mapper;
@@ -61,6 +63,45 @@ public class QdrantAudiobookRepository
     this.sparseEncoder = sparseEncoder;
     this.collection = collection;
     this.vectorDimension = vectorDimension;
+  }
+
+  @Override
+  public List<com.gen3.catalogue.model.AudiobookTitle> findBooksByTitle(
+      String title, String author, int limit) throws IOException {
+    if (title == null || title.isBlank() || limit <= 0) {
+      return List.of();
+    }
+    requireCollection();
+    var filter =
+        Filter.newBuilder()
+            .addMust(
+                io.qdrant.client.ConditionFactory.matchText(
+                    QdrantAudiobookSchema.TITLE, title.strip()));
+    if (author != null && !author.isBlank()) {
+      filter.addMust(
+          io.qdrant.client.ConditionFactory.matchText(
+              QdrantAudiobookSchema.AUTHORS, author.strip()));
+    }
+    var request =
+        io.qdrant.client.grpc.Points.ScrollPoints.newBuilder()
+            .setCollectionName(collection)
+            .setFilter(filter)
+            .setLimit(limit)
+            .setWithPayload(
+                io.qdrant.client.WithPayloadSelectorFactory.include(
+                    List.of(
+                        QdrantAudiobookSchema.BOOK_ID,
+                        QdrantAudiobookSchema.TITLE,
+                        QdrantAudiobookSchema.AUTHORS)))
+            .setWithVectors(io.qdrant.client.WithVectorsSelectorFactory.enable(false))
+            .build();
+    return await(client.scrollAsync(request), "look up Qdrant book title").getResultList().stream()
+        .map(mapper::toRecord)
+        .map(
+            record ->
+                new com.gen3.catalogue.model.AudiobookTitle(
+                    record.id(), record.title(), record.authors()))
+        .toList();
   }
 
   /** Searches the named dense vector while applying structured payload filters. */

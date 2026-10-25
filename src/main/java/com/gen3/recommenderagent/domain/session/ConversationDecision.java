@@ -3,6 +3,10 @@ package com.gen3.recommenderagent.domain.session;
 /** Policy decision about the next conversational action, independent of response wording. */
 public enum ConversationDecision {
   UNAVAILABLE,
+  SIMILAR_BOOK_SELECTION,
+  SIMILAR_BOOK_NOT_FOUND,
+  SIMILAR_BOOK_UNAVAILABLE,
+  SIMILAR_BOOK_REQUIRED,
   SEARCH_CLARIFICATION,
   PREFERENCE_CLARIFICATION,
   PREFERENCE_UPDATE_CLARIFICATION,

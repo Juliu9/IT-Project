@@ -69,6 +69,38 @@ class LiveInputParserTest {
     assertThat(result.getPreferenceUpdates()).isNull();
   }
 
+  @org.junit.jupiter.api.Test
+  void extractsReferenceWithoutInventingThemesOrFilteringByItsAuthor() {
+    var result =
+        parser.parse("Books similar to The Hunger Games by Suzanne Collins under ten hours");
+    assertThat(result.getIntent()).isEqualTo(Intent.RECOMMENDATION);
+    assertThat(result.getSimilarToTitle()).isEqualToIgnoringCase("The Hunger Games");
+    assertThat(result.getSimilarToAuthor()).isEqualToIgnoringCase("Suzanne Collins");
+    assertThat(result.getMustInclude()).isNotNull();
+    assertThat(result.getMustInclude().getDuration()).isEqualTo("under 10 hours");
+    assertThat(result.getMustInclude().getAuthors()).isNullOrEmpty();
+    assertThat(result.getPositiveSemanticQuery()).isNull();
+    assertThat(result.isPersonalised()).isFalse();
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "a book similar to the hunger games,false",
+    "books similar to The Hunger Games,false",
+    "books similar to the Hunger Games series,true",
+    "books similar to The Hunger Games and Divergent,true"
+  })
+  void distinguishesNamedBookFromExplicitSeriesOrMultipleReferences(String text, boolean clarify) {
+    var result = parser.parse(text);
+    assertThat(result.getIntent()).as(text).isEqualTo(Intent.RECOMMENDATION);
+    assertThat(result.isSimilarToClarificationRequired()).as(text).isEqualTo(clarify);
+    if (!clarify) {
+      assertThat(result.getSimilarToTitle()).as(text).isEqualToIgnoringCase("The Hunger Games");
+      assertThat(result.getPositiveSemanticQuery()).as(text).isNull();
+      assertThat(result.isPersonalised()).as(text).isFalse();
+    }
+  }
+
   @Configuration(proxyBeanMethods = false)
   @Profile("live-parser-evaluation")
   @EnableAutoConfiguration

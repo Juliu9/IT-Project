@@ -113,6 +113,12 @@ from the previous backend are not reused.
 A replacement session adapter must preserve locking, checked commits, and expiry, not just get/set.
 See [adapter contracts](architecture.md#database-selection-and-replacement).
 
+Similarity requests require title/author metadata and an existing compatible dense vector for the
+reference book. No new environment variables are needed. Solr title lookup queries `title` (it must
+be indexed); Qdrant uses its title payload text match. Existing Qdrant 1.19.1 collections work without
+a data rewrite; a lowercase full-text `title` payload index can speed larger catalogues. See
+[reference-book behaviour](architecture.md#books-similar-to-a-reference).
+
 ## AI models and shared vector dimensions
 
 | Property / environment variable | Default | Purpose |

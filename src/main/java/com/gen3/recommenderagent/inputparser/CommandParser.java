@@ -31,6 +31,13 @@ public class CommandParser {
                 "")
             .replaceFirst("[.!?,…]+$", "")
             .stripTrailing();
+    if (com.gen3.recommenderagent.domain.conversation.ClarificationResolver.selectionReply(
+            rawText.strip())
+        != null) {
+      var parsed = new ParsedRequest();
+      parsed.setIntent(Intent.UNKNOWN);
+      return parsed;
+    }
     var countedMore = COUNTED_MORE.matcher(command);
     if (countedMore.matches()) {
       var parsed = new ParsedRequest();

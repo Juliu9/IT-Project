@@ -58,7 +58,12 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
         && request.isUserPreferencesLoaded()) {
       preferences = request.getUserPreferenceSnapshot();
     } else {
-      preferences = userPreferences(session).orElse(null);
+      preferences =
+          request != null
+                  && request.getSearchContext().getSimilarBook() != null
+                  && !request.isPersonalised()
+              ? null
+              : userPreferences(session).orElse(null);
       if (request != null) {
         request.setUserPreferenceSnapshot(preferences);
         request.setUserPreferencesLoaded(true);
@@ -73,7 +78,10 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
         return List.of();
       }
     }
-    Set<String> shownBookIds = shownBooks(session);
+    Set<String> shownBookIds = new HashSet<>(shownBooks(session));
+    if (request != null && request.getSearchContext().getSimilarBook() != null) {
+      shownBookIds.add(request.getSearchContext().getSimilarBook().bookId());
+    }
     long retrievalStartedAt = System.nanoTime();
     var candidates =
         RequestTelemetry.measure(
@@ -100,21 +108,33 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
 
   private SemanticQueryVectors retrievalVectors(
       ConversationDraft request, UserPreferenceEmbedding preferences) {
-    if (request == null || !request.isPersonalised()) {
-      return semanticQueryVectorService.create(request);
+    var context = request == null ? null : request.getSearchContext();
+    var reference = context == null ? null : context.getSimilarBook();
+    if (reference != null
+        && request.getIntent() == Intent.MORE_RESULTS
+        && context.getSimilarityQueryVector() != null) {
+      return new SemanticQueryVectors(List.of(context.getSimilarityQueryVector()), List.of());
     }
-    if (preferences != null) {
-      List<float[]> positive = new ArrayList<>();
-      addVector(positive, preferences.favouritesVector());
-      addVector(positive, preferences.historyVector());
-      float[] combined = VectorMath.directionalAverage(positive, List.of());
-      SemanticQueryVectors current = semanticQueryVectorService.create(request);
-      List<float[]> blended = new ArrayList<>(current.positive());
-      // Treat stored taste as one signal, so it and the current query have equal shares.
-      blended.add(combined);
-      return new SemanticQueryVectors(blended, current.negative());
+    var current = semanticQueryVectorService.create(request);
+    List<float[]> positive = new ArrayList<>(current.positive());
+    if (reference != null) {
+      positive.add(reference.vector());
     }
-    return semanticQueryVectorService.create(request);
+    if (request != null && request.isPersonalised() && preferences != null) {
+      List<float[]> tastes = new ArrayList<>();
+      addVector(tastes, preferences.favouritesVector());
+      addVector(tastes, preferences.historyVector());
+      // Stored taste remains one signal, independent of how many profile vectors are available.
+      if (!tastes.isEmpty()) {
+        positive.add(VectorMath.directionalAverage(tastes, List.of()));
+      }
+    }
+    if (reference == null) {
+      return new SemanticQueryVectors(positive, current.negative());
+    }
+    float[] combined = VectorMath.directionalAverage(positive, current.negative());
+    context.setSimilarityQueryVector(combined);
+    return new SemanticQueryVectors(List.of(combined), List.of());
   }
 
   private void addVector(List<float[]> vectors, float[] vector) {

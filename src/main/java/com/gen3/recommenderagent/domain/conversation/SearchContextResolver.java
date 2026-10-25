@@ -103,6 +103,14 @@ public final class SearchContextResolver implements ConversationHandler {
         } else {
           merge(previous, target);
         }
+        if (target.getSimilarToTitle() == null && !target.isSimilarToClarificationRequired()) {
+          target.getSearchContext().setSimilarBook(previous.getSearchContext().getSimilarBook());
+          if (target.getIntent() == Intent.MORE_RESULTS) {
+            target
+                .getSearchContext()
+                .setSimilarityQueryVector(previous.getSearchContext().getSimilarityQueryVector());
+          }
+        }
         if (target.getIntent() == Intent.MORE_RESULTS) {
           target.setSearchCriteria(moreCriteria);
           target.setUserPreferenceSnapshot(previous.getUserPreferenceSnapshot());
@@ -119,8 +127,12 @@ public final class SearchContextResolver implements ConversationHandler {
     }
     SessionPreferences preferences = session.getPreferences();
     ConversationDraft base = new ConversationDraft();
-    base.setPositiveSemanticQuery(preferences.getPositiveSemanticQuery());
-    base.setNegativeSemanticQuery(preferences.getNegativeSemanticQuery());
+    if (target.isPersonalised()
+        || (target.getSimilarToTitle() == null
+            && target.getSearchContext().getSimilarBook() == null)) {
+      base.setPositiveSemanticQuery(preferences.getPositiveSemanticQuery());
+      base.setNegativeSemanticQuery(preferences.getNegativeSemanticQuery());
+    }
     base.setMustInclude(preferences.getMustInclude());
     base.setMustNotInclude(preferences.getMustNotInclude());
     merge(base, target);
