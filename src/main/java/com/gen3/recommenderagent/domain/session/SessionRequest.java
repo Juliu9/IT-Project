@@ -1,172 +1,171 @@
 package com.gen3.recommenderagent.domain.session;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.gen3.recommenderagent.domain.Intent;
 import java.time.Instant;
 import java.util.List;
 
+/** Incoming conversation instructions, independent of results and persisted search snapshots. */
 public class SessionRequest {
-
-  @JsonIgnore private ConversationDecision decision;
-
-  @JsonIgnore
-  public ConversationDecision getDecision() {
-    return decision;
-  }
-
-  public void setDecision(ConversationDecision decision) {
-    this.decision = decision;
-  }
-
   private String requestId;
   private String rawText;
   private Instant createdAt;
-
+  private Intent intent;
   private Integer referenceRank;
   private String referenceTitle;
-
-  public Integer getReferenceRank() {
-    return referenceRank;
-  }
-
-  public void setReferenceRank(Integer referenceRank) {
-    this.referenceRank = referenceRank;
-  }
-
-  public String getReferenceTitle() {
-    return referenceTitle;
-  }
-
-  public void setReferenceTitle(String referenceTitle) {
-    this.referenceTitle = referenceTitle;
-  }
-
-  private Intent intent;
-
+  private boolean addAuthors;
+  private boolean addNarrators;
+  private SessionPreferences preferenceUpdates;
+  private SessionPreferences preferenceRemovals;
+  private List<String> replacePreferenceFields;
+  private boolean explicitSearch;
   private SemanticQuery positiveSemanticQuery;
   private SemanticQuery negativeSemanticQuery;
-
-  private MustInclude mustInclude;
-  private MustNotInclude mustNotInclude;
+  private ExactCriteria mustInclude;
+  private ExactCriteria mustNotInclude;
   private Integer bookCount;
   private boolean personalised;
-  private boolean preferenceClarificationRequired;
-  private boolean searchClarificationRequired;
-  private boolean noMoreRecommendations;
-
-  public boolean isNoMoreRecommendations() {
-    return noMoreRecommendations;
-  }
-
-  public void setNoMoreRecommendations(boolean exhausted) {
-    noMoreRecommendations = exhausted;
-  }
-
-  public boolean isSearchClarificationRequired() {
-    return searchClarificationRequired;
-  }
-
-  public void setSearchClarificationRequired(boolean required) {
-    searchClarificationRequired = required;
-  }
-
-  public boolean isPersonalised() {
-    return personalised;
-  }
-
-  public void setPersonalised(boolean personalised) {
-    this.personalised = personalised;
-  }
-
-  public boolean isPreferenceClarificationRequired() {
-    return preferenceClarificationRequired;
-  }
-
-  public void setPreferenceClarificationRequired(boolean required) {
-    this.preferenceClarificationRequired = required;
-  }
-
-  private List<Recommendation> recommendations;
-
-  public SessionRequest() {}
 
   public String getRequestId() {
     return requestId;
   }
 
-  public void setRequestId(String requestId) {
-    this.requestId = requestId;
+  public void setRequestId(String value) {
+    requestId = value;
   }
 
   public String getRawText() {
     return rawText;
   }
 
-  public void setRawText(String rawText) {
-    this.rawText = rawText;
-  }
-
-  public Intent getIntent() {
-    return intent;
-  }
-
-  public void setIntent(Intent intent) {
-    this.intent = intent;
-  }
-
-  public SemanticQuery getPositiveSemanticQuery() {
-    return positiveSemanticQuery;
-  }
-
-  public void setPositiveSemanticQuery(SemanticQuery positiveSemanticQuery) {
-    this.positiveSemanticQuery = positiveSemanticQuery;
-  }
-
-  public SemanticQuery getNegativeSemanticQuery() {
-    return negativeSemanticQuery;
-  }
-
-  public void setNegativeSemanticQuery(SemanticQuery negativeSemanticQuery) {
-    this.negativeSemanticQuery = negativeSemanticQuery;
-  }
-
-  public MustInclude getMustInclude() {
-    return mustInclude;
-  }
-
-  public void setMustInclude(MustInclude mustInclude) {
-    this.mustInclude = mustInclude;
-  }
-
-  public MustNotInclude getMustNotInclude() {
-    return mustNotInclude;
-  }
-
-  public void setMustNotInclude(MustNotInclude mustNotInclude) {
-    this.mustNotInclude = mustNotInclude;
-  }
-
-  public Integer getBookCount() {
-    return bookCount;
-  }
-
-  public void setBookCount(Integer bookCount) {
-    this.bookCount = bookCount;
-  }
-
-  public List<Recommendation> getRecommendations() {
-    return recommendations;
-  }
-
-  public void setRecommendations(List<Recommendation> recommendations) {
-    this.recommendations = recommendations;
+  public void setRawText(String value) {
+    rawText = value;
   }
 
   public Instant getCreatedAt() {
     return createdAt;
   }
 
-  public void setCreatedAt(Instant createdAt) {
-    this.createdAt = createdAt;
+  public void setCreatedAt(Instant value) {
+    createdAt = value;
+  }
+
+  public Intent getIntent() {
+    return intent;
+  }
+
+  public void setIntent(Intent value) {
+    intent = value;
+  }
+
+  public Integer getReferenceRank() {
+    return referenceRank;
+  }
+
+  public void setReferenceRank(Integer value) {
+    referenceRank = value;
+  }
+
+  public String getReferenceTitle() {
+    return referenceTitle;
+  }
+
+  public void setReferenceTitle(String value) {
+    referenceTitle = value;
+  }
+
+  public boolean isAddAuthors() {
+    return addAuthors;
+  }
+
+  public void setAddAuthors(boolean value) {
+    addAuthors = value;
+  }
+
+  public boolean isAddNarrators() {
+    return addNarrators;
+  }
+
+  public void setAddNarrators(boolean value) {
+    addNarrators = value;
+  }
+
+  public SessionPreferences getPreferenceUpdates() {
+    return preferenceUpdates;
+  }
+
+  public void setPreferenceUpdates(SessionPreferences value) {
+    preferenceUpdates = value;
+  }
+
+  public SessionPreferences getPreferenceRemovals() {
+    return preferenceRemovals;
+  }
+
+  public void setPreferenceRemovals(SessionPreferences value) {
+    preferenceRemovals = value;
+  }
+
+  public List<String> getReplacePreferenceFields() {
+    return replacePreferenceFields;
+  }
+
+  public void setReplacePreferenceFields(List<String> value) {
+    replacePreferenceFields = value;
+  }
+
+  public boolean isExplicitSearch() {
+    return explicitSearch;
+  }
+
+  public void setExplicitSearch(boolean value) {
+    explicitSearch = value;
+  }
+
+  public SemanticQuery getPositiveSemanticQuery() {
+    return positiveSemanticQuery;
+  }
+
+  public void setPositiveSemanticQuery(SemanticQuery value) {
+    positiveSemanticQuery = value;
+  }
+
+  public SemanticQuery getNegativeSemanticQuery() {
+    return negativeSemanticQuery;
+  }
+
+  public void setNegativeSemanticQuery(SemanticQuery value) {
+    negativeSemanticQuery = value;
+  }
+
+  public ExactCriteria getMustInclude() {
+    return mustInclude;
+  }
+
+  public void setMustInclude(ExactCriteria value) {
+    mustInclude = value;
+  }
+
+  public ExactCriteria getMustNotInclude() {
+    return mustNotInclude;
+  }
+
+  public void setMustNotInclude(ExactCriteria value) {
+    mustNotInclude = value;
+  }
+
+  public Integer getBookCount() {
+    return bookCount;
+  }
+
+  public void setBookCount(Integer value) {
+    bookCount = value;
+  }
+
+  public boolean isPersonalised() {
+    return personalised;
+  }
+
+  public void setPersonalised(boolean value) {
+    personalised = value;
   }
 }

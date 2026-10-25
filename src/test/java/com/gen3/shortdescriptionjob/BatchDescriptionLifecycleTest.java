@@ -11,8 +11,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.model.StoredAudiobook;
+import com.gen3.catalogue.model.AudiobookRecord;
+import com.gen3.catalogue.model.StoredAudiobook;
 import com.gen3.shortdescriptionjob.provider.OpenAiShortDescriptionBatchProvider;
 import com.gen3.shortdescriptionjob.provider.ShortDescriptionBatchProvider;
 import com.gen3.shortdescriptionjob.store.AudiobookEnrichmentStore;
@@ -50,6 +50,50 @@ class BatchDescriptionLifecycleTest {
     return new StoredAudiobook(
         new AudiobookRecord("book-1", "catalogue", "Title", List.of(), "A long description."),
         "opaque-database-row");
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void invalidProviderOutputPreventsWritesAndRetainsTheManifest(boolean conflicting)
+      throws Exception {
+    when(store.datasetIdentity()).thenReturn(new DatasetIdentity("other", "catalogue-a"));
+    var provider =
+        spy(
+            new OpenAiShortDescriptionBatchProvider(
+                mapper, mock(HttpClient.class), "test-key", "https://unused.test", "model"));
+    var contents =
+        List.of(
+            "{\"book-1\":\"Valid summary\"}",
+            conflicting ? "{\"book-1\":\"Conflicting summary\"}" : "{\"book-2\":123}");
+    String output =
+        contents.stream()
+            .map(
+                content ->
+                    mapper.writeValueAsString(
+                        java.util.Map.of(
+                            "response",
+                            java.util.Map.of(
+                                "status_code",
+                                200,
+                                "body",
+                                java.util.Map.of(
+                                    "choices",
+                                    List.of(
+                                        java.util.Map.of(
+                                            "message", java.util.Map.of("content", content))))))))
+            .collect(java.util.stream.Collectors.joining("\n"));
+    doAnswer(call -> provider.parseDescriptions(output))
+        .when(provider)
+        .completedDescriptions("batch-1");
+    var job =
+        new BatchShortDescriptionEnricher(store, mapper, provider, "import", "", directory, 1);
+    Path pending = directory.resolve("short-description-batch.json");
+    job.writeManifest(pending, "batch-1", List.of(book()));
+    String original = Files.readString(pending);
+    assertThatThrownBy(() -> job.run(new DefaultApplicationArguments()))
+        .isInstanceOf(java.io.IOException.class);
+    verify(store, never()).updateShortDescriptions(any());
+    assertThat(Files.readString(pending)).isEqualTo(original);
   }
 
   @Test

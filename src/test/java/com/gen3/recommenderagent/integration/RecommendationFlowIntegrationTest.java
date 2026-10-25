@@ -10,13 +10,15 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.gen3.catalogue.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.api.RequestGateway;
-import com.gen3.recommenderagent.application.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.ranker.RankingService;
@@ -26,10 +28,10 @@ import com.gen3.recommenderagent.ranker.scorer.RetrievalRelevanceScorer;
 import com.gen3.recommenderagent.ranker.scorer.UserPreferenceScorer;
 import com.gen3.recommenderagent.ranker.scorer.WeightedScorer;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
+import com.gen3.recommenderagent.response.ConversationResponseGenerator;
 import com.gen3.recommenderagent.retrieval.CandidateRetrievalService;
 import com.gen3.recommenderagent.retrieval.CandidateRetriever;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.testsupport.SolrContainerTestSupport;
 import java.util.List;
 import java.util.Set;
@@ -110,7 +112,7 @@ class RecommendationFlowIntegrationTest {
   void returnsTheNoMatchesFallbackWhenTheCatalogueHasNoEligibleBooks() throws Exception {
     String rawText = "Recommend science fiction from a missing source";
     var request = parsedRequest(rawText);
-    var include = new com.gen3.recommenderagent.domain.session.MustInclude();
+    var include = new com.gen3.recommenderagent.domain.session.ExactCriteria();
     include.setSource("missing-test-source");
     request.setMustInclude(include);
     var sessions = new RecommendationFlowTestSupport.InMemorySessionRepository();
@@ -137,7 +139,7 @@ class RecommendationFlowIntegrationTest {
 
   private MockMvc recommendationEndpoint(
       String rawText,
-      SessionRequest parsedRequest,
+      ConversationDraft parsedRequest,
       RecommendationFlowTestSupport.InMemorySessionRepository sessionRepository) {
     InputParser inputParser = mock(InputParser.class);
     when(inputParser.parse(rawText)).thenReturn(parsedRequest);
@@ -166,10 +168,13 @@ class RecommendationFlowIntegrationTest {
             new SemanticQueryVectorService(embeddingIndexer),
             userPreferences);
     SessionTransitionService applicationService =
-        new SessionTransitionService(sessionRepository, workflow);
+        ConversationTestSupport.transitions(sessionRepository, workflow);
 
     RequestGateway gateway =
-        new RequestGateway(inputParser, applicationService, new AiResponseGenerator(null));
+        new RequestGateway(
+            inputParser,
+            applicationService,
+            new ConversationResponseGenerator(new AiResponseGenerator(null)));
 
     return MockMvcBuilders.standaloneSetup(gateway).build();
   }
@@ -183,11 +188,11 @@ class RecommendationFlowIntegrationTest {
         new RankingScoringProperties.UniversalRuleWeights(0.7, 0.3));
   }
 
-  private SessionRequest parsedRequest(String rawText) {
+  private ConversationDraft parsedRequest(String rawText) {
     SemanticQuery semanticQuery = new SemanticQuery();
     semanticQuery.setGenres(List.of("science fiction"));
 
-    SessionRequest request = new SessionRequest();
+    ConversationDraft request = new ConversationDraft();
     request.setRawText(rawText);
     request.setIntent(Intent.RECOMMENDATION);
     request.setPositiveSemanticQuery(semanticQuery);

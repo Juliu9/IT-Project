@@ -1,6 +1,6 @@
 package com.gen3.shortdescriptionjob.provider;
 
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
+import com.gen3.catalogue.model.AudiobookRecord;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -23,6 +23,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
+import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
@@ -256,20 +257,30 @@ public class OpenAiShortDescriptionBatchProvider implements ShortDescriptionBatc
       }
       JsonNode response;
       try {
-        response = mapper.readTree(content);
+        response =
+            mapper
+                .reader()
+                .with(DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY)
+                .readTree(content);
       } catch (JacksonException exception) {
-        LOGGER.warn("Skipping malformed short-description response");
-        continue;
+        throw new IOException("Invalid short-description JSON", exception);
       }
-      response
-          .properties()
-          .forEach(
-              entry -> {
-                String description = entry.getValue().asText();
-                if (hasText(entry.getKey()) && hasText(description)) {
-                  descriptions.put(entry.getKey(), description);
-                }
-              });
+      if (!response.isObject()) {
+        throw new IOException(
+            "Short-description output must be an object mapping book IDs to text");
+      }
+      for (var entry : response.properties()) {
+        if (!entry.getValue().isString()) {
+          throw new IOException("Short description must be text for book ID: " + entry.getKey());
+        }
+        String description = entry.getValue().asText();
+        if (hasText(entry.getKey()) && hasText(description)) {
+          String previous = descriptions.putIfAbsent(entry.getKey(), description);
+          if (previous != null && !previous.equals(description)) {
+            throw new IOException("Conflicting short descriptions for book ID: " + entry.getKey());
+          }
+        }
+      }
     }
     return descriptions;
   }

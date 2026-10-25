@@ -1,7 +1,7 @@
 package com.gen3.userpreferencejob;
 
-import com.gen3.recommenderagent.embedding.VectorMath;
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorRepository;
+import com.gen3.catalogue.port.AudiobookVectorRepository;
+import com.gen3.catalogue.vector.VectorMath;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
 import com.gen3.userpreferencejob.model.UserFavourite;
@@ -10,12 +10,14 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -24,9 +26,26 @@ public class UserPreferenceAggregatorService {
   private final AudiobookVectorRepository audiobookVectorRepository;
   private final UserPreferenceVectorRepository userPreferenceVectorRepository;
 
+  private final int maximumUsers;
+  private final int maximumBookIds;
+
   public UserPreferenceAggregatorService(
       AudiobookVectorRepository audiobookVectorRepository,
       UserPreferenceVectorRepository userPreferenceVectorRepository) {
+    this(audiobookVectorRepository, userPreferenceVectorRepository, 100, 10_000);
+  }
+
+  @Autowired
+  public UserPreferenceAggregatorService(
+      AudiobookVectorRepository audiobookVectorRepository,
+      UserPreferenceVectorRepository userPreferenceVectorRepository,
+      @Value("${user.preferences.import.max-users-per-group:100}") int maximumUsers,
+      @Value("${user.preferences.import.max-book-ids-per-group:10000}") int maximumBookIds) {
+    if (maximumUsers < 1 || maximumBookIds < 1) {
+      throw new IllegalArgumentException("Preference import group limits must be positive");
+    }
+    this.maximumUsers = maximumUsers;
+    this.maximumBookIds = maximumBookIds;
     this.audiobookVectorRepository = audiobookVectorRepository;
     this.userPreferenceVectorRepository = userPreferenceVectorRepository;
   }
@@ -35,19 +54,64 @@ public class UserPreferenceAggregatorService {
       throws IOException {
     // Group by User ID
     Map<String, List<UserFavourite>> favsByUser =
-        favourites.stream().collect(Collectors.groupingBy(UserFavourite::userId));
+        favourites.stream().distinct().collect(Collectors.groupingBy(UserFavourite::userId));
     Map<String, List<UserHistory>> histByUser =
         history.stream().collect(Collectors.groupingBy(UserHistory::userId));
 
-    Set<String> allUserIds = new HashSet<>();
+    Set<String> allUserIds = new TreeSet<>();
     allUserIds.addAll(favsByUser.keySet());
     allUserIds.addAll(histByUser.keySet());
-    Map<String, float[]> vectors =
-        audiobookVectorRepository.findEmbeddingsByBookIds(bookIds(favourites, history));
-
-    Instant now = Instant.now();
-
+    // Validate the entire input before any writes; never truncate one user's history.
     for (String userId : allUserIds) {
+      int count =
+          bookIds(
+                  favsByUser.getOrDefault(userId, List.of()),
+                  histByUser.getOrDefault(userId, List.of()))
+              .size();
+      if (count > maximumBookIds) {
+        throw new IllegalArgumentException(
+            "User "
+                + userId
+                + " references "
+                + count
+                + " distinct book IDs; configured limit is "
+                + maximumBookIds);
+      }
+    }
+    Instant now = Instant.now();
+    List<String> group = new ArrayList<>();
+    Set<String> groupBooks = new LinkedHashSet<>();
+    for (String userId : allUserIds) {
+      Set<String> ids =
+          bookIds(
+              favsByUser.getOrDefault(userId, List.of()),
+              histByUser.getOrDefault(userId, List.of()));
+      long additions = ids.stream().filter(id -> !groupBooks.contains(id)).count();
+      if (!group.isEmpty()
+          && (group.size() == maximumUsers || groupBooks.size() + additions > maximumBookIds)) {
+        aggregateGroup(group, groupBooks, favsByUser, histByUser, now);
+        group.clear();
+        groupBooks.clear();
+      }
+      group.add(userId);
+      groupBooks.addAll(ids);
+    }
+    if (!group.isEmpty()) {
+      aggregateGroup(group, groupBooks, favsByUser, histByUser, now);
+    }
+  }
+
+  private void aggregateGroup(
+      List<String> userIds,
+      Set<String> bookIds,
+      Map<String, List<UserFavourite>> favsByUser,
+      Map<String, List<UserHistory>> histByUser,
+      Instant now)
+      throws IOException {
+    Map<String, float[]> vectors = audiobookVectorRepository.findEmbeddingsByBookIds(bookIds);
+    List<UserPreferenceEmbedding> pending = new ArrayList<>();
+    List<String> usersToClear = new ArrayList<>();
+    for (String userId : userIds) {
       // 1. Process Favourites (Standard Average)
       List<float[]> favVectors = new ArrayList<>();
       for (UserFavourite fav : favsByUser.getOrDefault(userId, List.of())) {
@@ -75,12 +139,21 @@ public class UserPreferenceAggregatorService {
       }
       float[] aggregatedHist = VectorMath.weightedAverage(histVectors, histWeights);
 
-      // 3. Save to Qdrant
-      if (aggregatedFavs.length > 0 || aggregatedHist.length > 0) {
-        UserPreferenceEmbedding embedding =
-            new UserPreferenceEmbedding(userId, aggregatedFavs, aggregatedHist);
-        userPreferenceVectorRepository.save(embedding);
+      if (aggregatedFavs.length == 0 && aggregatedHist.length == 0) {
+        usersToClear.add(userId);
+        continue;
       }
+      pending.add(new UserPreferenceEmbedding(userId, aggregatedFavs, aggregatedHist));
+      if (pending.size() == 500) {
+        userPreferenceVectorRepository.saveAll(List.copyOf(pending));
+        pending.clear();
+      }
+    }
+    if (!usersToClear.isEmpty()) {
+      userPreferenceVectorRepository.clearAll(List.copyOf(usersToClear));
+    }
+    if (!pending.isEmpty()) {
+      userPreferenceVectorRepository.saveAll(List.copyOf(pending));
     }
   }
 

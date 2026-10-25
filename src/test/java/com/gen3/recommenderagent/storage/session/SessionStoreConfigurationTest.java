@@ -5,11 +5,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.application.RecommendationWorkflow;
 import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.application.recommendation.RecommendationPager;
+import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.Session;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
+import com.gen3.recommenderagent.retrieval.plan.ExactFilterPolicy;
 import com.gen3.recommenderagent.storage.session.redis.RedisConfig;
 import com.gen3.recommenderagent.storage.session.redis.RedisSessionRepository;
 import java.util.function.Function;
@@ -28,7 +31,14 @@ class SessionStoreConfigurationTest {
   private final ApplicationContextRunner runner =
       new ApplicationContextRunner()
           .withUserConfiguration(
-              RedisConfig.class, RedisSessionRepository.class, SessionTransitionService.class)
+              RedisConfig.class,
+              RedisSessionRepository.class,
+              SessionTransitionService.class,
+              com.gen3.recommenderagent.application.conversation.ConversationEngine.class,
+              com.gen3.recommenderagent.application.conversation.ConversationConfiguration.class,
+              AudiobookRetrievalPlanner.class,
+              ExactFilterPolicy.class,
+              RecommendationPager.class)
           .withBean(RecommendationWorkflow.class, () -> mock(RecommendationWorkflow.class));
 
   @TestConfiguration(proxyBeanMethods = false)
@@ -93,7 +103,7 @@ class SessionStoreConfigurationTest {
     when(replacement.update(any(), any(), any()))
         .thenAnswer(
             invocation -> {
-              Function<Session, SessionRequest> change = invocation.getArgument(2);
+              Function<Session, ConversationDraft> change = invocation.getArgument(2);
               Session session = new Session();
               session.setSessionId(invocation.getArgument(0));
               session.setUserId(invocation.getArgument(1));
@@ -112,7 +122,7 @@ class SessionStoreConfigurationTest {
                   .doesNotHaveBean(RedisConnectionFactory.class)
                   .doesNotHaveBean(RedisTemplate.class);
               assertThat(context.getBean(SessionRepository.class)).isSameAs(replacement);
-              SessionRequest request = new SessionRequest();
+              ConversationDraft request = new ConversationDraft();
               request.setIntent(Intent.HELP);
               var result =
                   context

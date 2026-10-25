@@ -8,14 +8,17 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.application.RecommendationWorkflow;
 import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDecision;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ConversationTurn;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
+import com.gen3.recommenderagent.response.ConversationResponseGenerator;
 import java.util.List;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
@@ -27,8 +30,10 @@ class RepeatRequestFlowTest {
   private final RecommendationWorkflow workflow = mock(RecommendationWorkflow.class);
   private final RecommendationFlowTestSupport.InMemorySessionRepository sessions =
       new RecommendationFlowTestSupport.InMemorySessionRepository();
-  private final SessionTransitionService service = new SessionTransitionService(sessions, workflow);
-  private final AiResponseGenerator responses = new AiResponseGenerator(null);
+  private final SessionTransitionService service =
+      ConversationTestSupport.transitions(sessions, workflow);
+  private final ConversationResponseGenerator responses =
+      new ConversationResponseGenerator(new AiResponseGenerator(null));
 
   @Test
   void helpCanBeRepeatedBeforeAnyRecommendationSearch() {
@@ -145,7 +150,7 @@ class RepeatRequestFlowTest {
     var legacy = new Session();
     legacy.setSessionId("session");
     legacy.setUserId("user");
-    legacy.getRequests().add(request(Intent.HELP));
+    legacy.getRequests().add(ConversationTurn.fromDraft(request(Intent.HELP)));
     sessions.updateSession(legacy);
     assertThat(process(request(Intent.REPEAT)).getDecision()).isEqualTo(ConversationDecision.HELP);
     verifyNoInteractions(workflow);
@@ -233,13 +238,13 @@ class RepeatRequestFlowTest {
     process(request(Intent.RECOMMENDATION));
   }
 
-  private SessionRequest request(Intent intent) {
-    var request = new SessionRequest();
+  private ConversationDraft request(Intent intent) {
+    var request = new ConversationDraft();
     request.setIntent(intent);
     return request;
   }
 
-  private SessionRequest process(SessionRequest request) {
+  private ConversationTurn process(ConversationDraft request) {
     return service.process("session", "user", request);
   }
 

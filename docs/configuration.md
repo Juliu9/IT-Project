@@ -11,7 +11,7 @@ This reference covers the repository's settings, rather than every property supp
 
 For local runs, command-line application arguments override environment variables, which override
 values in the packaged properties files. For example, `--server.port=8081` overrides `server.port=8080`.
-An expression such as `${QDRANT_TIMEOUT:10s}` reads the named variable and uses `10s` when absent.
+An expression such as `${QDRANT_TIMEOUT:15s}` reads the named variable and uses `15s` when absent.
 An empty default (`${QDRANT_API_KEY:}`) means optional configuration, not a generated credential.
 
 | Source | Purpose |
@@ -27,9 +27,73 @@ quotes. It does **not** export environment variables to Maven or tests. No `.env
 `.env.production` is loaded automatically. Outside the dev profile, `.env` is not imported.
 Docker Compose reads the root `.env` independently for substitution; this does not configure Java.
 
-See [local setup](../README.md#local-env-configuration) for the `.env` example and terminal export
-commands. Only source a trusted, shell-compatible file. Keep credentials out of tracked files and
-command-line arguments. The dev profile also enables the test website; leave it disabled in production.
+### Local `.env` and terminal exports
+
+Use one optional `.env` file in the repository root, beside `pom.xml`. For local Redis and a
+populated local Qdrant catalogue, the minimum is:
+
+```properties
+OPENAI_API_KEY=your-key
+```
+
+For remote services, add the connection/authentication values from [Technology connections](#technology-connections).
+Grafana credentials are only needed for [optional log shipping](observability.md#setup).
+Environment variables override imported `.env` values. The checked-in dev properties file contains
+no secrets; missing `.env` files are allowed.
+
+To export a trusted, shell-compatible `.env` to Maven and environment-gated tests, run from the
+repository directory:
+
+```bash
+set -a
+source .env
+set +a
+```
+
+Values remain exported in that terminal. `source` executes shell commands, so only use trusted files.
+Keep credentials out of Git, logs, and command-line arguments; `.env` is ignored by Git.
+
+### Development website
+
+The `dev` profile serves `/` and `/index.html`, and enables `POST /api/v1/recommendations/demo`.
+Without it the server is backend-only; both the page and demo endpoint are unavailable.
+Keep the profile disabled in production. Launch commands are in the [README](../README.md#run-locally).
+
+The page shows response text, resolved request, stage timings, and AI usage including query
+embeddings. It provides editable User ID and Session ID fields, initially generated for the tab.
+Submitted IDs persist across reloads through session storage and appear in response details.
+Use an imported user's ID to test stored reading preferences; generated IDs have no imported profile.
+Reuse the same user/session pair for follow-ups; change the session ID for a separate conversation.
+
+The demo collects per-operation metrics; the standard endpoint still returns plain text.
+Both use the same recommendation flow. The page reports the whole recommendation stage and
+distinguishes no AI call from unavailable usage. Costs are not estimated.
+
+User/session headers identify a conversation; they are not authentication. Establish a verified
+identity boundary before exposing the service to untrusted clients. Local Compose publishes its
+service ports on `127.0.0.1` only; this does not authenticate the HTTP API.
+
+### Verification and live-test prerequisites
+
+Commands are listed once in [README: Verification commands](../README.md#verification-commands).
+Local verification includes Maven validation, Spotless, Checkstyle, unit tests, and disposable
+container integration tests; Docker must be running.
+
+The live recommendation test requires exported, nonempty `OPENAI_API_KEY`, `QDRANT_URL`, and
+`QDRANT_API_KEY`, an accessible populated Qdrant catalogue, and Redis. This environment gate applies
+even though local Qdrant can run without authentication. A dev `.env` import does not satisfy it.
+The test requires actual saved recommendations and their titles in the response; a nonblank fallback
+alone does not pass. Without the required variables, it is skipped.
+
+Live parser evaluations additionally require `RUN_LIVE_PARSER_TESTS=true` and exported
+`OPENAI_API_KEY`. They send synthetic text to the configured parser model, without catalogue or
+Redis access. Cases cover natural phrases outside the fast path, ranks versus counts, repeat
+variants, and duration extraction. Mocked tests check mappings and prompt contracts; these live
+cases measure model recognition. Both kinds of live test incur provider charges.
+
+CI checks local tests on PRs and pushes to `staging` and `main`. Trusted PRs to `main`, pushes to
+`main`, and manual runs on `main` also run the secret-backed suite; fork PRs use local tests only.
+The workflow does not opt into the separate live parser evaluations.
 
 ## Application and backend selection
 
@@ -41,9 +105,11 @@ command-line arguments. The dev profile also enables the test website; leave it 
 | `session.store` / `SESSION_STORE` | `redis` | Selects the registered session adapter |
 | `audiobook.database` / `AUDIOBOOK_DATABASE` | `qdrant` | Selects one database for the operation |
 
-Qdrant is the complete live recommendation backend. Solr supports catalogue embedding and summary
-jobs and acts as the migration source; the recommendation server rejects Solr until its missing
-vector-lookup and user-preference adapters exist. Selecting a database does not move records.
+Qdrant and Solr both support the live recommendation server and its maintenance jobs. Select
+`qdrant` or `solr`; only that database's runtime adapters and client are enabled. Migration is the
+explicit exception that connects to both databases. Selecting a database does not move records.
+When switching to a different catalogue, use new sessions or clear existing history so cached pages
+from the previous backend are not reused.
 A replacement session adapter must preserve locking, checked commits, and expiry, not just get/set.
 See [adapter contracts](architecture.md#database-selection-and-replacement).
 
@@ -107,14 +173,15 @@ Required by the live server when `SESSION_STORE=redis`; maintenance jobs do not 
 | `collection` | `QDRANT_COLLECTION` | `audiobooks_hybrid`; existing audiobook catalogue |
 | `user-preference-collection` | `QDRANT_USER_PREFERENCE_COLLECTION` | `user`; stored favourites/history vectors |
 | `embedding-dimension` | Inherits `embedding.dimensions` | `1536`; keep aligned with the model and collection |
-| `timeout` | `QDRANT_TIMEOUT` | `10s`; timeout for one Qdrant call, not the whole HTTP request |
+| `timeout` | `QDRANT_TIMEOUT` | `15s`; timeout for one Qdrant call, not the whole HTTP request |
 
 Starting local Docker does not populate either collection. Existing schema and record-identity
 requirements are in [Qdrant schema](architecture.md#qdrant-schema-and-record-identity).
 
 ### Solr
 
-These settings apply to jobs that use Solr. Solr is not included in the local Compose stack.
+These settings apply to the recommendation server and jobs when Solr is selected. Solr is not
+included in the local Compose stack; Redis is still the session store.
 
 | Property under `solr.` | Environment variable | Default / purpose |
 | --- | --- | --- |
@@ -123,10 +190,48 @@ These settings apply to jobs that use Solr. Solr is not included in the local Co
 | `username` | `SOLR_USERNAME` | empty; optional authentication |
 | `password` | `SOLR_PASSWORD` | empty; optional authentication |
 | `vector-field` | `SOLR_VECTOR_FIELD` | `embedding`; dense-vector field |
+| `user-preference-collection` | `SOLR_USER_PREFERENCE_COLLECTION` | `user`; separate collection containing user taste vectors |
 | `embedding-dimension` | Inherits `embedding.dimensions` | `1536`; must match the external field schema |
 
-Apply the [manual vector-field schema](../solr/vector-field-schema.xml) to the target collection;
-the application does not automatically install it.
+To select Solr, supply these values through your environment or the dev `.env`:
+
+```properties
+AUDIOBOOK_DATABASE=solr
+SOLR_URL=http://localhost:8983/solr
+SOLR_COLLECTION=combinedbooks
+SOLR_VECTOR_FIELD=embedding
+SOLR_USER_PREFERENCE_COLLECTION=user
+EMBEDDING_DIMENSIONS=1536
+```
+
+Supply OpenAI credentials and Redis settings as usual. Add Solr credentials when authentication is
+enabled. `SOLR_URL` points to `/solr`, not a particular collection.
+
+Prepare the collections before use; reads and normal server startup never create collections or schemas:
+
+- **Catalogue:** Use a string `id` unique key as the book ID. Apply the
+  [catalogue vector schema](../solr/vector-field-schema.xml), matching the configured field name and
+  dimensions. Generate vectors with the opt-in embedding job if absent. The adapter uses `source`,
+  `title`, `authors`, `description`, `narrators`, `language`, `durationMinutes`, `publicationYear`, and
+  `short_description`. Keyword search, including the keyword part of hybrid retrieval, targets only
+  the analyzed `all` field; populate it with the text you want searchable. Explicit query field
+  selectors are restricted to `all` too. Exact author/narrator/language/source filters still use their
+  dedicated keyword (`string`) fields. Store metadata needed for responses and updates.
+- **User preferences:** Create a separate collection using the
+  [preference schema](../solr/user-preference-schema.xml). Its string `id` is the exact external user ID;
+  `favouritesVector` and `historyVector` are optional stored vectors of the shared dimension. Use the
+  preference import job to populate them. Saving replaces both vector fields, clears a missing side,
+  and preserves other user fields through atomic updates. Retain `_version_` and make non-copy fields
+  stored or backed by docValues as required for Solr atomic updates.
+
+The catalogue and preference collections must have different names to prevent ID collisions. Unknown
+users can still supply session preferences. Preference read errors fall back to session taste; catalogue
+search errors are reported as unavailable. Candidate vectors are returned and normalized for ranking;
+missing vectors make the preference ranking signal unavailable for that record. Malformed stored
+vectors fail rather than supplying misleading similarity scores.
+
+Solr hybrid search blends lexical and dense scores; it does not use Qdrant's sparse-vector schema.
+Expect ranking differences between databases even with equivalent catalogue content.
 
 ## Maintenance jobs: explicit opt-in
 
@@ -174,6 +279,8 @@ embedding model. See the maintenance guide for CSV columns and database support.
 | `import-on-startup` | `USER_PREFERENCES_IMPORT_ON_STARTUP` | `false`; opt-in for the dedicated launcher |
 | `favourites-csv-path` | `USER_PREFERENCES_FAVOURITES_CSV_PATH` | empty; favourites input path |
 | `history-csv-path` | `USER_PREFERENCES_HISTORY_CSV_PATH` | empty; history input path |
+| `import.max-users-per-group` | `USER_PREFERENCES_IMPORT_MAX_USERS_PER_GROUP` | `100`; maximum complete users processed together |
+| `import.max-book-ids-per-group` | `USER_PREFERENCES_IMPORT_MAX_BOOK_IDS_PER_GROUP` | `10000`; maximum distinct books loaded per group |
 
 ### Solr-to-Qdrant migration
 
@@ -192,8 +299,8 @@ It copies existing supported fields and vectors without generating embeddings or
 | --- | --- |
 | Local development | Start Redis and Qdrant with Compose, populate the catalogue, supply `OPENAI_API_KEY`, and use the `dev` profile for `.env` loading and the website. |
 | Remote Qdrant | Set `QDRANT_URL`, `QDRANT_GRPC_PORT`, authentication and collection names for the remote instance; configure Redis separately. |
+| Solr recommendation server | Select `AUDIOBOOK_DATABASE=solr`, configure both collections and their schemas above, populate catalogue vectors, and provide OpenAI and Redis connections. |
 | Catalogue maintenance in Solr | Select `AUDIOBOOK_DATABASE=solr`, supply Solr connection/schema settings, and run the dedicated embedding or summary launcher with its opt-in mode. Embedding generation needs OpenAI credentials; summary generation uses its selected Batch provider. |
-| Full live test suite | Export nonempty `OPENAI_API_KEY`, `QDRANT_URL`, and `QDRANT_API_KEY`; provide Redis and a populated catalogue. A dev `.env` import alone does not satisfy the test's environment conditions. |
 
 Optional Grafana settings belong to the Compose collector rather than `application.properties`;
 see [observability setup](observability.md#setup).

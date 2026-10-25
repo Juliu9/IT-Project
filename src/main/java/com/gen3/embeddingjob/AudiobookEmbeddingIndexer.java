@@ -1,8 +1,8 @@
 package com.gen3.embeddingjob;
 
-import com.gen3.recommenderagent.embedding.VectorMath;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookEmbedding;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
+import com.gen3.catalogue.model.AudiobookEmbedding;
+import com.gen3.catalogue.model.AudiobookRecord;
+import com.gen3.catalogue.vector.VectorMath;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;

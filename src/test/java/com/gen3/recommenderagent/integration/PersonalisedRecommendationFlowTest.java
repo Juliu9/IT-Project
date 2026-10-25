@@ -10,25 +10,27 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.application.AudiobookRecommendationWorkflow;
+import com.gen3.catalogue.model.AudiobookFilters;
+import com.gen3.catalogue.qdrant.QdrantAudiobookRepository;
 import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.MustInclude;
-import com.gen3.recommenderagent.domain.session.MustNotInclude;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ConversationTurn;
+import com.gen3.recommenderagent.domain.session.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.ranker.Ranker;
 import com.gen3.recommenderagent.ranker.RankingContext;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
+import com.gen3.recommenderagent.response.ConversationResponseGenerator;
 import com.gen3.recommenderagent.retrieval.CandidateRetrievalService;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
-import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
 import java.io.IOException;
@@ -52,7 +54,8 @@ class PersonalisedRecommendationFlowTest {
   private final Ranker ranker = mock(Ranker.class);
   private final RecommendationFlowTestSupport.InMemorySessionRepository sessions =
       new RecommendationFlowTestSupport.InMemorySessionRepository();
-  private final AiResponseGenerator responseGenerator = new AiResponseGenerator(null);
+  private final ConversationResponseGenerator responseGenerator =
+      new ConversationResponseGenerator(new AiResponseGenerator(null));
   private final SessionTransitionService application;
 
   PersonalisedRecommendationFlowTest() throws Exception {
@@ -71,7 +74,57 @@ class PersonalisedRecommendationFlowTest {
             ranker,
             new SemanticQueryVectorService(indexer),
             users);
-    application = new SessionTransitionService(sessions, workflow);
+    application = ConversationTestSupport.transitions(sessions, workflow);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"Recommend an audiobook", "Recommend an audiobook for me"})
+  void genericRequestForNewUserAsksForTasteWithoutSearching(String text) {
+    var request = new ConversationDraft();
+    request.setIntent(Intent.RECOMMENDATION);
+    request.setRawText(text);
+    var result = process(request);
+    assertThat(result.isPersonalised()).isTrue();
+    assertThat(result.isPreferenceClarificationRequired()).isTrue();
+    assertThat(result.getRecommendations()).isEmpty();
+    assertThat(responseGenerator.generate(result.getRecommendations(), result))
+        .contains("What genres");
+    verifyNoInteractions(books, embeddingModel, ranker);
+  }
+
+  @Test
+  void genericRequestForKnownUserUsesStoredTaste() throws Exception {
+    when(users.findEmbeddingByUserId("user"))
+        .thenReturn(
+            Optional.of(new UserPreferenceEmbedding("user", new float[] {1, 0}, new float[0])));
+    var request = new ConversationDraft();
+    request.setIntent(Intent.RECOMMENDATION);
+    request.setRawText("Recommend an audiobook");
+    var result = process(request);
+    assertThat(result.isPersonalised()).isTrue();
+    assertThat(result.getRecommendations()).hasSize(1);
+    verify(books).searchSemantic(any(), eq(AudiobookFilters.empty()), eq(50));
+    verifyNoInteractions(embeddingModel);
+  }
+
+  @Test
+  void cancellationSurvivesSessionReloadAndDoesNotRestartThePreferenceQuestion() {
+    process(personalisedRequest());
+    var cancel = new ConversationDraft();
+    cancel.setIntent(Intent.UNKNOWN);
+    cancel.setRawText("never mind");
+    var result = process(cancel);
+    assertThat(result.getDecision())
+        .isEqualTo(com.gen3.recommenderagent.domain.session.ConversationDecision.CANCELLED);
+    assertThat(responseGenerator.generate(result.getRecommendations(), result))
+        .contains("cancelled");
+    assertThat(sessions.getSession("session", "user").isAwaitingPersonalisedPreferences())
+        .isFalse();
+    var unknown = new ConversationDraft();
+    unknown.setIntent(Intent.UNKNOWN);
+    assertThat(process(unknown).getIntent()).isEqualTo(Intent.UNKNOWN);
+    verifyNoInteractions(books, embeddingModel, ranker);
   }
 
   @Test
@@ -81,7 +134,7 @@ class PersonalisedRecommendationFlowTest {
             Optional.of(
                 new UserPreferenceEmbedding("user", new float[] {1, 0}, new float[] {0, 1})));
 
-    SessionRequest result = process(personalisedRequest());
+    ConversationTurn result = process(personalisedRequest());
 
     ArgumentCaptor<float[]> vector = ArgumentCaptor.forClass(float[].class);
     verify(books).searchSemantic(vector.capture(), eq(AudiobookFilters.empty()), eq(50));
@@ -98,8 +151,8 @@ class PersonalisedRecommendationFlowTest {
     when(users.findEmbeddingByUserId("user"))
         .thenReturn(
             Optional.of(new UserPreferenceEmbedding("user", new float[0], new float[] {1, 0})));
-    SessionRequest request = personalisedRequest();
-    MustInclude filter = new MustInclude();
+    ConversationDraft request = personalisedRequest();
+    ExactCriteria filter = new ExactCriteria();
     filter.setLanguage("English");
     request.setMustInclude(filter);
 
@@ -134,7 +187,7 @@ class PersonalisedRecommendationFlowTest {
     blank.setGenres(List.of(" "));
     session.getPreferences().setPositiveSemanticQuery(blank);
     sessions.updateSession(session);
-    SessionRequest first = process(personalisedRequest());
+    ConversationTurn first = process(personalisedRequest());
 
     assertThat(first.getRecommendations()).isEmpty();
     assertThat(responseGenerator.generate(first.getRecommendations(), first))
@@ -149,14 +202,14 @@ class PersonalisedRecommendationFlowTest {
         mapper.readValue(
             mapper.writeValueAsString(sessions.getSession("session", "user")), Session.class);
     sessions.updateSession(restored);
-    SessionRequest answer = new SessionRequest();
+    ConversationDraft answer = new ConversationDraft();
     answer.setIntent(Intent.REFINE);
     SemanticQuery taste = new SemanticQuery();
     taste.setGenres(List.of("fantasy"));
     taste.setAuthors(List.of("Ursula Le Guin"));
     answer.setPositiveSemanticQuery(taste);
 
-    SessionRequest result = process(answer);
+    ConversationTurn result = process(answer);
 
     assertThat(result.getIntent()).isEqualTo(Intent.RECOMMENDATION);
     assertThat(result.getRecommendations()).hasSize(1);
@@ -176,11 +229,11 @@ class PersonalisedRecommendationFlowTest {
     SemanticQuery earlier = new SemanticQuery();
     earlier.setGenres(List.of("fantasy"));
     session.getPreferences().setPositiveSemanticQuery(earlier);
-    SessionRequest pending = personalisedRequest();
+    ConversationDraft pending = personalisedRequest();
     pending.setPreferenceClarificationRequired(true);
-    session.getRequests().add(pending);
+    session.getRequests().add(ConversationTurn.fromDraft(pending));
     sessions.updateSession(session);
-    SessionRequest answer = new SessionRequest();
+    ConversationDraft answer = new ConversationDraft();
     answer.setIntent(Intent.REFINE);
     SemanticQuery taste = new SemanticQuery();
     taste.setAuthors(List.of("Ursula Le Guin"));
@@ -192,27 +245,21 @@ class PersonalisedRecommendationFlowTest {
         .containsExactly("fantasy");
     assertThat(session.getPreferences().getPositiveSemanticQuery().getAuthors())
         .containsExactly("Ursula Le Guin");
-    SessionRequest more = new SessionRequest();
+    ConversationDraft more = new ConversationDraft();
     more.setIntent(Intent.MORE_RESULTS);
     assertThat(process(more).isPersonalised()).isTrue();
   }
 
   @Test
-  void structuredPreferencesAreEmbeddedAndAppliedAsFilters() throws Exception {
+  void exactOnlyPreferencesAskForSemanticTasteWithoutEmbeddingFilters() {
     Session session = sessionWithPreferences();
-    MustInclude include = new MustInclude();
+    ExactCriteria include = new ExactCriteria();
     include.setAuthors(List.of("Ursula Le Guin"));
     include.setLanguage("English");
     session.getPreferences().setMustInclude(include);
     sessions.updateSession(session);
-
-    process(personalisedRequest());
-
-    verify(embeddingModel)
-        .embedForResponse(List.of("Keywords: Author: Ursula Le Guin, Language: English"));
-    ArgumentCaptor<AudiobookFilters> filters = ArgumentCaptor.forClass(AudiobookFilters.class);
-    verify(books).searchSemantic(any(), filters.capture(), eq(50));
-    assertThat(filters.getValue().mustInclude().authors()).containsExactly("Ursula Le Guin");
+    assertThat(process(personalisedRequest()).isPreferenceClarificationRequired()).isTrue();
+    verifyNoInteractions(books, embeddingModel, ranker);
   }
 
   @Test
@@ -232,11 +279,11 @@ class PersonalisedRecommendationFlowTest {
   @Test
   void unrelatedHelpKeepsPendingAndClearHistoryCancelsIt() {
     process(personalisedRequest());
-    SessionRequest help = new SessionRequest();
+    ConversationDraft help = new ConversationDraft();
     help.setIntent(Intent.HELP);
     assertThat(process(help).getIntent()).isEqualTo(Intent.HELP);
     assertThat(sessions.getSession("session", "user").isAwaitingPersonalisedPreferences()).isTrue();
-    SessionRequest clear = new SessionRequest();
+    ConversationDraft clear = new ConversationDraft();
     clear.setIntent(Intent.CLEAR_HISTORY);
     process(clear);
     assertThat(sessions.getSession("session", "user").isAwaitingPersonalisedPreferences())
@@ -255,22 +302,22 @@ class PersonalisedRecommendationFlowTest {
                 List.of(
                     new Embedding(new float[] {0, 1, 0}, 0),
                     new Embedding(new float[] {0, 0, 1}, 1))));
-    SessionRequest request = personalisedRequest();
+    ConversationDraft request = personalisedRequest();
     SemanticQuery positive = new SemanticQuery();
     positive.setTopics(List.of("deserts"));
     SemanticQuery negative = new SemanticQuery();
     negative.setGenres(List.of("romance"));
     request.setPositiveSemanticQuery(positive);
     request.setNegativeSemanticQuery(negative);
-    MustInclude include = new MustInclude();
+    ExactCriteria include = new ExactCriteria();
     include.setLanguage("English");
     include.setDuration("at most 2 hours");
-    MustNotInclude exclude = new MustNotInclude();
+    ExactCriteria exclude = new ExactCriteria();
     exclude.setAuthors(List.of("Excluded Author"));
     request.setMustInclude(include);
     request.setMustNotInclude(exclude);
 
-    SessionRequest result = process(request);
+    ConversationTurn result = process(request);
 
     ArgumentCaptor<float[]> vector = ArgumentCaptor.forClass(float[].class);
     ArgumentCaptor<AudiobookFilters> filters = ArgumentCaptor.forClass(AudiobookFilters.class);
@@ -286,12 +333,144 @@ class PersonalisedRecommendationFlowTest {
     assertThat(result.getRecommendations()).hasSize(1);
   }
 
-  private SessionRequest process(SessionRequest request) {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void shortTasteAnswerRetainsPendingConstraintsAndCountAcrossReload(boolean changesYear)
+      throws Exception {
+    var request = personalisedRequest();
+    var include = new ExactCriteria();
+    include.setPublicationYear("recent");
+    request.setMustInclude(include);
+    request.setBookCount(2);
+    assertThat(process(request).isPreferenceClarificationRequired()).isTrue();
+    var mapper = JsonMapper.builder().build();
+    sessions.updateSession(
+        mapper.readValue(
+            mapper.writeValueAsString(sessions.getSession("session", "user")), Session.class));
+    var answer = new ConversationDraft();
+    answer.setIntent(Intent.RECOMMENDATION);
+    var taste = new SemanticQuery();
+    taste.setGenres(List.of("fantasy"));
+    answer.setPositiveSemanticQuery(taste);
+    if (changesYear) {
+      var changed = new ExactCriteria();
+      changed.setPublicationYear("2020");
+      answer.setMustInclude(changed);
+    }
+    var result = process(answer);
+    assertThat(result.getMustInclude().getPublicationYear())
+        .isEqualTo(changesYear ? "2020" : "recent");
+    assertThat(result.getBookCount()).isEqualTo(2);
+    var filters = ArgumentCaptor.forClass(AudiobookFilters.class);
+    verify(books).searchSemantic(any(), filters.capture(), eq(50));
+    assertThat(filters.getValue().mustInclude().minimumPublicationYear()).isNotNull();
+  }
+
+  @Test
+  void explicitSearchAbandonsPendingPersonalisationAndConstraints() throws Exception {
+    var request = personalisedRequest();
+    var include = new ExactCriteria();
+    include.setPublicationYear("recent");
+    request.setMustInclude(include);
+    process(request);
+    var answer = new ConversationDraft();
+    answer.setIntent(Intent.RECOMMENDATION);
+    answer.setExplicitSearch(true);
+    var taste = new SemanticQuery();
+    taste.setGenres(List.of("horror"));
+    answer.setPositiveSemanticQuery(taste);
+    when(books.searchSemantic(any(), any(), eq(50))).thenReturn(List.of());
+    var result = process(answer);
+    assertThat(result.isPersonalised()).isFalse();
+    assertThat(
+            result.getMustInclude() == null || result.getMustInclude().getPublicationYear() == null)
+        .isTrue();
+    verify(books).searchSemantic(any(), eq(AudiobookFilters.empty()), eq(50));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void recentPersonalisedRequestNeedsSemanticTasteOnlyWithoutUserVectors(boolean knownUser)
+      throws Exception {
+    if (knownUser) {
+      when(users.findEmbeddingByUserId("user"))
+          .thenReturn(Optional.of(new UserPreferenceEmbedding("user", new float[] {1, 0}, null)));
+    }
+    var request = personalisedRequest();
+    var include = new ExactCriteria();
+    include.setPublicationYear("recent");
+    request.setMustInclude(include);
+    var result = process(request);
+    assertThat(result.isPreferenceClarificationRequired()).isEqualTo(!knownUser);
+    if (knownUser) {
+      verify(books).searchSemantic(any(), any(), eq(50));
+    } else {
+      verifyNoInteractions(books, embeddingModel, ranker);
+    }
+  }
+
+  @Test
+  void tasteReplyUsesRefinementRulesForChangedAndConflictingConstraints() {
+    var request = personalisedRequest();
+    var include = new ExactCriteria();
+    include.setLanguage("English");
+    request.setMustInclude(include);
+    process(request);
+    var answer = new ConversationDraft();
+    answer.setIntent(Intent.RECOMMENDATION);
+    var taste = new SemanticQuery();
+    taste.setGenres(List.of("fantasy"));
+    answer.setPositiveSemanticQuery(taste);
+    var excluded = new ExactCriteria();
+    excluded.setLanguage("English");
+    answer.setMustNotInclude(excluded);
+    var result = process(answer);
+    assertThat(result.getMustInclude() == null || result.getMustInclude().getLanguage() == null)
+        .isTrue();
+    assertThat(result.getMustNotInclude().getLanguage()).isEqualTo("English");
+  }
+
+  @Test
+  void negativeSemanticTasteAlsoSatisfiesPersonalisation() throws Exception {
+    var request = personalisedRequest();
+    var avoided = new SemanticQuery();
+    avoided.setGenres(List.of("romance"));
+    request.setNegativeSemanticQuery(avoided);
+    assertThat(process(request).isPreferenceClarificationRequired()).isFalse();
+    verify(embeddingModel).embedForResponse(List.of("Genres: romance"));
+    verify(books).searchSemantic(any(), eq(AudiobookFilters.empty()), eq(50));
+  }
+
+  @Test
+  void contradictoryTasteReplyPreservesThePendingRequest() {
+    var request = personalisedRequest();
+    var include = new ExactCriteria();
+    include.setPublicationYear("recent");
+    request.setMustInclude(include);
+    process(request);
+    var answer = new ConversationDraft();
+    answer.setIntent(Intent.RECOMMENDATION);
+    var taste = new SemanticQuery();
+    taste.setGenres(List.of("fantasy"));
+    answer.setPositiveSemanticQuery(taste);
+    var both = new ExactCriteria();
+    both.setLanguage("English");
+    answer.setMustInclude(both);
+    var excluded = new ExactCriteria();
+    excluded.setLanguage("English");
+    answer.setMustNotInclude(excluded);
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> process(answer))
+        .isInstanceOf(com.gen3.recommenderagent.inputparser.InvalidRequestException.class);
+    assertThat(sessions.getSession("session", "user").isAwaitingPersonalisedPreferences()).isTrue();
+    verifyNoInteractions(books, embeddingModel, ranker);
+  }
+
+  private ConversationTurn process(ConversationDraft request) {
     return application.process("session", "user", request);
   }
 
-  private SessionRequest personalisedRequest() {
-    SessionRequest request = new SessionRequest();
+  private ConversationDraft personalisedRequest() {
+    ConversationDraft request = new ConversationDraft();
     request.setIntent(Intent.RECOMMENDATION);
     request.setPersonalised(true);
     request.setRawText("Give me books I would like");

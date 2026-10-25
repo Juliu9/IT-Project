@@ -13,16 +13,18 @@ skinparam wrapWidth 180
 actor User
 package "recommenderagent — live requests" {
   component "RequestGateway\nCoordinates the request" as Gateway #DBEAFE
-  component "AiInputParser\nText → intent + criteria" as Parser #DBEAFE
-  component "SessionTransitionService\nCoordinates paging and retrieval" as Session #DBEAFE
+  component "InputParser\nText → intent + criteria" as Parser #DBEAFE
+  component "SessionTransitionService\nOwns session transaction" as Session #DBEAFE
+  component "ConversationEngine + intent handlers\nResolve, validate and page" as Engine #DBEAFE
   component "AudiobookRecommendationWorkflow\nBuilds a new recommendation batch" as Workflow #DCFCE7
   component "CandidateRetrievalService\nSelects and executes search" as Retrieval #DCFCE7
   component "RankingService\nRanks up to 20 recommendations" as Ranking #DCFCE7
-  component "AiResponseGenerator\nExplains the selected books" as Response #DBEAFE
-  component "Database adapter\nCurrent runtime: Qdrant" as Adapter #FEF3C7
+  component "ConversationResponseGenerator\nFixed replies or AI narration" as Response #DBEAFE
+  component "User preference adapter\nQdrant OR Solr" as UserAdapter #FEF3C7
   component "SessionRepository adapter\nCurrent runtime: Redis" as SessionStore #FEF3C7
 }
-database "Qdrant\nCatalogue + book vectors\nUser preference vectors" as Qdrant
+component "catalogue\nAudiobook adapter: Qdrant OR Solr" as Adapter #FEF3C7
+database "Selected database\nQdrant OR Solr\nCatalogue + book vectors\nUser preference vectors" as Qdrant
 database "Redis\nSearch context + last page\nPending recommendations + shown IDs" as Redis
 
 User -right-> Gateway : request / response
@@ -30,8 +32,10 @@ Gateway --> Parser : 1. Parse
 Gateway --> Session : 2. Apply session transition
 Session --> SessionStore : lock / load / commit / release
 SessionStore --> Redis
-Session --> Workflow : only when a new batch is needed
-Workflow --> Adapter : load user preferences
+Session --> Engine : apply within session update
+Engine --> Workflow : only when a new batch is needed
+Workflow --> UserAdapter : load user preferences
+UserAdapter --> Qdrant
 Workflow --> Retrieval : retrieve up to 50 candidates
 Retrieval --> Adapter : semantic / keyword / hybrid / filters
 Adapter --> Qdrant
@@ -39,18 +43,19 @@ Workflow --> Ranking : rank candidates
 Gateway --> Response : 3. Generate response after commit
 
 note bottom of Session
-  ConversationState owns conversation policy.
-  The result carries a temporary ConversationDecision.
+  ConversationDispatcher dispatches validated intent handlers.
+  RecommendationPager consumes and refills the queue.
+  ConversationTurn carries the resolved decision.
   MORE: use pending recommendations first.
-  REPEAT: reuse the last search outcome.
+  REPEAT: replay the latest resolved request.
   MORE without a previous search: ask for criteria.
   These paths can skip retrieval and ranking.
 end note
 note bottom of Adapter
   Runtime code depends on storage interfaces.
   application.properties selects the adapter.
-  Solr currently supports maintenance jobs;
-  it is not yet a complete runtime backend.
+  Qdrant and Solr provide complete adapter sets.
+  Exactly one database is selected for live requests.
 end note
 legend bottom
   Blue: request handling

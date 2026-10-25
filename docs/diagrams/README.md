@@ -18,6 +18,7 @@ views use Smetana layout and do not require Graphviz.
 
 Labels use production class names. Wiring, getters/setters, exceptions, and implementation helpers
 are omitted. Runtime orchestration lives in `application`, query vectors in `embedding`, search
-execution/plans in `retrieval`, and session adapters in `storage.session`.
+execution/plans in `retrieval`, session adapters in `storage.session`, and shared audiobook
+models/adapters/vector utilities in sibling `catalogue`.
 
 When changing the architecture, update the affected `.puml` source and regenerate its SVG.

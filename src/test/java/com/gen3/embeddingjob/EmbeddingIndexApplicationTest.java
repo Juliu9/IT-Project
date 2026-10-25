@@ -3,9 +3,9 @@ package com.gen3.embeddingjob;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import com.gen3.catalogue.solr.SolrAudiobookRepository;
 import com.gen3.embeddingjob.store.AudiobookEmbeddingStore;
 import com.gen3.embeddingjob.store.QdrantEmbeddingStore;
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
 import io.qdrant.client.QdrantClient;
 import org.apache.solr.client.solrj.SolrClient;
 import org.junit.jupiter.api.Test;

@@ -3,9 +3,8 @@ package com.gen3.recommenderagent.retrieval.plan;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.gen3.recommenderagent.domain.session.MustInclude;
-import com.gen3.recommenderagent.domain.session.MustNotInclude;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ExactCriteria;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import java.util.Set;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -16,6 +15,7 @@ class DurationBoundsTest {
   @ParameterizedTest
   @CsvSource(
       value = {
+        "under 10 hours|null|599",
         "under 1.5 hours|null|89",
         "at most 1.5 hours|null|90",
         "over 90 minutes|91|null",
@@ -36,11 +36,11 @@ class DurationBoundsTest {
       nullValues = "null")
   void preservesDurationMeaningForRequiredAndExcludedRanges(
       String text, Integer minimum, Integer maximum) {
-    SessionRequest request = new SessionRequest();
-    MustInclude include = new MustInclude();
+    ConversationDraft request = new ConversationDraft();
+    ExactCriteria include = new ExactCriteria();
     include.setDuration(text);
     request.setMustInclude(include);
-    MustNotInclude exclude = new MustNotInclude();
+    ExactCriteria exclude = new ExactCriteria();
     exclude.setDuration(text);
     request.setMustNotInclude(exclude);
     var filters = new AudiobookRetrievalPlanner().plan(50, request, Set.of()).filters();
@@ -67,8 +67,8 @@ class DurationBoundsTest {
         "between 2 hours and 3"
       })
   void rejectsInvalidOrAmbiguousDurationWithoutDroppingTheFilter(String text) {
-    SessionRequest request = new SessionRequest();
-    MustInclude include = new MustInclude();
+    ConversationDraft request = new ConversationDraft();
+    ExactCriteria include = new ExactCriteria();
     include.setDuration(text);
     request.setMustInclude(include);
     assertThatThrownBy(() -> new AudiobookRetrievalPlanner().plan(50, request, Set.of()))

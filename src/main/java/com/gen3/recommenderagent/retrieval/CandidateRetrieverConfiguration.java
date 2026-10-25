@@ -1,9 +1,9 @@
 package com.gen3.recommenderagent.retrieval;
 
+import com.gen3.catalogue.port.AudiobookCandidateSearch;
+import com.gen3.catalogue.port.AudiobookVectorRepository;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorRepository;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
@@ -28,9 +28,9 @@ public class CandidateRetrieverConfiguration {
             "Run short-description generation with the dedicated ShortDescriptionApplication entry point");
       }
       String backend = environment.getProperty("audiobook.database", "qdrant");
-      if (backend.isBlank() || "solr".equals(backend)) {
+      if (backend.isBlank()) {
         throw new IllegalArgumentException(
-            "audiobook.database must select a complete database adapter set. Solr lacks vector lookup and user-preference adapters.");
+            "audiobook.database must select a complete database adapter set.");
       }
       if (environment.containsProperty("audiobook.candidate-retriever")) {
         throw new IllegalArgumentException(

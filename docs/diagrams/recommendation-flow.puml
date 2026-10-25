@@ -8,11 +8,12 @@ hide footbox
 
 actor User
 participant RequestGateway as Gateway
-participant AiInputParser as Parser
+participant InputParser as Parser
 participant SessionTransitionService as Transition
+participant "ConversationEngine\nIntent handlers + RecommendationPager" as Engine
 participant "SessionRepository\nRedis adapter" as Sessions
 participant "RecommendationWorkflow\nEmbedding → retrieval → ranking" as Workflow
-participant AiResponseGenerator as Response
+participant "ConversationResponseGenerator\nAI narration when needed" as Response
 
 User -> Gateway : Natural-language request
 Gateway -> Parser : Parse intent, criteria and count
@@ -31,38 +32,42 @@ note over Sessions
 end note
 Sessions -> Transition : Apply change to loaded session
 activate Transition
+Transition -> Engine : Resolve, validate and complete the turn
+activate Engine
 
 alt REPEAT
-  Transition -> Transition : Restore last search outcome\nKeep pending queue unchanged
+  Engine -> Engine : Restore last completed request outcome\nKeep pending queue unchanged
+else Explanation or repeat recommendations
+  Engine -> Engine : Reuse displayed page or saved outcome\nNo candidate retrieval
 else MORE with no previous search
-  Transition -> Transition : Mark search clarification required\nDo not retrieve candidates
+  Engine -> Engine : Mark search clarification required\nDo not retrieve candidates
 else Recommendation, refinement, or MORE
-  Transition -> Transition : ConversationState resolves context and preferences\nDiscard stale queue if search changed
-  Transition -> Transition : Take pending recommendations, up to requested count
+  Engine -> Engine : Intent handler resolves context and preferences\nDiscard stale queue if search changed
+  Engine -> Engine : Take pending recommendations, up to requested count
   opt Page still needs books
-    Transition -> Workflow : Build fresh batch, excluding shown IDs and cached tail
+    Engine -> Workflow : Build fresh batch, excluding shown IDs and cached tail
     activate Workflow
     Workflow -> Workflow : Load user preference vectors\nBuild query vectors when needed
     alt Personalised request lacks usable preferences
-      Workflow --> Transition : Ask for taste preferences
+      Workflow --> Engine : Ask for taste preferences
     else Search can proceed
       Workflow -> Workflow : Retrieve up to 50 candidates\nRank up to 20 recommendations
-      Workflow --> Transition : New batch for session queue
+      Workflow --> Engine : New batch for session queue
     end
     deactivate Workflow
-    Transition -> Transition : Fill page from new queue\nReturn fewer if necessary
+    Engine -> Engine : Fill page from new queue\nReturn fewer if necessary
   end
-  Transition -> Transition : ConversationState records the page and resolves outcome\nEmpty MORE = no further matches
+  Engine -> Engine : Handler completes action; history records the turn\nEmpty MORE = no further matches
 else Count, preference, history, help or unknown action
-  Transition -> Transition : Apply the relevant session action\nNo candidate retrieval
+  Engine -> Engine : Apply the relevant session action\nNo candidate retrieval
 end
 
+Engine --> Transition : Completed ConversationTurn
+deactivate Engine
 Transition --> Sessions : Transition result
 deactivate Transition
-Sessions -> Sessions : Commit session if lock and version still match\nRelease lock
-Sessions --> Transition : Return only after successful commit
-deactivate Sessions
-Transition --> Gateway : Selected page + resolved ConversationDecision
+Sessions -> Sessions : Commit session if lock and version still match\nKeep lease held and renewed
+Sessions -> Gateway : Run afterCommit with selected page and decision
 Gateway -> Response : Generate wording using resolved decision and context
 note over Response
   Chat model for book explanations.
@@ -70,6 +75,11 @@ note over Response
   exhausted results and model failures.
 end note
 Response --> Gateway : Response text
+Gateway --> Sessions : Generated response
+Sessions -> Sessions : Release session lease
+Sessions --> Transition : Completed request
+Transition --> Gateway : Generated response
+deactivate Sessions
 Gateway --> User : Response
 note over Gateway, Sessions
   Commit precedes final response generation.

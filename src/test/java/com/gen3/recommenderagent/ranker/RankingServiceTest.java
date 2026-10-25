@@ -2,13 +2,13 @@ package com.gen3.recommenderagent.ranker;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.gen3.catalogue.model.AudiobookCandidate;
+import com.gen3.catalogue.model.AudiobookRecord;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.ranker.scorer.CompositeScorer;
 import com.gen3.recommenderagent.ranker.scorer.RetrievalRelevanceScorer;
 import com.gen3.recommenderagent.ranker.scorer.ScoreResult;
 import com.gen3.recommenderagent.ranker.scorer.WeightedScorer;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.IntStream;
@@ -19,6 +19,26 @@ class RankingServiceTest {
   private final RankingService rankingService =
       new RankingService(
           new CompositeScorer(List.of(new WeightedScorer(new RetrievalRelevanceScorer(), 1.0))));
+
+  @Test
+  void replacementScorerSuppliesEvidenceWithoutRescoringSelectedBooks() {
+    var calls = new java.util.concurrent.atomic.AtomicInteger();
+    com.gen3.recommenderagent.ranker.scorer.CandidateScorer replacement =
+        (book, context) -> {
+          calls.incrementAndGet();
+          return ScoreResult.available(0.5, true);
+        };
+    var service =
+        new RankingService(
+            new CompositeScorer(
+                List.of(
+                    new WeightedScorer(replacement, 1),
+                    new WeightedScorer((book, context) -> ScoreResult.available(-0.5), 1))));
+    var result = service.rank(List.of(candidate("first", 1.0), candidate("second", 0.5)), 1);
+    assertEquals(2, calls.get());
+    assertEquals(0.0, result.getFirst().getScore());
+    assertEquals(true, result.getFirst().isReadingPreferencesUsed());
+  }
 
   @Test
   void recordsPreferencesOnlyWhenAnActivePreferenceScorerHasPositiveEvidence() {

@@ -7,7 +7,8 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ConversationTurn;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -63,7 +64,7 @@ class RequestTelemetryTest {
 
   @Test
   void logsTheCompleteRequestSummary() {
-    SessionRequest request = new SessionRequest();
+    ConversationDraft request = new ConversationDraft();
     request.setRequestId("request-1");
     request.setIntent(Intent.RECOMMENDATION);
 
@@ -73,7 +74,7 @@ class RequestTelemetryTest {
     RequestTelemetry.retrieval("HYBRID", 50);
     RequestTelemetry.ai(
         "generate_response", 2, new AiOperationObserver.AiUsage("model", 10, 5, 15, true));
-    telemetry.complete(request);
+    telemetry.complete(ConversationTurn.fromDraft(request));
 
     assertThat(lastMessage())
         .contains("\"event\":\"recommendation.completed\"")
@@ -110,7 +111,7 @@ class RequestTelemetryTest {
                             }),
                     response -> new AiOperationObserver.AiUsage(null, null, null, null, false)))
         .isInstanceOf(RuntimeException.class);
-    telemetry.complete(new SessionRequest());
+    telemetry.complete(new ConversationTurn());
     var summary = new ObjectMapper().readTree(lastMessage());
     assertThat(summary.path("outcome").asText()).isEqualTo("SUCCESS");
     assertThat(summary.path("ai").path("calls").asInt()).isEqualTo(2);

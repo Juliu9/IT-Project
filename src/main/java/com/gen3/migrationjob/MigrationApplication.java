@@ -19,12 +19,12 @@ import org.springframework.core.env.Environment;
       org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration.class
     })
 @Import({
-  com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantConfig.class,
-  com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantPointMapper.class,
-  com.gen3.recommenderagent.storage.audiobook.qdrant.Bm25SparseTextEncoder.class,
-  com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository.class,
-  com.gen3.recommenderagent.storage.audiobook.solr.SolrConfig.class,
-  com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository.class,
+  com.gen3.catalogue.qdrant.QdrantConfig.class,
+  com.gen3.catalogue.qdrant.QdrantPointMapper.class,
+  com.gen3.catalogue.qdrant.Bm25SparseTextEncoder.class,
+  com.gen3.catalogue.qdrant.QdrantAudiobookRepository.class,
+  com.gen3.catalogue.solr.SolrConfig.class,
+  com.gen3.catalogue.solr.SolrAudiobookRepository.class,
   com.gen3.migrationjob.SolrToQdrantMigrator.class
 })
 public class MigrationApplication {

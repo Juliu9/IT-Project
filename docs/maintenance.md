@@ -13,7 +13,12 @@ disable unused Spring AI models; the summary provider handles its own transport 
 | Catalogue embeddings | Solr or Qdrant | Embeddings | Existing records' vectors |
 | Migration | Solr → Qdrant | None | Copies absent destination books |
 | Short descriptions | Solr or Qdrant | Batch summaries | Missing short descriptions |
-| User preferences | Qdrant currently | None | Aggregated user vectors |
+| User preferences | Solr or Qdrant | None | Aggregated user vectors |
+
+Set `AUDIOBOOK_DATABASE=solr` for the recommendation server, embedding generation, all summary modes,
+and preference import. Supply the [Solr collections and schema](configuration.md#solr); only the
+recommendation server also needs Redis. Migration is specifically Solr **to Qdrant** and keeps
+`audiobook.database=qdrant` for its destination, as shown below; it is not a Solr-only job.
 
 ## Catalogue embeddings
 
@@ -40,11 +45,14 @@ AUDIOBOOK_EMBEDDING_INDEX_ENABLED=true AUDIOBOOK_DATABASE=solr \
 
 - IDs, metadata, custom fields, and short descriptions are preserved. Blank records are skipped.
 - An embedding failure prevents that page's writes; earlier pages remain saved.
+- Solr embedding writes require the version read before generation. A deleted or edited record
+  rejects the stale update instead of recreating a partial document or attaching an outdated vector.
+  Earlier updates may already be saved; rerun against the current catalogue after resolving the conflict.
 - Rerunning starts at the beginning and regenerates existing vectors, incurring charges again.
 - The process closes its clients when finished. It cannot run alongside migration or summary generation.
 
 Implementation lives in `com.gen3.embeddingjob`. Another database implements
-`AudiobookEmbeddingStore`; shared catalogue records and persistence remain in storage packages.
+`AudiobookEmbeddingStore`; shared catalogue records and persistence live in `com.gen3.catalogue`.
 The old `solr.embedding-index-on-startup` and `solr.embedding-index-page-size` settings are replaced
 by the settings above. Live search-query embeddings are independent of this job.
 
@@ -68,7 +76,7 @@ QDRANT_MIGRATION_ENABLED=true ./mvnw spring-boot:run \
   means the full catalogue.
 - Keep the source stable and avoid other destination writers during migration.
 
-Migration does not complete the missing Solr recommendation-server adapters.
+Migration copies data only; use `AUDIOBOOK_DATABASE` to select the recommendation backend.
 
 ## Short descriptions
 
@@ -130,6 +138,7 @@ Repeat submission/import for the remaining catalogue.
 | --- | --- |
 | Input upload fails | Retry submission; no generation batch or pending manifest was created. |
 | Submission outcome is unknown | Keep the manifest, reconcile the batch ID with the provider, and set `AUDIOBOOK_SHORT_DESCRIPTION_BATCH_ID` before import. |
+| Invalid or conflicting summary output | Import refuses all writes and retains the manifest. Inspect the provider output; retrying unchanged invalid output fails again. |
 | Import times out or a database write fails | Retry import with the retained manifest; already-written summaries are preserved. |
 | Solr version conflict | Retry import; each write checks the current record version. |
 | Provider or dataset mismatch | Restore the original configuration; import refuses to write. |
@@ -171,14 +180,42 @@ Implementation lives in `com.gen3.shortdescriptionjob`:
 ## User preferences
 
 Read favourites/history CSVs and aggregate existing book vectors into user vectors, without AI calls.
-Qdrant currently supplies the required audiobook-vector and user-preference adapters. Favourites
-use a normalized average; history weights halve every 180 days before the result is normalized.
+Both Solr and Qdrant supply the required adapters. Set `AUDIOBOOK_DATABASE=solr` or `qdrant`;
+reads and writes stay within that database. For Solr, prepare the separate preference collection and
+schema described in [Solr setup](configuration.md#solr). Solr writes at most 500 user updates per
+batch and commits once per batch; earlier batches remain saved if a later batch fails.
+
+The importer loads vectors for at most 100 users and 10,000 distinct book IDs per group by default.
+Either limit closes a group; repeated book IDs count once across favourites and history. Each user
+stays whole, and groups release their vectors before the next fetch. Both limits are configurable
+under `user.preferences.import` (see [configuration](configuration.md#user-preference-import)).
+Before any reads or writes, every user is checked against the book-ID limit. An oversized user
+stops the job with their ID, count and limit; no history is truncated. CSV records still reside in
+memory. Database failures can leave earlier groups saved; reruns recompute and overwrite preferences.
+Favourite rows are deduplicated by user and normalized book ID before averaging. Users present in
+the import with no usable book vectors have both stored taste vectors cleared; users absent from
+the input are unchanged. Solr batches these clears with one write and commit per group, checking
+existing profiles first to avoid creating empty records. Favourites use a normalized average; history
+weights halve every 180 days before the result is normalized.
 
 ```bash
-USER_PREFERENCES_IMPORT_ON_STARTUP=true ./mvnw spring-boot:run \
+AUDIOBOOK_DATABASE=solr USER_PREFERENCES_IMPORT_ON_STARTUP=true ./mvnw spring-boot:run \
   -Dapplication.main-class=com.gen3.userpreferencejob.UserPreferenceApplication \
   -Dspring-boot.run.arguments="--user.preferences.favourites-csv-path=/path/favourites.csv --user.preferences.history-csv-path=/path/history.csv"
 ```
 
 CSV records and aggregation live in `com.gen3.userpreferencejob`. Run this separately from the server
 and other maintenance jobs.
+
+## Solr launcher verification
+
+The container test starts the actual embedding, summary (submit/import/recover), and preference
+applications, executes their startup jobs, then starts the recommendation HTTP server with Solr and
+Redis. It also checks migration reads from Solr. AI and the migration destination use test doubles;
+all data writes stay in disposable containers and temporary files.
+
+```bash
+OPENAI_API_KEY=ci-placeholder ./mvnw -Dtest=SolrApplicationLaunchIntegrationTest test
+```
+
+Docker must be running. The normal `clean verify` command includes this test too.

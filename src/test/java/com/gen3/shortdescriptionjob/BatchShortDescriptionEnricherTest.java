@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.model.StoredAudiobook;
+import com.gen3.catalogue.model.AudiobookRecord;
+import com.gen3.catalogue.model.StoredAudiobook;
 import com.gen3.shortdescriptionjob.provider.OpenAiShortDescriptionBatchProvider;
 import com.gen3.shortdescriptionjob.provider.ShortDescriptionBatchProvider;
 import com.gen3.shortdescriptionjob.store.AudiobookEnrichmentStore;
@@ -25,12 +25,59 @@ class BatchShortDescriptionEnricherTest {
     String output =
         """
         {"response":{"status_code":200,"body":{"choices":[{"message":{"content":"{\\\"book-1\\\":\\\"A concise description.\\\"}"}}]}}}
-        {"response":{"status_code":200,"body":{"choices":[{"message":{"content":"{\\\"book-2\\\":\\\"An incomplete description"}}]}}}
         {"response":{"status_code":400,"body":{}}}
         """;
 
     assertThat(provider().parseDescriptions(output))
         .containsExactlyEntriesOf(java.util.Map.of("book-1", "A concise description."));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "{\"book-1\":123}",
+        "{\"book-1\":true}",
+        "{\"book-1\":null}",
+        "{\"book-1\":[]}",
+        "{\"book-1\":{}}",
+        "[]",
+        "null",
+        "{broken",
+        "{\"book-1\":\"First\",\"book-1\":\"Second\"}"
+      })
+  void rejectsInvalidSummaryOutput(String content) {
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> provider().parseDescriptions(outputLine(content)))
+        .isInstanceOf(java.io.IOException.class);
+  }
+
+  @Test
+  void identicalDuplicatesAreAcceptedButConflictingResponsesAreRejected() throws Exception {
+    String first = outputLine("{\"book-1\":\"First summary\"}");
+    assertThat(provider().parseDescriptions(first + "\n" + first))
+        .containsExactlyEntriesOf(java.util.Map.of("book-1", "First summary"));
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () ->
+                provider()
+                    .parseDescriptions(
+                        first + "\n" + outputLine("{\"book-1\":\"Different summary\"}")))
+        .isInstanceOf(java.io.IOException.class)
+        .hasMessageContaining("Conflicting");
+  }
+
+  private String outputLine(String content) {
+    return new ObjectMapper()
+        .writeValueAsString(
+            java.util.Map.of(
+                "response",
+                java.util.Map.of(
+                    "status_code",
+                    200,
+                    "body",
+                    java.util.Map.of(
+                        "choices",
+                        List.of(
+                            java.util.Map.of("message", java.util.Map.of("content", content)))))));
   }
 
   @Test

@@ -1,11 +1,11 @@
 package com.gen3.embeddingjob;
 
+import com.gen3.catalogue.qdrant.Bm25SparseTextEncoder;
+import com.gen3.catalogue.qdrant.QdrantConfig;
+import com.gen3.catalogue.qdrant.QdrantPointMapper;
+import com.gen3.catalogue.solr.SolrAudiobookRepository;
+import com.gen3.catalogue.solr.SolrConfig;
 import com.gen3.embeddingjob.store.AudiobookEmbeddingStore;
-import com.gen3.recommenderagent.storage.audiobook.qdrant.Bm25SparseTextEncoder;
-import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantConfig;
-import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantPointMapper;
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrConfig;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;

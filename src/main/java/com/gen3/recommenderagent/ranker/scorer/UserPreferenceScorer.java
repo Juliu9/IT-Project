@@ -1,8 +1,8 @@
 package com.gen3.recommenderagent.ranker.scorer;
 
-import com.gen3.recommenderagent.embedding.VectorMath;
+import com.gen3.catalogue.model.AudiobookCandidate;
+import com.gen3.catalogue.vector.VectorMath;
 import com.gen3.recommenderagent.ranker.RankingContext;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,7 +42,8 @@ public class UserPreferenceScorer implements CandidateScorer {
 
     double total = similarities.stream().mapToDouble(WeightedSimilarity::weightedScore).sum();
     double availableWeight = similarities.stream().mapToDouble(WeightedSimilarity::weight).sum();
-    return ScoreResult.available(Math.clamp(total / availableWeight, 0.0, 1.0));
+    double score = Math.clamp(total / availableWeight, 0.0, 1.0);
+    return ScoreResult.available(score, score > 0.0);
   }
 
   private void addSimilarity(
