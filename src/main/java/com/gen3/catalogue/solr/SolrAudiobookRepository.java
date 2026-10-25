@@ -38,7 +38,8 @@ import org.springframework.stereotype.Repository;
 @ConditionalOnExpression(
     "'${audiobook.database:qdrant}' == 'solr' or '${audiobook.qdrant.migration.enabled:false}' == 'true'")
 public class SolrAudiobookRepository
-    implements AudiobookCatalogueRepository,
+    implements com.gen3.catalogue.port.AudiobookDetailsLookup,
+        AudiobookCatalogueRepository,
         AudiobookCandidateSearch,
         AudiobookVectorRepository,
         com.gen3.catalogue.port.AudiobookTitleLookup {
@@ -270,6 +271,30 @@ public class SolrAudiobookRepository
       solrClient.commit(collection);
     } catch (SolrServerException | SolrException exception) {
       throw new IOException("Could not store audiobook embedding in Solr", exception);
+    }
+  }
+
+  @Override
+  public List<AudiobookRecord> findBooksByIds(List<String> bookIds) throws IOException {
+    if (bookIds.isEmpty()) {
+      return List.of();
+    }
+    var query = new SolrQuery();
+    query.setFields(
+        "id",
+        "source",
+        "title",
+        "authors",
+        "description",
+        "narrators",
+        "language",
+        "durationMinutes",
+        "publicationYear",
+        "short_description");
+    try {
+      return solrClient.getById(collection, bookIds, query).stream().map(this::toRecord).toList();
+    } catch (SolrServerException | SolrException exception) {
+      throw new IOException("Could not load audiobook details from Solr", exception);
     }
   }
 

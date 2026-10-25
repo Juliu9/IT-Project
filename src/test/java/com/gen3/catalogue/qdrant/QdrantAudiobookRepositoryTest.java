@@ -47,6 +47,36 @@ import org.mockito.ArgumentCaptor;
 /** Covers Qdrant repository behavior that does not require a running database. */
 class QdrantAudiobookRepositoryTest {
 
+  @Test
+  void metadataLookupUsesPayloadBookIdsAndDoesNotRequestVectors() throws Exception {
+    var client = mock(QdrantClient.class);
+    var encoder = new Bm25SparseTextEncoder();
+    when(client.collectionExistsAsync("books")).thenReturn(Futures.immediateFuture(true));
+    var point =
+        RetrievedPoint.newBuilder()
+            .setId(io.qdrant.client.PointIdFactory.id(42))
+            .putPayload("bookId", io.qdrant.client.ValueFactory.value("catalogue-id"))
+            .putPayload("title", io.qdrant.client.ValueFactory.value("Title"))
+            .putPayload(
+                "authors",
+                io.qdrant.client.ValueFactory.list(
+                    java.util.List.of(io.qdrant.client.ValueFactory.value("Author"))))
+            .build();
+    when(client.scrollAsync(any(ScrollPoints.class)))
+        .thenReturn(Futures.immediateFuture(ScrollResponse.newBuilder().addResult(point).build()));
+    var repository =
+        new QdrantAudiobookRepository(client, new QdrantPointMapper(encoder), encoder, "books", 2);
+    var result = repository.findBooksByIds(List.of("catalogue-id"));
+    assertThat(result).hasSize(1);
+    assertThat(result.getFirst().id()).isEqualTo("catalogue-id");
+    assertThat(result.getFirst().authors()).containsExactly("Author");
+    var request = ArgumentCaptor.forClass(ScrollPoints.class);
+    verify(client).scrollAsync(request.capture());
+    assertThat(request.getValue().getFilter().toString()).contains("bookId", "catalogue-id");
+    assertThat(request.getValue().getWithVectors())
+        .isEqualTo(io.qdrant.client.WithVectorsSelectorFactory.enable(false));
+  }
+
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {"semantic", "keyword", "hybrid", "filtered"})

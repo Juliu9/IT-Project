@@ -39,7 +39,8 @@ import org.springframework.stereotype.Repository;
 @Primary
 @Repository
 public class QdrantAudiobookRepository
-    implements AudiobookCandidateSearch,
+    implements com.gen3.catalogue.port.AudiobookDetailsLookup,
+        AudiobookCandidateSearch,
         AudiobookVectorRepository,
         com.gen3.catalogue.port.AudiobookTitleLookup {
 
@@ -63,6 +64,16 @@ public class QdrantAudiobookRepository
     this.sparseEncoder = sparseEncoder;
     this.collection = collection;
     this.vectorDimension = vectorDimension;
+  }
+
+  @Override
+  public List<com.gen3.catalogue.model.AudiobookRecord> findBooksByIds(List<String> bookIds)
+      throws IOException {
+    if (bookIds.isEmpty()) {
+      return List.of();
+    }
+    requireCollection();
+    return findRecordsByBookIds(bookIds, false).values().stream().map(mapper::toRecord).toList();
   }
 
   @Override

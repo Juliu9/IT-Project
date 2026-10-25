@@ -96,7 +96,8 @@ class RequestGatewayTest {
     when(responseGenerator.generate(null, completed)).thenReturn("No more recommendations.");
     var gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
-    MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
+    var catalogue = org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class);
+    MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway, catalogue))
         .build()
         .perform(
             post("/api/v1/recommendations")
@@ -107,6 +108,7 @@ class RequestGatewayTest {
         .andExpect(status().isOk())
         .andExpect(content().contentTypeCompatibleWith("text/plain"))
         .andExpect(content().string("No more recommendations."));
+    org.mockito.Mockito.verifyNoInteractions(catalogue);
     var order =
         org.mockito.Mockito.inOrder(
             inputParser, sessionTransitionService, responseGenerator, telemetry);
@@ -157,7 +159,11 @@ class RequestGatewayTest {
     var gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, realTelemetry);
 
-    MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
+    MockMvcBuilders.standaloneSetup(
+            gateway,
+            new DemoWebsite(
+                gateway,
+                org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
         .build()
         .perform(
             post("/api/v1/recommendations/demo")
@@ -186,7 +192,11 @@ class RequestGatewayTest {
                     "$.metrics.operations.parse.promptTokens")
                 .value(10));
 
-    MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
+    MockMvcBuilders.standaloneSetup(
+            gateway,
+            new DemoWebsite(
+                gateway,
+                org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
         .build()
         .perform(
             post("/api/v1/recommendations")
@@ -295,7 +305,11 @@ class RequestGatewayTest {
     RequestGateway gateway =
         new RequestGateway(realParser, sessionTransitionService, responseGenerator, telemetry);
     MockMvc mockMvc =
-        MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
+        MockMvcBuilders.standaloneSetup(
+                gateway,
+                new DemoWebsite(
+                    gateway,
+                    org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
             .setControllerAdvice(new RequestExceptionHandler())
             .build();
 
@@ -329,7 +343,11 @@ class RequestGatewayTest {
     RequestGateway gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
     MockMvc mockMvc =
-        MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
+        MockMvcBuilders.standaloneSetup(
+                gateway,
+                new DemoWebsite(
+                    gateway,
+                    org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
             .setControllerAdvice(new RequestExceptionHandler())
             .build();
 
@@ -361,7 +379,11 @@ class RequestGatewayTest {
     RequestGateway gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
 
-    MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
+    MockMvcBuilders.standaloneSetup(
+            gateway,
+            new DemoWebsite(
+                gateway,
+                org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
         .setControllerAdvice(new RequestExceptionHandler())
         .build()
         .perform(
@@ -390,7 +412,11 @@ class RequestGatewayTest {
     RequestGateway gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
 
-    MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
+    MockMvcBuilders.standaloneSetup(
+            gateway,
+            new DemoWebsite(
+                gateway,
+                org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
         .setControllerAdvice(new RequestExceptionHandler())
         .build()
         .perform(

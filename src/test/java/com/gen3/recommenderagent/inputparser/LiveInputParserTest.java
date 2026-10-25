@@ -120,6 +120,51 @@ class LiveInputParserTest {
     assertThat(result.isPersonalised()).as(text).isFalse();
   }
 
+  @ParameterizedTest
+  @CsvSource({
+    "Recommend fantasy audiobooks with a strong female protagonist.,",
+    "Recommend fantasy audiobooks by Suzanne Collins with a strong female protagonist.,Suzanne Collins"
+  })
+  void characterTraitsStaySemanticWhileNamedAuthorsRemainExact(String text, String author) {
+    var result = parser.parse(text);
+    assertThat(result.getIntent()).as(text).isEqualTo(Intent.RECOMMENDATION);
+    assertThat(result.getPositiveSemanticQuery()).as(text).isNotNull();
+    assertThat(result.getPositiveSemanticQuery().getGenres()).contains("fantasy");
+    var themes = new java.util.ArrayList<String>();
+    if (result.getPositiveSemanticQuery().getKeywords() != null) {
+      themes.addAll(result.getPositiveSemanticQuery().getKeywords());
+    }
+    if (result.getPositiveSemanticQuery().getTopics() != null) {
+      themes.addAll(result.getPositiveSemanticQuery().getTopics());
+    }
+    assertThat(String.join(" ", themes).toLowerCase(java.util.Locale.ROOT)).contains("female");
+    if (author == null) {
+      assertThat(
+              result.getMustInclude() == null
+                  || result.getMustInclude().getAuthors() == null
+                      && result.getMustInclude().getNarrators() == null
+                      && result.getMustInclude().getDuration() == null)
+          .as("character traits must not become exact catalogue filters")
+          .isTrue();
+    } else {
+      assertThat(result.getMustInclude()).isNotNull();
+      assertThat(result.getMustInclude().getAuthors()).containsExactly(author);
+    }
+    assertThat(result.getPositiveSemanticQuery().getAuthors()).isNullOrEmpty();
+    assertThat(result.getPositiveSemanticQuery().getNarrators()).isNullOrEmpty();
+  }
+
+  @org.junit.jupiter.api.Test
+  void personalisedRequestKeepsExplicitAuthorConstraint() {
+    var result = parser.parse("give me some books I would like by suzanne collins");
+    assertThat(result.getIntent()).isEqualTo(Intent.RECOMMENDATION);
+    assertThat(result.isPersonalised()).isTrue();
+    assertThat(result.getMustInclude()).isNotNull();
+    assertThat(result.getMustInclude().getAuthors()).hasSize(1);
+    assertThat(result.getMustInclude().getAuthors().getFirst())
+        .isEqualToIgnoringCase("Suzanne Collins");
+  }
+
   @Configuration(proxyBeanMethods = false)
   @Profile("live-parser-evaluation")
   @EnableAutoConfiguration

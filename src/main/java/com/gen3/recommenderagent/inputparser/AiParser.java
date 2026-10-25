@@ -74,7 +74,7 @@ public class AiParser {
                         Intents:
                         RECOMMENDATION=new/self-contained criteria (even without a verb); REFINE=context-dependent search change/taste reply.
                         MORE_RESULTS=different books; REPEAT=latest action/answer; REPEAT_RECOMMENDATIONS=the same previous books/list,
-                        A same-books/list reference takes precedence over REPEAT; REPEAT is for repeating an answer/action.
+                        A same-books/list reference takes precedence over REPEAT; "repeat your last explanation" is REPEAT, not a new explanation.
                         EXPLAIN_RECOMMENDATION=why recommended; HELP=capabilities/usage; CHANGE_COUNT=recommendation count;
                         REFINE changes the current results; UPDATE_PREFERENCES explicitly edits saved tastes/constraints.
                         "make them shorter" -> REFINE, shorter=true, explicitSearch=true; no invented genre or hour limit.
@@ -94,14 +94,17 @@ public class AiParser {
                         "books similar to the Hunger Games series" -> similarToClarificationRequired=true.
                         Preserve extra constraints and explicit personalisation; a reference alone is not personalised=true.
                         Only RECOMMENDATION/REFINE allow positiveSemanticQuery/negativeSemanticQuery or personalised=true.
-                        Desired/avoided concepts, including genre/mood and liked authors/narrators, stay semantic;
-                        Explicit author/narrator/language/duration/publication-year/source constraints use mustInclude/mustNotInclude.
+                        Genres, moods, plots and character traits belong in semantic genres/topics/keywords, never author/narrator fields.
+                        Author/narrator fields contain only names explicitly identified as writers/narrators; a protagonist is a story character.
+                        Liked/similar author or narrator names stay semantic; explicit by/narrated-by constraints use mustInclude/mustNotInclude.
+                        Explicit language/duration/publication-year/source constraints also use mustInclude/mustNotInclude.
                         Extract every stated constraint alongside semantic criteria; compact output must not omit supplied values.
                         Preserve contradictions. Author/narrator lists replace by default; addAuthors/addNarrators=true only for explicit additions.
                         personalised=true for taste/favourites/history or generic recommendations without criteria; never invent taste.
+                        Personalisation never removes stated criteria: "books I would like by Suzanne Collins" -> personalised=true, mustInclude.authors=["Suzanne Collins"].
                         explicitSearch=true for explicit search commands, false for short taste replies.
                         bookCount=null unless a recommendation count is requested ("2 more" -> MORE_RESULTS, bookCount=2).
-                        Explanation ordinals select ONE book: "the second one’s reason" -> EXPLAIN_RECOMMENDATION, referenceRank=2, bookCount=null.
+                        Explanation ordinals select ONE book: "the second one’s reason" -> referenceRank=2; "why the sixth book" -> referenceRank=6; intent=EXPLAIN_RECOMMENDATION, omit bookCount.
                         Preserve only explicitly stated rank (even invalid) or title in referenceRank/referenceTitle.
                         "Why did I get these recommendations?" and other whole-page explanations omit both references; never default to rank 1.
                         References are explanation-only; bare ordinals are not explanation requests.
@@ -114,6 +117,8 @@ public class AiParser {
                         Keep exclusions and duration comparisons separate. "mystery, not too dark" -> positive genres=["mystery"], negative keywords=["dark"].
 
                         Extraction examples (copy only values stated in the actual request):
+                        "Recommend fantasy audiobooks with a strong female protagonist" ->
+                        {"intent":"RECOMMENDATION","explicitSearch":true,"positiveSemanticQuery":{"genres":["fantasy"],"keywords":["strong female protagonist"]}}
                         "Recommend mystery audiobooks under five hours" ->
                         {"intent":"RECOMMENDATION","explicitSearch":true,"positiveSemanticQuery":{"genres":["mystery"]},"mustInclude":{"duration":"under 5 hours"}}
                         "Books similar to The Hunger Games by Suzanne Collins under ten hours" ->

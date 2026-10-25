@@ -309,6 +309,10 @@ class InputParserTest {
         "more, but shorter books",
         "2 more but shorter",
         "2 more by Jane Austen",
+        "another five but shorter",
+        "another book by Jane Austen",
+        "not another one",
+        "another five fantasy books",
         "repeat the second explanation",
         "repeat books by X",
         "cancelled flight books",
@@ -320,7 +324,6 @@ class InputParserTest {
         "please explain the second book",
         "hello please help me find fantasy books thanks",
         "no more, thanks",
-        "two more please, ta",
         "more British authors, cheers",
         "don’t clear history, thanks",
         "don‘t repeat the recommendations, cheers",
@@ -641,6 +644,7 @@ class InputParserTest {
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {
         "2 more",
+        "two more please, ta",
         "2 more books",
         "2 more recommendations",
         "show me 2 more",
@@ -660,6 +664,44 @@ class InputParserTest {
     assertEquals(null, result.getReferenceRank());
     assertEquals(null, result.getPositiveSemanticQuery());
     assertEquals(text, result.getRawText());
+    verifyNoInteractions(client);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "another,1",
+    "another 1,1",
+    "another one,1",
+    "another five,5",
+    "another book,1",
+    "another audiobook,1",
+    "another recommendation,1",
+    "another 5 books,5",
+    "another two audiobooks,2",
+    "another ten recommendations,10",
+    "Give me another five,5",
+    "Show me another 3 books,3",
+    "Can I have another one?,1",
+    "Could I have another five please?,5",
+    "Could you please give me another five? Thanks!,5",
+    "I'd like another book,1",
+    "I would like another five,5",
+    "Recommend another one,1",
+    "another 0,0",
+    "another 999999999999999999999999,2147483647"
+  })
+  void anotherCommandsPreserveCountWithoutAi(String text, int count) {
+    var client = mock(ChatClient.class);
+    var result =
+        new InputParser(
+                new CommandParser(),
+                new AiParser(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
+            .parse(text);
+    assertEquals(Intent.MORE_RESULTS, result.getIntent());
+    assertEquals(count, result.getBookCount());
+    assertEquals(null, result.getReferenceRank());
+    assertEquals(null, result.getPositiveSemanticQuery());
     verifyNoInteractions(client);
   }
 

@@ -55,7 +55,11 @@ class RequestBodyLimitTest {
     var response = mock(ResponseGenerator.class);
     var gateway = new RequestGateway(parser, transitions, response);
     var mvc =
-        MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
+        MockMvcBuilders.standaloneSetup(
+                gateway,
+                new DemoWebsite(
+                    gateway,
+                    org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
             .setControllerAdvice(new RequestBodyLimit(), new RequestExceptionHandler())
             .build();
     var request =

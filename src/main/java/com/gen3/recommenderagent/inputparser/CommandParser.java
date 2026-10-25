@@ -9,9 +9,16 @@ import org.springframework.stereotype.Component;
 /** Recognises complete commands; unmatched text falls through to AI parsing. */
 @Component
 public class CommandParser {
+  private static final String COUNT = "[0-9]+|one|two|three|four|five|six|seven|eight|nine|ten";
   private static final Pattern COUNTED_MORE =
       Pattern.compile(
-          "(?:show me |give me |can i have |could i have )?([0-9]+) more(?: books| audiobooks| recommendations)?");
+          "(?:show me |give me |can i have |could i have |i'd like |i would like |recommend )?"
+              + "(?:("
+              + COUNT
+              + ") more|another(?: ("
+              + COUNT
+              + "))?)"
+              + "(?: books?| audiobooks?| recommendations?)?");
 
   public ParsedRequest parse(String rawText) {
     String command =
@@ -58,7 +65,15 @@ public class CommandParser {
     if (countedMore.matches()) {
       var parsed = new ParsedRequest();
       parsed.setIntent(Intent.MORE_RESULTS);
-      parsed.setBookCount(new BigInteger(countedMore.group(1)));
+      String count = countedMore.group(1) == null ? countedMore.group(2) : countedMore.group(1);
+      parsed.setBookCount(
+          count == null
+              ? BigInteger.ONE
+              : Character.isDigit(count.charAt(0))
+                  ? new BigInteger(count)
+                  : BigInteger.valueOf(
+                      com.gen3.recommenderagent.domain.conversation.ClarificationResolver
+                          .selectionReply(count)));
       return parsed;
     }
     Intent intent =

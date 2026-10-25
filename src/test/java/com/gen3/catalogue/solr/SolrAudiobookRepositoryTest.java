@@ -55,6 +55,19 @@ class SolrAudiobookRepositoryTest {
   }
 
   @Test
+  void metadataLookupReturnsOnlyRequestedCatalogueRecords() throws Exception {
+    var repository = new SolrAudiobookRepository(solrClient, SolrContainerTestSupport.COLLECTION);
+    var books = repository.findBooksByIds(java.util.List.of("book-404", "missing-id"));
+    org.assertj.core.api.Assertions.assertThat(books).hasSize(1);
+    org.assertj.core.api.Assertions.assertThat(books.getFirst().id()).isEqualTo("book-404");
+    org.assertj.core.api.Assertions.assertThat(books.getFirst().title()).isEqualTo("The Hobbit");
+    org.assertj.core.api.Assertions.assertThat(books.getFirst().authors())
+        .containsExactly("J. R. R. Tolkien");
+    org.assertj.core.api.Assertions.assertThat(repository.findBooksByIds(java.util.List.of()))
+        .isEmpty();
+  }
+
+  @Test
   void titleLookupUsesOnlyTitleAndReturnsEditionMetadata() throws Exception {
     var document = new org.apache.solr.common.SolrInputDocument();
     document.setField("id", "title-lookup");
