@@ -79,6 +79,40 @@ public class SolrUserPreferenceRepository implements UserPreferenceVectorReposit
   }
 
   @Override
+  public void clear(String userId) throws IOException {
+    clearAll(Collections.singletonList(userId));
+  }
+
+  @Override
+  public void clearAll(List<String> userIds) throws IOException {
+    for (String userId : userIds) {
+      if (userId == null || userId.isBlank()) {
+        throw new IllegalArgumentException("User ID must not be blank");
+      }
+    }
+    var documents = new java.util.ArrayList<SolrInputDocument>();
+    for (String userId : userIds) {
+      if (findEmbeddingByUserId(userId).isEmpty()) {
+        continue;
+      }
+      var document = new SolrInputDocument();
+      document.setField("id", userId);
+      document.setField("favouritesVector", Collections.singletonMap("set", null));
+      document.setField("historyVector", Collections.singletonMap("set", null));
+      documents.add(document);
+    }
+    if (documents.isEmpty()) {
+      return;
+    }
+    try {
+      client.add(collection, documents);
+      client.commit(collection);
+    } catch (SolrServerException | SolrException exception) {
+      throw new IOException("Could not clear Solr user preferences", exception);
+    }
+  }
+
+  @Override
   public Optional<UserPreferenceEmbedding> findEmbeddingByUserId(String userId) throws IOException {
     if (userId == null || userId.isBlank()) {
       return Optional.empty();

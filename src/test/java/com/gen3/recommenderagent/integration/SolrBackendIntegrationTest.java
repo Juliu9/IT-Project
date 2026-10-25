@@ -244,5 +244,11 @@ class SolrBackendIntegrationTest {
     assertThat(updated.historyVector()).containsExactly(1, 0);
     assertThat(client.getById(USERS, "replacement").getFieldValue("client_custom_s"))
         .isEqualTo("keep");
+    users().clear("replacement");
+    assertThat(users().findEmbeddingByUserId("replacement")).isEmpty();
+    var cleared = client.getById(USERS, "replacement");
+    assertThat(cleared.getFieldValue("favouritesVector")).isNull();
+    assertThat(cleared.getFieldValue("historyVector")).isNull();
+    assertThat(cleared.getFieldValue("client_custom_s")).isEqualTo("keep");
   }
 }

@@ -128,7 +128,9 @@ public class QdrantAudiobookRepository
             .setQuery(Query.newBuilder().setFusion(io.qdrant.client.grpc.Points.Fusion.RRF))
             .setLimit(limit)
             .setWithPayload(enable(true))
-            .setWithVectors(io.qdrant.client.WithVectorsSelectorFactory.enable(true))
+            .setWithVectors(
+                io.qdrant.client.WithVectorsSelectorFactory.include(
+                    List.of(QdrantPointMapper.DENSE_VECTOR)))
             .build();
     return query(request);
   }
@@ -333,7 +335,9 @@ public class QdrantAudiobookRepository
             .setCollectionName(collection)
             .setLimit(limit)
             .setWithPayload(enable(true))
-            .setWithVectors(io.qdrant.client.WithVectorsSelectorFactory.enable(true));
+            .setWithVectors(
+                io.qdrant.client.WithVectorsSelectorFactory.include(
+                    List.of(QdrantPointMapper.DENSE_VECTOR)));
     Filter filter = QdrantAudiobookSchema.filter(filters);
     return filter == null ? request : request.setFilter(filter);
   }

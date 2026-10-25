@@ -9,6 +9,15 @@ public interface UserPreferenceVectorRepository {
 
   void save(UserPreferenceEmbedding embedding) throws IOException;
 
+  /** Removes both stored taste vectors without deleting unrelated user metadata. */
+  void clear(String userId) throws IOException;
+
+  default void clearAll(List<String> userIds) throws IOException {
+    for (String userId : userIds) {
+      clear(userId);
+    }
+  }
+
   default void saveAll(List<UserPreferenceEmbedding> embeddings) throws IOException {
     for (var embedding : embeddings) {
       save(embedding);

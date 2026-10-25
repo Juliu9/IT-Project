@@ -47,6 +47,37 @@ import org.mockito.ArgumentCaptor;
 /** Covers Qdrant repository behavior that does not require a running database. */
 class QdrantAudiobookRepositoryTest {
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"semantic", "keyword", "hybrid", "filtered"})
+  void candidateQueriesReturnOnlyTheDenseVectorNeededForRanking(String mode) throws Exception {
+    var client = mock(QdrantClient.class);
+    var encoder = new Bm25SparseTextEncoder();
+    when(client.collectionExistsAsync("books")).thenReturn(Futures.immediateFuture(true));
+    when(client.queryAsync(any(QueryPoints.class))).thenReturn(Futures.immediateFuture(List.of()));
+    var repository =
+        new QdrantAudiobookRepository(client, new QdrantPointMapper(encoder), encoder, "books", 2);
+    switch (mode) {
+      case "semantic" -> repository.searchSemantic(new float[] {1, 0}, AudiobookFilters.empty(), 5);
+      case "keyword" -> repository.searchKeyword("fantasy", AudiobookFilters.empty(), 5);
+      case "hybrid" ->
+          repository.searchHybrid(new float[] {1, 0}, "fantasy", AudiobookFilters.empty(), 5);
+      default ->
+          repository.searchByFilters(
+              new AudiobookFilters(
+                  AudiobookFilterConditions.empty(),
+                  AudiobookFilterConditions.empty(),
+                  List.of("shown")),
+              5);
+    }
+    var query = ArgumentCaptor.forClass(QueryPoints.class);
+    verify(client).queryAsync(query.capture());
+    assertThat(query.getValue().getWithVectors())
+        .isEqualTo(
+            io.qdrant.client.WithVectorsSelectorFactory.include(
+                List.of(QdrantPointMapper.DENSE_VECTOR)));
+  }
+
   @Test
   void hybridPrefetchesOneHundredPerSearchAndReturnsFiftyWithExclusionsIntact() throws Exception {
     var client = mock(QdrantClient.class);

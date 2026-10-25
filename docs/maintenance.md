@@ -192,7 +192,10 @@ under `user.preferences.import` (see [configuration](configuration.md#user-prefe
 Before any reads or writes, every user is checked against the book-ID limit. An oversized user
 stops the job with their ID, count and limit; no history is truncated. CSV records still reside in
 memory. Database failures can leave earlier groups saved; reruns recompute and overwrite preferences.
-Favourites use a normalized average; history
+Favourite rows are deduplicated by user and normalized book ID before averaging. Users present in
+the import with no usable book vectors have both stored taste vectors cleared; users absent from
+the input are unchanged. Solr batches these clears with one write and commit per group, checking
+existing profiles first to avoid creating empty records. Favourites use a normalized average; history
 weights halve every 180 days before the result is normalized.
 
 ```bash

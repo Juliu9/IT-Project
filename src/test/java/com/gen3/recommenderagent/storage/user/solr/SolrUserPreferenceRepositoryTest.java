@@ -100,6 +100,36 @@ class SolrUserPreferenceRepositoryTest {
   }
 
   @Test
+  void clearsMultipleExistingUsersWithOneWriteAndCommit() throws Exception {
+    repository.clearAll(List.of());
+    verifyNoInteractions(client);
+    var document = new SolrDocument();
+    document.setField("favouritesVector", List.of(1f, 0f));
+    stored(document);
+    repository.clearAll(List.of("one", "two"));
+    var captured = ArgumentCaptor.forClass(java.util.Collection.class);
+    verify(client).add(eq("preferences"), captured.capture());
+    assertThat(captured.getValue()).hasSize(2);
+    for (Object value : captured.getValue()) {
+      var update = (SolrInputDocument) value;
+      assertThat(update.getFieldNames())
+          .containsExactlyInAnyOrder("id", "favouritesVector", "historyVector");
+      for (String field : List.of("favouritesVector", "historyVector")) {
+        assertThat(((Map<?, ?>) update.getFieldValue(field)).containsKey("set")).isTrue();
+        assertThat(((Map<?, ?>) update.getFieldValue(field)).get("set")).isNull();
+      }
+    }
+    verify(client).commit("preferences");
+  }
+
+  @Test
+  void clearingMissingUsersDoesNotCreateDocuments() throws Exception {
+    repository.clearAll(List.of("missing"));
+    verify(client).query(eq("preferences"), any(SolrQuery.class), eq(SolrRequest.METHOD.POST));
+    verifyNoMoreInteractions(client);
+  }
+
+  @Test
   void missingAndBlankUsersNeedNoWrites() throws Exception {
     assertThat(repository.findEmbeddingByUserId(null)).isEmpty();
     assertThat(repository.findEmbeddingByUserId(" ")).isEmpty();

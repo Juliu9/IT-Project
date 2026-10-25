@@ -54,7 +54,7 @@ public class UserPreferenceAggregatorService {
       throws IOException {
     // Group by User ID
     Map<String, List<UserFavourite>> favsByUser =
-        favourites.stream().collect(Collectors.groupingBy(UserFavourite::userId));
+        favourites.stream().distinct().collect(Collectors.groupingBy(UserFavourite::userId));
     Map<String, List<UserHistory>> histByUser =
         history.stream().collect(Collectors.groupingBy(UserHistory::userId));
 
@@ -110,6 +110,7 @@ public class UserPreferenceAggregatorService {
       throws IOException {
     Map<String, float[]> vectors = audiobookVectorRepository.findEmbeddingsByBookIds(bookIds);
     List<UserPreferenceEmbedding> pending = new ArrayList<>();
+    List<String> usersToClear = new ArrayList<>();
     for (String userId : userIds) {
       // 1. Process Favourites (Standard Average)
       List<float[]> favVectors = new ArrayList<>();
@@ -138,16 +139,18 @@ public class UserPreferenceAggregatorService {
       }
       float[] aggregatedHist = VectorMath.weightedAverage(histVectors, histWeights);
 
-      // 3. Save through the selected database adapter
-      if (aggregatedFavs.length > 0 || aggregatedHist.length > 0) {
-        UserPreferenceEmbedding embedding =
-            new UserPreferenceEmbedding(userId, aggregatedFavs, aggregatedHist);
-        pending.add(embedding);
-        if (pending.size() == 500) {
-          userPreferenceVectorRepository.saveAll(List.copyOf(pending));
-          pending.clear();
-        }
+      if (aggregatedFavs.length == 0 && aggregatedHist.length == 0) {
+        usersToClear.add(userId);
+        continue;
       }
+      pending.add(new UserPreferenceEmbedding(userId, aggregatedFavs, aggregatedHist));
+      if (pending.size() == 500) {
+        userPreferenceVectorRepository.saveAll(List.copyOf(pending));
+        pending.clear();
+      }
+    }
+    if (!usersToClear.isEmpty()) {
+      userPreferenceVectorRepository.clearAll(List.copyOf(usersToClear));
     }
     if (!pending.isEmpty()) {
       userPreferenceVectorRepository.saveAll(List.copyOf(pending));

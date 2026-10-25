@@ -57,6 +57,67 @@ class UserPreferenceAggregatorServiceTest {
   }
 
   @Test
+  void reimportWithNoAvailableVectorsClearsBothPreviousTasteSignals() throws IOException {
+    var books = mock(AudiobookVectorRepository.class);
+    var users = mock(UserPreferenceVectorRepository.class);
+    when(books.findEmbeddingsByBookIds(org.mockito.ArgumentMatchers.anyCollection()))
+        .thenReturn(Map.of("book", new float[] {1, 0}), Map.of());
+    var service = new UserPreferenceAggregatorService(books, users);
+    var favourites = List.of(new UserFavourite("user", "book"));
+    var history = List.of(new UserHistory("user", "book", Instant.now()));
+    service.aggregateAndSave(favourites, history);
+    service.aggregateAndSave(favourites, history);
+    ArgumentCaptor<List<UserPreferenceEmbedding>> saved = ArgumentCaptor.forClass(List.class);
+    verify(users).saveAll(saved.capture());
+    assertArrayEquals(new float[] {1, 0}, saved.getValue().getFirst().favouritesVector());
+    assertArrayEquals(new float[] {1, 0}, saved.getValue().getFirst().historyVector());
+    verify(users).clearAll(List.of("user"));
+    verifyNoMoreInteractions(users);
+  }
+
+  @Test
+  void clearsMissingVectorsOncePerImportGroup() throws IOException {
+    var books = mock(AudiobookVectorRepository.class);
+    var users = mock(UserPreferenceVectorRepository.class);
+    when(books.findEmbeddingsByBookIds(org.mockito.ArgumentMatchers.anyCollection()))
+        .thenReturn(Map.of());
+    new UserPreferenceAggregatorService(books, users)
+        .aggregateAndSave(
+            List.of(new UserFavourite("one", "missing"), new UserFavourite("two", "missing")),
+            List.of());
+    ArgumentCaptor<List<String>> cleared = ArgumentCaptor.forClass(List.class);
+    verify(users).clearAll(cleared.capture());
+    org.assertj.core.api.Assertions.assertThat(cleared.getValue())
+        .containsExactlyInAnyOrder("one", "two");
+    verifyNoMoreInteractions(users);
+  }
+
+  @Test
+  void duplicateFavouritePairsDoNotIncreaseWeightOrMergeDifferentUsers() throws IOException {
+    var books = mock(AudiobookVectorRepository.class);
+    var users = mock(UserPreferenceVectorRepository.class);
+    when(books.findEmbeddingsByBookIds(org.mockito.ArgumentMatchers.anyCollection()))
+        .thenReturn(Map.of("a", new float[] {1, 0}, "b", new float[] {0, 1}));
+    new UserPreferenceAggregatorService(books, users)
+        .aggregateAndSave(
+            List.of(
+                new UserFavourite("u", "a"),
+                new UserFavourite("u", "a"),
+                new UserFavourite("u", "b"),
+                new UserFavourite("other", "a")),
+            List.of());
+    ArgumentCaptor<List<UserPreferenceEmbedding>> saved = ArgumentCaptor.forClass(List.class);
+    verify(users).saveAll(saved.capture());
+    var byUser =
+        saved.getValue().stream()
+            .collect(
+                java.util.stream.Collectors.toMap(
+                    UserPreferenceEmbedding::userId, UserPreferenceEmbedding::favouritesVector));
+    assertArrayEquals(new float[] {0.70710677f, 0.70710677f}, byUser.get("u"), 0.0001f);
+    assertArrayEquals(new float[] {1, 0}, byUser.get("other"), 0.0001f);
+  }
+
+  @Test
   void writesBoundedBatchesIncludingTheFinalPartialBatch() throws IOException {
     var books = mock(AudiobookVectorRepository.class);
     var users = mock(UserPreferenceVectorRepository.class);

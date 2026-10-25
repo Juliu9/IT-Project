@@ -23,6 +23,33 @@ class QdrantShownBookExclusionTest {
       new GenericContainer<>("qdrant/qdrant:v1.19.1").withExposedPorts(6334);
 
   @Test
+  void emptyPreferenceReplacementRemovesBothOldNamedVectors() throws Exception {
+    try (var client =
+        new QdrantClient(
+            QdrantGrpcClient.newBuilder(server.getHost(), server.getMappedPort(6334), false)
+                .build())) {
+      var users =
+          new com.gen3.recommenderagent.storage.user.qdrant.QdrantUserPreferenceRepository(
+              client,
+              new com.gen3.recommenderagent.storage.user.qdrant.QdrantUserPreferenceMapper(),
+              "clear-preferences",
+              2);
+      users.save(
+          new com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding(
+              "user", new float[] {1, 0}, new float[] {0, 1}));
+      assertThat(users.findEmbeddingByUserId("user")).isPresent();
+      users.clear("user");
+      assertThat(users.findEmbeddingByUserId("user")).isEmpty();
+      var id =
+          new com.gen3.recommenderagent.storage.user.qdrant.QdrantUserPreferenceMapper()
+              .pointId("user");
+      var stored = client.retrieveAsync("clear-preferences", List.of(id), true, true, null).get();
+      assertThat(stored).hasSize(1);
+      assertThat(stored.getFirst().getVectors().getVectors().getVectorsMap()).isEmpty();
+    }
+  }
+
+  @Test
   void catalogueOperationsUsePayloadBookIdsAndPreserveExistingPointIds() throws Exception {
     try (var client =
         new QdrantClient(
