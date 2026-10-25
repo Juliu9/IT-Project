@@ -61,6 +61,68 @@ class ExplanationFlowTest {
   }
 
   @ParameterizedTest
+  @ValueSource(ints = {1, 5})
+  void bareExplainUsesTheDisplayedPageWithoutAiParsing(int requestedCount) throws Exception {
+    search();
+    when(workflow.recommend(any(), any()))
+        .thenReturn(
+            List.of(new Recommendation("only-book", 1, 0.8, "Only Book", "A fantasy adventure.")));
+    var request = new ConversationDraft();
+    request.setIntent(Intent.RECOMMENDATION);
+    request.setBookCount(requestedCount);
+    var query = new SemanticQuery();
+    query.setGenres(List.of("fantasy"));
+    request.setPositiveSemanticQuery(query);
+    var page = service.process("session", "user", request);
+    assertThat(page.getRecommendations()).hasSize(1);
+    String before = saved();
+    var client = mock(org.springframework.ai.chat.client.ChatClient.class);
+    var parser =
+        new com.gen3.recommenderagent.inputparser.AiInputParser(
+            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+    var result = service.process("session", "user", parser.parse("explain"));
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(result.getRecommendations())
+        .extracting(Recommendation::getBookId)
+        .containsExactly("only-book");
+    assertThat(responses.generate(result.getRecommendations(), result))
+        .contains("Only Book")
+        .doesNotContain("Which one did you mean?");
+    assertThat(saved()).isEqualTo(before);
+    verifyNoInteractions(client);
+    verify(workflow, times(2)).recommend(any(), any());
+  }
+
+  @Test
+  void bareExplainWithoutHistoryReturnsTheExistingFallback() {
+    var client = mock(org.springframework.ai.chat.client.ChatClient.class);
+    var parser =
+        new com.gen3.recommenderagent.inputparser.AiInputParser(
+            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+    var result = service.process("session", "user", parser.parse("explain"));
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.NOTHING_TO_EXPLAIN);
+    verifyNoInteractions(client, workflow);
+  }
+
+  @Test
+  void secondBooksReasonExplainsOnlyRankTwoWithoutPendingClarification() {
+    search();
+    var request = new ConversationDraft();
+    request.setIntent(Intent.EXPLAIN_RECOMMENDATION);
+    request.setRawText("the second one’s reason");
+    request.setReferenceRank(2);
+    request.setBookCount(2);
+    var result = service.process("session", "user", request);
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(result.getRecommendations()).extracting(Recommendation::getRank).containsExactly(2);
+    assertThat(responses.generate(result.getRecommendations(), result))
+        .contains("Number 2, Harry Potter 2")
+        .doesNotContain("Harry Potter 1");
+    assertThat(sessions.getSession("session", "user").getBookCount()).isEqualTo(5);
+    verify(workflow).recommend(any(), any());
+  }
+
+  @ParameterizedTest
   @ValueSource(ints = {-1, 0, 6, 100})
   void invalidRanksReadOutThePageThenExplicitRetryExplainsFourth(int rank) throws Exception {
     search();
@@ -126,6 +188,38 @@ class ExplanationFlowTest {
     verify(workflow).recommend(any(), any());
   }
 
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "what can you do,HELP",
+    "cancel,CANCELLED",
+    "more,RECOMMENDATIONS",
+    "repeat,EXPLANATION_TARGET_CLARIFICATION",
+    "repeat the books,RECOMMENDATIONS",
+    "please repeat the recommendations thanks,RECOMMENDATIONS",
+    "clear history,HISTORY_CLEARED"
+  })
+  void fastCommandsUseNormalConversationHandlingWhileSelectionIsPending(
+      String text, ConversationDecision expected) {
+    search();
+    explain(null, "Harry Potter");
+    var client = mock(org.springframework.ai.chat.client.ChatClient.class);
+    var parser =
+        new com.gen3.recommenderagent.inputparser.AiInputParser(
+            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+    var result = service.process("session", "user", parser.parse(text));
+    assertThat(result.getDecision()).isEqualTo(expected);
+    if (expected == ConversationDecision.RECOMMENDATIONS) {
+      assertThat(result.getRecommendations())
+          .extracting(Recommendation::getBookId)
+          .containsExactlyElementsOf(
+              text.equals("more")
+                  ? List.of("book-6", "book-7", "book-8", "book-9", "book-10")
+                  : List.of("book-1", "book-2", "book-3", "book-4", "book-5"));
+    }
+    verifyNoInteractions(client);
+    verify(workflow).recommend(any(), any());
+  }
+
   @Test
   void explicitSearchByTitleCanStartANewSearchDuringClarification() {
     search();
@@ -168,6 +262,31 @@ class ExplanationFlowTest {
   }
 
   @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "the second audiobook",
+        "book number 2",
+        "number two",
+        "2nd",
+        "the second one",
+        "the audiobook number two please!",
+        "audiobook 2"
+      })
+  void secondBookSelectionRepliesUsePendingExplanation(String text) throws Exception {
+    search();
+    String before = saved();
+    explain(null, "Harry Potter");
+    var reply = new ConversationDraft();
+    reply.setIntent(Intent.UNKNOWN);
+    reply.setRawText(text);
+    var result = service.process("session", "user", reply);
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(result.getRecommendations()).extracting(Recommendation::getRank).containsExactly(2);
+    assertThat(saved()).isEqualTo(before);
+    verify(workflow).recommend(any(), any());
+  }
+
+  @ParameterizedTest
   @ValueSource(strings = {"3", "three", "3 please"})
   void countQuestionAcceptsShortRepliesAndPreservesTheQueue(String text) throws Exception {
     search();
@@ -194,6 +313,7 @@ class ExplanationFlowTest {
   @Test
   void explicitlyAskingForTwoMoreReturnsTwoAndKeepsTheRest() {
     search();
+    explain(null, "Harry Potter");
     var more = new ConversationDraft();
     more.setIntent(Intent.MORE_RESULTS);
     more.setRawText("2 more");
@@ -207,8 +327,30 @@ class ExplanationFlowTest {
     verify(workflow).recommend(any(), any());
   }
 
+  @Test
+  void explicitTwoBookSearchStartsNewSearchDuringSelection() {
+    search();
+    explain(null, "Harry Potter");
+    var reply = new ConversationDraft();
+    reply.setIntent(Intent.RECOMMENDATION);
+    reply.setRawText("recommend 2 books");
+    reply.setExplicitSearch(true);
+    reply.setBookCount(2);
+    var result = service.process("session", "user", reply);
+    assertThat(result.getIntent()).isEqualTo(Intent.RECOMMENDATION);
+    assertThat(result.getRecommendations()).hasSize(2);
+    verify(workflow, times(2)).recommend(any(), any());
+  }
+
   @ParameterizedTest
-  @ValueSource(strings = {"0", "6", "999999999999999999999"})
+  @ValueSource(
+      strings = {
+        "0",
+        "6",
+        "999999999999999999999",
+        "the sixth audiobook",
+        "book number 999999999999999999999th"
+      })
   void invalidNumericReplyKeepsClarifyingUntilAValidSelection(String number) {
     search();
     explain(null, "Harry Potter");
@@ -225,12 +367,13 @@ class ExplanationFlowTest {
     verify(workflow).recommend(any(), any());
   }
 
-  @Test
-  void numericReplyOnlySelectsABookWhileClarificationIsPending() {
+  @ParameterizedTest
+  @ValueSource(strings = {"1", "the second audiobook", "book number 2"})
+  void numericReplyOnlySelectsABookWhileClarificationIsPending(String text) {
     search();
     var reply = new ConversationDraft();
     reply.setIntent(Intent.UNKNOWN);
-    reply.setRawText("1");
+    reply.setRawText(text);
     assertThat(service.process("session", "user", reply).getDecision())
         .isEqualTo(ConversationDecision.UNKNOWN);
     explain(null, "Harry Potter");

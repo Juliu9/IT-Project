@@ -32,6 +32,47 @@ class RequestGatewayTest {
   @Mock private ResponseGenerator responseGenerator;
   @Mock private RequestTelemetry telemetry;
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  @ExtendWith(org.springframework.boot.test.system.OutputCaptureExtension.class)
+  void fastPathStillLogsParseStageForBothEndpoints(
+      boolean demo, org.springframework.boot.test.system.CapturedOutput output) {
+    var client = mock(org.springframework.ai.chat.client.ChatClient.class);
+    var parser =
+        new com.gen3.recommenderagent.inputparser.AiInputParser(
+            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+    var completed = new ConversationTurn();
+    completed.setIntent(com.gen3.recommenderagent.domain.Intent.HELP);
+    when(sessionTransitionService.process(
+            org.mockito.ArgumentMatchers.eq("session"), org.mockito.ArgumentMatchers.eq("user"),
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+        .thenAnswer(
+            call ->
+                ((java.util.function.Function<ConversationTurn, Object>) call.getArgument(3))
+                    .apply(completed));
+    when(responseGenerator.generate(null, completed)).thenReturn("Supported operations.");
+    var gateway =
+        new RequestGateway(
+            parser,
+            sessionTransitionService,
+            responseGenerator,
+            new RequestTelemetry(new tools.jackson.databind.ObjectMapper()));
+    if (demo) {
+      org.assertj.core.api.Assertions.assertThat(
+              gateway.handleDemoRequest("session", "user", "help").metrics().stages())
+          .containsKey("parseMs");
+    } else {
+      gateway.handleRequest("session", "user", "help");
+    }
+    org.assertj.core.api.Assertions.assertThat(output.getOut())
+        .contains(
+            "parser.completed mode=FAST_PATH outcome=SUCCESS durationMs=",
+            "\"event\":\"recommendation.completed\"")
+        .containsPattern("\"parseMs\":[0-9]+")
+        .doesNotContain("ai.operation.completed", "promptTokens=", "completionTokens=");
+    verifyNoInteractions(client);
+  }
+
   @Test
   void standardApiDoesNotBuildOrCollectDemoMetrics() throws Exception {
     var parsed = new ConversationDraft();

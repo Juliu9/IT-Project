@@ -18,7 +18,7 @@ import java.util.regex.Pattern;
 public final class ClarificationResolver {
   private static final Pattern SELECTION_REPLY =
       Pattern.compile(
-          "(?i)^(?:(?:the|number|book)\\s+)?([0-9]+(?:st|nd|rd|th)?|one|two|three|four|five|six|seven|eight|nine|ten|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)(?:\\s+(?:one|book))?(?:\\s+please)?[.!?]?$");
+          "(?i)^(?:the\\s+)?(?:(?:book|audiobook)\\s+)?(?:number\\s+)?([0-9]+(?:st|nd|rd|th)?|one|two|three|four|five|six|seven|eight|nine|ten|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)(?:\\s+(?:one|book|audiobook))?(?:\\s+please)?[.!?]?$");
 
   public ConversationDraft resolve(Session session, SessionRequest input) {
     ConversationDraft effective = copyOf(input);

@@ -21,7 +21,11 @@
       .label { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px; font-weight: 600; }
       .label span { color: var(--muted); font-size: 12px; font-weight: 400; }
       textarea { width: 100%; min-height: 140px; resize: vertical; padding: 16px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); font: inherit; line-height: 1.6; }
-      textarea:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgb(37 99 235 / 10%); }
+      .identity-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 20px; }
+      .identity-fields label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; }
+      .identity-fields input { width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+      .identity-note { margin: 0 0 20px; color: var(--muted); font-size: 12px; }
+      .identity-fields input:focus, textarea:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgb(37 99 235 / 10%); }
       .actions { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-top: 14px; }
       .examples { display: flex; flex-wrap: wrap; gap: 8px; }
       .example { border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; background: #f9fafb; color: var(--muted); cursor: pointer; font: inherit; font-size: 12px; }
@@ -70,6 +74,11 @@
         <p>Describe the audiobook you want and the recommendation agent will find a suitable next listen.</p>
       </section>
       <section class="card">
+        <div class="identity-fields">
+          <div><label for="user-id">User ID</label><input id="user-id" type="text" required pattern="[ -~]+" aria-describedby="identity-note" autocomplete="off"></div>
+          <div><label for="session-id">Session ID</label><input id="session-id" type="text" required pattern="[ -~]+" aria-describedby="identity-note" autocomplete="off"></div>
+        </div>
+        <p id="identity-note" class="identity-note">Use the same IDs for follow-ups. Change the session ID to test a new conversation. IDs must use standard ASCII characters and cannot be blank.</p>
         <div class="label"><label for="query">Your request</label><span>Natural language</span></div>
         <textarea maxlength="10000" id="query" placeholder="e.g. I want a short mystery audiobook with a female narrator. Nothing too dark."></textarea>
         <div class="actions">
@@ -97,6 +106,8 @@
         <summary>Agent Processing Details</summary>
         <div class="details-content">
           <div class="metadata-grid">
+            <div class="metadata"><div class="metadata-label">User ID</div><div id="request-user-id" class="metadata-value">—</div></div>
+            <div class="metadata"><div class="metadata-label">Session ID</div><div id="request-session-id" class="metadata-value">—</div></div>
             <div class="metadata"><div class="metadata-label">Request ID</div><div id="request-id" class="metadata-value">—</div></div>
             <div class="metadata"><div class="metadata-label">Intent</div><div id="intent" class="metadata-value">—</div></div>
             <div class="metadata"><div class="metadata-label">Personalised</div><div id="personalised" class="metadata-value">—</div></div>
@@ -114,6 +125,10 @@
         identity = crypto.randomUUID();
         sessionStorage.setItem(identityKey, identity);
       }
+      const userId = document.getElementById("user-id");
+      const sessionId = document.getElementById("session-id");
+      userId.value = sessionStorage.getItem("audiobook-demo-user-id") ?? identity;
+      sessionId.value = sessionStorage.getItem("audiobook-demo-session-id") ?? identity;
       const query = document.getElementById("query");
       const submit = document.getElementById("submit");
       const loading = document.getElementById("loading");
@@ -129,18 +144,27 @@
 
       async function requestRecommendation() {
         if (submit.disabled) return;
+        userId.value = userId.value.trim();
+        sessionId.value = sessionId.value.trim();
+        if (!userId.reportValidity() || !sessionId.reportValidity()) return;
+        const requestUserId = userId.value;
+        const requestSessionId = sessionId.value;
+        sessionStorage.setItem("audiobook-demo-user-id", requestUserId);
+        sessionStorage.setItem("audiobook-demo-session-id", requestSessionId);
         const text = query.value.trim();
         error.style.display = "none";
         result.style.display = "none";
         metrics.style.display = "none";
         details.style.display = "none";
         submit.disabled = true;
+        userId.disabled = true;
+        sessionId.disabled = true;
         submit.textContent = "Processing…";
         loading.style.display = "block";
         try {
           const response = await fetch("/api/v1/recommendations/demo", {
             method: "POST",
-            headers: { "Content-Type": "text/plain;charset=UTF-8", "X-Session-Id": identity, "X-User-Id": identity },
+            headers: { "Content-Type": "text/plain;charset=UTF-8", "X-Session-Id": requestSessionId, "X-User-Id": requestUserId },
             body: text
           });
           if (!response.ok) {
@@ -152,6 +176,8 @@
           result.style.display = "block";
           displayMetrics(payload.metrics);
           displayRequest(payload.sessionRequest);
+          document.getElementById("request-user-id").textContent = requestUserId;
+          document.getElementById("request-session-id").textContent = requestSessionId;
         } catch (exception) {
           error.textContent = exception instanceof TypeError
             ? "Unable to connect to the Recommendation Agent. Make sure the server is running on port 8080."
@@ -160,23 +186,30 @@
         } finally {
           loading.style.display = "none";
           submit.disabled = false;
+          userId.disabled = false;
+          sessionId.disabled = false;
           submit.textContent = "Get recommendations";
         }
       }
 
       function displayMetrics(data) {
+        if (!data) {
+          metrics.style.display = "none";
+          return;
+        }
+        const stages = data.stages ?? {};
         const number = (value) => value == null ? "—" : Number(value).toLocaleString();
         const operations = data.operations ?? {};
         const available = (operation) => operation.available && operation.promptTokens != null && operation.completionTokens != null;
         const usage = (operation) => !operation ? "Not called" : !available(operation)
           ? "Usage unavailable"
           : `${number(operation.promptTokens)} input / ${number(operation.completionTokens)} output tokens`;
-        document.getElementById("parse-tokens").textContent = usage(operations.parse);
+        document.getElementById("parse-tokens").textContent = operations.parse ? usage(operations.parse) : "No AI call";
         document.getElementById("response-tokens").textContent = usage(operations.generate_response);
         document.getElementById("embed-tokens").textContent = `Query embedding: ${usage(operations.embed_query)}`;
-        document.getElementById("parse-ms").textContent = number(data.stages.parseMs);
-        document.getElementById("recommend-ms").textContent = number(data.stages.recommendMs);
-        document.getElementById("response-ms").textContent = number(data.stages.responseMs);
+        document.getElementById("parse-ms").textContent = number(stages.parseMs);
+        document.getElementById("recommend-ms").textContent = number(stages.recommendMs);
+        document.getElementById("response-ms").textContent = number(stages.responseMs);
         document.getElementById("total-ms").textContent = number(data.totalMs);
         const calls = Object.values(operations);
         document.getElementById("total-tokens").textContent = calls.every(available)

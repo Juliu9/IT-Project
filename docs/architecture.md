@@ -2,8 +2,26 @@
 
 [README](../README.md) · [Sessions](#session-guarantees-and-replacement) · [Search rules](#search-and-retrieval-rules) · [Adapters](#database-selection-and-replacement) · [Models](#chat-models)
 
-The [README walkthrough](../README.md#how-the-recommender-agent-works) explains the request
-pipeline. This document records internal responsibilities, behavior rules, and adapter contracts.
+This document owns the request pipeline, conversation rules, and adapter guarantees.
+For setup and commands, start with the [README](../README.md).
+
+## Request pipeline
+
+1. `RequestGateway` accepts text plus user/session IDs. `AiInputParser` returns a structured
+   `SessionRequest` through exact-command matching or model extraction.
+2. `SessionTransitionService` loads the session under its lock. `ConversationEngine` resolves the
+   action through `ConversationDispatcher`, validates criteria, and requests a page only when needed.
+3. `AudiobookRecommendationWorkflow` prepares query vectors; `AudiobookRetrievalPlanner` builds the
+   mandatory exact filters and retrieval mode. `CandidateRetrievalService` queries the selected adapter.
+4. `RankingService` combines available retrieval relevance, stored-user preference similarity, and
+   universal rules such as recency/duration plausibility. Weights belong in
+   [configuration](configuration.md#ranking-rules).
+5. The session commits the completed turn, queue and shown IDs together. Response generation then
+   uses fixed wording or a separate chat client; the response model never selects the books.
+
+Catalogue embedding, summary generation, migration and CSV imports run in separate maintenance
+applications. Interactive requests only generate query embeddings when retrieval needs them.
+See the [request sequence diagram](diagrams/recommendation-flow.svg) for execution order.
 
 ## Terminology
 
@@ -44,6 +62,18 @@ Do not mix the two locking versions.
 ## Search and retrieval rules
 
 ### Context and cached results
+
+Retrieval excludes recently shown IDs before selecting up to 50 candidates. Ranking removes
+remaining duplicates and shown books, retains up to 20 recommendations, and serves at most five
+according to the requested count. Queued items retain ID, title, short description, score and
+reading-preference evidence, so full cached pages skip preference lookup, embedding, retrieval,
+and ranking. Parsing still runs (possibly through the fast path); response generation follows.
+
+MORE keeps the cached tail and refills when needed. Short pages are valid; no remaining matches
+produce an explicit exhaustion message. Changed search criteria invalidate the batch. Count changes
+and Help preserve it; preference-update behaviour is specified below. The session retains at most
+500 shown IDs, so older books can eventually reappear. Clear history removes searches, shown IDs,
+pending recommendations and clarification state, while preserving preferences and result count.
 
 A zero-match search still supplies context for `MORE_RESULTS`; clearing history removes it.
 `MORE_RESULTS` restores saved search criteria. `REPEAT` replays the latest resolved request,
@@ -217,6 +247,27 @@ readable; those fields are ignored. Decisions remain outside serialized turns, i
 The response generator consumes the resolved decision; direct callers without one use the shared
 `ConversationRules` classifier.
 
+### Input parsing
+
+Exact commands skip the model but still use the normal session/conversation pipeline. The command
+switch in [`AiInputParser`](../src/main/java/com/gen3/recommenderagent/inputparser/AiInputParser.java)
+is the authoritative alias list. It covers Help, More (including “next”), both repeat actions,
+page explanations, clear history and cancellation.
+
+Matching ignores case, extra whitespace, curly apostrophe differences, and boundary punctuation.
+It removes supported polite wording such as “please”/“kindly”, opening greetings or “sorry”/“excuse me”,
+and trailing “cheers”/“ta”/“many thanks”. The original input is preserved. Counts, negations,
+book selectors and extra criteria prevent exact matching and go through the model. For example,
+“2 more” and “more British authors” are not reduced to MORE.
+
+The parser schema and response vocabulary remain explicit contracts rather than dynamically
+loadable plugins. The model's JSON requires only `intent`; other fields, including nested
+criteria, may be omitted. Parser guidance asks for compact output without null/empty values or false
+flags; Java supplies their existing defaults. This is converter-based format guidance, not native
+strict Structured Outputs. Standalone taste replies supply search criteria once; pending preference
+updates derive their edits through `SessionPreferences.fromRequest`. Explicit preference commands
+retain their addition/removal/replacement fields.
+
 ### Adding an intent
 
 1. Add its parser contract and normalization rules, including whether it can introduce search criteria.
@@ -227,8 +278,6 @@ The response generator consumes the resolved decision; direct callers without on
 4. Add behavior tests for fresh sessions, follow-ups and replay. Update response wording as needed.
 
 Simple actions share `SessionActionHandler`; a new intent does not require a new class by default.
-The parser schema and response vocabulary remain explicit contracts rather than dynamically
-loadable plugins.
 
 A pending result-count question also accepts short answers such as “3” and “three”. The resolved
 count updates the session without consuming the pending recommendation queue. An explicit count
@@ -259,7 +308,8 @@ resolve them as an answer to a pending preference question.
 ## Explaining recommendations
 
 `EXPLAIN_RECOMMENDATION` carries optional `referenceRank` and `referenceTitle`, independent of
-`bookCount` and semantic criteria. No selectors means the whole latest search page. Title matching
+`bookCount` and semantic criteria. No selectors means the whole latest search page. A bare “explain”
+automatically explains the sole book when the latest page contains one recommendation. Title matching
 ignores case/punctuation and uses exact matches before unique partial matches. Missing, ambiguous,
 out-of-range or conflicting references produce a ranked-title clarification. A bare ordinal is not
 an explanation request on its own. While a book-selection clarification is pending, a numeric
@@ -314,6 +364,7 @@ the vector dimensions to the configured embedding model.
 
 Local Docker and Qdrant integration tests use server 1.19.1 with Java client 1.18.0. Vector readers
 use the current dense-vector response format; legacy flattened responses are not supported.
+Before reusing an older data volume, check server compatibility and the vendor’s upgrade instructions.
 
 `audiobook.database` in `application.properties` selects one database for the whole request flow;
 `qdrant` is the default. The former `audiobook.candidate-retriever` setting is rejected to prevent

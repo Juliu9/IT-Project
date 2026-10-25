@@ -150,6 +150,52 @@ class PreferenceUpdateFlowTest {
     verifyNoInteractions(vectors, retriever, ranker, users);
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = Intent.class,
+      names = {"RECOMMENDATION", "REFINE"})
+  void sparseParsedTasteReplyDerivesPreferenceUpdatesOnlyWhenContextRequiresThem(Intent intent) {
+    process(update(null));
+    String raw = "fantasy but avoid romance, in English";
+    var parsed =
+        new org.springframework.ai.converter.BeanOutputConverter<>(
+                com.gen3.recommenderagent.inputparser.ParsedRequest.class)
+            .convert(
+                "{\"intent\":\""
+                    + intent
+                    + "\","
+                    + "\"positiveSemanticQuery\":{\"genres\":[\"fantasy\"]},"
+                    + "\"negativeSemanticQuery\":{\"genres\":[\"romance\"]},"
+                    + "\"mustInclude\":{\"language\":\"English\"}}");
+    var client =
+        mock(
+            org.springframework.ai.chat.client.ChatClient.class,
+            org.mockito.Mockito.RETURNS_DEEP_STUBS);
+    when(client
+            .prompt()
+            .system(org.mockito.ArgumentMatchers.anyString())
+            .user(raw)
+            .call()
+            .responseEntity(
+                org.mockito.ArgumentMatchers
+                    .<org.springframework.ai.converter.StructuredOutputConverter<
+                            com.gen3.recommenderagent.inputparser.ParsedRequest>>
+                        any()))
+        .thenReturn(new org.springframework.ai.chat.client.ResponseEntity<>(null, parsed));
+    var parser =
+        new com.gen3.recommenderagent.inputparser.AiInputParser(
+            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+    var request = parser.parse(raw);
+    assertThat(request.getPreferenceUpdates()).isNull();
+    var result = service.process("session", "user", request);
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.PREFERENCES_UPDATED);
+    assertThat(saved().getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
+    assertThat(saved().getNegativeSemanticQuery().getGenres()).containsExactly("romance");
+    assertThat(saved().getMustInclude().getLanguage()).isEqualTo("English");
+    assertThat(result.getRecommendations()).isEmpty();
+    verifyNoInteractions(vectors, retriever, ranker, users);
+  }
+
   @Test
   void explicitSearchAndCancelExitThePendingUpdate() {
     process(update(null));

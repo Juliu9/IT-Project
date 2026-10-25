@@ -24,6 +24,96 @@ import tools.jackson.databind.ObjectMapper;
 
 class InputParserTest {
   @Test
+  void parserSchemaRequiresOnlyIntentIncludingInsideNestedCriteria() {
+    var schema = new ObjectMapper().readTree(AiInputParser.REQUEST_CONVERTER.getJsonSchema());
+    org.assertj.core.api.Assertions.assertThat(schema.path("required"))
+        .containsExactly(new ObjectMapper().readTree("\"intent\""));
+    org.assertj.core.api.Assertions.assertThat(schema.findValues("required")).hasSize(1);
+    assertEquals("boolean", schema.path("properties").path("explicitSearch").path("type").asText());
+    assertEquals(false, schema.path("additionalProperties").asBoolean());
+  }
+
+  @Test
+  void sparseExplanationOutputUsesExistingDefaultsWithoutInventingCountOrCriteria() {
+    var request =
+        parseModelJson(
+            "why the second book", "{\"intent\":\"EXPLAIN_RECOMMENDATION\",\"referenceRank\":2}");
+    assertEquals(Intent.EXPLAIN_RECOMMENDATION, request.getIntent());
+    assertEquals(2, request.getReferenceRank());
+    assertEquals(null, request.getBookCount());
+    assertEquals(null, request.getPositiveSemanticQuery());
+    assertEquals(null, request.getMustInclude());
+    assertEquals(null, request.getPreferenceUpdates());
+    assertEquals(false, request.isExplicitSearch());
+    assertEquals(false, request.isPersonalised());
+    assertEquals(false, request.isAddAuthors());
+    assertEquals(false, request.isAddNarrators());
+  }
+
+  @Test
+  void sparseTasteCriteriaDoNotRequireDuplicatePreferenceUpdates() {
+    var request =
+        parseModelJson(
+            "fantasy under ten hours",
+            """
+        {"intent":"RECOMMENDATION","positiveSemanticQuery":{"genres":["fantasy"]},
+         "mustInclude":{"duration":"under 10 hours"}}
+        """);
+    assertEquals(List.of("fantasy"), request.getPositiveSemanticQuery().getGenres());
+    assertEquals("under 10 hours", request.getMustInclude().getDuration());
+    assertEquals(null, request.getPositiveSemanticQuery().getAuthors());
+    assertEquals(null, request.getMustInclude().getLanguage());
+    assertEquals(null, request.getPreferenceUpdates());
+    assertEquals(null, request.getPreferenceRemovals());
+  }
+
+  @Test
+  void sparseRemovalAndClearingEditsDoNotNeedEmptyAdditionObjects() {
+    var removal =
+        parseModelJson(
+            "I no longer like romance",
+            """
+        {"intent":"UPDATE_PREFERENCES",
+         "preferenceRemovals":{"positiveSemanticQuery":{"genres":["romance"]}}}
+        """);
+    assertEquals(null, removal.getPreferenceUpdates());
+    assertEquals(
+        List.of("romance"), removal.getPreferenceRemovals().getPositiveSemanticQuery().getGenres());
+    var clearing =
+        parseModelJson(
+            "clear my language preference",
+            """
+        {"intent":"UPDATE_PREFERENCES","replacePreferenceFields":["mustInclude.language"]}
+        """);
+    assertEquals(null, clearing.getPreferenceUpdates());
+    assertEquals(List.of("mustInclude.language"), clearing.getReplacePreferenceFields());
+  }
+
+  private SessionRequest parseModelJson(String text, String json) {
+    var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    when(client
+            .prompt()
+            .system(anyString())
+            .user(text)
+            .call()
+            .responseEntity(AiInputParser.REQUEST_CONVERTER))
+        .thenReturn(
+            new ResponseEntity<ChatResponse, ParsedRequest>(
+                null, AiInputParser.REQUEST_CONVERTER.convert(json)));
+    var request =
+        new AiInputParser(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
+            .parse(text);
+    org.mockito.Mockito.verify(client.prompt())
+        .system(
+            org.mockito.ArgumentMatchers.<String>argThat(
+                prompt ->
+                    prompt.contains("omit nulls, empty arrays/objects/strings and false flags")
+                        && prompt.contains("omit preferenceUpdates")));
+    return request;
+  }
+
+  @Test
   void mapsPreferenceEditsWithoutPuttingThemInControlSearchSemantics() {
     var parsed =
         AiInputParser.REQUEST_CONVERTER.convert(
@@ -80,8 +170,193 @@ class InputParserTest {
         .system(
             org.mockito.ArgumentMatchers.<String>argThat(
                 prompt ->
-                    prompt.contains("Self-contained criteria")
+                    prompt.contains("self-contained criteria")
                         && prompt.contains("addAuthors/addNarrators")));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "help,HELP",
+    "show help,HELP",
+    "what can you do,HELP",
+    "what else can you do,HELP",
+    "what do you do,HELP",
+    "how do i use this,HELP",
+    "how does this work,HELP",
+    "what can i ask,HELP",
+    "more,MORE_RESULTS",
+    "some more,MORE_RESULTS",
+    "more recommendations,MORE_RESULTS",
+    "more books,MORE_RESULTS",
+    "more audiobooks,MORE_RESULTS",
+    "show me more,MORE_RESULTS",
+    "give me more,MORE_RESULTS",
+    "can i have more,MORE_RESULTS",
+    "can i have some more,MORE_RESULTS",
+    "could i have more,MORE_RESULTS",
+    "could i have some more,MORE_RESULTS",
+    "next,MORE_RESULTS",
+    "next batch,MORE_RESULTS",
+    "next page,MORE_RESULTS",
+    "repeat,REPEAT",
+    "repeat that,REPEAT",
+    "say that again,REPEAT",
+    "say it again,REPEAT",
+    "repeat yourself,REPEAT",
+    "repeat your last response,REPEAT",
+    "repeat the last response,REPEAT",
+    "repeat your last answer,REPEAT",
+    "repeat the books,REPEAT_RECOMMENDATIONS",
+    "repeat the recommendations,REPEAT_RECOMMENDATIONS",
+    "repeat recommendations,REPEAT_RECOMMENDATIONS",
+    "repeat the audiobooks,REPEAT_RECOMMENDATIONS",
+    "repeat those books,REPEAT_RECOMMENDATIONS",
+    "repeat those recommendations,REPEAT_RECOMMENDATIONS",
+    "show those recommendations again,REPEAT_RECOMMENDATIONS",
+    "show me the recommendations again,REPEAT_RECOMMENDATIONS",
+    "show those books again,REPEAT_RECOMMENDATIONS",
+    "explain,EXPLAIN_RECOMMENDATION",
+    "explain the recommendations,EXPLAIN_RECOMMENDATION",
+    "explain these recommendations,EXPLAIN_RECOMMENDATION",
+    "why these books,EXPLAIN_RECOMMENDATION",
+    "why these recommendations,EXPLAIN_RECOMMENDATION",
+    "why were these books recommended,EXPLAIN_RECOMMENDATION",
+    "clear history,CLEAR_HISTORY",
+    "clear my history,CLEAR_HISTORY",
+    "clear recommendation history,CLEAR_HISTORY",
+    "clear my recommendation history,CLEAR_HISTORY",
+    "cancel,CANCEL",
+    "cancel that,CANCEL",
+    "cancel this,CANCEL",
+    "cancel the request,CANCEL",
+    "never mind,CANCEL",
+    "nevermind,CANCEL",
+    "stop,CANCEL",
+    "forget it,CANCEL",
+    "more please,MORE_RESULTS"
+  })
+  void exactCommandsSkipAiAndPreserveRequestMetadata(String text, Intent intent) {
+    var client = mock(ChatClient.class);
+    var parser =
+        new AiInputParser(
+            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+    for (String raw :
+        List.of(
+            text,
+            "  " + text.toUpperCase(java.util.Locale.ROOT).replace(" ", " \t ") + "?!  ",
+            "Hello, could you please " + text + ", thank you!",
+            "kindly " + text + " please",
+            "Sorry, " + text + ", cheers!",
+            "Excuse me—" + text + ", ta.",
+            "Hello. " + text + ", many thanks…")) {
+      var result = parser.parse(raw);
+      assertEquals(intent, result.getIntent());
+      assertEquals(raw, result.getRawText());
+      assertEquals(7, UUID.fromString(result.getRequestId()).version());
+      assertEquals(null, result.getBookCount());
+      assertEquals(null, result.getReferenceRank());
+      assertEquals(null, result.getPositiveSemanticQuery());
+      assertEquals(null, result.getNegativeSemanticQuery());
+      assertEquals(false, result.isPersonalised());
+    }
+    verifyNoInteractions(client);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "help me find fantasy books",
+        "2 more",
+        "more, but shorter books",
+        "repeat the second explanation",
+        "repeat books by X",
+        "cancelled flight books",
+        "clear history and recommend fantasy",
+        "2",
+        "the second audiobook",
+        "help/more",
+        "please do not clear history",
+        "could you repeat the recommendations but exclude romance please",
+        "no more please",
+        "please give me 2 more thanks",
+        "please explain the second book",
+        "hello please help me find fantasy books thanks",
+        "no more, thanks",
+        "two more please, ta",
+        "more British authors, cheers",
+        "don’t clear history, thanks",
+        "don‘t repeat the recommendations, cheers",
+        "recommend books titled Cheers",
+        "ta more",
+        "would you mind recommending fantasy audiobooks",
+        "show me 2 more",
+        "repeat your last response but shorter",
+        "repeat those recommendations except the first",
+        "explain the second recommendation",
+        "clear my history of horror preferences",
+        "cancel that and recommend romance"
+      })
+  void requestsOutsideExactWhitelistStillUseAi(String text) {
+    var parsed = new ParsedRequest();
+    parsed.setIntent(Intent.UNKNOWN);
+    var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    when(client
+            .prompt()
+            .system(anyString())
+            .user(text)
+            .call()
+            .responseEntity(AiInputParser.REQUEST_CONVERTER))
+        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+    var result =
+        new AiInputParser(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
+            .parse(text);
+    assertEquals(Intent.UNKNOWN, result.getIntent());
+    org.mockito.Mockito.verify(client.prompt().system(anyString()).user(text).call())
+        .responseEntity(AiInputParser.REQUEST_CONVERTER);
+  }
+
+  @Test
+  void ignoresPolitenessInsideACommandWithoutChangingItsRepeatMeaning() {
+    var client = mock(ChatClient.class);
+    var parser =
+        new AiInputParser(
+            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+    assertEquals(
+        Intent.REPEAT_RECOMMENDATIONS,
+        parser.parse("repeat please the recommendations").getIntent());
+    assertEquals(Intent.REPEAT, parser.parse("could you just repeat that, thanks").getIntent());
+    verifyNoInteractions(client);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"the second one’s reason", "the second one's reason", "why the second book"})
+  void ordinalExplanationGuidanceSeparatesRankFromCount(String text) {
+    var parsed = new ParsedRequest();
+    parsed.setIntent(Intent.EXPLAIN_RECOMMENDATION);
+    parsed.setReferenceRank(java.math.BigInteger.valueOf(2));
+    var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    when(client
+            .prompt()
+            .system(anyString())
+            .user(text)
+            .call()
+            .responseEntity(AiInputParser.REQUEST_CONVERTER))
+        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+    var result =
+        new AiInputParser(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
+            .parse(text);
+    assertEquals(Intent.EXPLAIN_RECOMMENDATION, result.getIntent());
+    assertEquals(2, result.getReferenceRank());
+    assertEquals(null, result.getBookCount());
+    org.mockito.Mockito.verify(client.prompt())
+        .system(
+            org.mockito.ArgumentMatchers.<String>argThat(
+                prompt ->
+                    prompt.contains("the second one’s reason")
+                        && prompt.contains("Explanation ordinals select ONE book")));
   }
 
   @Test
@@ -233,7 +508,7 @@ class InputParserTest {
     when(client
             .prompt()
             .system(anyString())
-            .user("help")
+            .user("Could you explain how this service works?")
             .call()
             .responseEntity(AiInputParser.REQUEST_CONVERTER))
         .thenReturn(new ResponseEntity<>(response, parsed));
@@ -241,10 +516,12 @@ class InputParserTest {
         new com.gen3.recommenderagent.observability.AiOperationObserver(
             new org.springframework.beans.factory.support.DefaultListableBeanFactory()
                 .getBeanProvider(org.springframework.core.retry.RetryTemplate.class));
-    var result = new AiInputParser(client, observer).parse("help");
+    var result =
+        new AiInputParser(client, observer).parse("Could you explain how this service works?");
     assertEquals(Intent.HELP, result.getIntent());
     org.assertj.core.api.Assertions.assertThat(output.getOut())
         .contains(
+            "parser.completed mode=AI outcome=SUCCESS durationMs=",
             "operation=parse",
             "model=parser-model",
             "promptTokens=12",
@@ -393,6 +670,50 @@ class InputParserTest {
   }
 
   @Test
+  @org.junit.jupiter.api.extension.ExtendWith(
+      org.springframework.boot.test.system.OutputCaptureExtension.class)
+  void logsFastPathTimingWithoutAiUsage(
+      org.springframework.boot.test.system.CapturedOutput output) {
+    var client = mock(ChatClient.class);
+    var parser =
+        new AiInputParser(
+            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+    parser.parse("help");
+    org.assertj.core.api.Assertions.assertThat(output.getOut())
+        .containsPattern("parser.completed mode=FAST_PATH outcome=SUCCESS durationMs=[0-9]+")
+        .doesNotContain("ai.operation.completed", "promptTokens=", "completionTokens=");
+    verifyNoInteractions(client);
+  }
+
+  @Test
+  @org.junit.jupiter.api.extension.ExtendWith(
+      org.springframework.boot.test.system.OutputCaptureExtension.class)
+  void logsRejectedInputWithoutClaimingAnAiCall(
+      org.springframework.boot.test.system.CapturedOutput output) {
+    var client = mock(ChatClient.class);
+    var parser =
+        new AiInputParser(
+            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+    assertThrows(InvalidRequestException.class, () -> parser.parse(" "));
+    org.assertj.core.api.Assertions.assertThat(output.getOut())
+        .containsPattern("parser.completed mode=VALIDATION outcome=FAILURE durationMs=[0-9]+")
+        .doesNotContain("ai.operation.completed");
+    verifyNoInteractions(client);
+  }
+
+  @Test
+  void commandMatchingCannotBypassInputLengthValidation() {
+    var client = mock(ChatClient.class);
+    var parser =
+        new AiInputParser(
+            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop());
+    assertThrows(
+        InvalidRequestException.class,
+        () -> parser.parse("help" + " ".repeat(InputParser.MAX_REQUEST_CHARACTERS)));
+    verifyNoInteractions(client);
+  }
+
+  @Test
   void shouldRejectBlankTextBeforeCallingAi() {
     ChatClient chatClient = mock(ChatClient.class);
     ChatClient.Builder builder = mock(ChatClient.Builder.class);
@@ -408,7 +729,10 @@ class InputParserTest {
   }
 
   @Test
-  void shouldFailClearlyWhenMockAiReturnsNoParsedRequest() {
+  @org.junit.jupiter.api.extension.ExtendWith(
+      org.springframework.boot.test.system.OutputCaptureExtension.class)
+  void shouldFailClearlyWhenMockAiReturnsNoParsedRequest(
+      org.springframework.boot.test.system.CapturedOutput output) {
     String rawText = "Recommend an audiobook.";
 
     ChatClient chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
@@ -427,6 +751,8 @@ class InputParserTest {
         assertThrows(IllegalStateException.class, () -> new AiInputParser(builder).parse(rawText));
 
     assertEquals("AI did not return a ParsedRequest", exception.getMessage());
+    org.assertj.core.api.Assertions.assertThat(output.getOut())
+        .containsPattern("parser.completed mode=AI outcome=FAILURE durationMs=[0-9]+");
   }
 
   @Test
