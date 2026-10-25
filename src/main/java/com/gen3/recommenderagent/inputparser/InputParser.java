@@ -48,6 +48,7 @@ public class InputParser {
 
       SessionRequest request = new SessionRequest();
       request.setIntent(parsed.getIntent());
+      request.setShorter(parsed.isShorter());
       request.setSimilarToTitle(parsed.getSimilarToTitle());
       request.setSimilarToAuthor(parsed.getSimilarToAuthor());
       request.setSimilarToClarificationRequired(parsed.isSimilarToClarificationRequired());

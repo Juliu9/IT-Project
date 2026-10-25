@@ -106,6 +106,8 @@ public class ConversationResponseGenerator implements ResponseGenerator {
           "Please name one individual book you'd like similar recommendations for.";
       case SIMILAR_BOOK_UNAVAILABLE ->
           "I can't use that book for similarity recommendations right now. Please try another title.";
+      case SHORTER_DURATION_CLARIFICATION ->
+          "How short would you like the audiobooks to be? For example, under 3 hours.";
       case COUNT_CLARIFICATION -> "How many recommendations would you like at a time?";
       case COUNT_CHANGED -> {
         int count = Math.clamp(currentRequest.getBookCount(), 1, MAX_BOOK_COUNT);

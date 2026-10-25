@@ -132,6 +132,7 @@ public final class SearchCriteriaMerger {
     copy.setCreatedAt(source.getCreatedAt());
     copy.setIntent(source.getIntent() == null ? Intent.UNKNOWN : source.getIntent());
     if (acceptsSemanticInformation(copy.getIntent())) {
+      copy.setShorter(source.isShorter());
       copy.setPositiveSemanticQuery(copy(source.getPositiveSemanticQuery()));
       copy.setNegativeSemanticQuery(copy(source.getNegativeSemanticQuery()));
       copy.setPersonalised(source.isPersonalised());

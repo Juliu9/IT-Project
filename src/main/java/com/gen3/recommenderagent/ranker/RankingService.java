@@ -97,6 +97,7 @@ public class RankingService implements Ranker {
               score,
               candidate.audiobook().title(),
               candidate.audiobook().shortDescription());
+      recommendation.setDurationMinutes(candidate.audiobook().durationMinutes());
       recommendation.setReadingPreferencesUsed(item.score().readingPreferencesUsed());
       recommendations.add(recommendation);
     }

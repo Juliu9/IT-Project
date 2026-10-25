@@ -9,6 +9,16 @@ public class Recommendation {
   private Double score;
   private String title;
   private String shortDescription;
+  private Integer durationMinutes;
+
+  public Integer getDurationMinutes() {
+    return durationMinutes;
+  }
+
+  public void setDurationMinutes(Integer value) {
+    durationMinutes = value;
+  }
+
   // Retained with each queued book so later explanations use the evidence from its retrieval.
   private boolean readingPreferencesUsed;
 

@@ -24,9 +24,13 @@ public final class ConversationRules {
       request.setPositiveSemanticQuery(null);
       request.setNegativeSemanticQuery(null);
       request.setPersonalised(false);
+      request.setShorter(false);
       request.setSimilarToTitle(null);
       request.setSimilarToAuthor(null);
       request.setSimilarToClarificationRequired(false);
+    } else if (request.isShorter()) {
+      request.setIntent(Intent.REFINE);
+      request.setExplicitSearch(true);
     } else if (hasText(request.getSimilarToTitle()) || request.isSimilarToClarificationRequired()) {
       request.setExplicitSearch(true);
     }

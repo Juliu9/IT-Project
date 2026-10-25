@@ -45,6 +45,7 @@ public class RecommendationPager {
                       item.getScore(),
                       item.getTitle(),
                       item.getShortDescription());
+              displayed.setDurationMinutes(item.getDurationMinutes());
               displayed.setReadingPreferencesUsed(item.isReadingPreferencesUsed());
               return displayed;
             })

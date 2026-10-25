@@ -240,6 +240,8 @@ class InputParserTest {
     "show those recommendations again,REPEAT_RECOMMENDATIONS",
     "show me the recommendations again,REPEAT_RECOMMENDATIONS",
     "show those books again,REPEAT_RECOMMENDATIONS",
+    "show me the same books again,REPEAT_RECOMMENDATIONS",
+    "show me the same audiobook list you gave me earlier,REPEAT_RECOMMENDATIONS",
     "explain,EXPLAIN_RECOMMENDATION",
     "explain the recommendations,EXPLAIN_RECOMMENDATION",
     "explain these recommendations,EXPLAIN_RECOMMENDATION",
@@ -377,6 +379,34 @@ class InputParserTest {
     assertEquals(null, result.getReferenceRank());
     assertEquals(null, result.getSimilarToTitle());
     assertEquals(false, result.isExplicitSearch());
+    verifyNoInteractions(client);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "make them shorter",
+        "make those audiobooks shorter",
+        "Can you make the previous books shorter",
+        "make it shorter",
+        "shorter ones",
+        "something shorter",
+        "Please make them shorter, thanks!"
+      })
+  void shorterFollowUpsAreRefinementsWithoutInventedGenreOrDuration(String text) {
+    var client = mock(ChatClient.class);
+    var result =
+        new InputParser(
+                new CommandParser(),
+                new AiParser(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
+            .parse(text);
+    assertEquals(Intent.REFINE, result.getIntent());
+    assertEquals(true, result.isShorter());
+    assertEquals(true, result.isExplicitSearch());
+    assertEquals(null, result.getPositiveSemanticQuery());
+    assertEquals(null, result.getMustInclude());
+    assertEquals(null, result.getPreferenceUpdates());
     verifyNoInteractions(client);
   }
 

@@ -97,6 +97,21 @@ normaliser for case, punctuation and catalogue `$b` markers across reference and
 Pending choices are stored once in their request snapshot; older snapshots with a duplicate choices
 field remain readable.
 
+### Shorter follow-ups
+
+"Make them shorter" is a `REFINE` command, not a saved-preference edit. It skips AI, preserves the
+active search's content and other constraints, and uses `shorter=true` without inventing a numeric
+limit. With no previous search (including cleared/expired/new sessions), it asks what content the
+user wants and performs no retrieval, even when saved preferences exist.
+
+Recommendations retain their catalogue `durationMinutes` through ranking, paging and session storage.
+When every displayed duration is known and greater than one minute, a shorter refinement sets the
+new duration filter strictly below the shortest displayed book. The resolved limit is retained for
+More; session preferences are unchanged. If durations are missing, the page is empty, or the shortest
+book is already one minute, it asks for a duration limit and preserves the old page/batch. A numeric
+limit reply refines that search. Older session snapshots without durations remain readable and use
+this clarification path. Explicit duration requests still use their stated bounds.
+
 ### Context and cached results
 
 Retrieval excludes recently shown IDs before selecting up to 50 candidates. Ranking removes

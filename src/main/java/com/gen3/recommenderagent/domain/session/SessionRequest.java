@@ -6,6 +6,16 @@ import java.util.List;
 
 /** Incoming conversation instructions, independent of results and persisted search snapshots. */
 public class SessionRequest {
+  private boolean shorter;
+
+  public boolean isShorter() {
+    return shorter;
+  }
+
+  public void setShorter(boolean value) {
+    shorter = value;
+  }
+
   private String similarToTitle;
   private String similarToAuthor;
   private boolean similarToClarificationRequired;

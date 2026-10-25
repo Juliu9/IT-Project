@@ -62,6 +62,84 @@ class RefinementFlowTest {
     clearInvocations(workflow);
   }
 
+  private com.gen3.recommenderagent.domain.session.SessionRequest shorterCommand() {
+    return new com.gen3.recommenderagent.inputparser.InputParser(
+            new com.gen3.recommenderagent.inputparser.CommandParser(),
+            new com.gen3.recommenderagent.inputparser.AiParser(
+                mock(org.springframework.ai.chat.client.ChatClient.class),
+                com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
+        .parse("make them shorter");
+  }
+
+  @Test
+  void shorterFollowUpKeepsScienceFictionAndUsesDisplayedDurationsWithoutEditingPreferences() {
+    var old = new Recommendation("old", 1, 1.0, "Science Fiction");
+    old.setDurationMinutes(600);
+    var next = new Recommendation("next", 1, 1.0, "Short Science Fiction");
+    next.setDurationMinutes(120);
+    when(workflow.recommend(any(), any())).thenReturn(List.of(old), List.of(next));
+    var search = request(Intent.RECOMMENDATION);
+    var query = new SemanticQuery();
+    query.setGenres(List.of("science fiction"));
+    search.setPositiveSemanticQuery(query);
+    process(search);
+    var session = sessions.getSession("session", "user");
+    session.setAwaitingPreferenceUpdate(true);
+    session.setLastDecision(ConversationDecision.PREFERENCE_UPDATE_CLARIFICATION);
+    sessions.updateSession(session);
+    var result = service.process("session", "user", shorterCommand());
+    assertThat(result.getIntent()).isEqualTo(Intent.REFINE);
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
+    assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("science fiction");
+    assertThat(result.getMustInclude().getDuration()).isEqualTo("under 600 minutes");
+    assertThat(result.getSearchCriteria().getMustInclude().getDuration())
+        .isEqualTo("under 600 minutes");
+    assertThat(result.getRecommendations().getFirst().getDurationMinutes()).isLessThan(600);
+    assertThat(sessions.getSession("session", "user").getPreferences()).isNull();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"fresh", "cleared", "new-session"})
+  void shorterWithoutAnActiveSearchAsksForContentWithoutRetrieval(String scenario) {
+    if (!scenario.equals("fresh")) {
+      search(null, null);
+      if (scenario.equals("cleared")) {
+        process(request(Intent.CLEAR_HISTORY));
+      }
+      clearInvocations(workflow);
+    }
+    String id = scenario.equals("new-session") ? "new-session" : "session";
+    var result = service.process(id, "user", shorterCommand());
+    assertThat(result.getIntent()).isEqualTo(Intent.REFINE);
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.SEARCH_CLARIFICATION);
+    assertThat(result.getPositiveSemanticQuery()).isNull();
+    assertThat(result.getMustInclude()).isNull();
+    assertThat(result.getRecommendations()).isEmpty();
+    verifyNoInteractions(workflow);
+  }
+
+  @Test
+  void oldRecommendationsWithoutDurationsAskForALimitAndKeepTheSearch() {
+    search(null, null);
+    var result = service.process("session", "user", shorterCommand());
+    assertThat(result.getIntent()).isEqualTo(Intent.REFINE);
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.SHORTER_DURATION_CLARIFICATION);
+    assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
+    assertThat(result.getMustInclude() == null || result.getMustInclude().getDuration() == null)
+        .isTrue();
+    verifyNoInteractions(workflow);
+    var reply = request(Intent.RECOMMENDATION);
+    reply.setExplicitSearch(false);
+    var limit = new ExactCriteria();
+    limit.setDuration("under 2 hours");
+    reply.setMustInclude(limit);
+    var refined = process(reply);
+    assertThat(refined.getIntent()).isEqualTo(Intent.REFINE);
+    assertThat(refined.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
+    assertThat(refined.getMustInclude().getDuration()).isEqualTo("under 2 hours");
+    verify(workflow).recommend(any(), any());
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   void replacesOrAddsExactAuthorsAndNarrators(boolean add) {

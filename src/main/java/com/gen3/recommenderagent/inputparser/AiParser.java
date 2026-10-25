@@ -74,14 +74,19 @@ public class AiParser {
                         Intents:
                         RECOMMENDATION=new/self-contained criteria (even without a verb); REFINE=context-dependent search change/taste reply.
                         MORE_RESULTS=different books; REPEAT=latest action/answer; REPEAT_RECOMMENDATIONS=the same previous books/list,
-                        including "show me the same audiobook list you gave me earlier". A book-list reference takes precedence over REPEAT.
+                        A same-books/list reference takes precedence over REPEAT; REPEAT is for repeating an answer/action.
                         EXPLAIN_RECOMMENDATION=why recommended; HELP=capabilities/usage; CHANGE_COUNT=recommendation count;
-                        UPDATE_PREFERENCES=edit tastes/constraints; CLEAR_HISTORY=clear history; CANCEL=abandon pending action;
+                        REFINE changes the current results; UPDATE_PREFERENCES explicitly edits saved tastes/constraints.
+                        "make them shorter" -> REFINE, shorter=true, explicitSearch=true; no invented genre or hour limit.
+                        shorter=true only compares previous results' runtimes without an explicit numeric limit; Java uses their durations.
+                        shorter refers to runtime, not response length. Never invent genres or numeric limits for an underspecified refinement.
+                        CLEAR_HISTORY=clear history; CANCEL=abandon pending action;
                         UNKNOWN=unsupported/unrecognised, never a capability question.
 
                         Fields:
                         "books similar to The Hunger Games" -> RECOMMENDATION, similarToTitle="The Hunger Games".
-                        similarToAuthor identifies the reference's author, not a filter on recommended authors.
+                        For "similar to TITLE by AUTHOR", extract both similarToTitle and similarToAuthor;
+                        that author identifies the reference, not a filter on recommended authors.
                         Do not invent themes or embed the title as semantic criteria; only additional requested tastes go in semantic queries.
                         A single named title always goes to catalogue lookup, even if it also names a series; never infer series scope from your knowledge.
                         similarToClarificationRequired=true ONLY when the user explicitly requests a series/trilogy/saga as a whole or names multiple reference books.
@@ -104,10 +109,15 @@ public class AiParser {
                         Filters:
                         Duration comparisons belong in mustInclude.duration (including "under"/"over", not just exact lengths); use digits plus hours/minutes; convert words/fractions ("under ten hours" -> "under 10 hours";
                         "one and a half hours" -> "1.5 hours"). Preserve under/over/at most/at least/exactly/between and both endpoints; vague duration=null.
-                        "Recommend mystery audiobooks under ten hours" -> {"intent":"RECOMMENDATION","positiveSemanticQuery":{"genres":["mystery"]},"mustInclude":{"duration":"under 10 hours"}}.
                         Years=preserve after/before/at least/at most/exactly/between and both YYYY endpoints. recent/recently=last 5 years;
                         retain relative wording/counts ("recent", "past year", "last four years") in publicationYear, never guess years.
                         Keep exclusions and duration comparisons separate. "mystery, not too dark" -> positive genres=["mystery"], negative keywords=["dark"].
+
+                        Extraction examples (copy only values stated in the actual request):
+                        "Recommend mystery audiobooks under five hours" ->
+                        {"intent":"RECOMMENDATION","explicitSearch":true,"positiveSemanticQuery":{"genres":["mystery"]},"mustInclude":{"duration":"under 5 hours"}}
+                        "Books similar to The Hunger Games by Suzanne Collins under ten hours" ->
+                        {"intent":"RECOMMENDATION","explicitSearch":true,"similarToTitle":"The Hunger Games","similarToAuthor":"Suzanne Collins","mustInclude":{"duration":"under 10 hours"}}
 
                         Preferences:
                         UPDATE_PREFERENCES uses preferenceUpdates/preferenceRemovals (SessionPreferences), not search fields.

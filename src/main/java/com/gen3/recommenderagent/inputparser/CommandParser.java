@@ -38,6 +38,22 @@ public class CommandParser {
       parsed.setIntent(Intent.UNKNOWN);
       return parsed;
     }
+    if (java.util.Set.of(
+            "make them shorter",
+            "make it shorter",
+            "make those audiobooks shorter",
+            "make the previous books shorter",
+            "shorter ones",
+            "something shorter",
+            "shorter audiobooks",
+            "shorter books")
+        .contains(command)) {
+      var parsed = new ParsedRequest();
+      parsed.setIntent(Intent.REFINE);
+      parsed.setShorter(true);
+      parsed.setExplicitSearch(true);
+      return parsed;
+    }
     var countedMore = COUNTED_MORE.matcher(command);
     if (countedMore.matches()) {
       var parsed = new ParsedRequest();
@@ -88,7 +104,9 @@ public class CommandParser {
               "repeat those recommendations",
               "show those recommendations again",
               "show me the recommendations again",
-              "show those books again" ->
+              "show those books again",
+              "show me the same books again",
+              "show me the same audiobook list you gave me earlier" ->
               Intent.REPEAT_RECOMMENDATIONS;
           case "explain",
               "explain the recommendations",

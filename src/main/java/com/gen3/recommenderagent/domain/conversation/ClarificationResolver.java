@@ -60,6 +60,17 @@ public final class ClarificationResolver {
       effective.setReferenceTitle(selection == null ? reply : null);
       return effective;
     }
+    if (session.getLastDecision() == ConversationDecision.SHORTER_DURATION_CLARIFICATION
+        && !effective.isExplicitSearch()
+        && effective.getMustInclude() != null
+        && effective.getMustInclude().getDuration() != null
+        && (effective.getIntent() == Intent.RECOMMENDATION
+            || effective.getIntent() == Intent.REFINE
+            || effective.getIntent() == Intent.UNKNOWN)) {
+      effective.setIntent(Intent.REFINE);
+      normalizeInput(effective);
+      return effective;
+    }
     boolean anotherQuestion =
         session.getLastDecision() != null
             && switch (session.getLastDecision()) {
@@ -67,7 +78,8 @@ public final class ClarificationResolver {
                   EXPLANATION_TARGET_CLARIFICATION,
                   PREFERENCE_CLARIFICATION,
                   PREFERENCE_UPDATE_CLARIFICATION,
-                  SEARCH_CLARIFICATION ->
+                  SEARCH_CLARIFICATION,
+                  SHORTER_DURATION_CLARIFICATION ->
                   true;
               default -> false;
             };
@@ -81,6 +93,7 @@ public final class ClarificationResolver {
         || (session.isAwaitingPreferenceUpdate()
             && session.getLastDecision() != ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
             && session.getLastDecision() != ConversationDecision.COUNT_CLARIFICATION
+            && session.getLastDecision() != ConversationDecision.SHORTER_DURATION_CLARIFICATION
             && !effective.isExplicitSearch()
             && (effective.getIntent() == Intent.RECOMMENDATION
                 || effective.getIntent() == Intent.REFINE

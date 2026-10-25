@@ -101,6 +101,25 @@ class LiveInputParserTest {
     }
   }
 
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "make them shorter",
+        "make those audiobooks shorter",
+        "Can you make the previous books shorter"
+      })
+  void contextualShorterRequestsDoNotInventContentOrNumericLimits(String text) {
+    var result = parser.parse(text);
+    assertThat(result.getIntent()).as(text).isEqualTo(Intent.REFINE);
+    assertThat(result.isShorter()).as(text).isTrue();
+    assertThat(result.getPositiveSemanticQuery()).as(text).isNull();
+    assertThat(result.getNegativeSemanticQuery()).as(text).isNull();
+    assertThat(result.getMustInclude()).as(text).isNull();
+    assertThat(result.getMustNotInclude()).as(text).isNull();
+    assertThat(result.getPreferenceUpdates()).as(text).isNull();
+    assertThat(result.isPersonalised()).as(text).isFalse();
+  }
+
   @Configuration(proxyBeanMethods = false)
   @Profile("live-parser-evaluation")
   @EnableAutoConfiguration

@@ -21,6 +21,24 @@ class RankingServiceTest {
           new CompositeScorer(List.of(new WeightedScorer(new RetrievalRelevanceScorer(), 1.0))));
 
   @Test
+  void retainsCatalogueDurationForLaterRelativeRefinements() {
+    var record =
+        new AudiobookRecord(
+            "science",
+            "test",
+            "Science Fiction",
+            List.of(),
+            "Description",
+            List.of(),
+            "English",
+            180,
+            2024,
+            "Summary");
+    var result = rankingService.rank(List.of(new AudiobookCandidate(record, 1.0)), 1);
+    assertEquals(180, result.getFirst().getDurationMinutes());
+  }
+
+  @Test
   void replacementScorerSuppliesEvidenceWithoutRescoringSelectedBooks() {
     var calls = new java.util.concurrent.atomic.AtomicInteger();
     com.gen3.recommenderagent.ranker.scorer.CandidateScorer replacement =
