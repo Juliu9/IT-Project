@@ -285,8 +285,9 @@ class InputParserTest {
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {
         "help me find fantasy books",
-        "2 more",
         "more, but shorter books",
+        "2 more but shorter",
+        "2 more by Jane Austen",
         "repeat the second explanation",
         "repeat books by X",
         "cancelled flight books",
@@ -297,7 +298,6 @@ class InputParserTest {
         "please do not clear history",
         "could you repeat the recommendations but exclude romance please",
         "no more please",
-        "please give me 2 more thanks",
         "please explain the second book",
         "hello please help me find fantasy books thanks",
         "no more, thanks",
@@ -308,7 +308,6 @@ class InputParserTest {
         "recommend books titled Cheers",
         "ta more",
         "would you mind recommending fantasy audiobooks",
-        "show me 2 more",
         "repeat your last response but shorter",
         "repeat those recommendations except the first",
         "explain the second recommendation",
@@ -564,30 +563,30 @@ class InputParserTest {
             "usageAvailable=true");
   }
 
-  @Test
-  void preservesAnExplicitCountOnMoreWithoutAddingSearchCriteria() {
-    var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
-    when(client
-            .prompt()
-            .system(anyString())
-            .user("2 more")
-            .call()
-            .responseEntity(AiParser.REQUEST_CONVERTER))
-        .thenAnswer(
-            ignored ->
-                new ResponseEntity<>(
-                    null,
-                    AiParser.REQUEST_CONVERTER.convert(
-                        "{\"intent\":\"MORE_RESULTS\",\"bookCount\":2}")));
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "2 more",
+        "2 more books",
+        "2 more recommendations",
+        "show me 2 more",
+        "please give me 2 more thanks",
+        "Could you please show me 2 more audiobooks?"
+      })
+  void preservesAnExplicitCountOnMoreWithoutCallingAi(String text) {
+    var client = mock(ChatClient.class);
     var result =
         new InputParser(
                 new CommandParser(),
                 new AiParser(
                     client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
-            .parse("2 more");
+            .parse(text);
     assertEquals(Intent.MORE_RESULTS, result.getIntent());
     assertEquals(2, result.getBookCount());
+    assertEquals(null, result.getReferenceRank());
     assertEquals(null, result.getPositiveSemanticQuery());
+    assertEquals(text, result.getRawText());
+    verifyNoInteractions(client);
   }
 
   @org.junit.jupiter.params.ParameterizedTest

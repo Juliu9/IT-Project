@@ -42,6 +42,8 @@ class LiveInputParserTest {
     "recommend 2 fantasy audiobooks,RECOMMENDATION,,2",
     "I missed your last answer. Could you say it again,REPEAT,,",
     "Can you show me the same audiobook list you gave me earlier,REPEAT_RECOMMENDATIONS,,",
+    "Show me the same books again,REPEAT_RECOMMENDATIONS,,",
+    "Repeat your last explanation,REPEAT,,",
     "I have changed my mind; abandon that request,CANCEL,,"
   })
   void recognisesIntentAndSeparatesRankFromCount(
@@ -58,7 +60,9 @@ class LiveInputParserTest {
   void extractsNumericDurationAndSemanticGenre(String duration, String expected) {
     var result = parser.parse("Recommend mystery audiobooks " + duration);
     assertThat(result.getIntent()).isEqualTo(Intent.RECOMMENDATION);
-    assertThat(result.getMustInclude()).isNotNull();
+    assertThat(result.getMustInclude())
+        .as("duration criteria for %s; parsed=%s", duration, result)
+        .isNotNull();
     assertThat(result.getMustInclude().getDuration()).isEqualTo(expected);
     assertThat(result.getPositiveSemanticQuery()).isNotNull();
     assertThat(result.getPositiveSemanticQuery().getGenres()).contains("mystery");

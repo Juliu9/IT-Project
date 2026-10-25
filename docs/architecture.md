@@ -259,9 +259,10 @@ page explanations, clear history and cancellation.
 
 Matching ignores case, extra whitespace, curly apostrophe differences, and boundary punctuation.
 It removes supported polite wording such as “please”/“kindly”, opening greetings or “sorry”/“excuse me”,
-and trailing “cheers”/“ta”/“many thanks”. The original input is preserved. Counts, negations,
-book selectors and extra criteria prevent exact matching and go through the model. For example,
-“2 more” and “more British authors” are not reduced to MORE.
+and trailing “cheers”/“ta”/“many thanks”. The original input is preserved. Explicit numeric More commands such as “2 more”, “show me 2 more”
+and “2 more audiobooks” preserve their count without calling AI. Negations, book selectors and
+extra criteria still go through the model; “2 more but shorter” and “more British authors” are not
+reduced to a plain More command.
 
 The parser schema and response vocabulary remain explicit contracts rather than dynamically
 loadable plugins. The model's JSON requires only `intent`; other fields, including nested

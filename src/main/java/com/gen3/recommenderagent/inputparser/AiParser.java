@@ -73,7 +73,8 @@ public class AiParser {
 
                         Intents:
                         RECOMMENDATION=new/self-contained criteria (even without a verb); REFINE=context-dependent search change/taste reply.
-                        MORE_RESULTS=different books; REPEAT=latest action/answer; REPEAT_RECOMMENDATIONS=latest book page.
+                        MORE_RESULTS=different books; REPEAT=latest action/answer; REPEAT_RECOMMENDATIONS=the same previous books/list,
+                        including "show me the same audiobook list you gave me earlier". A book-list reference takes precedence over REPEAT.
                         EXPLAIN_RECOMMENDATION=why recommended; HELP=capabilities/usage; CHANGE_COUNT=recommendation count;
                         UPDATE_PREFERENCES=edit tastes/constraints; CLEAR_HISTORY=clear history; CANCEL=abandon pending action;
                         UNKNOWN=unsupported/unrecognised, never a capability question.
@@ -81,7 +82,8 @@ public class AiParser {
                         Fields:
                         Only RECOMMENDATION/REFINE allow positiveSemanticQuery/negativeSemanticQuery or personalised=true.
                         Desired/avoided concepts, including genre/mood and liked authors/narrators, stay semantic;
-                        only explicit exact author/narrator/language/duration/publication-year/source requirements use mustInclude/mustNotInclude.
+                        Explicit author/narrator/language/duration/publication-year/source constraints use mustInclude/mustNotInclude.
+                        Extract every stated constraint alongside semantic criteria; compact output must not omit supplied values.
                         Preserve contradictions. Author/narrator lists replace by default; addAuthors/addNarrators=true only for explicit additions.
                         personalised=true for taste/favourites/history or generic recommendations without criteria; never invent taste.
                         explicitSearch=true for explicit search commands, false for short taste replies.
@@ -92,8 +94,9 @@ public class AiParser {
                         References are explanation-only; bare ordinals are not explanation requests.
 
                         Filters:
-                        Duration=digits plus hours/minutes; convert words/fractions ("under ten hours" -> "under 10 hours";
+                        Duration comparisons belong in mustInclude.duration (including "under"/"over", not just exact lengths); use digits plus hours/minutes; convert words/fractions ("under ten hours" -> "under 10 hours";
                         "one and a half hours" -> "1.5 hours"). Preserve under/over/at most/at least/exactly/between and both endpoints; vague duration=null.
+                        "Recommend mystery audiobooks under ten hours" -> {"intent":"RECOMMENDATION","positiveSemanticQuery":{"genres":["mystery"]},"mustInclude":{"duration":"under 10 hours"}}.
                         Years=preserve after/before/at least/at most/exactly/between and both YYYY endpoints. recent/recently=last 5 years;
                         retain relative wording/counts ("recent", "past year", "last four years") in publicationYear, never guess years.
                         Keep exclusions and duration comparisons separate. "mystery, not too dark" -> positive genres=["mystery"], negative keywords=["dark"].

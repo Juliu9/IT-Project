@@ -1,6 +1,5 @@
 package com.gen3.recommenderagent.inputparser;
 
-import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.conversation.ConversationRules;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.math.BigInteger;
@@ -41,14 +40,10 @@ public class InputParser {
                 + " characters or fewer.");
       }
 
-      Intent command = commandParser.parse(rawText);
-      mode = command == null ? "AI" : "FAST_PATH";
-      ParsedRequest parsed;
-      if (command == null) {
+      ParsedRequest parsed = commandParser.parse(rawText);
+      mode = parsed == null ? "AI" : "FAST_PATH";
+      if (parsed == null) {
         parsed = aiParser.parse(rawText);
-      } else {
-        parsed = new ParsedRequest();
-        parsed.setIntent(command);
       }
 
       SessionRequest request = new SessionRequest();
