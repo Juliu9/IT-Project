@@ -90,7 +90,7 @@ public class ConversationResponseGenerator implements ResponseGenerator {
       ConversationDecision decision, ConversationTurn currentRequest) {
     return switch (decision) {
       case SIMILAR_BOOK_SELECTION ->
-          "Which book did you mean? "
+          "I found a few possible matches. Which book did you mean? "
               + java.util.stream.IntStream.range(0, currentRequest.getSimilarBookChoices().size())
                   .mapToObj(
                       index -> {
@@ -103,13 +103,13 @@ public class ConversationResponseGenerator implements ResponseGenerator {
                                 : " by " + String.join(", ", book.authors()));
                       })
                   .collect(Collectors.joining(". "))
-              + ". Choose a number, or give a more specific title and author.";
+              + ". You can choose a number, or share a more specific title and author.";
       case SIMILAR_BOOK_NOT_FOUND ->
-          "I couldn't find that book in the catalogue. What aspects of it did you enjoy?";
+          "I couldn't find that book in the catalogue. What did you enjoy about it?";
       case SIMILAR_BOOK_REQUIRED ->
-          "Please name one individual book you'd like similar recommendations for.";
+          "Which book would you like similar recommendations for? Please give me one title.";
       case SIMILAR_BOOK_UNAVAILABLE ->
-          "I can't use that book for similarity recommendations right now. Please try another title.";
+          "I can't use that book to find similar audiobooks right now. Would you like to try another title?";
       case SHORTER_DURATION_CLARIFICATION ->
           "How short would you like the audiobooks to be? For example, under 3 hours.";
       case COUNT_CLARIFICATION -> "How many recommendations would you like at a time?";
@@ -121,27 +121,29 @@ public class ConversationResponseGenerator implements ResponseGenerator {
           "What would you like to change about your preferences?";
       case PREFERENCES_UPDATED -> "Thanks, I've updated your preferences for this session.";
       case PREFERENCES_RESET ->
-          "I’ve reset your session preferences and will show "
+          "All set, I've reset your preferences for this session and will show "
               + MAX_BOOK_COUNT
               + " recommendations at a time.";
       case HISTORY_CLEARED -> "All set, I've cleared this session's recommendation history.";
-      case CANCELLED -> "Okay, cancelled. Let me know what you would like next.";
+      case CANCELLED -> "No problem, I've cancelled that. What would you like to do next?";
       case HELP ->
-          "I can help you find audiobooks, refine a search, show more results, repeat the last request or book page, change the result "
-              + "count, explain why books were recommended, update or reset your preferences, cancel, or clear this session's history.";
+          "I can help you find audiobooks, adjust your search, or explore more books. You can ask me to "
+              + "repeat my last reply or the last book list, explain a recommendation, or change how many books I show. "
+              + "You can also update or reset your preferences, cancel a request, or clear this session's history.";
       case UNKNOWN ->
           "I'm not quite sure what you'd like to do. You can ask for audiobook recommendations or "
               + "say help to hear what I can do.";
       case NO_RECOMMENDATIONS_TO_REPEAT ->
-          "There are no recommendations to repeat. Ask me for audiobooks first.";
+          "I don't have a list of recommendations to repeat right now. What kind of audiobook would you like?";
       case NOTHING_TO_EXPLAIN ->
-          "I haven't recommended any books yet. Ask me for recommendations first.";
-      case EMPTY_EXPLANATION_PAGE -> "The latest request returned no recommendations to explain.";
+          "I haven't recommended any books in this session yet. What kind of audiobook would you like?";
+      case EMPTY_EXPLANATION_PAGE ->
+          "I didn't find any books in the latest search to explain. Would you like to try a different search?";
       case EXPLANATION_TARGET_CLARIFICATION -> explanationClarification(currentRequest);
       case NO_MORE_RESULTS ->
-          "There are no more audiobooks matching your current search. Try changing your criteria.";
+          "There are no more audiobooks matching your current search. Would you like to try a different author, genre, or filter?";
       case NOTHING_TO_REPEAT ->
-          "There is no previous request to repeat. Ask me for recommendations or help first.";
+          "I don't have an earlier request to repeat yet. Would you like recommendations or help getting started?";
       case NO_MATCHES -> generateFallbackResponse(currentRequest);
       case UNAVAILABLE -> PROCESSING_FALLBACK;
       case SEARCH_CLARIFICATION -> "What kind of audiobook would you like?";
@@ -156,32 +158,32 @@ public class ConversationResponseGenerator implements ResponseGenerator {
         page.stream()
             .map(book -> book.getRank() + ". " + book.getTitle())
             .collect(Collectors.joining(". "));
-    return "I returned "
+    return "I shared "
         + page.size()
         + " book"
         + (page.size() == 1 ? "" : "s")
-        + ": "
+        + " with you: "
         + titles
-        + ". Which one did you mean?";
+        + ". Which one would you like me to explain?";
   }
 
   // Safe node output
   private String generateFallbackResponse(ConversationTurn currentRequest) {
     if (currentRequest != null && currentRequest.isPersonalised()) {
       return "I couldn't find audiobooks matching your current search and saved preferences. "
-          + "Try changing the author, genre, or another filter.";
+          + "Would you like to try a different author, genre, or filter?";
     }
     if (currentRequest != null
         && currentRequest.getMustInclude() != null
         && currentRequest.getMustInclude().getPublicationYear() != null) {
-      return "I couldn't find books matching those criteria. Try changing your criteria.";
+      return "I couldn't find books matching those criteria. Would you like to try a different author, genre, or filter?";
     }
     if (currentRequest != null
         && currentRequest.getRawText() != null
         && !currentRequest.getRawText().isBlank()) {
       return "I couldn't find a good match for "
           + currentRequest.getRawText()
-          + " just yet. Try a genre, author, narrator, or a different description.";
+          + " just yet. Would you like to try a different genre, author, narrator, or description?";
     }
 
     return PROCESSING_FALLBACK;

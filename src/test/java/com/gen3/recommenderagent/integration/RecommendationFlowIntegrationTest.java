@@ -130,7 +130,7 @@ class RecommendationFlowIntegrationTest {
                 .string(
                     "I couldn't find a good match for "
                         + rawText
-                        + " just yet. Try a genre, author, narrator, or a different description."));
+                        + " just yet. Would you like to try a different genre, author, narrator, or description?"));
     var saved = sessions.getSession("no-matches", "user-1");
     assertNotNull(saved);
     assertTrue(saved.getRequests().getFirst().getRecommendations().isEmpty());

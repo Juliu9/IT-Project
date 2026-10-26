@@ -56,7 +56,7 @@ public class DemoWebsite {
         metadata = catalogue.findBooksByIds(Recommendation.bookIds(books));
       } catch (IOException exception) {
         LOGGER.warn("dev.catalogue.lookup.failed", exception);
-        error = "Catalogue details are temporarily unavailable.";
+        error = "I couldn't load the extra book details right now. Please try again in a moment.";
       }
     }
     return new DemoResponse(

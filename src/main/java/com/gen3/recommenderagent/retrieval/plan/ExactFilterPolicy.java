@@ -277,7 +277,7 @@ public class ExactFilterPolicy {
       }
     }
     throw new InvalidRequestException(
-        "Please specify a publication year, comparison, or valid year range.");
+        "What publication year or year range would you like? You can also say 'after 2020' or 'in the last 5 years'.");
   }
 
   /** Creates an immutable, null-safe filter list. */

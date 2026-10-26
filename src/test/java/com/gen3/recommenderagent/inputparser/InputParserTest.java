@@ -305,6 +305,8 @@ class InputParserTest {
     "explain all the recommendations,EXPLAIN_RECOMMENDATION",
     "explain these books,EXPLAIN_RECOMMENDATION",
     "why were these books recommended,EXPLAIN_RECOMMENDATION",
+    "reset,RESET_PREFERENCES",
+    "Reset please,RESET_PREFERENCES",
     "reset preferences,RESET_PREFERENCES",
     "reset my preferences,RESET_PREFERENCES",
     "reset session preferences,RESET_PREFERENCES",
@@ -312,6 +314,8 @@ class InputParserTest {
     "clear my preferences,RESET_PREFERENCES",
     "reset my tastes,RESET_PREFERENCES",
     "reset preferences and count,RESET_PREFERENCES",
+    "clear,CLEAR_HISTORY",
+    "Clear please,CLEAR_HISTORY",
     "clear history,CLEAR_HISTORY",
     "clear my history,CLEAR_HISTORY",
     "clear recommendation history,CLEAR_HISTORY",
@@ -360,6 +364,8 @@ class InputParserTest {
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {
         "help me find fantasy books",
+        "do not reset",
+        "clear and recommend fantasy",
         "only three at a time by Jane Austen",
         "not now but add horror to my preferences",
         "no horror",

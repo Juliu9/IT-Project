@@ -50,7 +50,7 @@ class ExplanationFlowTest {
     explain(6, null);
     var help = process(Intent.HELP);
     assertThat(responses.generate(help.getRecommendations(), help))
-        .contains("Which one did you mean?");
+        .contains("Which one would you like me to explain?");
     var repeated = process(Intent.REPEAT);
     assertThat(responses.generate(repeated.getRecommendations(), repeated))
         .isEqualTo(responses.generate(help.getRecommendations(), help));
@@ -206,7 +206,7 @@ class ExplanationFlowTest {
         .containsExactly("only-book");
     assertThat(responses.generate(result.getRecommendations(), result))
         .contains("Only Book")
-        .doesNotContain("Which one did you mean?");
+        .doesNotContain("Which one would you like me to explain?");
     assertThat(saved()).isEqualTo(before);
     verifyNoInteractions(client);
     verify(workflow, times(2)).recommend(any(), any());
@@ -253,7 +253,7 @@ class ExplanationFlowTest {
         .isEqualTo(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
     assertThat(responses.generate(invalid.getRecommendations(), invalid))
         .isEqualTo(
-            "I returned 5 books: 1. Harry Potter 1. 2. Harry Potter 2. 3. Harry Potter 3. 4. Harry Potter 4. 5. Harry Potter 5. Which one did you mean?");
+            "I shared 5 books with you: 1. Harry Potter 1. 2. Harry Potter 2. 3. Harry Potter 3. 4. Harry Potter 4. 5. Harry Potter 5. Which one would you like me to explain?");
     assertThat(explain(4, null).getRecommendations())
         .extracting(Recommendation::getRank)
         .containsExactly(4);
@@ -528,7 +528,8 @@ class ExplanationFlowTest {
   void noSearchAndClearedHistoryReturnFixedMessagesWithoutSearching() {
     var none = explain(null, null);
     assertThat(responses.generate(none.getRecommendations(), none))
-        .isEqualTo("I haven't recommended any books yet. Ask me for recommendations first.");
+        .isEqualTo(
+            "I haven't recommended any books in this session yet. What kind of audiobook would you like?");
     verifyNoInteractions(workflow);
     search();
     process(Intent.CLEAR_HISTORY);
@@ -545,7 +546,8 @@ class ExplanationFlowTest {
     var result = explain(null, null);
     assertThat(result.getDecision()).isEqualTo(ConversationDecision.EMPTY_EXPLANATION_PAGE);
     assertThat(responses.generate(result.getRecommendations(), result))
-        .isEqualTo("The latest request returned no recommendations to explain.");
+        .isEqualTo(
+            "I didn't find any books in the latest search to explain. Would you like to try a different search?");
     assertThat(process(Intent.REPEAT).getRecommendations()).isEmpty();
     verify(workflow, times(2)).recommend(any(), any());
   }
@@ -578,7 +580,7 @@ class ExplanationFlowTest {
     var result = explain(6, null);
     assertThat(responses.generate(result.getRecommendations(), result))
         .isEqualTo(
-            "I returned 2 books: 1. Harry Potter 6. 2. Harry Potter 7. Which one did you mean?");
+            "I shared 2 books with you: 1. Harry Potter 6. 2. Harry Potter 7. Which one would you like me to explain?");
   }
 
   @ParameterizedTest
@@ -611,7 +613,9 @@ class ExplanationFlowTest {
             org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
         .andExpect(
             org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
-                .string(org.hamcrest.Matchers.containsString("Which one did you mean?")));
+                .string(
+                    org.hamcrest.Matchers.containsString(
+                        "Which one would you like me to explain?")));
     mvc.perform(
             org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
                     "/api/v1/recommendations")
@@ -688,7 +692,8 @@ class ExplanationFlowTest {
             .andReturn()
             .getResponse()
             .getContentAsString();
-    assertThat(body).contains("Which one did you mean?", "Harry Potter 1", "Harry Potter 5");
+    assertThat(body)
+        .contains("Which one would you like me to explain?", "Harry Potter 1", "Harry Potter 5");
     assertThat(saved()).isEqualTo(before);
     verify(workflow).recommend(any(), any());
   }

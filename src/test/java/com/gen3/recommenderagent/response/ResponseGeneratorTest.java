@@ -25,7 +25,7 @@ class ResponseGeneratorTest {
     var ai = org.mockito.Mockito.mock(AiResponseGenerator.class);
     var generator = new ConversationResponseGenerator(ai);
     assertEquals(
-        "There are no more audiobooks matching your current search. Try changing your criteria.",
+        "There are no more audiobooks matching your current search. Would you like to try a different author, genre, or filter?",
         generator.generate(List.of(), ConversationTurn.fromDraft(request)));
     org.mockito.Mockito.verifyNoInteractions(ai);
   }
@@ -90,7 +90,7 @@ class ResponseGeneratorTest {
     ConversationDraft request = new ConversationDraft();
     request.setIntent(Intent.REPEAT);
     assertEquals(
-        "There is no previous request to repeat. Ask me for recommendations or help first.",
+        "I don't have an earlier request to repeat yet. Would you like recommendations or help getting started?",
         generator.generate(List.of(), ConversationTurn.fromDraft(request)));
     String response =
         generator.generate(
@@ -257,7 +257,7 @@ class ResponseGeneratorTest {
     request.setMustInclude(publicationYear);
 
     assertEquals(
-        "I couldn't find books matching those criteria. Try changing your criteria.",
+        "I couldn't find books matching those criteria. Would you like to try a different author, genre, or filter?",
         generator.generate(List.of(), ConversationTurn.fromDraft(request)));
   }
 
@@ -276,7 +276,7 @@ class ResponseGeneratorTest {
     request.setPositiveSemanticQuery(genre);
     assertEquals(
         "I couldn't find audiobooks matching your current search and saved preferences. "
-            + "Try changing the author, genre, or another filter.",
+            + "Would you like to try a different author, genre, or filter?",
         generator.generate(List.of(), ConversationTurn.fromDraft(request)));
     assertEquals(List.of("jk rowling"), request.getMustInclude().getAuthors());
     assertEquals(List.of("romance"), request.getPositiveSemanticQuery().getGenres());
@@ -331,8 +331,8 @@ class ResponseGeneratorTest {
 
     String response = generator.generate(List.of(), ConversationTurn.fromDraft(request));
 
-    assertTrue(response.toLowerCase().contains("refine"));
-    assertTrue(response.toLowerCase().contains("more results"));
+    assertTrue(response.toLowerCase().contains("adjust your search"));
+    assertTrue(response.toLowerCase().contains("explore more books"));
     assertTrue(response.toLowerCase().contains("clear"));
   }
 }

@@ -97,7 +97,8 @@ class DemoWebsiteTest {
     if (failure) {
       org.assertj.core.api.Assertions.assertThat(result.catalogueBooks()).isEmpty();
       org.assertj.core.api.Assertions.assertThat(result.catalogueError())
-          .isEqualTo("Catalogue details are temporarily unavailable.");
+          .isEqualTo(
+              "I couldn't load the extra book details right now. Please try again in a moment.");
     } else {
       org.assertj.core.api.Assertions.assertThat(result.catalogueBooks()).containsExactly(stored);
       org.assertj.core.api.Assertions.assertThat(result.catalogueError()).isNull();

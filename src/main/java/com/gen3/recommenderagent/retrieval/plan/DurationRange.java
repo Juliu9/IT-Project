@@ -104,6 +104,6 @@ record DurationRange(Integer minimum, Integer maximum) {
 
   private static InvalidRequestException invalidDuration() {
     return new InvalidRequestException(
-        "Please give a valid duration in hours or minutes, such as 'under 1.5 hours' or 'between 2 and 3 hours'.");
+        "Could you give me a duration in hours or minutes? For example, 'under 1.5 hours' or 'between 2 and 3 hours'.");
   }
 }

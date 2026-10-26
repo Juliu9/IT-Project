@@ -194,7 +194,8 @@ class RepeatRequestFlowTest {
     var page = process(request(Intent.REPEAT_RECOMMENDATIONS));
     assertThat(page.getDecision()).isEqualTo(ConversationDecision.NO_RECOMMENDATIONS_TO_REPEAT);
     assertThat(responses.generate(page.getRecommendations(), page))
-        .isEqualTo("There are no recommendations to repeat. Ask me for audiobooks first.");
+        .isEqualTo(
+            "I don't have a list of recommendations to repeat right now. What kind of audiobook would you like?");
     assertThat(process(request(Intent.REPEAT)).getDecision()).isEqualTo(page.getDecision());
     verifyNoInteractions(workflow);
   }

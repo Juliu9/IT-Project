@@ -187,7 +187,7 @@
           });
           if (!response.ok) {
             const message = await response.text();
-            throw new Error(message || `The server returned ${response.status}.`);
+            throw new Error(message || `I couldn't complete that request just now (status ${response.status}). Please try again.`);
           }
           const payload = await response.json();
           result.textContent = payload.response;
@@ -199,8 +199,8 @@
           document.getElementById("request-session-id").textContent = requestSessionId;
         } catch (exception) {
           error.textContent = exception instanceof TypeError
-            ? "Unable to connect to the Recommendation Agent. Make sure the server is running on port 8080."
-            : `Request failed: ${exception.message}`;
+            ? "I couldn't reach the recommendation service. Please check that it's running on port 8080 and try again."
+            : exception.message;
           error.style.display = "block";
         } finally {
           loading.style.display = "none";

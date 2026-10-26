@@ -85,7 +85,8 @@ public class SessionPreferences {
                     .contains(parts[1]);
             default -> false;
           })) {
-        throw new InvalidRequestException("Please specify which preference you want to replace.");
+        throw new InvalidRequestException(
+            "Which preference would you like to change? You can name a genre, author, or narrator.");
       }
     }
     var result = new SessionPreferences();

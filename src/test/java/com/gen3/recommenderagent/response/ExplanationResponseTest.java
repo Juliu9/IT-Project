@@ -84,13 +84,13 @@ class ExplanationResponseTest {
         generator.generate(List.of(known, unknown), ConversationTurn.fromDraft(request()));
     assertThat(response)
         .contains(
-            "Your reading preferences were used",
+            "I used your reading preferences to help choose this book",
             "school of magic",
-            "not enough description information");
+            "enough detail in this book's description");
     assertThat(
             new ConversationResponseGenerator(new AiResponseGenerator(null))
                 .generate(List.of(unknown), ConversationTurn.fromDraft(request())))
-        .doesNotContain("Your reading preferences were used");
+        .doesNotContain("I used your reading preferences to help choose this book");
   }
 
   @Test

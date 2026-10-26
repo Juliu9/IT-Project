@@ -261,14 +261,6 @@ public class AiResponseGenerator {
     StringBuilder response = new StringBuilder();
     response.append("Here are a few recommendations");
 
-    if (currentRequest != null && currentRequest.getIntent() != null) {
-      String intentName = currentRequest.getIntent().name().toLowerCase().replace("_", " ");
-      // Skip saying "for your recommendation request" as it sounds redundant when spoken
-      if (!intentName.equals("recommendation")) {
-        response.append(" for your ").append(intentName).append(" request");
-      }
-    }
-
     if (currentRequest != null
         && currentRequest.getPositiveSemanticQuery() != null
         && currentRequest.getPositiveSemanticQuery().getGenres() != null
@@ -335,12 +327,12 @@ public class AiResponseGenerator {
                       + limitWords(plainExplanation(book.getTitle()), 12)
                       + ". "
                       + (book.isReadingPreferencesUsed()
-                          ? "Your reading preferences were used. "
+                          ? "I used your reading preferences to help choose this book. "
                           : "");
               String description = plainExplanation(book.getShortDescription());
               String reason =
                   description.isBlank()
-                      ? "There's not enough description information for a specific explanation."
+                      ? "I don't have enough detail in this book's description to explain the match."
                       : "Its description says " + description;
               return (prefix + limitWords(reason, budget - wordCount(prefix)))
                       .replaceAll("[.,!?]+$", "")
