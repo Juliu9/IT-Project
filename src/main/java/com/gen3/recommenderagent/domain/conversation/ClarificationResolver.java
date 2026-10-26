@@ -146,10 +146,7 @@ public final class ClarificationResolver {
         return effective;
       }
       if (ConversationText.isAffirmativeReply(reply)) {
-        var resumed = restoreSearchCriteria(session.getPendingRefinementRequest());
-        resumed.setRequestId(effective.getRequestId());
-        resumed.setRawText(effective.getRawText());
-        resumed.setCreatedAt(effective.getCreatedAt());
+        var resumed = restoreSearchCriteria(session.getPendingRefinementRequest(), effective);
         resumed.setSearchClarificationRequired(false);
         resumed.setDecision(null);
         session.setPendingQuestion(null);
@@ -330,6 +327,14 @@ public final class ClarificationResolver {
     return effective;
   }
 
+  private ConversationDraft restoreSearchCriteria(ConversationTurn pending, SessionRequest reply) {
+    var resumed = restoreSearchCriteria(pending);
+    resumed.setRequestId(reply.getRequestId());
+    resumed.setRawText(reply.getRawText());
+    resumed.setCreatedAt(reply.getCreatedAt());
+    return resumed;
+  }
+
   private ConversationDraft restoreSearchCriteria(ConversationTurn pending) {
     var resumed = pending.toDraft();
     // Keep explicit constraints; the search handler reapplies current preferences after
@@ -405,10 +410,7 @@ public final class ClarificationResolver {
               || pending.decision() == ConversationDecision.SIMILAR_BOOK_UNAVAILABLE)
           && input.getIntent() == Intent.UNKNOWN
           && !reply.isBlank()) {
-        var named = restoreSearchCriteria(pending.request());
-        named.setRequestId(input.getRequestId());
-        named.setRawText(input.getRawText());
-        named.setCreatedAt(input.getCreatedAt());
+        var named = restoreSearchCriteria(pending.request(), input);
         named.getSearchContext().setSimilarBook(null);
         named.getSearchContext().setSimilarityQueryVector(null);
         named.setSimilarToAuthor(null);
@@ -431,12 +433,9 @@ public final class ClarificationResolver {
       }
       return input;
     }
-    var resumed = restoreSearchCriteria(pending.request());
+    var resumed = restoreSearchCriteria(pending.request(), input);
     resumed.setIntent(Intent.RECOMMENDATION);
     resumed.setExplicitSearch(true);
-    resumed.setRequestId(input.getRequestId());
-    resumed.setRawText(input.getRawText());
-    resumed.setCreatedAt(input.getCreatedAt());
     resumed.setSearchClarificationRequired(false);
     resumed.setDecision(null);
     resumed.setSimilarBookChoices(List.of());
@@ -449,12 +448,9 @@ public final class ClarificationResolver {
   }
 
   private ConversationDraft anotherReference(ConversationTurn pending, SessionRequest input) {
-    var another = restoreSearchCriteria(pending);
+    var another = restoreSearchCriteria(pending, input);
     another.setIntent(Intent.RECOMMENDATION);
     another.setExplicitSearch(true);
-    another.setRequestId(input.getRequestId());
-    another.setRawText(input.getRawText());
-    another.setCreatedAt(input.getCreatedAt());
     another.setSimilarToTitle(null);
     another.setSimilarToAuthor(null);
     another.setSimilarToClarificationRequired(true);

@@ -8,6 +8,7 @@ import com.gen3.recommenderagent.domain.conversation.ConversationHistory;
 import com.gen3.recommenderagent.domain.conversation.ConversationText;
 import com.gen3.recommenderagent.domain.session.ConversationDecision;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ConversationTurn;
 import com.gen3.recommenderagent.domain.session.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
@@ -357,10 +358,7 @@ public class ExactFilterPolicy {
                 .toList();
     if (older) {
       if (years.isEmpty()) {
-        request.setDecision(ConversationDecision.RECENCY_YEAR_CLARIFICATION);
-        request.setSearchClarificationRequired(true);
-        session.setPendingRefinementRequest(
-            com.gen3.recommenderagent.domain.session.ConversationTurn.fromDraft(request));
+        awaitRefinement(request, session, ConversationDecision.RECENCY_YEAR_CLARIFICATION);
         return;
       }
       int upper = years.stream().mapToInt(Integer::intValue).sum() / years.size() - 1;
@@ -382,10 +380,7 @@ public class ExactFilterPolicy {
               : "between " + lower + " and " + upper;
       setYear(request, bounded);
       if (conflict) {
-        request.setDecision(ConversationDecision.RECENCY_RANGE_CONFIRMATION);
-        request.setSearchClarificationRequired(true);
-        session.setPendingRefinementRequest(
-            com.gen3.recommenderagent.domain.session.ConversationTurn.fromDraft(request));
+        awaitRefinement(request, session, ConversationDecision.RECENCY_RANGE_CONFIRMATION);
       }
       return;
     }
@@ -399,10 +394,7 @@ public class ExactFilterPolicy {
       return;
     }
     if (lower == null) {
-      request.setDecision(ConversationDecision.RECENCY_YEAR_CLARIFICATION);
-      request.setSearchClarificationRequired(true);
-      session.setPendingRefinementRequest(
-          com.gen3.recommenderagent.domain.session.ConversationTurn.fromDraft(request));
+      awaitRefinement(request, session, ConversationDecision.RECENCY_YEAR_CLARIFICATION);
       return;
     }
     var previousBounds =
@@ -419,8 +411,7 @@ public class ExactFilterPolicy {
         request.setDecision(ConversationDecision.RECENCY_EXHAUSTED);
       } else {
         request.setDecision(ConversationDecision.RECENCY_RANGE_CONFIRMATION);
-        session.setPendingRefinementRequest(
-            com.gen3.recommenderagent.domain.session.ConversationTurn.fromDraft(request));
+        session.setPendingRefinementRequest(ConversationTurn.fromDraft(request));
       }
       request.setSearchClarificationRequired(true);
       return;
@@ -433,6 +424,13 @@ public class ExactFilterPolicy {
     }
     String bounded = upper == null ? "from " + lower : "between " + lower + " and " + upper;
     setYear(request, bounded);
+  }
+
+  private void awaitRefinement(
+      ConversationDraft request, Session session, ConversationDecision question) {
+    request.setDecision(question);
+    request.setSearchClarificationRequired(true);
+    session.setPendingRefinementRequest(ConversationTurn.fromDraft(request));
   }
 
   private void setYear(ConversationDraft request, String value) {
@@ -457,13 +455,12 @@ public class ExactFilterPolicy {
         || page.stream()
             .anyMatch(
                 book -> book.getDurationMinutes() == null || book.getDurationMinutes() <= 1)) {
-      request.setDecision(
+      awaitRefinement(
+          request,
+          session,
           longer
               ? ConversationDecision.LONGER_DURATION_CLARIFICATION
               : ConversationDecision.SHORTER_DURATION_CLARIFICATION);
-      request.setSearchClarificationRequired(true);
-      session.setPendingRefinementRequest(
-          com.gen3.recommenderagent.domain.session.ConversationTurn.fromDraft(request));
       return;
     }
     int boundary =
@@ -495,10 +492,7 @@ public class ExactFilterPolicy {
     request.setShorter(false);
     request.setLonger(false);
     if (conflict) {
-      request.setDecision(ConversationDecision.DURATION_RANGE_CONFIRMATION);
-      request.setSearchClarificationRequired(true);
-      session.setPendingRefinementRequest(
-          com.gen3.recommenderagent.domain.session.ConversationTurn.fromDraft(request));
+      awaitRefinement(request, session, ConversationDecision.DURATION_RANGE_CONFIRMATION);
     }
   }
 

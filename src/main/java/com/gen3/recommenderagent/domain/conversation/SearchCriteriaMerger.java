@@ -43,27 +43,26 @@ public final class SearchCriteriaMerger {
     ExactCriteria explicitExclude = target.getMustNotInclude();
     ExactCriteria included = merge(base.getMustInclude(), explicitInclude);
     ExactCriteria excluded = merge(base.getMustNotInclude(), explicitExclude);
-    if (explicitInclude != null) {
-      if (!target.isAddAuthors() && hasTerms(explicitInclude.getAuthors())) {
-        included.setAuthors(union(null, explicitInclude.getAuthors()));
-      }
-      if (!target.isAddNarrators() && hasTerms(explicitInclude.getNarrators())) {
-        included.setNarrators(union(null, explicitInclude.getNarrators()));
-      }
-    }
-    if (explicitExclude != null) {
-      if (!target.isAddAuthors() && hasTerms(explicitExclude.getAuthors())) {
-        excluded.setAuthors(union(null, explicitExclude.getAuthors()));
-      }
-      if (!target.isAddNarrators() && hasTerms(explicitExclude.getNarrators())) {
-        excluded.setNarrators(union(null, explicitExclude.getNarrators()));
-      }
-    }
+    replacePeople(included, explicitInclude, target);
+    replacePeople(excluded, explicitExclude, target);
     target.setMustInclude(included);
     target.setMustNotInclude(excluded);
     var replacements = new java.util.LinkedHashSet<>(inheritedReplacements);
     replacements.addAll(target.getReplaceSearchFields());
     target.setReplaceSearchFields(new ArrayList<>(replacements));
+  }
+
+  private static void replacePeople(
+      ExactCriteria merged, ExactCriteria explicit, ConversationDraft target) {
+    if (explicit == null) {
+      return;
+    }
+    if (!target.isAddAuthors() && hasTerms(explicit.getAuthors())) {
+      merged.setAuthors(union(null, explicit.getAuthors()));
+    }
+    if (!target.isAddNarrators() && hasTerms(explicit.getNarrators())) {
+      merged.setNarrators(union(null, explicit.getNarrators()));
+    }
   }
 
   private static SemanticQuery merge(SemanticQuery base, SemanticQuery override) {
