@@ -1,0 +1,1255 @@
+@startuml
+!pragma layout smetana
+title recommenderagent
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "recommenderagent" as recommenderagent {
+  package "domain" {
+    package "session" {
+      class "SessionRequest" as C0 {
+        - boolean shorter
+        - String similarToTitle
+        - String similarToAuthor
+        - boolean similarToClarificationRequired
+        - String requestId
+        - String rawText
+        - Instant createdAt
+        - Intent intent
+        - Integer referenceRank
+        - String referenceTitle
+        - boolean addAuthors
+        - boolean addNarrators
+        - SessionPreferences preferenceUpdates
+        - SessionPreferences preferenceRemovals
+        - List<String> replacePreferenceFields
+        - boolean explicitSearch
+        - SemanticQuery positiveSemanticQuery
+        - SemanticQuery negativeSemanticQuery
+        - ExactCriteria mustInclude
+        - ExactCriteria mustNotInclude
+        - Integer bookCount
+        - boolean personalised
+        + boolean isShorter()
+        + void setShorter(boolean)
+        + String getSimilarToTitle()
+        + void setSimilarToTitle(String)
+        + String getSimilarToAuthor()
+        + void setSimilarToAuthor(String)
+        + boolean isSimilarToClarificationRequired()
+        + void setSimilarToClarificationRequired(boolean)
+        + String getRequestId()
+        + void setRequestId(String)
+        + String getRawText()
+        + void setRawText(String)
+        + Instant getCreatedAt()
+        + void setCreatedAt(Instant)
+        + Intent getIntent()
+        + void setIntent(Intent)
+        + Integer getReferenceRank()
+        + void setReferenceRank(Integer)
+        + String getReferenceTitle()
+        + void setReferenceTitle(String)
+        + boolean isAddAuthors()
+        + void setAddAuthors(boolean)
+        + boolean isAddNarrators()
+        + void setAddNarrators(boolean)
+        + SessionPreferences getPreferenceUpdates()
+        + void setPreferenceUpdates(SessionPreferences)
+        + SessionPreferences getPreferenceRemovals()
+        + void setPreferenceRemovals(SessionPreferences)
+        + List<String> getReplacePreferenceFields()
+        + void setReplacePreferenceFields(List<String>)
+        + boolean isExplicitSearch()
+        + void setExplicitSearch(boolean)
+        + SemanticQuery getPositiveSemanticQuery()
+        + void setPositiveSemanticQuery(SemanticQuery)
+        + SemanticQuery getNegativeSemanticQuery()
+        + void setNegativeSemanticQuery(SemanticQuery)
+        + ExactCriteria getMustInclude()
+        + void setMustInclude(ExactCriteria)
+        + ExactCriteria getMustNotInclude()
+        + void setMustNotInclude(ExactCriteria)
+        + Integer getBookCount()
+        + void setBookCount(Integer)
+        + boolean isPersonalised()
+        + void setPersonalised(boolean)
+      }
+      class "SearchContext" as C8 {
+        - SimilarBookReference similarBook
+        - float[] similarityQueryVector
+        - SessionPreferences searchCriteria
+        - UserPreferenceEmbedding userPreferenceSnapshot
+        - boolean userPreferencesLoaded
+        - boolean personalised
+        - SemanticQuery positiveSemanticQuery
+        - SemanticQuery negativeSemanticQuery
+        - ExactCriteria mustInclude
+        - ExactCriteria mustNotInclude
+        + SimilarBookReference getSimilarBook()
+        + void setSimilarBook(SimilarBookReference)
+        + float[] getSimilarityQueryVector()
+        + void setSimilarityQueryVector(float[])
+        + SessionPreferences getSearchCriteria()
+        + void setSearchCriteria(SessionPreferences)
+        + UserPreferenceEmbedding getUserPreferenceSnapshot()
+        + void setUserPreferenceSnapshot(UserPreferenceEmbedding)
+        + boolean isUserPreferencesLoaded()
+        + void setUserPreferencesLoaded(boolean)
+        + boolean isPersonalised()
+        + void setPersonalised(boolean)
+        + SemanticQuery getPositiveSemanticQuery()
+        + void setPositiveSemanticQuery(SemanticQuery)
+        + SemanticQuery getNegativeSemanticQuery()
+        + void setNegativeSemanticQuery(SemanticQuery)
+        + ExactCriteria getMustInclude()
+        + void setMustInclude(ExactCriteria)
+        + ExactCriteria getMustNotInclude()
+        + void setMustNotInclude(ExactCriteria)
+        + SearchContext copy()
+      }
+      class "ConversationTurn" as C9 {
+        - List<catalogue.model.AudiobookTitle> similarBookChoices
+        - SearchContext searchContext
+        - String requestId
+        - String rawText
+        - Instant createdAt
+        - Intent intent
+        - Integer referenceRank
+        - String referenceTitle
+        - Integer bookCount
+        - ConversationDecision decision
+        - boolean preferenceClarificationRequired
+        - boolean searchClarificationRequired
+        - boolean noMoreRecommendations
+        - List<Recommendation> recommendations
+        + List<catalogue.model.AudiobookTitle> getSimilarBookChoices()
+        + void setSimilarBookChoices(List<catalogue.model.AudiobookTitle>)
+        + SearchContext getSearchContext()
+        + void setSearchContext(SearchContext)
+        + String getRequestId()
+        + void setRequestId(String)
+        + String getRawText()
+        + void setRawText(String)
+        + Instant getCreatedAt()
+        + void setCreatedAt(Instant)
+        + Intent getIntent()
+        + void setIntent(Intent)
+        + Integer getReferenceRank()
+        + void setReferenceRank(Integer)
+        + String getReferenceTitle()
+        + void setReferenceTitle(String)
+        + Integer getBookCount()
+        + void setBookCount(Integer)
+        + ConversationDecision getDecision()
+        + void setDecision(ConversationDecision)
+        + boolean isPreferenceClarificationRequired()
+        + void setPreferenceClarificationRequired(boolean)
+        + boolean isSearchClarificationRequired()
+        + void setSearchClarificationRequired(boolean)
+        + boolean isNoMoreRecommendations()
+        + void setNoMoreRecommendations(boolean)
+        + List<Recommendation> getRecommendations()
+        + void setRecommendations(List<Recommendation>)
+        + SessionPreferences getSearchCriteria()
+        + void setSearchCriteria(SessionPreferences)
+        + UserPreferenceEmbedding getUserPreferenceSnapshot()
+        + void setUserPreferenceSnapshot(UserPreferenceEmbedding)
+        + boolean isUserPreferencesLoaded()
+        + void setUserPreferencesLoaded(boolean)
+        + boolean isPersonalised()
+        + void setPersonalised(boolean)
+        + SemanticQuery getPositiveSemanticQuery()
+        + void setPositiveSemanticQuery(SemanticQuery)
+        + SemanticQuery getNegativeSemanticQuery()
+        + void setNegativeSemanticQuery(SemanticQuery)
+        + ExactCriteria getMustInclude()
+        + void setMustInclude(ExactCriteria)
+        + ExactCriteria getMustNotInclude()
+        + void setMustNotInclude(ExactCriteria)
+        + SimilarBookReference getSimilarBook()
+        + void setSimilarBook(SimilarBookReference)
+        + float[] getSimilarityQueryVector()
+        + void setSimilarityQueryVector(float[])
+        + {static} ConversationTurn fromDraft(ConversationDraft)
+        + ConversationDraft toDraft()
+      }
+      class "SimilarBookReference" as C15 {
+        - String bookId
+        - String title
+        - List<String> authors
+        - float[] vector
+        + float[] vector()
+        + String title()
+        + String bookId()
+        + List<String> authors()
+      }
+      class "Session" as C50 {
+        - PendingSimilarBook pendingSimilarBook
+        - String sessionId
+        - String userId
+        - Instant createdAt
+        - Instant updatedAt
+        - Instant expiresAt
+        - long version
+        - boolean awaitingPreferenceUpdate
+        - Integer bookCount
+        - List<String> shownBooks
+        - List<ConversationTurn> requests
+        - SessionPreferences preferences
+        - ConversationTurn lastRequest
+        - ConversationDecision lastDecision
+        - List<Recommendation> pendingRecommendations
+        + PendingSimilarBook getPendingSimilarBook()
+        + void setPendingSimilarBook(PendingSimilarBook)
+        + boolean isAwaitingPreferenceUpdate()
+        + void setAwaitingPreferenceUpdate(boolean)
+        + ConversationTurn getLastRequest()
+        + void setLastRequest(ConversationTurn)
+        + ConversationDecision getLastDecision()
+        + void setLastDecision(ConversationDecision)
+        + boolean isAwaitingPersonalisedPreferences()
+        + List<String> getShownBooks()
+        + void setShownBooks(List<String>)
+        + String getSessionId()
+        + void setSessionId(String)
+        + String getUserId()
+        + void setUserId(String)
+        + Instant getCreatedAt()
+        + void setCreatedAt(Instant)
+        + Instant getUpdatedAt()
+        + void setUpdatedAt(Instant)
+        + Instant getExpiresAt()
+        + void setExpiresAt(Instant)
+        + long getVersion()
+        + void setVersion(long)
+        + Integer getBookCount()
+        + void setBookCount(Integer)
+        + List<ConversationTurn> getRequests()
+        + void setRequests(List<ConversationTurn>)
+        + SessionPreferences getPreferences()
+        + void setPreferences(SessionPreferences)
+        + List<Recommendation> getPendingRecommendations()
+        + void setPendingRecommendations(List<Recommendation>)
+        + void addRecommendationIds(List<String>)
+        + void clearHistory()
+      }
+      class "PendingSimilarBook" as C54 {
+        - ConversationTurn request
+        - ConversationDecision decision
+        + ConversationTurn request()
+        + ConversationDecision decision()
+      }
+      class "Recommendation" as C56 {
+        - String bookId
+        - Integer rank
+        - Double score
+        - String title
+        - String shortDescription
+        - Integer durationMinutes
+        - boolean readingPreferencesUsed
+        + Integer getDurationMinutes()
+        + void setDurationMinutes(Integer)
+        + boolean isReadingPreferencesUsed()
+        + void setReadingPreferencesUsed(boolean)
+        + String getTitle()
+        + void setTitle(String)
+        + String getShortDescription()
+        + void setShortDescription(String)
+        + String getBookId()
+        + void setBookId(String)
+        + Integer getRank()
+        + void setRank(Integer)
+        + Double getScore()
+        + void setScore(Double)
+        + {static} List<String> bookIds(List<Recommendation>)
+      }
+      class "SessionPreferences" as C74 {
+        - SemanticQuery positiveSemanticQuery
+        - SemanticQuery negativeSemanticQuery
+        - ExactCriteria mustInclude
+        - ExactCriteria mustNotInclude
+        + SemanticQuery getPositiveSemanticQuery()
+        + void setPositiveSemanticQuery(SemanticQuery)
+        + SemanticQuery getNegativeSemanticQuery()
+        + void setNegativeSemanticQuery(SemanticQuery)
+        + ExactCriteria getMustInclude()
+        + void setMustInclude(ExactCriteria)
+        + ExactCriteria getMustNotInclude()
+        + void setMustNotInclude(ExactCriteria)
+        + {static} SessionPreferences fromRequest(SessionRequest)
+        + SessionRequest asRequest()
+        + SessionPreferences copy()
+        + SessionPreferences updated(SessionPreferences,SessionPreferences,List<String>)
+        + boolean hasValues()
+        - {static} boolean hasQuery(SemanticQuery)
+        - {static} boolean hasTerms(List<String>)
+        - {static} R get(T,Function<T,R>)
+        - {static} SemanticQuery query(SemanticQuery,SemanticQuery,SemanticQuery,String,List<String>)
+        - {static} List<String> terms(List<String>,List<String>,List<String>,boolean)
+        - {static} String scalar(String,String,String,boolean)
+      }
+      enum "ConversationDecision" as C82 {
+        +  UNAVAILABLE
+        +  SIMILAR_BOOK_SELECTION
+        +  SIMILAR_BOOK_NOT_FOUND
+        +  SIMILAR_BOOK_UNAVAILABLE
+        +  SIMILAR_BOOK_REQUIRED
+        +  SEARCH_CLARIFICATION
+        +  SHORTER_DURATION_CLARIFICATION
+        +  PREFERENCE_CLARIFICATION
+        +  PREFERENCE_UPDATE_CLARIFICATION
+        +  COUNT_CLARIFICATION
+        +  COUNT_CHANGED
+        +  PREFERENCES_UPDATED
+        +  HISTORY_CLEARED
+        +  HELP
+        +  CANCELLED
+        +  UNKNOWN
+        +  NO_MORE_RESULTS
+        +  NOTHING_TO_REPEAT
+        +  NO_RECOMMENDATIONS_TO_REPEAT
+        +  EXPLANATION
+        +  EXPLANATION_TARGET_CLARIFICATION
+        +  NOTHING_TO_EXPLAIN
+        +  EMPTY_EXPLANATION_PAGE
+        +  NO_MATCHES
+        +  RECOMMENDATIONS
+      }
+      class "ConversationDraft" as C85 {
+        - List<catalogue.model.AudiobookTitle> similarBookChoices
+        - SearchContext searchContext
+        - ConversationDecision decision
+        - boolean preferenceClarificationRequired
+        - boolean searchClarificationRequired
+        - boolean noMoreRecommendations
+        - List<Recommendation> recommendations
+        + List<catalogue.model.AudiobookTitle> getSimilarBookChoices()
+        + void setSimilarBookChoices(List<catalogue.model.AudiobookTitle>)
+        + SearchContext getSearchContext()
+        + void setSearchContext(SearchContext)
+        + ConversationDecision getDecision()
+        + void setDecision(ConversationDecision)
+        + boolean isPreferenceClarificationRequired()
+        + void setPreferenceClarificationRequired(boolean)
+        + boolean isSearchClarificationRequired()
+        + void setSearchClarificationRequired(boolean)
+        + boolean isNoMoreRecommendations()
+        + void setNoMoreRecommendations(boolean)
+        + List<Recommendation> getRecommendations()
+        + void setRecommendations(List<Recommendation>)
+        + SessionPreferences getSearchCriteria()
+        + void setSearchCriteria(SessionPreferences)
+        + UserPreferenceEmbedding getUserPreferenceSnapshot()
+        + void setUserPreferenceSnapshot(UserPreferenceEmbedding)
+        + boolean isUserPreferencesLoaded()
+        + void setUserPreferencesLoaded(boolean)
+        + boolean isPersonalised()
+        + void setPersonalised(boolean)
+        + SemanticQuery getPositiveSemanticQuery()
+        + void setPositiveSemanticQuery(SemanticQuery)
+        + SemanticQuery getNegativeSemanticQuery()
+        + void setNegativeSemanticQuery(SemanticQuery)
+        + ExactCriteria getMustInclude()
+        + void setMustInclude(ExactCriteria)
+        + ExactCriteria getMustNotInclude()
+        + void setMustNotInclude(ExactCriteria)
+      }
+      class "SemanticQuery" as C95 {
+        - List<String> topics
+        - List<String> genres
+        - List<String> authors
+        - List<String> narrators
+        - List<String> keywords
+        + List<String> getTopics()
+        + void setTopics(List<String>)
+        + List<String> getGenres()
+        + void setGenres(List<String>)
+        + List<String> getAuthors()
+        + void setAuthors(List<String>)
+        + List<String> getNarrators()
+        + void setNarrators(List<String>)
+        + List<String> getKeywords()
+        + void setKeywords(List<String>)
+      }
+      class "ExactCriteria" as C99 {
+        - List<String> authors
+        - List<String> narrators
+        - String language
+        - String duration
+        - String publicationYear
+        - String source
+        + List<String> getAuthors()
+        + void setAuthors(List<String>)
+        + List<String> getNarrators()
+        + void setNarrators(List<String>)
+        + String getLanguage()
+        + void setLanguage(String)
+        + String getDuration()
+        + void setDuration(String)
+        + String getPublicationYear()
+        + void setPublicationYear(String)
+        + String getSource()
+        + void setSource(String)
+      }
+    }
+    package "conversation" {
+      class "ConversationRules" as C6 {
+        + {static} SessionRequest normalizeInput(SessionRequest)
+        ~ {static} boolean acceptsSemanticInformation(Intent)
+        + {static} ConversationDecision decisionFor(List<Recommendation>,ConversationDraft)
+        ~ {static} boolean isRecommendationIntent(Intent)
+        ~ {static} boolean isSearchContext(ConversationDraft)
+        ~ {static} boolean isSearchContext(ConversationTurn)
+        ~ {static} boolean hasSearchCriteria(ConversationDraft)
+        ~ {static} boolean hasQuery(SemanticQuery)
+        ~ {static} boolean hasTerms(List<String>)
+        ~ {static} boolean hasText(String)
+      }
+      class "ConversationHistory" as C7 {
+        + {static} void retainRequest(Session,ConversationTurn)
+        ~ {static} void complete(ConversationDraft)
+        ~ {static} ConversationTurn historyEntry(ConversationDraft)
+        + {static} ConversationDraft latestSearch(Session)
+        ~ {static} void remember(Session,ConversationDraft)
+      }
+      class "ClarificationResolver" as C17 {
+        - {static} Pattern SELECTION_REPLY
+        + ConversationDraft resolve(Session,SessionRequest)
+        - ConversationDraft resolveSimilarBook(Session,ConversationDraft,String,Integer)
+        + {static} Integer selectionReply(String)
+      }
+      class "PreferenceConversationHandler" as C30 {
+        + java.util.Set<Intent> intents()
+        + ConversationDraft resolve(Session,ConversationDraft)
+        + void finish(Session,ConversationDraft,SessionRequest)
+      }
+      class "ReplayConversationHandler" as C40 {
+        + java.util.Set<Intent> intents()
+        + ConversationDraft resolve(Session,ConversationDraft)
+        - ConversationDraft resolveRepeat(Session,ConversationDraft)
+        - ConversationDraft restoreRequest(ConversationDraft,ConversationDraft)
+        + boolean remembersTurn(ConversationDraft)
+        + String retrievalMode(ConversationDraft)
+      }
+      class "ConversationDispatcher" as C45 {
+        - Map<Intent,ConversationHandler> handlers
+        - ClarificationResolver clarification
+        + ConversationDraft begin(Session,SessionRequest)
+        + ConversationDraft begin(Session,SessionRequest,Consumer<ConversationDraft>)
+        ~ ConversationDraft resolve(Session,SessionRequest)
+        - ConversationHandler handler(ConversationDraft)
+        + String retrievalMode(ConversationDraft)
+        + boolean needsRecommendations(ConversationDraft)
+        + void finish(Session,ConversationDraft,SessionRequest)
+      }
+      class "SearchCriteriaMerger" as C67 {
+        + {static} void merge(SessionRequest,ConversationDraft)
+        - {static} SemanticQuery merge(SemanticQuery,SemanticQuery)
+        - {static} ExactCriteria merge(ExactCriteria,ExactCriteria)
+        + {static} ConversationDraft copyOf(SessionRequest)
+        - {static} SemanticQuery copy(SemanticQuery)
+        - {static} ExactCriteria copy(ExactCriteria)
+        - {static} List<String> values(SemanticQuery,java.util.function.Function<SemanticQuery,List<String>>)
+        ~ {static} List<String> union(List<String>,List<String>)
+        - {static} void add(Map<String,String>,List<String>)
+        - {static} String preferred(String,String)
+      }
+      class "SessionActionHandler" as C78 {
+        + java.util.Set<Intent> intents()
+        + ConversationDraft resolve(Session,ConversationDraft)
+        + boolean retainsHistory()
+        + void finish(Session,ConversationDraft,SessionRequest)
+      }
+      class "SearchContextResolver" as C80 {
+        + java.util.Set<Intent> intents()
+        + ConversationDraft resolve(Session,ConversationDraft)
+        - void applyShorterDuration(ConversationDraft,Session)
+        - boolean acceptsPreferences(Intent)
+        - void applyPreviousSearch(ConversationDraft,Session)
+        - void applyPreferences(ConversationDraft,Session)
+        - Integer resolveBookCount(ConversationDraft,Session)
+        + boolean invalidatesBatch(SessionRequest)
+        + boolean needsRecommendations(ConversationDraft)
+        + boolean retainsHistory()
+        + void finish(Session,ConversationDraft,SessionRequest)
+      }
+      class "ExplanationConversationHandler" as C84 {
+        + java.util.Set<Intent> intents()
+        + ConversationDraft resolve(Session,ConversationDraft)
+        - void resolveExplanation(ConversationDraft,Session)
+        ~ {static} boolean matchesDisplayedTitle(Session,String)
+        - {static} List<Recommendation> matchingTitles(List<Recommendation>,String)
+        + String retrievalMode(ConversationDraft)
+      }
+      interface "ConversationHandler" as C94 {
+        ~ Set<Intent> intents()
+        ~ ConversationDraft resolve(Session,ConversationDraft)
+        ~ void finish(Session,ConversationDraft,SessionRequest)
+        ~ boolean needsRecommendations(ConversationDraft)
+        ~ boolean invalidatesBatch(SessionRequest)
+        ~ boolean retainsHistory()
+        ~ String retrievalMode(ConversationDraft)
+        ~ boolean remembersTurn(ConversationDraft)
+      }
+    }
+    class "RecommendationPolicy" as C14 {
+      + {static} int MAX_BOOK_COUNT
+      + {static} int MAX_SHOWN_BOOKS
+      + {static} int RECOMMENDATION_BATCH_SIZE
+      + {static} int clamp(int)
+      + {static} int clampOrDefault(Integer)
+    }
+    enum "Intent" as C32 {
+      +  RECOMMENDATION
+      +  REFINE
+      +  MORE_RESULTS
+      +  REPEAT
+      +  REPEAT_RECOMMENDATIONS
+      +  EXPLAIN_RECOMMENDATION
+      +  CHANGE_COUNT
+      +  UPDATE_PREFERENCES
+      +  CLEAR_HISTORY
+      +  HELP
+      +  CANCEL
+      +  UNKNOWN
+    }
+  }
+  package "storage" {
+    package "user" {
+      package "qdrant" {
+        class "QdrantUserPreferenceRepository" as C1 {
+          - QdrantClient client
+          - QdrantUserPreferenceMapper mapper
+          - String collection
+          - int vectorDimension
+          - Object initializationLock
+          - boolean initialized
+          + void save(UserPreferenceEmbedding)
+          + void clear(String)
+          + Optional<UserPreferenceEmbedding> findEmbeddingByUserId(String)
+          + void initialize()
+          - boolean collectionExists()
+          - void createCollection()
+          - void validateDimension(float[])
+          - boolean hasVector(float[])
+          - T await(java.util.concurrent.Future<T>,String)
+        }
+        class "QdrantUserPreferenceMapper" as C37 {
+          + {static} String FAVOURITES_VECTOR
+          + {static} String HISTORY_VECTOR
+          + PointStruct toPoint(UserPreferenceEmbedding)
+          + io.qdrant.client.grpc.Common.PointId pointId(String)
+          + float[] toVector(RetrievedPoint,String)
+        }
+      }
+      package "model" {
+        class "UserPreferenceEmbedding" as C2 {
+          - String userId
+          - float[] favouritesVector
+          - float[] historyVector
+          + float[] historyVector()
+          + String userId()
+          + float[] favouritesVector()
+        }
+      }
+      package "port" {
+        interface "UserPreferenceVectorRepository" as C41 {
+          ~ void save(UserPreferenceEmbedding)
+          ~ void clear(String)
+          ~ void clearAll(List<String>)
+          ~ void saveAll(List<UserPreferenceEmbedding>)
+          ~ Optional<UserPreferenceEmbedding> findEmbeddingByUserId(String)
+        }
+      }
+      package "solr" {
+        class "SolrUserPreferenceRepository" as C42 {
+          - SolrClient client
+          - String collection
+          - int dimension
+          + void save(UserPreferenceEmbedding)
+          + void saveAll(List<UserPreferenceEmbedding>)
+          + void clear(String)
+          + void clearAll(List<String>)
+          + Optional<UserPreferenceEmbedding> findEmbeddingByUserId(String)
+        }
+      }
+    }
+    package "session" {
+      package "redis" {
+        class "RedisSessionRepository" as C28 {
+          - {static} org.slf4j.Logger LOGGER
+          - {static} Duration SESSION_TTL
+          - {static} Duration LOCK_TTL
+          - {static} Duration LOCK_RENEWAL_INTERVAL
+          - {static} ScheduledExecutorService LOCK_RENEWAL_EXECUTOR
+          - {static} DefaultRedisScript<Long> RELEASE_LOCK
+          - {static} DefaultRedisScript<Long> RENEW_LOCK
+          - RedisTemplate<String,Session> redisTemplate
+          - StringRedisTemplate stringRedisTemplate
+          - Duration lockTtl
+          - Duration lockRenewalInterval
+          - ScheduledExecutorService lockRenewalExecutor
+          + R update(String,String,Function<Session,T>,Function<T,R>)
+          - Session load(String,String)
+          - boolean commit(Session,LockOwnership)
+          - T withSessionLock(String,String,Function<LockOwnership,T>)
+          - void renew(LockOwnership)
+          - RedisOperations<String,Session> sessionOperations(RedisOperations<?,?>)
+          - String sessionKey(String,String)
+        }
+        class "RedisSessionRepository$LockOwnership" as C29 {
+          - String key
+          - String owner
+          - AtomicBoolean lost
+          - boolean isOwnedBy(StringRedisTemplate)
+          + AtomicBoolean lost()
+          + String key()
+          + String owner()
+        }
+        class "SessionStoreRedisAutoConfigurationFilter" as C60 {
+          - {static} Set<String> REDIS_CONFIGURATIONS
+          - Environment environment
+          + void setEnvironment(Environment)
+          + boolean[] match(String[],AutoConfigurationMetadata)
+        }
+        class "RedisConfig" as C91 {
+          + RedisTemplate<String,Session> redisTemplate(RedisConnectionFactory,ObjectMapper)
+        }
+      }
+      interface "SessionRepository" as C13 {
+        ~ T update(String,String,Function<Session,T>)
+        ~ R update(String,String,Function<Session,T>,Function<T,R>)
+      }
+      class "SessionCommitException" as C31 {
+        
+      }
+      class "SessionBusyException" as C55 {
+        
+      }
+      class "SessionLockLostException" as C77 {
+        
+      }
+    }
+  }
+  package "ranker" {
+    package "scorer" {
+      class "ScoringConfiguration" as C19 {
+        + CompositeScorer compositeScorer(RetrievalRelevanceScorer,UserPreferenceScorer,UniversalRulesScorer,RankingScoringProperties)
+        - void add(List<WeightedScorer>,CandidateScorer,double)
+      }
+      class "UserPreferenceScorer" as C21 {
+        - double favouritesWeight
+        - double historyWeight
+        + ScoreResult score(AudiobookCandidate,RankingContext)
+        - void addSimilarity(List<WeightedSimilarity>,float[],float[],double)
+      }
+      class "UserPreferenceScorer$WeightedSimilarity" as C22 {
+        - double weightedScore
+        - double weight
+        + double weight()
+        + double weightedScore()
+      }
+      interface "CandidateScorer" as C39 {
+        ~ ScoreResult score(AudiobookCandidate,RankingContext)
+      }
+      class "UniversalRulesScorer" as C51 {
+        - double recencyWeight
+        - double durationPlausibilityWeight
+        - IntSupplier currentYear
+        + ScoreResult score(AudiobookCandidate,RankingContext)
+        - Double recencyScore(Integer)
+        - Double durationPlausibilityScore(Integer)
+      }
+      class "RankingScoringProperties" as C63 {
+        - double retrievalRelevanceWeight
+        - double userPreferenceWeight
+        - double universalRulesWeight
+        - UserPreferenceWeights userPreference
+        - UniversalRuleWeights universalRules
+        - {static} void validateWeight(String,double)
+        + double userPreferenceWeight()
+        + double retrievalRelevanceWeight()
+        + UniversalRuleWeights universalRules()
+        + UserPreferenceWeights userPreference()
+        + double universalRulesWeight()
+      }
+      class "RankingScoringProperties$UserPreferenceWeights" as C64 {
+        - double favouritesWeight
+        - double historyWeight
+        + double historyWeight()
+        + double favouritesWeight()
+      }
+      class "RankingScoringProperties$UniversalRuleWeights" as C65 {
+        - double recencyWeight
+        - double durationPlausibilityWeight
+        + double recencyWeight()
+        + double durationPlausibilityWeight()
+      }
+      class "CompositeScorer" as C83 {
+        - List<WeightedScorer> scorers
+        + ScoreResult score(AudiobookCandidate,RankingContext)
+        - double clamp(double)
+      }
+      class "ScoreResult" as C88 {
+        - boolean available
+        - double value
+        - boolean readingPreferencesUsed
+        + {static} ScoreResult available(double)
+        + {static} ScoreResult available(double,boolean)
+        + {static} ScoreResult unavailable()
+        + boolean readingPreferencesUsed()
+        + double value()
+        + boolean available()
+      }
+      class "WeightedScorer" as C96 {
+        - CandidateScorer scorer
+        - double weight
+        + double weight()
+        + CandidateScorer scorer()
+      }
+      class "RetrievalRelevanceScorer" as C97 {
+        + ScoreResult score(AudiobookCandidate,RankingContext)
+      }
+    }
+    class "RankingService" as C3 {
+      - CompositeScorer compositeScorer
+      + List<Recommendation> rank(List<AudiobookCandidate>,int)
+      + List<Recommendation> rank(List<AudiobookCandidate>,int,RankingContext)
+    }
+    class "RankingService$ScoredCandidate" as C4 {
+      - AudiobookCandidate candidate
+      - ScoreResult score
+      + ScoreResult score()
+      + AudiobookCandidate candidate()
+    }
+    interface "Ranker" as C20 {
+      ~ List<Recommendation> rank(List<AudiobookCandidate>,int)
+      ~ List<Recommendation> rank(List<AudiobookCandidate>,int,RankingContext)
+    }
+    class "RankingContext" as C93 {
+      - UserPreferenceEmbedding userPreferences
+      - Set<String> excludedBookIds
+      - Double minimumRetrievalScore
+      - Double maximumRetrievalScore
+      + RankingContext withRetrievalScoreRange(Double,Double)
+      + {static} RankingContext empty()
+      + Double minimumRetrievalScore()
+      + UserPreferenceEmbedding userPreferences()
+      + Double maximumRetrievalScore()
+      + Set<String> excludedBookIds()
+    }
+  }
+  package "response" {
+    class "ConversationResponseGenerator" as C5 {
+      - {static} String PROCESSING_FALLBACK
+      - {static} Pattern EXPLICIT_OVERSIZED_COUNT
+      - AiResponseGenerator ai
+      + String generate(List<Recommendation>,ConversationTurn)
+      - String limitNotice(ConversationTurn)
+      - String generateOutcomeResponse(ConversationDecision,ConversationTurn)
+      - String explanationClarification(ConversationTurn)
+      - String generateFallbackResponse(ConversationTurn)
+    }
+    class "AiResponseGenerator" as C59 {
+      - {static} Logger LOGGER
+      - {static} int MAX_EXPLANATION_WORDS
+      - ChatClient chatClient
+      - AiOperationObserver aiOperationObserver
+      ~ String generate(List<Recommendation>,ConversationTurn,boolean,String)
+      ~ String compilePrompt(List<Recommendation>,ConversationTurn,String)
+      - String resolvedCriteria(ConversationTurn)
+      - String semanticSummary(SemanticQuery)
+      - String formatRecommendationForPrompt(Recommendation)
+      - String buildHumanReadableResponse(List<Recommendation>,ConversationTurn)
+      - List<Recommendation> getTopRecommendations(List<Recommendation>)
+      - String explanationFallback(List<Recommendation>)
+      - String plainExplanation(String)
+      - int wordCount(String)
+      - String limitWords(String,int)
+    }
+    interface "ResponseGenerator" as C90 {
+      ~ String generate(List<Recommendation>,ConversationTurn)
+    }
+  }
+  package "inputparser" {
+    class "CommandParser" as C10 {
+      - {static} String COUNT
+      - {static} Pattern COUNTED_MORE
+      + ParsedRequest parse(String)
+    }
+    class "AiParser" as C24 {
+      ~ {static} BeanOutputConverter<ParsedRequest> REQUEST_CONVERTER
+      - ChatClient chatClient
+      - AiOperationObserver aiOperationObserver
+      - {static} void optionalFields(JsonNode)
+      + ParsedRequest parse(String)
+    }
+    class "InvalidRequestException" as C76 {
+      
+    }
+    class "InputParser" as C92 {
+      + {static} int MAX_REQUEST_CHARACTERS
+      - {static} Logger LOGGER
+      - {static} SecureRandom RANDOM
+      - CommandParser commandParser
+      - AiParser aiParser
+      + SessionRequest parse(String)
+      - Integer boundedInteger(BigInteger)
+      - UUID createUuidV7()
+    }
+    class "ParsedRequest" as C98 {
+      - boolean shorter
+      - String similarToTitle
+      - String similarToAuthor
+      - boolean similarToClarificationRequired
+      - BigInteger referenceRank
+      - String referenceTitle
+      - boolean addAuthors
+      - boolean addNarrators
+      - SessionPreferences preferenceUpdates
+      - SessionPreferences preferenceRemovals
+      - List<String> replacePreferenceFields
+      - boolean explicitSearch
+      - Intent intent
+      - SemanticQuery positiveSemanticQuery
+      - SemanticQuery negativeSemanticQuery
+      - ExactCriteria mustInclude
+      - ExactCriteria mustNotInclude
+      - BigInteger bookCount
+      - boolean personalised
+      + boolean isShorter()
+      + void setShorter(boolean)
+      + String getSimilarToTitle()
+      + void setSimilarToTitle(String)
+      + String getSimilarToAuthor()
+      + void setSimilarToAuthor(String)
+      + boolean isSimilarToClarificationRequired()
+      + void setSimilarToClarificationRequired(boolean)
+      + BigInteger getReferenceRank()
+      + void setReferenceRank(BigInteger)
+      + String getReferenceTitle()
+      + void setReferenceTitle(String)
+      + boolean isAddAuthors()
+      + void setAddAuthors(boolean)
+      + boolean isAddNarrators()
+      + void setAddNarrators(boolean)
+      + SessionPreferences getPreferenceUpdates()
+      + void setPreferenceUpdates(SessionPreferences)
+      + SessionPreferences getPreferenceRemovals()
+      + void setPreferenceRemovals(SessionPreferences)
+      + List<String> getReplacePreferenceFields()
+      + void setReplacePreferenceFields(List<String>)
+      + boolean isExplicitSearch()
+      + void setExplicitSearch(boolean)
+      + boolean isPersonalised()
+      + void setPersonalised(boolean)
+      + Intent getIntent()
+      + void setIntent(Intent)
+      + SemanticQuery getPositiveSemanticQuery()
+      + void setPositiveSemanticQuery(SemanticQuery)
+      + SemanticQuery getNegativeSemanticQuery()
+      + void setNegativeSemanticQuery(SemanticQuery)
+      + ExactCriteria getMustInclude()
+      + void setMustInclude(ExactCriteria)
+      + ExactCriteria getMustNotInclude()
+      + void setMustNotInclude(ExactCriteria)
+      + BigInteger getBookCount()
+      + void setBookCount(BigInteger)
+    }
+  }
+  package "retrieval" {
+    package "plan" {
+      class "ExactFilterPolicy" as C11 {
+        - {static} Pattern YEAR_RANGE
+        - {static} Pattern YEAR_COMPARISON
+        - {static} Pattern RELATIVE_YEARS
+        - Clock clock
+        + AudiobookFilters filters(SessionRequest,Set<String>)
+        + void resolveFilterCorrections(SessionRequest,SessionRequest)
+        + void resolveFilterCorrections(SessionRequest,SessionRequest,SessionRequest)
+        - void requireCompatible(AudiobookFilters)
+        - List<String> conflicts(AudiobookFilters)
+        - boolean covers(Integer,Integer,Integer,Integer,int,int)
+        - List<String> exactValues(AudiobookFilterConditions,String)
+        - boolean supplied(AudiobookFilterConditions,String)
+        - List<String> without(List<String>,AudiobookFilterConditions,String)
+        - void clear(ExactCriteria,String,AudiobookFilterConditions)
+        - AudiobookFilterConditions conditions(ExactCriteria)
+        - RangeBounds yearBounds(String)
+        - List<String> copy(List<String>)
+        - boolean hasText(String)
+        + void validateTransition(ConversationDraft,SessionRequest,Session)
+      }
+      class "ExactFilterPolicy$RangeBounds" as C12 {
+        - Integer minimum
+        - Integer maximum
+        - {static} RangeBounds empty()
+        + Integer maximum()
+        + Integer minimum()
+      }
+      class "AudiobookRetrievalPlan" as C23 {
+        - RetrievalMode mode
+        - String keywordText
+        - AudiobookFilters filters
+        - int limit
+        + int limit()
+        + AudiobookFilters filters()
+        + RetrievalMode mode()
+        + String keywordText()
+      }
+      class "AudiobookRetrievalPlanner" as C38 {
+        - ExactFilterPolicy filterPolicy
+        + AudiobookRetrievalPlan plan(int,SessionRequest,Set<String>)
+        ~ RetrievalMode modeFor(SemanticQuery,SemanticQuery,AudiobookFilters)
+        + String lexicalText(SemanticQuery,String)
+        - void add(List<String>,List<String>)
+        - boolean hasSemanticContent(SemanticQuery)
+        - boolean hasValues(List<String>)
+        - boolean hasText(String)
+      }
+      enum "RetrievalMode" as C66 {
+        +  SEMANTIC
+        +  KEYWORD
+        +  HYBRID
+        +  FILTER_ONLY
+        +  NONE
+      }
+      class "DurationRange" as C89 {
+        - Integer minimum
+        - Integer maximum
+        - {static} String NUMBER
+        - {static} String UNIT
+        - {static} Pattern TERM
+        - {static} Pattern QUANTITY
+        - {static} Pattern RANGE
+        - {static} Pattern COMPARISON
+        ~ {static} DurationRange parse(String)
+        - {static} BigDecimal minutes(String)
+        - {static} DurationRange bounded(BigDecimal,BigDecimal)
+        - {static} int whole(BigDecimal,RoundingMode)
+        - {static} DurationRange checked(Integer,Integer)
+        - {static} InvalidRequestException invalidDuration()
+        + Integer maximum()
+        + Integer minimum()
+      }
+    }
+    interface "CandidateRetriever" as C43 {
+      ~ List<AudiobookCandidate> getCandidates(SessionRequest,SemanticQueryVectors,int,Set<String>)
+    }
+    class "CandidateRetrieverConfiguration" as C47 {
+      ~ {static} BeanFactoryPostProcessor validateDatabaseSelection(Environment)
+      ~ CandidateRetriever candidateRetriever(String,AudiobookCandidateSearch,AudiobookVectorRepository,UserPreferenceVectorRepository,QueryEmbeddingService,AudiobookRetrievalPlanner)
+    }
+    class "CandidateRetrievalService" as C53 {
+      - String backend
+      - AudiobookCandidateSearch candidateSearch
+      - QueryEmbeddingService embeddingIndexer
+      - AudiobookRetrievalPlanner retrievalPlanner
+      + List<AudiobookCandidate> getCandidates(SessionRequest,SemanticQueryVectors,int,Set<String>)
+      - List<AudiobookCandidate> retrieveSemantic(AudiobookRetrievalPlan,SemanticQueryVectors)
+      - List<AudiobookCandidate> retrieveHybrid(AudiobookRetrievalPlan,SemanticQueryVectors)
+      - List<AudiobookCandidate> retrieveKeywordFallback(AudiobookRetrievalPlan)
+    }
+    class "CandidateRetrievalException" as C79 {
+      
+    }
+  }
+  package "application" {
+    package "recommendation" {
+      class "RecommendationPager" as C18 {
+        - RecommendationWorkflow recommendationWorkflow
+        + List<Recommendation> page(ConversationDraft,Session)
+        - List<Recommendation> takePending(Session,int)
+      }
+      interface "RecommendationWorkflow" as C57 {
+        ~ List<Recommendation> recommend(ConversationDraft,Session)
+      }
+      class "AudiobookRecommendationWorkflow" as C62 {
+        - {static} int CANDIDATE_LIMIT
+        - {static} Logger LOGGER
+        - CandidateRetriever candidateRetriever
+        - Ranker ranker
+        - SemanticQueryVectorService semanticQueryVectorService
+        - UserPreferenceVectorRepository userPreferenceVectorRepository
+        + List<Recommendation> recommend(ConversationDraft,Session)
+        - SemanticQueryVectors retrievalVectors(ConversationDraft,UserPreferenceEmbedding)
+        - void addVector(List<float[]>,float[])
+        - Optional<UserPreferenceEmbedding> userPreferences(Session)
+        - Set<String> shownBooks(Session)
+      }
+      class "SimilarBookResolver" as C81 {
+        - {static} int MAX_CHOICES
+        - {static} Logger LOGGER
+        - AudiobookTitleLookup titles
+        - AudiobookVectorRepository vectors
+        + void resolve(Session,ConversationDraft)
+        - void loadVector(ConversationDraft,AudiobookTitle)
+        - void unavailable(ConversationDraft,AudiobookTitle)
+        - void clarify(Session,ConversationDraft,ConversationDecision,List<AudiobookTitle>)
+      }
+    }
+    package "conversation" {
+      class "ConversationConfiguration" as C44 {
+        ~ SearchContextResolver searchConversationHandler()
+        ~ PreferenceConversationHandler preferenceConversationHandler()
+        ~ ExplanationConversationHandler explanationConversationHandler()
+        ~ ReplayConversationHandler replayConversationHandler()
+        ~ SessionActionHandler sessionActionHandler()
+        ~ ConversationDispatcher conversationDispatcher(List<ConversationHandler>)
+      }
+      class "ConversationEngine" as C87 {
+        - ConversationDispatcher conversation
+        - recommenderagent.application.recommendation.SimilarBookResolver similarBooks
+        - RecommendationPager pager
+        - ExactFilterPolicy planner
+        + ConversationTurn process(Session,SessionRequest)
+        - ConversationDraft apply(Session,SessionRequest)
+      }
+    }
+    class "SessionTransitionService" as C16 {
+      - SessionRepository sessions
+      - ConversationEngine conversation
+      + ConversationTurn process(String,String,SessionRequest)
+      + T process(String,String,SessionRequest,Function<ConversationTurn,T>)
+    }
+    class "ChatClientConfiguration" as C46 {
+      + ChatClient inputParserChatClient(ChatClient.Builder,String)
+      + ChatClient responseGeneratorChatClient(ChatClient.Builder,String)
+      - ChatClient build(ChatClient.Builder,String)
+    }
+  }
+  package "observability" {
+    class "RequestTelemetry" as C25 {
+      - {static} Logger LOGGER
+      - {static} ThreadLocal<RequestState> CURRENT
+      - ObjectMapper objectMapper
+      + void start()
+      + void startDemo()
+      + {static} T measure(String,Supplier<T>)
+      + {static} void responseMode(String)
+      + {static} void retrieval(String,int)
+      + {static} void retrievalBackend(String)
+      + {static} void ai(String,int,AiOperationObserver.AiUsage)
+      + Snapshot snapshot()
+      + void complete(ConversationTurn)
+      + void fail(SessionRequest)
+      - void finish(ConversationDraft,String)
+      - void log(Map<String,Object>)
+      - {static} int value(Integer)
+    }
+    class "RequestTelemetry$Snapshot" as C26 {
+      - long totalMs
+      - Map<String,Long> stages
+      - Map<String,AiOperationObserver.AiUsage> operations
+      - Map<String,Object> retrieval
+      + long totalMs()
+      + Map<String,AiOperationObserver.AiUsage> operations()
+      + Map<String,Long> stages()
+      + Map<String,Object> retrieval()
+    }
+    class "RequestTelemetry$RequestState" as C27 {
+      - Instant startedAt
+      - Map<String,AiOperationObserver.AiUsage> operations
+      - Map<String,Long> stages
+      - Map<String,Object> retrieval
+      - Map<String,Object> ai
+      - String responseMode
+      - int aiCalls
+      - int aiAttempts
+      - int inputTokens
+      - int outputTokens
+      - boolean usageAvailable
+      - long durationMillis()
+    }
+    class "AiOperationObserver" as C33 {
+      - {static} Logger LOGGER
+      - {static} ThreadLocal<Operation> CURRENT_OPERATION
+      - boolean enabled
+      + {static} AiOperationObserver noop()
+      + T observe(String,Supplier<T>,Function<T,AiUsage>)
+      - void logCompletion(Operation,AiUsage)
+    }
+    class "AiOperationObserver$LoggingRetryListener" as C34 {
+      - RetryListener delegate
+      + void beforeRetry(RetryPolicy,Retryable<?>,RetryState)
+      + void onRetryPolicyExhaustion(RetryPolicy,Retryable<?>,org.springframework.core.retry.RetryException)
+    }
+    class "AiOperationObserver$Operation" as C35 {
+      - String name
+      - Instant startedAt
+      - Instant attemptStartedAt
+      - int retries
+      - String name()
+      - void recordRetry()
+      - int attempts()
+      - long durationMillis()
+      - long attemptDurationMillis()
+    }
+    class "AiOperationObserver$AiUsage" as C36 {
+      - String model
+      - Integer promptTokens
+      - Integer completionTokens
+      - Integer totalTokens
+      - boolean available
+      + {static} AiUsage from(ChatResponse)
+      + {static} AiUsage from(EmbeddingResponse)
+      - {static} AiUsage from(String,Usage)
+      - {static} AiUsage unavailable()
+      + String model()
+      + Integer totalTokens()
+      + Integer promptTokens()
+      + boolean available()
+      + Integer completionTokens()
+    }
+  }
+  package "embedding" {
+    class "SemanticQueryVectorService" as C48 {
+      - QueryEmbeddingService embeddingIndexer
+      + SemanticQueryVectors create(SessionRequest)
+      - List<float[]> vectorOf(float[])
+    }
+    class "SemanticQueryVectors" as C49 {
+      - List<float[]> positive
+      - List<float[]> negative
+      + {static} SemanticQueryVectors empty()
+      + boolean isEmpty()
+      + List<float[]> positive()
+      + List<float[]> negative()
+    }
+    class "QueryEmbeddingService" as C73 {
+      - EmbeddingModel model
+      - AiOperationObserver aiOperationObserver
+      + float[] embedSemanticQuery(SemanticQuery)
+      + List<float[]> embedSemanticQueries(List<SemanticQuery>)
+      + float[] combineSemanticQueries(SemanticQueryVectors)
+      + String buildSemanticQueryText(SemanticQuery)
+      - String part(String,String)
+      - String part(String,List<String>)
+    }
+  }
+  package "api" {
+    class "RequestExceptionHandler" as C52 {
+      + ResponseEntity<String> handleUnavailableAi(recommenderagent.ai.AiProviderException)
+      + ResponseEntity<String> handleInvalidRequest(InvalidRequestException)
+      + ResponseEntity<String> handleBusySession(SessionBusyException)
+      + ResponseEntity<String> handleUnsafeSessionCommit(SessionCommitException)
+      + ResponseEntity<String> handleLostSessionLock(SessionLockLostException)
+      + ResponseEntity<String> handleUnavailableCandidateStore(CandidateRetrievalException)
+    }
+    class "RequestBodyLimit" as C58 {
+      - {static} int MAX_BYTES
+      + boolean supports(MethodParameter,Type,Class<? extends HttpMessageConverter<?>>)
+      + HttpInputMessage beforeBodyRead(HttpInputMessage,MethodParameter,Type,Class<? extends HttpMessageConverter<?>>)
+      - ResponseStatusException tooLarge()
+    }
+    class "DemoWebsite" as C68 {
+      - {static} Logger LOGGER
+      - {static} ObjectMapper JSON
+      - RequestGateway gateway
+      - AudiobookDetailsLookup catalogue
+      + Resource index()
+      + DemoResponse recommend(String,String,String)
+      - ObjectNode withoutVectors(ConversationTurn)
+    }
+    class "DemoWebsite$DemoResponse" as C69 {
+      - String response
+      - ObjectNode sessionRequest
+      - RequestTelemetry.Snapshot metrics
+      - List<AudiobookRecord> catalogueBooks
+      - String catalogueError
+      + String catalogueError()
+      + ObjectNode sessionRequest()
+      + String response()
+      + RequestTelemetry.Snapshot metrics()
+      + List<AudiobookRecord> catalogueBooks()
+    }
+    class "RequestGateway" as C70 {
+      - InputParser inputParser
+      - SessionTransitionService sessionTransitionService
+      - ResponseGenerator responseGenerator
+      - RequestTelemetry telemetry
+      + String handleRequest(String,String,String)
+      + DemoResponse handleDemoRequest(String,String,String)
+      - T process(String,String,String,boolean,BiFunction<String,ConversationTurn,T>)
+    }
+    class "RequestGateway$DemoResponse" as C71 {
+      - String response
+      - ConversationTurn sessionRequest
+      - RequestTelemetry.Snapshot metrics
+      + ConversationTurn sessionRequest()
+      + String response()
+      + RequestTelemetry.Snapshot metrics()
+    }
+    class "Generated" as C72 {
+      - String text
+      - ConversationTurn turn
+      + String text()
+      + ConversationTurn turn()
+    }
+  }
+  package "ai" {
+    class "AiProviderCalls" as C61 {
+      + {static} T call(Supplier<T>)
+    }
+    class "AiProviderException" as C75 {
+      
+    }
+  }
+  class "RecommenderAgentApplication" as C86 {
+    + {static} void main(String[])
+  }
+}
+
+
+C41 <|.. C1
+C20 <|.. C3
+C3 +.. C4
+C90 <|.. C5
+C11 +.. C12
+C39 <|.. C21
+C21 +.. C22
+C25 +.. C26
+C25 +.. C27
+C13 <|.. C28
+C28 +.. C29
+C94 <|.. C30
+C33 +.. C34
+C33 +.. C35
+C33 +.. C36
+C94 <|.. C40
+C41 <|.. C42
+C39 <|.. C51
+C43 <|.. C53
+C57 <|.. C62
+C63 +.. C64
+C63 +.. C65
+C68 +.. C69
+C70 +.. C71
+C94 <|.. C78
+C94 <|.. C80
+C39 <|.. C83
+C94 <|.. C84
+C0 <|-- C85
+C39 <|.. C97
+
+package "catalogue" as catalogue <<external>> {
+}
+recommenderagent ..> catalogue : uses
+
+' Sources: README.md and docs/architecture.md
+note right of recommenderagent
+  Interactive audiobook recommendation service.
+
+  Parses requests, resolves conversation context,
+  retrieves and ranks books, commits session
+  changes, then generates response wording.
+
+  Redis sessions use the (userId, sessionId)
+  pair with a 24-hour sliding expiry.
+
+  Catalogue maintenance runs in separate
+  opt-in applications.
+end note
+@enduml

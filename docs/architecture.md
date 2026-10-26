@@ -204,8 +204,24 @@ the first refill. New searches record the full snapshot metadata; no database mi
 ### Refinements and exact-filter corrections
 
 Self-contained criteria, such as “fantasy under five hours”, route to `RECOMMENDATION`.
-“More recent” is a `REFINE` that keeps the search content and applies the existing `recent`
-publication window. Without an active search, it asks what kind of audiobook the user wants.
+“More recent” (including “I want books from more recent times”) is a `REFINE` that keeps
+search content and sets an inclusive lower publication-year bound to the floored average of the
+latest displayed page's known years. Unknown years are ignored; when every year is missing, it asks
+for a starting year without consuming the previous search or queued books. A supplied starting year
+resumes that search. A different refinement abandons the year question; an upper-bound reply such
+as “before 2000” replaces the unfinished recency request. Any previous upper year bound remains in
+force for a supplied starting year. If the start exceeds that bound, ask before extending the period:
+“yes” replaces the old period with the proposed range, retaining any explicitly supplied end year;
+“no” keeps the original search, and a different range replaces the
+proposal. The confirmation survives HELP, count changes and cache reloads. Resuming uses the saved
+explicit criteria and reapplies current preferences, so preference updates or resets do not revive
+old inherited filters. Explicit request constraints remain in force.
+When the average would not advance the existing lower bound, advance it by one year instead. If
+that exceeds the period's end, return a fixed exhaustion message without consuming the page or queue;
+MORE and REPEAT_RECOMMENDATIONS remain available, while REPEAT repeats the exhaustion message.
+Explicit periods stay literal:
+“1950 to the 2000s” means 1950–2009. Ordinary “recent books” still means the last five years.
+Without an active search, a comparative refinement asks what kind of audiobook the user wants.
 A context-dependent `REFINE` without a previous search asks for criteria without embedding or
 retrieval; stored user preferences alone are not a previous search. A self-contained request can
 still answer a pending preference question and save that taste for the session.
@@ -229,7 +245,11 @@ an explicit `García Márquez, Gabriel` also tries `Gabriel García Márquez`. T
 names, and uncertain comma formats are not guessed. Include/exclude conflict checks use the same name-order comparison. Original request
 and preference values remain unchanged, so MORE/REFINE reuse those names and regenerate variants.
 This uses no dictionary, catalogue scan, AI call, new index, or migration. Generated alternatives
-are not verified catalogue identities; typo matching, initials aliases, arbitrary stored casing,
+also tolerate a terminal catalogue period and compact/spaced dotted initials (`J.K.` / `J. K.`).
+Separated single-letter initials (`J K`) match those dotted forms in both name orders; compact
+undotted words (`JK`) are not assumed to be initials. This works for authors and narrators,
+without expanding initials into full names or removing suffix punctuation. These alternatives
+are not verified catalogue identities; typo matching, full-name aliases, arbitrary stored casing,
 and complete discovery of longer-name variants remain outside this limited approach.
 
 ### Semantic criteria and personalisation
