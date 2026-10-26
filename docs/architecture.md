@@ -73,7 +73,7 @@ A single named title goes to catalogue lookup even when it is also the name of a
 search. A unique exact title match (ignoring case/punctuation) selects the reference. Its author can
 narrow editions; otherwise the user chooses from at most five title/author matches using a number,
 ordinal, title or unique author. “The last one” selects the final reference choice; “the former”
-and “the latter” work with exactly two choices. Partial title matches always need confirmation.
+and “the latter” select the first and last choices respectively. Partial title matches always need confirmation.
 Adapters scan matching title pages while retaining bounded choices, returning exact titles when
 present before falling back to partial titles. A truncated exact-match set never automatically
 selects a reference. No match asks which aspects the user
@@ -112,6 +112,11 @@ field remain readable.
 by REPEAT. HELP preserves it and repeats the question after the help text; REPEAT leaves it alone.
 Count changes preserve book-selection and genre questions, including when a missing count needs its
 own clarification: `Session.suspendedQuestion` restores the original question after the count answer.
+Zero, negative and fractional recommendation counts ask for a whole number from one to five before
+retrieval. `Session.pendingCountRequest` retains the original action and criteria across HELP/cache
+reloads. Correcting a search/More count resumes that action with a temporary count; only explicit
+count settings change the saved default. Settings corrections repeat the interrupted question.
+Positive whole counts above five retain the existing cap and notice.
 Preference updates preserve unrelated questions. Both direct semantic updates and answers to an update
 question can supply the missing genres and resume the waiting personalised search.
 New recommendations/refinements replace the pending selection; MORE and REPEAT_RECOMMENDATIONS clear
@@ -127,7 +132,13 @@ preference-question cleanup. For example, "please, the second
 one" selects rank 2 after a question, while "could you explain number two, please" explicitly requests
 an explanation. Titles and search criteria still use their original text.
 
-### Shorter follow-ups
+### Runtime comparisons
+
+“Make them longer” sets a minimum one minute beyond the longest displayed duration. If that
+conflicts with an existing maximum, ask before extending the range. Refusal keeps the old search.
+Missing durations ask for a limit. `Session.pendingRefinementRequest` retains all explicit criteria
+for both duration and year questions; replies reapply current session preferences. Older cached
+`pendingRecencyRequest` values remain readable under this generalized field.
 
 "Make them shorter" is a `REFINE` command, not a saved-preference edit. It skips AI, preserves the
 active search's content and other constraints, and uses `shorter=true` without inventing a numeric
@@ -231,6 +242,10 @@ old inherited filters. Explicit request constraints remain in force.
 When the average would not advance the existing lower bound, advance it by one year instead. If
 that exceeds the period's end, return a fixed exhaustion message without consuming the page or queue;
 MORE and REPEAT_RECOMMENDATIONS remain available, while REPEAT repeats the exhaustion message.
+“Older ones” mirrors the recency comparison with an upper bound one year below the floored average
+of known displayed years. Keep the existing lower bound when compatible; otherwise ask before
+extending the period. If all years are missing, ask for an ending year and retain the full refinement.
+
 Explicit periods stay literal:
 “1950 to the 2000s” means 1950–2009. A standalone decade, including “from the 2000s”,
 means 2000–2009. Publication years must be within 1–9999; exclusive bounds outside that range
@@ -270,6 +285,8 @@ an explicit `García Márquez, Gabriel` also tries `Gabriel García Márquez`. T
 names, and uncertain comma formats are not guessed. Include/exclude conflict checks use the same name-order comparison. Original request
 and preference values remain unchanged, so MORE/REFINE reuse those names and regenerate variants.
 Removing saved author/narrator preferences uses this same equivalence, including semantic preferences.
+“Remove X from my preferences” removes matching saved values across positive and negative fields.
+“I no longer like X” removes positive values only; it does not invent a dislike or alter the current batch.
 This uses no dictionary, catalogue scan, AI call, new index, or migration. Generated alternatives
 also tolerate a terminal catalogue period and compact/spaced dotted initials (`J.K.` / `J. K.`).
 Separated single-letter initials (`J K`) match those dotted forms in both name orders; compact
@@ -482,14 +499,23 @@ out-of-range or conflicting references produce a ranked-title clarification. A b
 an explanation request on its own. While a book-selection clarification is pending, a numeric
 reply such as “1”, “1.”, “first”, or “the first one” selects that rank from the retained page;
 a numeric title such as “1984” matches its displayed book when it is not a valid rank.
-“The last one” selects the final displayed book; “the former” and “the latter” select from exactly two
-books. Other invalid numbers ask again. An otherwise unrecognized reply can also identify a displayed title. HELP preserves this context; a new search replaces it. “Why the fourth book?” also resolves independently.
+“The last one” and “the latter” select the final displayed book; “the former” selects the first.
+These relative positions also work in complete questions such as “Why the last book?”. Other invalid numbers ask again. An otherwise unrecognized reply can also identify a displayed title. HELP preserves this context; a new search replaces it. “Why the fourth book?” also resolves independently.
 “Explain two more” and “explain book two more” both select book 2 for more detail, never two additional
 books. Single-book explanations retain the original displayed rank.
+`explanationSelection` carries literal include/exclude lists of ranks, relative positions or titles.
+Empty includes mean the whole page. Multiple titles and “all except” selections use the same exact/
+unique-partial matching; exclusions win, duplicates disappear, and displayed order/ranks remain intact.
+An invalid or ambiguous selector asks for clarification while retaining other selections and exclusions.
+Each bare reply resolves the next unresolved item. An explicit new explanation replaces that subset;
+MORE/new searches clear it. Empty subsets ask which books to explain without calling AI. The existing
+150-word total explanation limit also applies to subsets.
+
 Model-provided ranks and counts accept large integers before conversion to bounded internal values:
 oversized ranks clarify rather than overflow, and result counts retain the existing one-to-five cap.
-Fractional numeric fields and structured responses exceeding JSON limits return a friendly `400`
-validation message rather than truncating a position or returning a server error.
+Malformed model numeric fields and structured responses exceeding JSON limits return a friendly `400`
+validation message. Invalid user recommendation counts use the count-clarification flow instead of
+rounding or interpreting zero as replay.
 
 Bare title replies to a pending explanation question match the displayed page even when the parser
 labels them RECOMMENDATION or REFINE. Explicit search commands still start a new search.

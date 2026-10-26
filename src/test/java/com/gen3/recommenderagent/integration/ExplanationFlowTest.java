@@ -72,7 +72,7 @@ class ExplanationFlowTest {
   }
 
   @Test
-  void latterWithMoreThanTwoBooksAsksInsteadOfGuessing() {
+  void latterWithMoreThanTwoBooksSelectsTheLast() {
     search();
     explain(99, null);
     var result =
@@ -80,8 +80,8 @@ class ExplanationFlowTest {
             "session",
             "user",
             new InputParser(new CommandParser(), mock(AiParser.class)).parse("the latter"));
-    assertThat(result.getDecision())
-        .isEqualTo(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(result.getRecommendations()).extracting(Recommendation::getRank).containsExactly(5);
   }
 
   @Test

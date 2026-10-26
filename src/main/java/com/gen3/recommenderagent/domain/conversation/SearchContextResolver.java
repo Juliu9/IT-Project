@@ -51,11 +51,10 @@ public final class SearchContextResolver implements ConversationHandler {
     if (effective.getIntent() == Intent.REFINE
         && latestSearch(session) == null
         && !session.isAwaitingPersonalisedPreferences()) {
-      if (effective.isShorter()
-          || ConversationText.isRecencyRefinement(effective.getRawText())
+      if ((effective.isShorter() || effective.isLonger())
+          || ConversationText.isYearRefinement(effective.getRawText())
           || (effective.getMustInclude() != null
-              && ConversationText.isRecencyRefinement(
-                  effective.getMustInclude().getPublicationYear()))
+              && ConversationText.isYearRefinement(effective.getMustInclude().getPublicationYear()))
           || !hasSearchCriteria(effective)) {
         effective.setSearchClarificationRequired(true);
         return effective;
@@ -63,7 +62,7 @@ public final class SearchContextResolver implements ConversationHandler {
       effective.setIntent(Intent.RECOMMENDATION);
     }
     if (session.isAwaitingPersonalisedPreferences()
-        && !effective.isShorter()
+        && !(effective.isShorter() || effective.isLonger())
         && effective.getIntent() != Intent.MORE_RESULTS
         && acceptsPreferences(effective.getIntent())) {
       if (!effective.isExplicitSearch()) {
@@ -84,12 +83,6 @@ public final class SearchContextResolver implements ConversationHandler {
     if (effective.getIntent() == Intent.REFINE || effective.getIntent() == Intent.MORE_RESULTS) {
       applyPreviousSearch(effective, session);
     }
-    if (effective.isShorter()) {
-      applyShorterDuration(effective, session);
-      if (effective.isSearchClarificationRequired()) {
-        return effective;
-      }
-    }
     if (isRecommendationIntent(effective.getIntent())) {
       if (effective.getIntent() != Intent.MORE_RESULTS) {
         effective.setSearchCriteria(SessionPreferences.fromRequest(effective));
@@ -98,29 +91,6 @@ public final class SearchContextResolver implements ConversationHandler {
       effective.setBookCount(resolveBookCount(effective, session));
     }
     return effective;
-  }
-
-  private void applyShorterDuration(ConversationDraft request, Session session) {
-    var previous = latestSearch(session);
-    var page = previous == null ? null : previous.getRecommendations();
-    if (page == null
-        || page.isEmpty()
-        || page.stream()
-            .anyMatch(
-                book -> book.getDurationMinutes() == null || book.getDurationMinutes() <= 1)) {
-      request.setDecision(
-          com.gen3.recommenderagent.domain.session.ConversationDecision
-              .SHORTER_DURATION_CLARIFICATION);
-      request.setSearchClarificationRequired(true);
-      return;
-    }
-    int shortest = page.stream().mapToInt(book -> book.getDurationMinutes()).min().orElseThrow();
-    var include =
-        request.getMustInclude() == null
-            ? new com.gen3.recommenderagent.domain.session.ExactCriteria()
-            : request.getMustInclude();
-    include.setDuration("under " + shortest + " minutes");
-    request.setMustInclude(include);
   }
 
   private boolean acceptsPreferences(Intent intent) {

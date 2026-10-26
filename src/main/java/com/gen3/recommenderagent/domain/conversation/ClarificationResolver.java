@@ -48,10 +48,65 @@ public final class ClarificationResolver {
       normalizeInput(effective);
       return effective;
     }
+    if (effective.isInvalidBookCount()
+        && (session.getPendingQuestion() == ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
+            || session.getPendingSimilarBook() != null)
+        && reply.matches("[-−]?(?:[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)")) {
+      effective.setInvalidBookCount(false);
+      effective.setIntent(Intent.UNKNOWN);
+      effective.setBookCount(null);
+    }
+    if (session.getPendingQuestion() == ConversationDecision.COUNT_CLARIFICATION
+        && session.getPendingCountRequest() != null) {
+      Integer count = ConversationText.selectionReply(reply);
+      if (count != null && count > 0) {
+        var pending = copyOf(session.getPendingCountRequest());
+        pending.setBookCount(count);
+        pending.setInvalidBookCount(false);
+        pending.setRawText(input.getRawText());
+        pending.setRequestId(input.getRequestId());
+        pending.setCreatedAt(input.getCreatedAt());
+        session.setPendingCountRequest(null);
+        session.setPendingQuestion(session.getSuspendedQuestion());
+        session.setSuspendedQuestion(null);
+        if (pending.isExplicitSearch()
+            && (pending.getIntent() == Intent.RECOMMENDATION
+                || pending.getIntent() == Intent.REFINE)) {
+          session.setPendingQuestion(null);
+          session.setPendingSimilarBook(null);
+          session.setPendingExplanation(null);
+          session.clearPreferenceQuestions();
+        }
+        return pending;
+      }
+    }
+    if (session.getPendingQuestion() == ConversationDecision.COUNT_CLARIFICATION
+        && (effective.getIntent() == Intent.UNKNOWN || effective.getIntent() == Intent.CHANGE_COUNT)
+        && (ConversationText.selectionReply(reply) == null
+            || ConversationText.selectionReply(reply) <= 0)) {
+      effective.setIntent(Intent.CHANGE_COUNT);
+      effective.setBookCount(null);
+      effective.setDecision(ConversationDecision.COUNT_CLARIFICATION);
+      return effective;
+    }
+    if (effective.isInvalidBookCount()) {
+      if (session.getPendingCountRequest() == null) {
+        session.setPendingCountRequest(copyOf(input));
+      }
+      if (session.getPendingQuestion() != ConversationDecision.COUNT_CLARIFICATION) {
+        session.setSuspendedQuestion(session.getPendingQuestion());
+      }
+      effective.setIntent(Intent.CHANGE_COUNT);
+      effective.setBookCount(null);
+      effective.setDecision(ConversationDecision.COUNT_CLARIFICATION);
+      return effective;
+    }
     if (effective.getIntent() == Intent.UPDATE_PREFERENCES
         || (session.isAwaitingPreferenceUpdate()
             && session.getPendingQuestion() != ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
             && session.getPendingQuestion() != ConversationDecision.COUNT_CLARIFICATION
+            && session.getPendingQuestion() != ConversationDecision.LONGER_DURATION_CLARIFICATION
+            && session.getPendingQuestion() != ConversationDecision.DURATION_RANGE_CONFIRMATION
             && session.getPendingQuestion() != ConversationDecision.SHORTER_DURATION_CLARIFICATION
             && session.getPendingQuestion() != ConversationDecision.RECENCY_YEAR_CLARIFICATION
             && session.getPendingQuestion() != ConversationDecision.RECENCY_RANGE_CONFIRMATION
@@ -80,8 +135,9 @@ public final class ClarificationResolver {
       effective.setNegativeSemanticQuery(updates.getNegativeSemanticQuery());
       return effective;
     }
-    if (session.getPendingQuestion() == ConversationDecision.RECENCY_RANGE_CONFIRMATION
-        && session.getPendingRecencyRequest() != null) {
+    if ((session.getPendingQuestion() == ConversationDecision.RECENCY_RANGE_CONFIRMATION
+            || session.getPendingQuestion() == ConversationDecision.DURATION_RANGE_CONFIRMATION)
+        && session.getPendingRefinementRequest() != null) {
       String answer = ConversationText.normalizeCommand(reply);
       if (java.util.Set.of("no", "no thanks", "not now", "keep the previous search")
           .contains(answer)) {
@@ -90,14 +146,14 @@ public final class ClarificationResolver {
         return effective;
       }
       if (ConversationText.isAffirmativeReply(reply)) {
-        var resumed = restoreSearchCriteria(session.getPendingRecencyRequest());
+        var resumed = restoreSearchCriteria(session.getPendingRefinementRequest());
         resumed.setRequestId(effective.getRequestId());
         resumed.setRawText(effective.getRawText());
         resumed.setCreatedAt(effective.getCreatedAt());
         resumed.setSearchClarificationRequired(false);
         resumed.setDecision(null);
         session.setPendingQuestion(null);
-        session.setPendingRecencyRequest(null);
+        session.setPendingRefinementRequest(null);
         return resumed;
       }
     }
@@ -108,7 +164,29 @@ public final class ClarificationResolver {
       normalizeInput(effective);
       effective.setReferenceRank(null);
       effective.setReferenceTitle(null);
+      effective.setExplanationSelection(null);
+      session.setPendingExplanation(null);
       return effective;
+    }
+    if (session.getPendingQuestion() == ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
+        && session.getPendingExplanation() != null
+        && !effective.isExplicitSearch()
+        && (effective.getIntent() == Intent.UNKNOWN
+            || effective.getIntent() == Intent.RECOMMENDATION
+            || effective.getIntent() == Intent.REFINE)) {
+      var search = ConversationHistory.latestSearch(session);
+      var page = search == null ? List.<Recommendation>of() : search.getRecommendations();
+      String unresolved =
+          ExplanationConversationHandler.firstUnresolved(session.getPendingExplanation(), page);
+      if (unresolved != null) {
+        effective.setIntent(Intent.EXPLAIN_RECOMMENDATION);
+        normalizeInput(effective);
+        effective.setReferenceRank(null);
+        effective.setReferenceTitle(null);
+        effective.setExplanationSelection(
+            session.getPendingExplanation().replace(unresolved, reply));
+        return effective;
+      }
     }
     Integer selection = ConversationText.selectionReply(reply);
     if (session.getPendingQuestion() == ConversationDecision.EXPLANATION_TARGET_CLARIFICATION) {
@@ -153,13 +231,22 @@ public final class ClarificationResolver {
         include.setPublicationYear("from " + include.getPublicationYear());
       }
       effective.setMustInclude(include);
-      if (session.getPendingQuestion() == ConversationDecision.RECENCY_RANGE_CONFIRMATION) {
-        if (session.getPendingRecencyRequest() != null) {
-          SearchCriteriaMerger.merge(
-              restoreSearchCriteria(session.getPendingRecencyRequest()), effective);
-        }
+      boolean older =
+          session.getPendingRefinementRequest() != null
+              && session.getPendingRefinementRequest().getMustInclude() != null
+              && ConversationText.isOlderRefinement(
+                  session.getPendingRefinementRequest().getMustInclude().getPublicationYear());
+      if (older && yearReply.matches("[0-9]{4}")) {
+        include.setPublicationYear("at most " + yearReply);
+      }
+      if (session.getPendingRefinementRequest() != null) {
+        SearchCriteriaMerger.merge(
+            restoreSearchCriteria(session.getPendingRefinementRequest()), effective);
+      }
+      if (older
+          || session.getPendingQuestion() == ConversationDecision.RECENCY_RANGE_CONFIRMATION) {
         session.setPendingQuestion(null);
-        session.setPendingRecencyRequest(null);
+        session.setPendingRefinementRequest(null);
       }
       return effective;
     }
@@ -167,7 +254,10 @@ public final class ClarificationResolver {
         && selection != null) {
       effective.setIntent(Intent.CHANGE_COUNT);
       normalizeInput(effective);
-      effective.setBookCount(selection);
+      effective.setBookCount(selection > 0 ? selection : null);
+      if (selection <= 0) {
+        effective.setDecision(ConversationDecision.COUNT_CLARIFICATION);
+      }
       return effective;
     }
     if (session.getPendingQuestion() == ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
@@ -185,7 +275,8 @@ public final class ClarificationResolver {
       effective.setReferenceTitle(selection == null ? reply : null);
       return effective;
     }
-    if (session.getPendingQuestion() == ConversationDecision.SHORTER_DURATION_CLARIFICATION
+    if ((session.getPendingQuestion() == ConversationDecision.SHORTER_DURATION_CLARIFICATION
+            || session.getPendingQuestion() == ConversationDecision.LONGER_DURATION_CLARIFICATION)
         && !effective.isExplicitSearch()
         && effective.getMustInclude() != null
         && effective.getMustInclude().getDuration() != null
@@ -193,7 +284,13 @@ public final class ClarificationResolver {
             || effective.getIntent() == Intent.REFINE
             || effective.getIntent() == Intent.UNKNOWN)) {
       effective.setIntent(Intent.REFINE);
+      effective.setShorter(false);
+      effective.setLonger(false);
       normalizeInput(effective);
+      if (session.getPendingRefinementRequest() != null) {
+        SearchCriteriaMerger.merge(
+            restoreSearchCriteria(session.getPendingRefinementRequest()), effective);
+      }
       return effective;
     }
     if (session.getPendingSimilarBook() != null
@@ -219,6 +316,8 @@ public final class ClarificationResolver {
       session.setPendingQuestion(null);
       session.setSuspendedQuestion(null);
       session.setPendingSimilarBook(null);
+      session.setPendingExplanation(null);
+      session.setPendingCountRequest(null);
       session.clearPreferenceQuestions();
     } else if ((effective.getIntent() == Intent.MORE_RESULTS
             || effective.getIntent() == Intent.REPEAT_RECOMMENDATIONS)
@@ -226,6 +325,7 @@ public final class ClarificationResolver {
       session.setPendingQuestion(null);
       session.setSuspendedQuestion(null);
       session.setPendingSimilarBook(null);
+      session.setPendingExplanation(null);
     }
     return effective;
   }
@@ -377,6 +477,8 @@ public final class ClarificationResolver {
           PREFERENCE_UPDATE_CLARIFICATION,
           SEARCH_CLARIFICATION,
           SHORTER_DURATION_CLARIFICATION,
+          LONGER_DURATION_CLARIFICATION,
+          DURATION_RANGE_CONFIRMATION,
           RECENCY_YEAR_CLARIFICATION,
           RECENCY_RANGE_CONFIRMATION,
           SIMILAR_BOOK_SELECTION,
@@ -388,22 +490,39 @@ public final class ClarificationResolver {
     };
   }
 
+  private boolean isRefinementQuestion(ConversationDecision decision) {
+    return decision == ConversationDecision.RECENCY_RANGE_CONFIRMATION
+        || decision == ConversationDecision.RECENCY_YEAR_CLARIFICATION
+        || decision == ConversationDecision.SHORTER_DURATION_CLARIFICATION
+        || decision == ConversationDecision.LONGER_DURATION_CLARIFICATION
+        || decision == ConversationDecision.DURATION_RANGE_CONFIRMATION;
+  }
+
+  private void attachQuestion(Session session, ConversationDraft request) {
+    request.setPendingQuestion(session.getPendingQuestion());
+    if (session.getPendingQuestion() == ConversationDecision.EXPLANATION_TARGET_CLARIFICATION) {
+      request.setExplanationSelection(session.getPendingExplanation());
+      var search = ConversationHistory.latestSearch(session);
+      if (search != null) {
+        request.setRecommendations(search.getRecommendations());
+      }
+    } else if (isRefinementQuestion(session.getPendingQuestion())
+        && session.getPendingRefinementRequest() != null) {
+      request.setMustInclude(
+          restoreSearchCriteria(session.getPendingRefinementRequest()).getMustInclude());
+    } else if (session.getPendingSimilarBook() != null) {
+      request.setSimilarBookChoices(
+          session.getPendingSimilarBook().request().getSimilarBookChoices());
+    }
+  }
+
   public void complete(Session session, ConversationDraft request) {
     Intent intent = request.getIntent();
     if (intent == Intent.REPEAT) {
       return;
     }
     if (intent == Intent.HELP) {
-      request.setPendingQuestion(session.getPendingQuestion());
-      if (session.getPendingQuestion() == ConversationDecision.EXPLANATION_TARGET_CLARIFICATION) {
-        var search = ConversationHistory.latestSearch(session);
-        if (search != null) {
-          request.setRecommendations(search.getRecommendations());
-        }
-      } else if (session.getPendingSimilarBook() != null) {
-        request.setSimilarBookChoices(
-            session.getPendingSimilarBook().request().getSimilarBookChoices());
-      }
+      attachQuestion(session, request);
       return;
     }
     if (intent == Intent.RESET_PREFERENCES) {
@@ -415,6 +534,7 @@ public final class ClarificationResolver {
     if (intent == Intent.CHANGE_COUNT
         && request.getBookCount() != null
         && session.getPendingQuestion() != ConversationDecision.COUNT_CLARIFICATION) {
+      attachQuestion(session, request);
       return;
     }
     if (request.getDecision() == ConversationDecision.COUNT_CLARIFICATION
@@ -425,20 +545,25 @@ public final class ClarificationResolver {
         && session.getPendingQuestion() == ConversationDecision.COUNT_CLARIFICATION) {
       session.setPendingQuestion(session.getSuspendedQuestion());
       session.setSuspendedQuestion(null);
+      attachQuestion(session, request);
       return;
     }
     if (intent == Intent.CANCEL) {
-      session.setPendingRecencyRequest(null);
+      session.setPendingRefinementRequest(null);
+      session.setPendingExplanation(null);
+      session.setPendingCountRequest(null);
       session.setSuspendedQuestion(null);
     }
-    if (isQuestion(request.getDecision())) {
+    if (request.getDecision() == ConversationDecision.EMPTY_EXPLANATION_SELECTION) {
+      session.setPendingQuestion(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+    } else if (isQuestion(request.getDecision())) {
       session.setPendingQuestion(request.getDecision());
     } else if (intent != Intent.UNKNOWN) {
       session.setPendingQuestion(null);
     }
-    if (session.getPendingQuestion() != ConversationDecision.RECENCY_RANGE_CONFIRMATION
-        && session.getSuspendedQuestion() != ConversationDecision.RECENCY_RANGE_CONFIRMATION) {
-      session.setPendingRecencyRequest(null);
+    if (!isRefinementQuestion(session.getPendingQuestion())
+        && !isRefinementQuestion(session.getSuspendedQuestion())) {
+      session.setPendingRefinementRequest(null);
     }
   }
 }

@@ -67,6 +67,38 @@ public class SessionPreferences {
     return request;
   }
 
+  /**
+   * Removes a named saved value wherever it is stored, using the existing field-specific equality.
+   */
+  public SessionPreferences withoutTerms(List<String> values, boolean positiveOnly) {
+    var result = copy();
+    for (String value : values) {
+      var terms = List.of(value);
+      var query = new SemanticQuery();
+      query.setAuthors(terms);
+      query.setNarrators(terms);
+      query.setGenres(terms);
+      query.setTopics(terms);
+      query.setKeywords(terms);
+      var exact = new ExactCriteria();
+      exact.setAuthors(terms);
+      exact.setNarrators(terms);
+      exact.setLanguage(value);
+      exact.setSource(value);
+      exact.setDuration(value);
+      exact.setPublicationYear(value);
+      var removals = new SessionPreferences();
+      removals.setPositiveSemanticQuery(query);
+      removals.setMustInclude(exact);
+      if (!positiveOnly) {
+        removals.setNegativeSemanticQuery(query);
+        removals.setMustNotInclude(exact);
+      }
+      result = result.updated(null, removals, List.of());
+    }
+    return result;
+  }
+
   public SessionPreferences copy() {
     return updated(null, null, List.of());
   }

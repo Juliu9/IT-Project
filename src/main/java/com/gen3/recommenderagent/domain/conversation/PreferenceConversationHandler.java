@@ -17,6 +17,15 @@ public final class PreferenceConversationHandler implements ConversationHandler 
   }
 
   public ConversationDraft resolve(Session session, ConversationDraft effective) {
+    if (!effective.getPreferenceRemovalTerms().isEmpty()) {
+      var preferences =
+          session.getPreferences() == null ? new SessionPreferences() : session.getPreferences();
+      effective.setPreferenceUpdates(
+          preferences.withoutTerms(
+              effective.getPreferenceRemovalTerms(), effective.isPositivePreferenceRemovalOnly()));
+      effective.setDecision(ConversationDecision.PREFERENCES_UPDATED);
+      return effective;
+    }
     SessionPreferences updates = effective.getPreferenceUpdates();
     if (updates == null) {
       updates = SessionPreferences.fromRequest(effective);

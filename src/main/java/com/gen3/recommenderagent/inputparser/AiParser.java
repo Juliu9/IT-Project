@@ -79,7 +79,8 @@ public class AiParser {
                         REFINE changes the current results; UPDATE_PREFERENCES explicitly edits saved tastes/constraints.
                         "give me some books" -> RECOMMENDATION, personalised=true, explicitSearch=true; no invented criteria.
                         Comparative recency ("more recent", "I want books from more recent times") -> REFINE, mustInclude.publicationYear="more recent"; Java compares displayed years, never MORE_RESULTS or a guessed calendar cutoff.
-                        "make them shorter" -> REFINE, shorter=true, explicitSearch=true; no invented genre or hour limit.
+                        "make them shorter" -> REFINE, shorter=true; "make them longer" -> REFINE, longer=true. No invented hour limits.
+                        "older ones" -> REFINE, mustInclude.publicationYear="older"; Java resolves comparison against the displayed page.
                         shorter=true only compares previous results' runtimes without an explicit numeric limit; Java uses their durations.
                         shorter refers to runtime, not response length. Never invent genres or numeric limits for an underspecified refinement.
                         RESET_PREFERENCES=reset all session preferences and recommendation count to defaults; clearing one field is UPDATE_PREFERENCES.
@@ -119,6 +120,14 @@ public class AiParser {
                         Preserve only explicitly stated rank (even invalid) or title in referenceRank/referenceTitle.
                         "Why did I get these recommendations?" and other whole-page explanations omit both references; never default to rank 1.
                         References are explanation-only; bare ordinals are not explanation requests.
+                        explanationSelection is EXPLAIN_RECOMMENDATION-only, never recommendation reference titles.
+                        "books similar to The Hunger Games and Divergent" -> RECOMMENDATION, similarToClarificationRequired=true, omit similarToTitle; ask for ONE book. A single title containing "and", e.g. War and Peace, stays one reference.
+                        Multiple/relative explanation targets use explanationSelection={include:["2","4","last","The Hobbit"],exclude:["first","Harry Potter"]}; include omitted/empty means all. Copy only stated selectors; never guess ranks for first/last/former/latter. Former=first, latter=last.
+                        "Explain all except The Hobbit and Dune" -> explanationSelection={exclude:["The Hobbit","Dune"]}; omit referenceRank/referenceTitle when using explanationSelection.
+                        "Remove X from my preferences" -> UPDATE_PREFERENCES, preferenceRemovalTerms=["X"]. "I no longer like X" also sets positivePreferenceRemovalOnly=true; never remove negative preferences for this phrase.
+                        "I dislike X" adds negative preferences; removing a like does not invent a dislike.
+                        "the same but less violent" -> REFINE, negativeSemanticQuery.keywords=["violent"]. "books without romance" -> RECOMMENDATION, negativeSemanticQuery.genres=["romance"], never positive keywords or exact genre filters.
+                        Invalid recommendation counts (zero, negative, fractional) set invalidBookCount=true; preserve the action and criteria, omit bookCount. Counts above five remain positive integers; never round fractional counts or interpret zero as REPEAT.
 
                         Filters:
                         Duration comparisons belong in mustInclude.duration (including "under"/"over", not just exact lengths); use digits plus hours/minutes; convert words/fractions ("under ten hours" -> "under 10 hours";

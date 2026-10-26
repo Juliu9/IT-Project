@@ -222,7 +222,7 @@ class RefinementFlowTest {
     assertThat(confirmed.getBookCount()).isEqualTo(2);
     assertThat(confirmed.getMustInclude().getPublicationYear()).isEqualTo("from 2010");
     assertThat(confirmed.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
-    assertThat(sessions.getSession("session", "user").getPendingRecencyRequest()).isNull();
+    assertThat(sessions.getSession("session", "user").getPendingRefinementRequest()).isNull();
     verify(workflow).recommend(any(), any());
   }
 
@@ -239,7 +239,7 @@ class RefinementFlowTest {
             Recommendation.bookIds(
                 sessions.getSession("session", "user").getPendingRecommendations()))
         .isEqualTo(pending);
-    assertThat(sessions.getSession("session", "user").getPendingRecencyRequest()).isNull();
+    assertThat(sessions.getSession("session", "user").getPendingRefinementRequest()).isNull();
     var repeated = process(request(Intent.REPEAT_RECOMMENDATIONS));
     assertThat(repeated.getRecommendations())
         .extracting(Recommendation::getBookId)
@@ -326,7 +326,7 @@ class RefinementFlowTest {
     assertThat(result.getIntent()).isEqualTo(Intent.RECOMMENDATION);
     assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("horror");
     assertThat(result.getMustInclude().getPublicationYear()).isEqualTo("between 2020 and 2025");
-    assertThat(sessions.getSession("session", "user").getPendingRecencyRequest()).isNull();
+    assertThat(sessions.getSession("session", "user").getPendingRefinementRequest()).isNull();
   }
 
   @Test

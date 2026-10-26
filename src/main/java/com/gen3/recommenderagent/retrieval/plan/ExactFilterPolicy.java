@@ -71,7 +71,7 @@ public class ExactFilterPolicy {
     }
     if (incoming != null
         && incoming.getMustInclude() != null
-        && ConversationText.isRecencyRefinement(incoming.getMustInclude().getPublicationYear())) {
+        && ConversationText.isYearRefinement(incoming.getMustInclude().getPublicationYear())) {
       incoming = SessionPreferences.fromRequest(incoming).asRequest();
       incoming.getMustInclude().setPublicationYear(resolved.getMustInclude().getPublicationYear());
     }
@@ -338,7 +338,8 @@ public class ExactFilterPolicy {
       return;
     }
     String expression = request.getMustInclude().getPublicationYear();
-    boolean relative = ConversationText.isRecencyRefinement(expression);
+    boolean older = ConversationText.isOlderRefinement(expression);
+    boolean relative = ConversationText.isYearRefinement(expression);
     boolean answeringYear =
         session != null
             && session.getPendingQuestion() == ConversationDecision.RECENCY_YEAR_CLARIFICATION;
@@ -354,6 +355,40 @@ public class ExactFilterPolicy {
                 .map(com.gen3.recommenderagent.domain.session.Recommendation::getPublicationYear)
                 .filter(year -> year != null && year > 0 && year <= 9999)
                 .toList();
+    if (older) {
+      if (years.isEmpty()) {
+        request.setDecision(ConversationDecision.RECENCY_YEAR_CLARIFICATION);
+        request.setSearchClarificationRequired(true);
+        session.setPendingRefinementRequest(
+            com.gen3.recommenderagent.domain.session.ConversationTurn.fromDraft(request));
+        return;
+      }
+      int upper = years.stream().mapToInt(Integer::intValue).sum() / years.size() - 1;
+      if (upper < 1) {
+        request.setDecision(ConversationDecision.RECENCY_EXHAUSTED);
+        request.setSearchClarificationRequired(true);
+        return;
+      }
+      var old =
+          yearBounds(
+              previous != null && previous.getMustInclude() != null
+                  ? previous.getMustInclude().getPublicationYear()
+                  : null);
+      Integer lower = old.minimum();
+      boolean conflict = lower != null && lower > upper;
+      String bounded =
+          conflict || lower == null
+              ? "before " + (upper + 1)
+              : "between " + lower + " and " + upper;
+      setYear(request, bounded);
+      if (conflict) {
+        request.setDecision(ConversationDecision.RECENCY_RANGE_CONFIRMATION);
+        request.setSearchClarificationRequired(true);
+        session.setPendingRefinementRequest(
+            com.gen3.recommenderagent.domain.session.ConversationTurn.fromDraft(request));
+      }
+      return;
+    }
     Integer lower =
         relative
             ? (years.isEmpty()
@@ -366,6 +401,8 @@ public class ExactFilterPolicy {
     if (lower == null) {
       request.setDecision(ConversationDecision.RECENCY_YEAR_CLARIFICATION);
       request.setSearchClarificationRequired(true);
+      session.setPendingRefinementRequest(
+          com.gen3.recommenderagent.domain.session.ConversationTurn.fromDraft(request));
       return;
     }
     var previousBounds =
@@ -382,7 +419,7 @@ public class ExactFilterPolicy {
         request.setDecision(ConversationDecision.RECENCY_EXHAUSTED);
       } else {
         request.setDecision(ConversationDecision.RECENCY_RANGE_CONFIRMATION);
-        session.setPendingRecencyRequest(
+        session.setPendingRefinementRequest(
             com.gen3.recommenderagent.domain.session.ConversationTurn.fromDraft(request));
       }
       request.setSearchClarificationRequired(true);
@@ -395,13 +432,73 @@ public class ExactFilterPolicy {
       }
     }
     String bounded = upper == null ? "from " + lower : "between " + lower + " and " + upper;
-    request.getMustInclude().setPublicationYear(bounded);
+    setYear(request, bounded);
+  }
+
+  private void setYear(ConversationDraft request, String value) {
+    request.getMustInclude().setPublicationYear(value);
     if (request.getSearchCriteria() != null) {
-      var criteria = request.getSearchCriteria();
-      if (criteria.getMustInclude() == null) {
-        criteria.setMustInclude(new ExactCriteria());
+      if (request.getSearchCriteria().getMustInclude() == null) {
+        request.getSearchCriteria().setMustInclude(new ExactCriteria());
       }
-      criteria.getMustInclude().setPublicationYear(bounded);
+      request.getSearchCriteria().getMustInclude().setPublicationYear(value);
+    }
+  }
+
+  private void resolveDurationRefinement(ConversationDraft request, Session session) {
+    if (request.getIntent() != Intent.REFINE || (!request.isShorter() && !request.isLonger())) {
+      return;
+    }
+    var previous = session == null ? null : ConversationHistory.latestSearch(session);
+    var page = previous == null ? null : previous.getRecommendations();
+    boolean longer = request.isLonger();
+    if (page == null
+        || page.isEmpty()
+        || page.stream()
+            .anyMatch(
+                book -> book.getDurationMinutes() == null || book.getDurationMinutes() <= 1)) {
+      request.setDecision(
+          longer
+              ? ConversationDecision.LONGER_DURATION_CLARIFICATION
+              : ConversationDecision.SHORTER_DURATION_CLARIFICATION);
+      request.setSearchClarificationRequired(true);
+      session.setPendingRefinementRequest(
+          com.gen3.recommenderagent.domain.session.ConversationTurn.fromDraft(request));
+      return;
+    }
+    int boundary =
+        longer
+            ? page.stream().mapToInt(book -> book.getDurationMinutes()).max().orElseThrow()
+            : page.stream().mapToInt(book -> book.getDurationMinutes()).min().orElseThrow();
+    var include = request.getMustInclude() == null ? new ExactCriteria() : request.getMustInclude();
+    var old = DurationRange.parse(include.getDuration());
+    if (longer && boundary == Integer.MAX_VALUE) {
+      throw new InvalidRequestException(
+          "Could you give me a smaller minimum duration in hours or minutes?");
+    }
+    int next = longer ? boundary + 1 : boundary - 1;
+    boolean conflict = longer && old.maximum() != null && next > old.maximum();
+    String bounded =
+        longer
+            ? old.maximum() == null || conflict
+                ? "at least " + next + " minutes"
+                : "between " + next + " and " + old.maximum() + " minutes"
+            : "under " + boundary + " minutes";
+    include.setDuration(bounded);
+    request.setMustInclude(include);
+    if (request.getSearchCriteria() != null) {
+      if (request.getSearchCriteria().getMustInclude() == null) {
+        request.getSearchCriteria().setMustInclude(new ExactCriteria());
+      }
+      request.getSearchCriteria().getMustInclude().setDuration(bounded);
+    }
+    request.setShorter(false);
+    request.setLonger(false);
+    if (conflict) {
+      request.setDecision(ConversationDecision.DURATION_RANGE_CONFIRMATION);
+      request.setSearchClarificationRequired(true);
+      session.setPendingRefinementRequest(
+          com.gen3.recommenderagent.domain.session.ConversationTurn.fromDraft(request));
     }
   }
 
@@ -425,6 +522,10 @@ public class ExactFilterPolicy {
       resolved.getPreferenceUpdates().setMustNotInclude(proposed.getMustNotInclude());
       return;
     }
+    if (resolved.isSearchClarificationRequired()) {
+      return;
+    }
+    resolveDurationRefinement(resolved, session);
     if (resolved.isSearchClarificationRequired()) {
       return;
     }

@@ -49,6 +49,11 @@ public final class ExplanationConversationHandler implements ConversationHandler
       target.setDecision(ConversationDecision.EMPTY_EXPLANATION_PAGE);
       return;
     }
+    if (target.getExplanationSelection() != null) {
+      resolveSubset(target, session, page);
+      return;
+    }
+    session.setPendingExplanation(null);
     Integer rank = target.getReferenceRank();
     String title = AudiobookTitle.normalize(target.getReferenceTitle());
     List<Recommendation> matches = page;
@@ -69,6 +74,76 @@ public final class ExplanationConversationHandler implements ConversationHandler
     }
     target.setRecommendations(matches);
     target.setDecision(ConversationDecision.EXPLANATION);
+  }
+
+  private void resolveSubset(ConversationDraft target, Session session, List<Recommendation> page) {
+    var selection = target.getExplanationSelection();
+    var include = resolveSelectors(selection.include(), page);
+    var exclude = resolveSelectors(selection.exclude(), page);
+    var normalized =
+        new com.gen3.recommenderagent.domain.session.ExplanationSelection(include, exclude);
+    target.setExplanationSelection(normalized);
+    if (firstUnresolved(normalized, page) != null) {
+      session.setPendingExplanation(normalized);
+      target.setDecision(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+      return;
+    }
+    var included = include.stream().map(Integer::valueOf).toList();
+    var excluded = exclude.stream().map(Integer::valueOf).toList();
+    var selected =
+        page.stream()
+            .filter(
+                book ->
+                    (include.isEmpty() || included.contains(book.getRank()))
+                        && !excluded.contains(book.getRank()))
+            .toList();
+    session.setPendingExplanation(null);
+    target.setRecommendations(selected);
+    target.setDecision(
+        selected.isEmpty()
+            ? ConversationDecision.EMPTY_EXPLANATION_SELECTION
+            : ConversationDecision.EXPLANATION);
+  }
+
+  private static List<String> resolveSelectors(List<String> selectors, List<Recommendation> page) {
+    return selectors.stream()
+        .flatMap(
+            value ->
+                value.equals("*")
+                    ? page.stream().map(book -> book.getRank().toString())
+                    : java.util.stream.Stream.of(value))
+        .map(
+            value -> {
+              var matches = select(page, value);
+              return matches.size() == 1 ? matches.getFirst().getRank().toString() : value;
+            })
+        .toList();
+  }
+
+  static String firstUnresolved(
+      com.gen3.recommenderagent.domain.session.ExplanationSelection selection,
+      List<Recommendation> page) {
+    return java.util.stream.Stream.concat(
+            selection.include().stream(), selection.exclude().stream())
+        .filter(value -> select(page, value).size() != 1)
+        .findFirst()
+        .orElse(null);
+  }
+
+  private static List<Recommendation> select(List<Recommendation> page, String value) {
+    Integer position = ConversationText.relativeSelectionReply(value, page.size());
+    if (position != null) {
+      return List.of(page.get(position - 1));
+    }
+    Integer rank = ConversationText.selectionReply(value);
+    if (rank != null) {
+      var ranked = page.stream().filter(book -> rank.equals(book.getRank())).toList();
+      if (!ranked.isEmpty()) {
+        return ranked;
+      }
+    }
+    String title = AudiobookTitle.normalize(value);
+    return title.isBlank() ? List.of() : matchingTitles(page, title);
   }
 
   static boolean matchesDisplayedTitle(Session session, String title) {

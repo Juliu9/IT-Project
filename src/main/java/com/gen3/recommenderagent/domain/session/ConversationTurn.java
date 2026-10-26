@@ -39,6 +39,16 @@ public class ConversationTurn {
     searchContext.setReplaceSearchFields(value);
   }
 
+  private ExplanationSelection explanationSelection;
+
+  public ExplanationSelection getExplanationSelection() {
+    return explanationSelection;
+  }
+
+  public void setExplanationSelection(ExplanationSelection value) {
+    explanationSelection = value;
+  }
+
   private String requestId;
   private String rawText;
   private Instant createdAt;
@@ -246,6 +256,7 @@ public class ConversationTurn {
     turn.setRawText(draft.getRawText());
     turn.setCreatedAt(draft.getCreatedAt());
     turn.setIntent(draft.getIntent());
+    turn.setExplanationSelection(draft.getExplanationSelection());
     turn.setReferenceRank(draft.getReferenceRank());
     turn.setReferenceTitle(draft.getReferenceTitle());
     turn.setBookCount(draft.getBookCount());
@@ -266,6 +277,7 @@ public class ConversationTurn {
     draft.setRawText(getRawText());
     draft.setCreatedAt(getCreatedAt());
     draft.setIntent(getIntent());
+    draft.setExplanationSelection(getExplanationSelection());
     draft.setReferenceRank(getReferenceRank());
     draft.setReferenceTitle(getReferenceTitle());
     draft.setBookCount(getBookCount());

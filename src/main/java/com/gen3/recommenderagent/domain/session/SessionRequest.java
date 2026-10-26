@@ -5,7 +5,54 @@ import java.time.Instant;
 import java.util.List;
 
 /** Incoming conversation instructions, independent of results and persisted search snapshots. */
+@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public class SessionRequest {
+  private boolean longer;
+  private boolean invalidBookCount;
+  private ExplanationSelection explanationSelection;
+  private List<String> preferenceRemovalTerms = List.of();
+  private boolean positivePreferenceRemovalOnly;
+
+  public boolean isLonger() {
+    return longer;
+  }
+
+  public void setLonger(boolean value) {
+    longer = value;
+  }
+
+  public boolean isInvalidBookCount() {
+    return invalidBookCount;
+  }
+
+  public void setInvalidBookCount(boolean value) {
+    invalidBookCount = value;
+  }
+
+  public ExplanationSelection getExplanationSelection() {
+    return explanationSelection;
+  }
+
+  public void setExplanationSelection(ExplanationSelection value) {
+    explanationSelection = value;
+  }
+
+  public List<String> getPreferenceRemovalTerms() {
+    return preferenceRemovalTerms;
+  }
+
+  public void setPreferenceRemovalTerms(List<String> value) {
+    preferenceRemovalTerms = value == null ? List.of() : value;
+  }
+
+  public boolean isPositivePreferenceRemovalOnly() {
+    return positivePreferenceRemovalOnly;
+  }
+
+  public void setPositivePreferenceRemovalOnly(boolean value) {
+    positivePreferenceRemovalOnly = value;
+  }
+
   private List<String> replaceSearchFields = List.of();
 
   public List<String> getReplaceSearchFields() {

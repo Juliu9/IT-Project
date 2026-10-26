@@ -138,6 +138,9 @@ public final class SearchCriteriaMerger {
             : new ArrayList<>(source.getReplacePreferenceFields()));
     copy.setReplaceSearchFields(source.getReplaceSearchFields());
     copy.setExplicitSearch(source.isExplicitSearch());
+    copy.setInvalidBookCount(source.isInvalidBookCount());
+    copy.setPreferenceRemovalTerms(source.getPreferenceRemovalTerms());
+    copy.setPositivePreferenceRemovalOnly(source.isPositivePreferenceRemovalOnly());
     copy.setAddAuthors(source.isAddAuthors());
     copy.setAddNarrators(source.isAddNarrators());
     copy.setRequestId(source.getRequestId());
@@ -146,6 +149,7 @@ public final class SearchCriteriaMerger {
     copy.setIntent(source.getIntent() == null ? Intent.UNKNOWN : source.getIntent());
     if (acceptsSemanticInformation(copy.getIntent())) {
       copy.setShorter(source.isShorter());
+      copy.setLonger(source.isLonger());
       copy.setPositiveSemanticQuery(copy(source.getPositiveSemanticQuery()));
       copy.setNegativeSemanticQuery(copy(source.getNegativeSemanticQuery()));
       copy.setPersonalised(source.isPersonalised());
@@ -153,6 +157,7 @@ public final class SearchCriteriaMerger {
     copy.setMustInclude(copy(source.getMustInclude()));
     copy.setMustNotInclude(copy(source.getMustNotInclude()));
     if (copy.getIntent() == Intent.EXPLAIN_RECOMMENDATION) {
+      copy.setExplanationSelection(source.getExplanationSelection());
       copy.setReferenceRank(source.getReferenceRank());
       copy.setReferenceTitle(source.getReferenceTitle());
     }

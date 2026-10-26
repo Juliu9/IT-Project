@@ -33,14 +33,15 @@ public class Session {
   }
 
   // The proposed refinement must survive HELP, count changes and cache reloads.
-  private ConversationTurn pendingRecencyRequest;
+  @com.fasterxml.jackson.annotation.JsonAlias("pendingRecencyRequest")
+  private ConversationTurn pendingRefinementRequest;
 
-  public ConversationTurn getPendingRecencyRequest() {
-    return pendingRecencyRequest;
+  public ConversationTurn getPendingRefinementRequest() {
+    return pendingRefinementRequest;
   }
 
-  public void setPendingRecencyRequest(ConversationTurn value) {
-    pendingRecencyRequest = value;
+  public void setPendingRefinementRequest(ConversationTurn value) {
+    pendingRefinementRequest = value;
   }
 
   private PendingSimilarBook pendingSimilarBook;
@@ -51,6 +52,27 @@ public class Session {
 
   public void setPendingSimilarBook(PendingSimilarBook value) {
     pendingSimilarBook = value;
+  }
+
+  // Count recovery retains incoming instructions; explanation recovery retains unresolved
+  // selectors.
+  private SessionRequest pendingCountRequest;
+  private ExplanationSelection pendingExplanation;
+
+  public SessionRequest getPendingCountRequest() {
+    return pendingCountRequest;
+  }
+
+  public void setPendingCountRequest(SessionRequest value) {
+    pendingCountRequest = value;
+  }
+
+  public ExplanationSelection getPendingExplanation() {
+    return pendingExplanation;
+  }
+
+  public void setPendingExplanation(ExplanationSelection value) {
+    pendingExplanation = value;
   }
 
   private String sessionId;
@@ -235,8 +257,10 @@ public class Session {
   }
 
   public void clearHistory() {
+    pendingCountRequest = null;
+    pendingExplanation = null;
     pendingSimilarBook = null;
-    pendingRecencyRequest = null;
+    pendingRefinementRequest = null;
     pendingQuestion = null;
     suspendedQuestion = null;
     this.awaitingPreferenceUpdate = false;

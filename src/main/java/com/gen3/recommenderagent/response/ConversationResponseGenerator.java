@@ -51,7 +51,8 @@ public class ConversationResponseGenerator implements ResponseGenerator {
         decision == ConversationDecision.EXPLANATION ? "" : limitNotice(currentRequest);
     String fixedResponse = generateOutcomeResponse(decision, currentRequest);
     if (fixedResponse != null) {
-      if (decision == ConversationDecision.HELP && currentRequest.getPendingQuestion() != null) {
+      if ((decision == ConversationDecision.HELP || decision == ConversationDecision.COUNT_CHANGED)
+          && currentRequest.getPendingQuestion() != null) {
         String question =
             generateOutcomeResponse(currentRequest.getPendingQuestion(), currentRequest);
         if (question != null) {
@@ -110,14 +111,26 @@ public class ConversationResponseGenerator implements ResponseGenerator {
           "Which book would you like similar recommendations for? Please give me one title.";
       case SIMILAR_BOOK_UNAVAILABLE ->
           "I can't use that book to find similar audiobooks right now. Please give me another title.";
+      case LONGER_DURATION_CLARIFICATION ->
+          "How long would you like the audiobooks to be? For example, at least 3 hours.";
+      case DURATION_RANGE_CONFIRMATION ->
+          "That duration goes beyond your previous range. Would you like to extend the range?";
+      case EMPTY_EXPLANATION_SELECTION ->
+          "There aren't any books left to explain. Which books would you like me to explain?";
       case SHORTER_DURATION_CLARIFICATION ->
           "How short would you like the audiobooks to be? For example, under 3 hours.";
       case RECENCY_RANGE_CONFIRMATION ->
           "Those years extend beyond your previous period. Would you like to use the new year range instead?";
-      case RECENCY_EXHAUSTED -> "There are no newer books within your selected period.";
+      case RECENCY_EXHAUSTED ->
+          olderRequest(currentRequest)
+              ? "There are no older books within the available publication years."
+              : "There are no newer books within your selected period.";
       case RECENCY_YEAR_CLARIFICATION ->
-          "I don't have publication years for those books. What year would you like me to start from? For example, from 2000.";
-      case COUNT_CLARIFICATION -> "How many recommendations would you like at a time?";
+          olderRequest(currentRequest)
+              ? "I don't have publication years for those books. What ending year would you like?"
+              : "I don't have publication years for those books. What year would you like me to start from? For example, from 2000.";
+      case COUNT_CLARIFICATION ->
+          "How many books would you like? Please choose a whole number from one to five.";
       case COUNT_CHANGED -> {
         int count = Math.clamp(currentRequest.getBookCount(), 1, MAX_BOOK_COUNT);
         yield "I'll show " + count + " recommendation" + (count == 1 ? "" : "s") + " at a time.";
@@ -157,13 +170,31 @@ public class ConversationResponseGenerator implements ResponseGenerator {
     };
   }
 
+  private boolean olderRequest(ConversationTurn request) {
+    return request.getMustInclude() != null
+        && com.gen3.recommenderagent.domain.conversation.ConversationText.isOlderRefinement(
+            request.getMustInclude().getPublicationYear());
+  }
+
   private String explanationClarification(ConversationTurn request) {
     List<Recommendation> page = request.getRecommendations();
     String titles =
         page.stream()
             .map(book -> book.getRank() + ". " + book.getTitle())
             .collect(Collectors.joining(". "));
-    return "I shared "
+    var selection = request.getExplanationSelection();
+    String unresolved =
+        selection == null
+            ? null
+            : java.util.stream.Stream.concat(
+                    selection.include().stream(), selection.exclude().stream())
+                .filter(
+                    value ->
+                        page.stream().noneMatch(book -> book.getRank().toString().equals(value)))
+                .findFirst()
+                .orElse(null);
+    return (unresolved == null ? "" : "I couldn't uniquely identify " + unresolved + ". ")
+        + "I shared "
         + page.size()
         + " book"
         + (page.size() == 1 ? "" : "s")

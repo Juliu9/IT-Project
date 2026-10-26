@@ -34,6 +34,68 @@ public class CommandParser {
 
   public ParsedRequest parse(String rawText) {
     String command = normalizeCommand(rawText);
+    var removal =
+        Pattern.compile(
+                "^(?:remove (.+) from (?:my |the )?(?:session )?preferences|i no longer like (.+))$")
+            .matcher(command);
+    if (removal.matches()) {
+      var parsed = new ParsedRequest();
+      parsed.setIntent(Intent.UPDATE_PREFERENCES);
+      String term =
+          (removal.group(1) == null ? removal.group(2) : removal.group(1))
+              .replaceFirst("^(?:the )?(?:author|narrator|genre|topic|keyword) ", "");
+      if (term.contains(" and ")) {
+        return null;
+      }
+      parsed.setPreferenceRemovalTerms(java.util.List.of(term));
+      parsed.setPositivePreferenceRemovalOnly(removal.group(2) != null);
+      return parsed;
+    }
+    var negative =
+        Pattern.compile("^(?:the same but )?less (violent|dark|scary|romantic)$").matcher(command);
+    var without =
+        Pattern.compile(
+                "^(?:only )?(?:books|audiobooks) without (romance|horror|fantasy|mystery|crime|comedy|science fiction|thrillers?)$")
+            .matcher(command);
+    if (negative.matches() || without.matches()) {
+      var parsed = new ParsedRequest();
+      parsed.setIntent(negative.matches() ? Intent.REFINE : Intent.RECOMMENDATION);
+      var query = new com.gen3.recommenderagent.domain.session.SemanticQuery();
+      if (negative.matches()) {
+        query.setKeywords(java.util.List.of(negative.group(1)));
+      } else {
+        query.setGenres(java.util.List.of(without.group(1)));
+      }
+      parsed.setNegativeSemanticQuery(query);
+      parsed.setExplicitSearch(true);
+      return parsed;
+    }
+    if (ConversationText.isOlderRefinement(command)) {
+      var parsed = new ParsedRequest();
+      parsed.setIntent(Intent.REFINE);
+      parsed.setExplicitSearch(true);
+      var criteria = new ExactCriteria();
+      criteria.setPublicationYear("older");
+      parsed.setMustInclude(criteria);
+      return parsed;
+    }
+    if (java.util.Set.of(
+            "make them longer",
+            "make it longer",
+            "longer ones",
+            "longer books",
+            "longer audiobooks")
+        .contains(command)) {
+      var parsed = new ParsedRequest();
+      parsed.setIntent(Intent.REFINE);
+      parsed.setLonger(true);
+      parsed.setExplicitSearch(true);
+      return parsed;
+    }
+    var explanation = explanation(command);
+    if (explanation != null) {
+      return explanation;
+    }
     if (java.util.Set.of(
             "give me some books",
             "give me some audiobooks",
@@ -225,6 +287,60 @@ public class CommandParser {
     var parsed = new ParsedRequest();
     parsed.setIntent(intent);
     return parsed;
+  }
+
+  private ParsedRequest explanation(String command) {
+    String target;
+    if (command.startsWith("explain ")) {
+      target = command.substring(8);
+    } else if (command.startsWith("why ")) {
+      target = command.substring(4);
+    } else {
+      return null;
+    }
+    String[] sides = target.split(" (?:except|except for|but|but not) ", 2);
+    var included = selectors(sides[0]);
+    var excluded =
+        sides.length == 2
+            ? ConversationText.isWholePageReply(sides[1])
+                ? java.util.List.of("*")
+                : selectors(sides[1])
+            : java.util.List.<String>of();
+    if (included == null || excluded == null) {
+      return null;
+    }
+    var parsed = new ParsedRequest();
+    parsed.setIntent(Intent.EXPLAIN_RECOMMENDATION);
+    if (sides.length == 1 && included.size() == 1) {
+      Integer rank = ConversationText.selectionReply(included.getFirst());
+      if (rank != null) {
+        parsed.setReferenceRank(BigInteger.valueOf(rank));
+      } else {
+        parsed.setExplanationSelection(
+            new com.gen3.recommenderagent.domain.session.ExplanationSelection(included, excluded));
+      }
+    } else {
+      parsed.setExplanationSelection(
+          new com.gen3.recommenderagent.domain.session.ExplanationSelection(included, excluded));
+    }
+    return parsed;
+  }
+
+  private java.util.List<String> selectors(String text) {
+    text = text.replaceFirst(" (?:more|in more detail)$", "");
+    if (ConversationText.isWholePageReply(text)
+        || java.util.Set.of("these", "these books", "these recommendations", "the recommendations")
+            .contains(text)) {
+      return java.util.List.of();
+    }
+    var values = text.replaceFirst("^books? ", "").split("\\s*(?:,| and )\\s*");
+    for (String value : values) {
+      if (ConversationText.selectionReply(value) == null
+          && ConversationText.relativeSelectionReply(value, 2) == null) {
+        return null;
+      }
+    }
+    return java.util.List.of(values);
   }
 
   private static BigInteger countValue(String count) {

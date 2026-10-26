@@ -42,10 +42,17 @@ public final class ConversationText {
           "the last one",
           "last book",
           "the last book",
-          "the final one" ->
+          "the final one",
+          "final",
+          "the final",
+          "final one",
+          "final book",
+          "the final book",
+          "last audiobook",
+          "the last audiobook" ->
           size;
-      case "latter", "the latter", "the latter one" -> size == 2 ? 2 : null;
-      case "former", "the former", "the former one" -> size == 2 ? 1 : null;
+      case "latter", "the latter", "the latter one", "latter book", "the latter book" -> size;
+      case "former", "the former", "the former one", "former book", "the former book" -> 1;
       default -> null;
     };
   }
@@ -72,6 +79,10 @@ public final class ConversationText {
                 "all the books",
                 "all the recommendations",
                 "every book",
+                "every displayed book",
+                "all displayed books",
+                "all the displayed books",
+                "every recommendation",
                 "each one")
             .contains(normalizeCommand(text));
   }
@@ -90,6 +101,16 @@ public final class ConversationText {
                 "more recent audiobooks",
                 "i want books from more recent times")
             .contains(normalizeCommand(text));
+  }
+
+  public static boolean isOlderRefinement(String text) {
+    return text != null
+        && java.util.Set.of("older", "older ones", "older books", "older audiobooks", "less recent")
+            .contains(normalizeCommand(text));
+  }
+
+  public static boolean isYearRefinement(String text) {
+    return isRecencyRefinement(text) || isOlderRefinement(text);
   }
 
   public static boolean isPreferenceDecline(String reply) {

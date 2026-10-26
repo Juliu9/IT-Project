@@ -83,15 +83,38 @@ public class InputParser {
                 + " characters or fewer.");
       }
 
+      var countInput = CountInput.check(rawText);
       ParsedRequest parsed = commandParser.parse(rawText);
+      if (parsed == null && countInput.invalid()) {
+        parsed = commandParser.parse(countInput.modelText());
+      }
       mode = parsed == null ? "AI" : "FAST_PATH";
       if (parsed == null) {
-        parsed = aiParser.parse(rawText);
+        parsed = aiParser.parse(countInput.modelText());
       }
 
+      boolean invalidCount =
+          parsed.getIntent() != com.gen3.recommenderagent.domain.Intent.EXPLAIN_RECOMMENDATION
+              && (countInput.invalid()
+                  || parsed.isInvalidBookCount()
+                  || (parsed.getBookCount() != null && parsed.getBookCount().signum() <= 0));
+      if (invalidCount && countInput.invalid()) {
+        parsed.setIntent(
+            CountInput.setting(rawText) || countInput.modelText().equals("1")
+                ? com.gen3.recommenderagent.domain.Intent.CHANGE_COUNT
+                : rawText
+                        .toLowerCase(java.util.Locale.ROOT)
+                        .matches("(?s).*\\b(?:more|another)\\b.*")
+                    ? com.gen3.recommenderagent.domain.Intent.MORE_RESULTS
+                    : com.gen3.recommenderagent.domain.Intent.RECOMMENDATION);
+      }
       SessionRequest request = new SessionRequest();
       request.setIntent(parsed.getIntent());
       request.setShorter(parsed.isShorter());
+      request.setLonger(parsed.isLonger());
+      request.setExplanationSelection(parsed.getExplanationSelection());
+      request.setPreferenceRemovalTerms(parsed.getPreferenceRemovalTerms());
+      request.setPositivePreferenceRemovalOnly(parsed.isPositivePreferenceRemovalOnly());
       request.setSimilarToTitle(parsed.getSimilarToTitle());
       request.setSimilarToAuthor(parsed.getSimilarToAuthor());
       request.setSimilarToClarificationRequired(parsed.isSimilarToClarificationRequired());
@@ -126,8 +149,22 @@ public class InputParser {
       request.setNegativeSemanticQuery(parsed.getNegativeSemanticQuery());
       request.setMustInclude(parsed.getMustInclude());
       request.setMustNotInclude(parsed.getMustNotInclude());
+      String command =
+          com.gen3.recommenderagent.domain.conversation.ConversationText.normalizeCommand(rawText);
+      if (command.matches(
+              "^(?:i want |give me |recommend |show me )?(?:a |an |some |[0-9]+ )?(?:books?|audiobooks?) (?:by|narrated by) .+")
+          && !command.matches(
+              ".*\\b(?:for me|personalised|personalized|my preferences|my reading|my favourites|my favorites|my history|i would like|i'd like)\\b.*")) {
+        request.setPersonalised(false);
+      }
       ConversationRules.normalizeInput(request);
-      request.setBookCount(boundedInteger(parsed.getBookCount()));
+      request.setInvalidBookCount(invalidCount);
+      request.setBookCount(
+          invalidCount
+                  || parsed.getIntent()
+                      == com.gen3.recommenderagent.domain.Intent.EXPLAIN_RECOMMENDATION
+              ? null
+              : boundedInteger(parsed.getBookCount()));
       request.setRequestId(createUuidV7().toString());
       request.setRawText(rawText);
 

@@ -25,20 +25,22 @@ public final class ConversationRules {
       request.setNegativeSemanticQuery(null);
       request.setPersonalised(false);
       request.setShorter(false);
+      request.setLonger(false);
       request.setSimilarToTitle(null);
       request.setSimilarToAuthor(null);
       request.setSimilarToClarificationRequired(false);
     } else if (!request.getReplaceSearchFields().isEmpty()
         || request.isShorter()
+        || request.isLonger()
         || (request.getMustInclude() != null
-            && ConversationText.isRecencyRefinement(
-                request.getMustInclude().getPublicationYear()))) {
+            && ConversationText.isYearRefinement(request.getMustInclude().getPublicationYear()))) {
       request.setIntent(Intent.REFINE);
       request.setExplicitSearch(true);
     } else if (hasText(request.getSimilarToTitle()) || request.isSimilarToClarificationRequired()) {
       request.setExplicitSearch(true);
     }
     if (request.getIntent() != Intent.EXPLAIN_RECOMMENDATION) {
+      request.setExplanationSelection(null);
       request.setReferenceRank(null);
       request.setReferenceTitle(null);
     }

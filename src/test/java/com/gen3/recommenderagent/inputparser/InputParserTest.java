@@ -74,6 +74,44 @@ class InputParserTest {
   }
 
   @Test
+  void invalidCountIntentCorrectionHappensBeforeSemanticFieldsCanBeCleared() {
+    var ai = mock(AiParser.class);
+    var parsed = new ParsedRequest();
+    parsed.setIntent(Intent.CHANGE_COUNT);
+    parsed.setBookCount(java.math.BigInteger.ONE);
+    var genre = new SemanticQuery();
+    genre.setGenres(List.of("mystery"));
+    parsed.setPositiveSemanticQuery(genre);
+    when(ai.parse(anyString())).thenReturn(parsed);
+    var result =
+        new InputParser(new CommandParser(), ai).parse("I want two and a half mystery books");
+    assertEquals(Intent.RECOMMENDATION, result.getIntent());
+    assertEquals(true, result.isInvalidBookCount());
+    assertEquals(List.of("mystery"), result.getPositiveSemanticQuery().getGenres());
+  }
+
+  @Test
+  void plainAuthorRequestsCannotAccidentallyRequirePersonalisationButKeepNameCasing() {
+    var ai = mock(AiParser.class);
+    var parsed = new ParsedRequest();
+    parsed.setIntent(Intent.RECOMMENDATION);
+    parsed.setPersonalised(true);
+    var exact = new com.gen3.recommenderagent.domain.session.ExactCriteria();
+    exact.setAuthors(List.of("Suzanne Collins"));
+    parsed.setMustInclude(exact);
+    when(ai.parse(anyString())).thenReturn(parsed);
+    var parser = new InputParser(new CommandParser(), ai);
+    var result = parser.parse("I want a book by Suzanne Collins");
+    assertEquals(false, result.isPersonalised());
+    assertEquals(List.of("Suzanne Collins"), result.getMustInclude().getAuthors());
+    assertEquals(
+        true,
+        parser
+            .parse("I want a book by Suzanne Collins for me based on my preferences")
+            .isPersonalised());
+  }
+
+  @Test
   void modelRecencyCriteriaNormalizeBeforeLeavingTheParser() {
     var ai = mock(AiParser.class);
     var parsed = new ParsedRequest();
@@ -242,7 +280,8 @@ class InputParserTest {
   void sparseExplanationOutputUsesExistingDefaultsWithoutInventingCountOrCriteria() {
     var request =
         parseModelJson(
-            "why the second book", "{\"intent\":\"EXPLAIN_RECOMMENDATION\",\"referenceRank\":2}");
+            "Tell me the reason for position two",
+            "{\"intent\":\"EXPLAIN_RECOMMENDATION\",\"referenceRank\":2}");
     assertEquals(Intent.EXPLAIN_RECOMMENDATION, request.getIntent());
     assertEquals(2, request.getReferenceRank());
     assertEquals(null, request.getBookCount());
@@ -276,7 +315,7 @@ class InputParserTest {
   void sparseRemovalAndClearingEditsDoNotNeedEmptyAdditionObjects() {
     var removal =
         parseModelJson(
-            "I no longer like romance",
+            "Amend my tastes to stop liking romance",
             """
         {"intent":"UPDATE_PREFERENCES",
          "preferenceRemovals":{"positiveSemanticQuery":{"genres":["romance"]}}}
@@ -634,7 +673,7 @@ class InputParserTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
-      strings = {"the second one’s reason", "the second one's reason", "why the second book"})
+      strings = {"the second one’s reason", "the second one's reason"})
   void ordinalExplanationGuidanceSeparatesRankFromCount(String text) {
     var parsed = new ParsedRequest();
     parsed.setIntent(Intent.EXPLAIN_RECOMMENDATION);
@@ -718,7 +757,7 @@ class InputParserTest {
             .parse(raw);
     assertEquals(
         number.startsWith("-") ? Integer.MIN_VALUE : Integer.MAX_VALUE, result.getReferenceRank());
-    assertEquals(result.getReferenceRank(), result.getBookCount());
+    assertEquals(null, result.getBookCount());
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -892,7 +931,6 @@ class InputParserTest {
     "I'd like another book,1",
     "I would like another five,5",
     "Recommend another one,1",
-    "another 0,0",
     "another 999999999999999999999999,2147483647"
   })
   void anotherCommandsPreserveCountWithoutAi(String text, int count) {

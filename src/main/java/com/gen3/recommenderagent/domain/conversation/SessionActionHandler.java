@@ -52,8 +52,8 @@ public final class SessionActionHandler implements ConversationHandler {
   }
 
   private void updatePendingCounts(Session session) {
-    if (session.getPendingRecencyRequest() != null) {
-      session.getPendingRecencyRequest().setBookCount(session.getBookCount());
+    if (session.getPendingRefinementRequest() != null) {
+      session.getPendingRefinementRequest().setBookCount(session.getBookCount());
     }
     if (session.getPendingSimilarBook() != null) {
       session.getPendingSimilarBook().request().setBookCount(session.getBookCount());
