@@ -55,7 +55,28 @@ public class CommandParser {
       parsed.setMustInclude(criteria);
       return parsed;
     }
-    if (ConversationText.isAffirmativeReply(rawText)
+    String cleared =
+        switch (command) {
+          case "any author",
+              "any author is fine",
+              "any author is fine now",
+              "remove the author filter" ->
+              "mustInclude.authors";
+          case "any narrator", "any narrator is fine", "remove the narrator filter" ->
+              "mustInclude.narrators";
+          case "remove the time limit", "remove the duration limit", "any duration" ->
+              "mustInclude.duration";
+          case "any publication year", "remove the year filter" -> "mustInclude.publicationYear";
+          default -> null;
+        };
+    if (cleared != null) {
+      var parsed = new ParsedRequest();
+      parsed.setIntent(Intent.REFINE);
+      parsed.setReplaceSearchFields(java.util.List.of(cleared));
+      return parsed;
+    }
+    if (ConversationText.isWholePageReply(rawText)
+        || ConversationText.isAffirmativeReply(rawText)
         || selectionReply(rawText.strip()) != null
         || com.gen3.recommenderagent.domain.conversation.ConversationText.isPreferenceDecline(
             rawText)) {

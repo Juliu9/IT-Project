@@ -99,6 +99,14 @@ public final class ClarificationResolver {
       }
     }
     // The parser has no session context; resolve short answers against the outstanding question.
+    if (session.getPendingQuestion() == ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
+        && ConversationText.isWholePageReply(reply)) {
+      effective.setIntent(Intent.EXPLAIN_RECOMMENDATION);
+      normalizeInput(effective);
+      effective.setReferenceRank(null);
+      effective.setReferenceTitle(null);
+      return effective;
+    }
     Integer selection = ConversationText.selectionReply(reply);
     String yearReply = ConversationText.normalizeCommand(reply);
     if ((session.getPendingQuestion() == ConversationDecision.RECENCY_YEAR_CLARIFICATION

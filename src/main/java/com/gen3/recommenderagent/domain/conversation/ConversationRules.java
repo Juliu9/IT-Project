@@ -28,7 +28,8 @@ public final class ConversationRules {
       request.setSimilarToTitle(null);
       request.setSimilarToAuthor(null);
       request.setSimilarToClarificationRequired(false);
-    } else if (request.isShorter()
+    } else if (!request.getReplaceSearchFields().isEmpty()
+        || request.isShorter()
         || (request.getMustInclude() != null
             && ConversationText.isRecencyRefinement(
                 request.getMustInclude().getPublicationYear()))) {

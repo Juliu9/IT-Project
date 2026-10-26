@@ -76,6 +76,30 @@ class LiveInputParserTest {
     assertThat(result.isPersonalised()).as(text).isFalse();
   }
 
+  @ParameterizedTest
+  @CsvSource({
+    "Make it horror instead,horror,true",
+    "Also include mystery in that search,mystery,false"
+  })
+  void distinguishesReplacingAndAddingSearchGenres(String text, String genre, boolean replace) {
+    var result = parser.parse(text);
+    assertThat(result.getIntent()).isEqualTo(Intent.REFINE);
+    assertThat(result.getPositiveSemanticQuery().getGenres()).contains(genre);
+    assertThat(result.getReplaceSearchFields().contains("positiveSemanticQuery.genres"))
+        .isEqualTo(replace);
+    assertThat(result.getPreferenceUpdates()).isNull();
+  }
+
+  @org.junit.jupiter.api.Test
+  void clearingASearchFilterIsNotAPreferenceEdit() {
+    var result = parser.parse("Please remove the author restriction from this search");
+    assertThat(result.getIntent()).isEqualTo(Intent.REFINE);
+    assertThat(result.getReplaceSearchFields()).containsExactly("mustInclude.authors");
+    assertThat(result.getMustInclude() == null ? null : result.getMustInclude().getAuthors())
+        .isNullOrEmpty();
+    assertThat(result.getPreferenceUpdates()).isNull();
+  }
+
   @org.junit.jupiter.api.Test
   void explicitPersonalisationCanAccompanyAuthorStyle() {
     var result =

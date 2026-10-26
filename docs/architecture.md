@@ -157,6 +157,9 @@ history, shown IDs and the pending queue untouched, while updating the latest re
 "repeat that" afterward repeats that page. No page yields a fixed message; an empty latest MORE
 repeats exhaustion rather than falling back to an older page. Clearing history removes the page.
 
+A pending explanation-target question accepts “all of them” as the whole displayed page, including
+after HELP or a cache reload. Outside that question, the reply remains context-dependent.
+
 The session stores one bounded `lastRequest` snapshot and its `lastDecision`, separately from
 search/preference history. Raw input and final response text are not stored. A repeated explanation
 uses the original selected books and criteria; AI wording may vary. Old sessions without these
@@ -225,6 +228,14 @@ Without an active search, a comparative refinement asks what kind of audiobook t
 A context-dependent `REFINE` without a previous search asks for criteria without embedding or
 retrieval; stored user preferences alone are not a previous search. A self-contained request can
 still answer a pending preference question and save that taste for the session.
+
+Search edits use `replaceSearchFields`, an allowlisted list of criteria paths, reusing the preference
+field validation. “Make it horror instead” replaces `positiveSemanticQuery.genres`; “also mystery”
+adds to the existing genres. A listed field with no value clears it: “any author is fine now” clears
+`mustInclude.authors`, while “remove the time limit” clears `mustInclude.duration`. Omitted fields
+still inherit previous values. These edits leave saved preferences unchanged. Override paths persist
+with the search through cache reloads, MORE and later refinements, preventing saved preferences from
+reintroducing a cleared filter or replaced genre. A new recommendation request starts fresh.
 
 New exact author/narrator lists replace the previous list by default. Explicit “also”/“add” wording
 sets the parser's `addAuthors`/`addNarrators` flags and extends that list instead. Unrelated filters

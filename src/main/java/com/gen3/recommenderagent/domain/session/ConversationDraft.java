@@ -36,6 +36,15 @@ public class ConversationDraft extends SessionRequest {
   }
 
   private SearchContext searchContext = new SearchContext();
+
+  public List<String> getReplaceSearchFields() {
+    return searchContext.getReplaceSearchFields();
+  }
+
+  public void setReplaceSearchFields(List<String> value) {
+    searchContext.setReplaceSearchFields(value);
+  }
+
   private ConversationDecision decision;
   private boolean preferenceClarificationRequired;
   private boolean searchClarificationRequired;

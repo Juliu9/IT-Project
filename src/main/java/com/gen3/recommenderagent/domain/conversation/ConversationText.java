@@ -31,6 +31,20 @@ public final class ConversationText {
         .stripTrailing();
   }
 
+  public static boolean isWholePageReply(String text) {
+    return text != null
+        && java.util.Set.of(
+                "all",
+                "all of them",
+                "all of these",
+                "all of those",
+                "all the books",
+                "all the recommendations",
+                "every book",
+                "each one")
+            .contains(normalizeCommand(text));
+  }
+
   public static boolean isAffirmativeReply(String text) {
     return text != null
         && java.util.Set.of("yes", "yeah", "yep", "sure", "go ahead", "ok", "okay")

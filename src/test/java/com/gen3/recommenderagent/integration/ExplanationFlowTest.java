@@ -2,6 +2,7 @@ package com.gen3.recommenderagent.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -17,6 +18,7 @@ import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.ConversationTurn;
 import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
+import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.inputparser.AiParser;
 import com.gen3.recommenderagent.inputparser.CommandParser;
 import com.gen3.recommenderagent.inputparser.InputParser;
@@ -37,6 +39,33 @@ class ExplanationFlowTest {
       ConversationTestSupport.transitions(sessions, workflow);
   private final ConversationResponseGenerator responses =
       new ConversationResponseGenerator(new AiResponseGenerator(null));
+
+  @ParameterizedTest
+  @ValueSource(strings = {"all", "all of them", "all of these please", "every book", "each one"})
+  void aWholePageReplyExplainsEveryDisplayedBookAfterHelpAndReload(String reply) {
+    search();
+    explain(6, null);
+    process(Intent.HELP);
+    var mapper = new ObjectMapper();
+    sessions.updateSession(
+        mapper.readValue(
+            mapper.writeValueAsString(sessions.getSession("session", "user")), Session.class));
+    clearInvocations(workflow);
+    var result =
+        service.process(
+            "session",
+            "user",
+            new com.gen3.recommenderagent.inputparser.InputParser(
+                    new com.gen3.recommenderagent.inputparser.CommandParser(),
+                    mock(com.gen3.recommenderagent.inputparser.AiParser.class))
+                .parse(reply));
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(result.getRecommendations()).hasSize(5);
+    assertThat(result.getReferenceRank()).isNull();
+    assertThat(result.getReferenceTitle()).isNull();
+    assertThat(sessions.getSession("session", "user").getPendingQuestion()).isNull();
+    verifyNoInteractions(workflow);
+  }
 
   @ParameterizedTest
   @ValueSource(

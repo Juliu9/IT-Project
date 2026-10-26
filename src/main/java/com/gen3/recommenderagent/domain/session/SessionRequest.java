@@ -6,6 +6,16 @@ import java.util.List;
 
 /** Incoming conversation instructions, independent of results and persisted search snapshots. */
 public class SessionRequest {
+  private List<String> replaceSearchFields = List.of();
+
+  public List<String> getReplaceSearchFields() {
+    return replaceSearchFields;
+  }
+
+  public void setReplaceSearchFields(List<String> value) {
+    replaceSearchFields = value == null ? List.of() : value;
+  }
+
   private boolean shorter;
 
   public boolean isShorter() {

@@ -4,6 +4,7 @@ import com.gen3.recommenderagent.domain.conversation.ConversationRules;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.math.BigInteger;
 import java.security.SecureRandom;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
@@ -56,6 +57,20 @@ public class InputParser {
       request.setPreferenceRemovals(parsed.getPreferenceRemovals());
       request.setReplacePreferenceFields(parsed.getReplacePreferenceFields());
       request.setExplicitSearch(parsed.isExplicitSearch());
+      if (parsed.getIntent() == com.gen3.recommenderagent.domain.Intent.RECOMMENDATION
+          || parsed.getIntent() == com.gen3.recommenderagent.domain.Intent.REFINE) {
+        new com.gen3.recommenderagent.domain.session.SessionPreferences()
+            .updated(null, null, parsed.getReplaceSearchFields());
+        request.setReplaceSearchFields(parsed.getReplaceSearchFields());
+        String command =
+            com.gen3.recommenderagent.domain.conversation.ConversationText.normalizeCommand(
+                rawText);
+        if (command.matches("^(?:also|add|additionally)\\b.*")
+            && !command.matches(".*\\b(?:instead|replace|rather than|switch|remove|clear)\\b.*")) {
+          // Explicit additions cannot erase criteria, even if the model supplies replacement paths.
+          request.setReplaceSearchFields(List.of());
+        }
+      }
       request.setAddAuthors(parsed.isAddAuthors());
       request.setAddNarrators(parsed.isAddNarrators());
       request.setReferenceRank(boundedInteger(parsed.getReferenceRank()));

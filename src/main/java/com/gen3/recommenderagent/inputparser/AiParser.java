@@ -104,6 +104,10 @@ public class AiParser {
                         Apply the same distinction to narrators: by/narrated-by requirements use mustInclude/mustNotInclude; liked/similar styles use positive/negativeSemanticQuery names, without invented themes.
                         Explicit language/duration/publication-year/source constraints also use mustInclude/mustNotInclude.
                         Extract every stated constraint alongside semantic criteria; compact output must not omit supplied values.
+                        Current-search edits: "Make it horror instead" -> intent=REFINE, positiveSemanticQuery.genres=["horror"], replaceSearchFields=["positiveSemanticQuery.genres"]. Replace only the named fields.
+                        "Also include mystery in that search" -> intent=REFINE, positiveSemanticQuery.genres=["mystery"], OMIT replaceSearchFields: also/add/too are additions, not replacements.
+                        "Any author is fine now" -> REFINE, replaceSearchFields=["mustInclude.authors"], no author value. Likewise remove a time/year/narrator filter using its field path. These change the current search, not saved preferences. Omitted fields keep prior criteria.
+                        replaceSearchFields allows only positiveSemanticQuery/negativeSemanticQuery.{genres,topics,keywords,authors,narrators} or mustInclude/mustNotInclude.{authors,narrators,language,source,duration,publicationYear}.
                         Preserve contradictions. Author/narrator lists replace by default; addAuthors/addNarrators=true only for explicit additions.
                         personalised=true only for explicit use of the user's preferences/favourites/history or generic requests without criteria. Author/narrator style similarity alone is personalised=false; "for me based on my preferences" can make it true. Never invent taste.
                         Personalisation never removes stated criteria: "books I would like by Suzanne Collins" -> personalised=true, mustInclude.authors=["Suzanne Collins"].

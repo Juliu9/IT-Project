@@ -4,6 +4,17 @@ import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 
 /** Explicit and effective search criteria together with the frozen reading-preference evidence. */
 public class SearchContext {
+  // An empty replacement suppresses that saved preference for this search and subsequent pages.
+  private java.util.List<String> replaceSearchFields = java.util.List.of();
+
+  public java.util.List<String> getReplaceSearchFields() {
+    return replaceSearchFields;
+  }
+
+  public void setReplaceSearchFields(java.util.List<String> value) {
+    replaceSearchFields = value == null ? java.util.List.of() : new java.util.ArrayList<>(value);
+  }
+
   private SimilarBookReference similarBook;
   private float[] similarityQueryVector;
 
@@ -98,6 +109,7 @@ public class SearchContext {
 
   public SearchContext copy() {
     var copy = new SearchContext();
+    copy.setReplaceSearchFields(replaceSearchFields);
     copy.similarBook = similarBook;
     copy.setSimilarityQueryVector(similarityQueryVector);
     var values = new SessionPreferences();

@@ -37,6 +37,77 @@ class InputParserTest {
     verifyNoInteractions(ai);
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "any author is fine now,mustInclude.authors",
+    "any narrator,mustInclude.narrators",
+    "remove the time limit,mustInclude.duration",
+    "any publication year,mustInclude.publicationYear"
+  })
+  void clearingOneSearchFilterUsesTheFastPath(String text, String field) {
+    var ai = mock(AiParser.class);
+    var result = new InputParser(new CommandParser(), ai).parse(text);
+    assertEquals(Intent.REFINE, result.getIntent());
+    assertEquals(List.of(field), result.getReplaceSearchFields());
+    verifyNoInteractions(ai);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "Also include mystery in that search",
+        "Please add mystery",
+        "Additionally include mystery"
+      })
+  void explicitAdditionsIgnoreErroneousModelReplacementFlags(String text) {
+    var ai = mock(AiParser.class);
+    var parsed = new ParsedRequest();
+    parsed.setIntent(Intent.REFINE);
+    parsed.setReplaceSearchFields(List.of("positiveSemanticQuery.genres"));
+    var query = new SemanticQuery();
+    query.setGenres(List.of("mystery"));
+    parsed.setPositiveSemanticQuery(query);
+    when(ai.parse(anyString())).thenReturn(parsed);
+    var result = new InputParser(new CommandParser(), ai).parse(text);
+    assertEquals(List.of(), result.getReplaceSearchFields());
+    assertEquals(List.of("mystery"), result.getPositiveSemanticQuery().getGenres());
+  }
+
+  @Test
+  void anAdditionCanAlsoExplicitlyReplaceAnotherField() {
+    var ai = mock(AiParser.class);
+    var parsed = new ParsedRequest();
+    parsed.setIntent(Intent.REFINE);
+    parsed.setReplaceSearchFields(List.of("mustInclude.duration"));
+    when(ai.parse(anyString())).thenReturn(parsed);
+    assertEquals(
+        List.of("mustInclude.duration"),
+        new InputParser(new CommandParser(), ai)
+            .parse("also remove the time limit")
+            .getReplaceSearchFields());
+  }
+
+  @Test
+  void modelSearchReplacementsAreCopiedAndInvalidPathsAreRejected() {
+    var ai = mock(AiParser.class);
+    var parsed = new ParsedRequest();
+    parsed.setIntent(Intent.REFINE);
+    parsed.setReplaceSearchFields(List.of("positiveSemanticQuery.genres"));
+    var query = new SemanticQuery();
+    query.setGenres(List.of("horror"));
+    parsed.setPositiveSemanticQuery(query);
+    when(ai.parse(anyString())).thenReturn(parsed);
+    assertEquals(
+        List.of("positiveSemanticQuery.genres"),
+        new InputParser(new CommandParser(), ai)
+            .parse("make it horror instead")
+            .getReplaceSearchFields());
+    parsed.setReplaceSearchFields(List.of("requestId"));
+    assertThrows(
+        InvalidRequestException.class,
+        () -> new InputParser(new CommandParser(), ai).parse("remove that filter"));
+  }
+
   @Test
   void moreRecentIsARefinementComparedWithTheDisplayedPageWithoutAi() {
     var ai = mock(AiParser.class);

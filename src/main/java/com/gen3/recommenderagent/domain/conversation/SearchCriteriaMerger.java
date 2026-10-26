@@ -7,6 +7,7 @@ import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
+import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import com.gen3.recommenderagent.domain.session.SessionRequest;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -25,7 +26,15 @@ public final class SearchCriteriaMerger {
         && target.getSearchContext().getSimilarBook() == null) {
       target.getSearchContext().setSimilarBook(previous.getSearchContext().getSimilarBook());
     }
-    target.setPersonalised(base.isPersonalised() || target.isPersonalised());
+    var inheritedReplacements = base.getReplaceSearchFields();
+    boolean personalised = base.isPersonalised();
+    if (!target.getReplaceSearchFields().isEmpty()) {
+      base =
+          SessionPreferences.fromRequest(base)
+              .updated(null, null, target.getReplaceSearchFields())
+              .asRequest();
+    }
+    target.setPersonalised(personalised || target.isPersonalised());
     target.setPositiveSemanticQuery(
         merge(base.getPositiveSemanticQuery(), target.getPositiveSemanticQuery()));
     target.setNegativeSemanticQuery(
@@ -52,6 +61,9 @@ public final class SearchCriteriaMerger {
     }
     target.setMustInclude(included);
     target.setMustNotInclude(excluded);
+    var replacements = new java.util.LinkedHashSet<>(inheritedReplacements);
+    replacements.addAll(target.getReplaceSearchFields());
+    target.setReplaceSearchFields(new ArrayList<>(replacements));
   }
 
   private static SemanticQuery merge(SemanticQuery base, SemanticQuery override) {
@@ -124,6 +136,7 @@ public final class SearchCriteriaMerger {
         source.getReplacePreferenceFields() == null
             ? null
             : new ArrayList<>(source.getReplacePreferenceFields()));
+    copy.setReplaceSearchFields(source.getReplaceSearchFields());
     copy.setExplicitSearch(source.isExplicitSearch());
     copy.setAddAuthors(source.isAddAuthors());
     copy.setAddNarrators(source.isAddNarrators());

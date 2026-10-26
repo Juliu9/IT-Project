@@ -415,6 +415,147 @@ class RefinementFlowTest {
     verify(workflow).recommend(any(), any());
   }
 
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+  void genreReplacementAndAdditionHaveDifferentSearchSemantics(boolean replace) {
+    search(null, null);
+    var refine = request(Intent.REFINE);
+    var query = new SemanticQuery();
+    query.setGenres(List.of("horror"));
+    refine.setPositiveSemanticQuery(query);
+    if (replace) {
+      refine.setReplaceSearchFields(List.of("positiveSemanticQuery.genres"));
+    }
+    var result = process(refine);
+    assertThat(result.getPositiveSemanticQuery().getGenres())
+        .containsExactlyElementsOf(replace ? List.of("horror") : List.of("fantasy", "horror"));
+    assertThat(result.getSearchCriteria().getPositiveSemanticQuery().getGenres())
+        .containsExactlyElementsOf(replace ? List.of("horror") : List.of("fantasy", "horror"));
+  }
+
+  @Test
+  void clearingAnAuthorPersistsAcrossReloadMoreAndRefineWithoutChangingPreferences() {
+    var include = new ExactCriteria();
+    include.setAuthors(List.of("Suzanne Collins"));
+    include.setDuration("under 5 hours");
+    search(include, null);
+    var preferences = new SessionPreferences();
+    var preferredAuthor = new ExactCriteria();
+    preferredAuthor.setAuthors(List.of("Saved Writer"));
+    preferences.setMustInclude(preferredAuthor);
+    var session = sessions.getSession("session", "user");
+    session.setPreferences(preferences);
+    sessions.updateSession(session);
+    var count = request(Intent.CHANGE_COUNT);
+    count.setBookCount(1);
+    process(count);
+    when(workflow.recommend(any(), any()))
+        .thenReturn(
+            List.of(
+                new Recommendation("three", 1, 1.0, "Three"),
+                new Recommendation("four", 2, .9, "Four")));
+    var cleared = service.process("session", "user", command("any author is fine now"));
+    assertThat(cleared.getMustInclude().getAuthors()).isNullOrEmpty();
+    assertThat(cleared.getMustInclude().getDuration()).isEqualTo("under 5 hours");
+    assertThat(cleared.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
+    assertThat(cleared.getSearchCriteria().getMustInclude().getAuthors()).isNullOrEmpty();
+    assertThat(
+            sessions.getSession("session", "user").getPreferences().getMustInclude().getAuthors())
+        .containsExactly("Saved Writer");
+    var mapper = new ObjectMapper();
+    sessions.updateSession(
+        mapper.readValue(
+            mapper.writeValueAsString(sessions.getSession("session", "user")), Session.class));
+    clearInvocations(workflow);
+    var more = process(request(Intent.MORE_RESULTS));
+    assertThat(more.getMustInclude().getAuthors()).isNullOrEmpty();
+    assertThat(more.getRecommendations())
+        .extracting(Recommendation::getBookId)
+        .containsExactly("four");
+    verifyNoInteractions(workflow);
+    var next = request(Intent.REFINE);
+    var shorter = new ExactCriteria();
+    shorter.setDuration("under 3 hours");
+    next.setMustInclude(shorter);
+    assertThat(process(next).getMustInclude().getAuthors()).isNullOrEmpty();
+    var newAuthor = request(Intent.REFINE);
+    var author = new ExactCriteria();
+    author.setAuthors(List.of("New Writer"));
+    newAuthor.setMustInclude(author);
+    assertThat(process(newAuthor).getMustInclude().getAuthors()).containsExactly("New Writer");
+    var fresh = request(Intent.RECOMMENDATION);
+    var genre = new SemanticQuery();
+    genre.setGenres(List.of("mystery"));
+    fresh.setPositiveSemanticQuery(genre);
+    fresh.setExplicitSearch(true);
+    assertThat(process(fresh).getMustInclude().getAuthors()).containsExactly("Saved Writer");
+  }
+
+  @Test
+  void replacingAGenreSuppressesSavedGenreButKeepsOtherSavedPreferences() {
+    search(null, null);
+    var prefs = new SessionPreferences();
+    var old = new SemanticQuery();
+    old.setGenres(List.of("romance"));
+    old.setNarrators(List.of("Stephen Fry"));
+    prefs.setPositiveSemanticQuery(old);
+    var session = sessions.getSession("session", "user");
+    session.setPreferences(prefs);
+    sessions.updateSession(session);
+    var change = request(Intent.REFINE);
+    var horror = new SemanticQuery();
+    horror.setGenres(List.of("horror"));
+    change.setPositiveSemanticQuery(horror);
+    change.setReplaceSearchFields(List.of("positiveSemanticQuery.genres"));
+    var replaced = process(change);
+    assertThat(replaced.getPositiveSemanticQuery().getGenres()).containsExactly("horror");
+    assertThat(replaced.getPositiveSemanticQuery().getNarrators()).containsExactly("Stephen Fry");
+    var also = request(Intent.REFINE);
+    var mystery = new SemanticQuery();
+    mystery.setGenres(List.of("mystery"));
+    also.setPositiveSemanticQuery(mystery);
+    assertThat(process(also).getPositiveSemanticQuery().getGenres())
+        .containsExactly("horror", "mystery");
+    assertThat(
+            sessions
+                .getSession("session", "user")
+                .getPreferences()
+                .getPositiveSemanticQuery()
+                .getGenres())
+        .containsExactly("romance");
+  }
+
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "any narrator,mustInclude.narrators",
+    "remove the time limit,mustInclude.duration",
+    "any publication year,mustInclude.publicationYear"
+  })
+  void clearingOneFilterPreservesAllUnrelatedCriteria(String text, String field) {
+    var include = new ExactCriteria();
+    include.setAuthors(List.of("Suzanne Collins"));
+    include.setNarrators(List.of("Stephen Fry"));
+    include.setDuration("under 5 hours");
+    include.setPublicationYear("from 2000");
+    search(include, null);
+    var result = service.process("session", "user", command(text));
+    var actual = result.getMustInclude();
+    assertThat(actual.getAuthors()).containsExactly("Suzanne Collins");
+    assertThat(actual.getNarrators())
+        .isEqualTo(field.endsWith("narrators") ? null : List.of("Stephen Fry"));
+    assertThat(actual.getDuration()).isEqualTo(field.endsWith("duration") ? null : "under 5 hours");
+    assertThat(actual.getPublicationYear())
+        .isEqualTo(field.endsWith("publicationYear") ? null : "from 2000");
+    assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
+  }
+
+  @Test
+  void clearingAFilterWithoutHistoryAsksForSearchContent() {
+    var result = service.process("session", "user", command("remove the time limit"));
+    assertThat(result.isSearchClarificationRequired()).isTrue();
+    verifyNoInteractions(workflow);
+  }
+
   @Test
   void unchangedAverageAdvancesOneYearAndExhaustionPreservesThePageAndQueue() {
     var include = new ExactCriteria();

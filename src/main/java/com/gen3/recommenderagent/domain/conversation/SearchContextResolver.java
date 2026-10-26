@@ -150,6 +150,9 @@ public final class SearchContextResolver implements ConversationHandler {
         } else {
           merge(previous, target);
         }
+        var replacements = new java.util.LinkedHashSet<>(previous.getReplaceSearchFields());
+        replacements.addAll(target.getReplaceSearchFields());
+        target.setReplaceSearchFields(new java.util.ArrayList<>(replacements));
         if (target.getSimilarToTitle() == null && !target.isSimilarToClarificationRequired()) {
           target.getSearchContext().setSimilarBook(previous.getSearchContext().getSimilarBook());
           if (target.getIntent() == Intent.MORE_RESULTS) {
