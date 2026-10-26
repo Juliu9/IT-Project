@@ -41,6 +41,96 @@ class ExplanationFlowTest {
       new ConversationResponseGenerator(new AiResponseGenerator(null));
 
   @ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "2,the last one,2",
+    "3,last book,3",
+    "2,the latter,2",
+    "2,the former,1",
+    "5,the final one please,5"
+  })
+  void relativeSelectionsUseTheDisplayedPageAfterHelpAndReload(
+      int count, String text, int expectedRank) {
+    var setting = new ConversationDraft();
+    setting.setIntent(Intent.CHANGE_COUNT);
+    setting.setBookCount(count);
+    service.process("session", "user", setting);
+    search();
+    explain(99, null);
+    process(Intent.HELP);
+    var mapper = new ObjectMapper();
+    sessions.updateSession(
+        mapper.readValue(
+            mapper.writeValueAsString(sessions.getSession("session", "user")), Session.class));
+    var ai = mock(AiParser.class);
+    var result =
+        service.process("session", "user", new InputParser(new CommandParser(), ai).parse(text));
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(result.getRecommendations())
+        .extracting(Recommendation::getRank)
+        .containsExactly(expectedRank);
+    verifyNoInteractions(ai);
+  }
+
+  @Test
+  void latterWithMoreThanTwoBooksAsksInsteadOfGuessing() {
+    search();
+    explain(99, null);
+    var result =
+        service.process(
+            "session",
+            "user",
+            new InputParser(new CommandParser(), mock(AiParser.class)).parse("the latter"));
+    assertThat(result.getDecision())
+        .isEqualTo(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+  }
+
+  @Test
+  void numericTitleIsUsedWhenTheNumberIsNotADisplayedRank() {
+    search();
+    var session = sessions.getSession("session", "user");
+    session.getRequests().getFirst().getRecommendations().get(1).setTitle("1984");
+    sessions.updateSession(session);
+    explain(99, null);
+    var ai = mock(AiParser.class);
+    var result =
+        service.process("session", "user", new InputParser(new CommandParser(), ai).parse("1984"));
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(result.getReferenceRank()).isNull();
+    assertThat(result.getRecommendations())
+        .extracting(Recommendation::getTitle)
+        .containsExactly("1984");
+    verifyNoInteractions(ai);
+  }
+
+  @Test
+  void validRanksKeepPriorityOverNumericTitlesAndDuplicateTitlesStayAmbiguous() {
+    search();
+    var session = sessions.getSession("session", "user");
+    session.getRequests().getFirst().getRecommendations().get(3).setTitle("2");
+    sessions.updateSession(session);
+    explain(99, null);
+    var chosen =
+        service.process(
+            "session",
+            "user",
+            new InputParser(new CommandParser(), mock(AiParser.class)).parse("2"));
+    assertThat(chosen.getRecommendations()).extracting(Recommendation::getRank).containsExactly(2);
+    session = sessions.getSession("session", "user");
+    session.getRequests().getFirst().getRecommendations().get(0).setTitle("1984");
+    session.getRequests().getFirst().getRecommendations().get(1).setTitle("1984");
+    sessions.updateSession(session);
+    explain(99, null);
+    assertThat(
+            service
+                .process(
+                    "session",
+                    "user",
+                    new InputParser(new CommandParser(), mock(AiParser.class)).parse("1984"))
+                .getDecision())
+        .isEqualTo(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+  }
+
+  @ParameterizedTest
   @ValueSource(strings = {"all", "all of them", "all of these please", "every book", "each one"})
   void aWholePageReplyExplainsEveryDisplayedBookAfterHelpAndReload(String reply) {
     search();

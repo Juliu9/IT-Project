@@ -32,14 +32,7 @@ public final class SessionActionHandler implements ConversationHandler {
       case CHANGE_COUNT -> {
         if (request.getBookCount() != null) {
           session.setBookCount(request.getBookCount());
-          if (session.getPendingRecencyRequest() != null) {
-            session.getPendingRecencyRequest().setBookCount(session.getBookCount());
-          }
-          session.getRequests().stream()
-              .filter(
-                  com.gen3.recommenderagent.domain.session.ConversationTurn
-                      ::isPreferenceClarificationRequired)
-              .forEach(pending -> pending.setBookCount(session.getBookCount()));
+          updatePendingCounts(session);
         }
       }
       case CANCEL -> {
@@ -49,14 +42,26 @@ public final class SessionActionHandler implements ConversationHandler {
       case RESET_PREFERENCES -> {
         session.setPreferences(null);
         session.setBookCount(null);
-        if (session.getPendingRecencyRequest() != null) {
-          session.getPendingRecencyRequest().setBookCount(session.getBookCount());
-        }
+        updatePendingCounts(session);
         request.setBookCount(session.getBookCount());
         session.clearPreferenceQuestions();
       }
       case CLEAR_HISTORY -> session.clearHistory();
       default -> {}
     }
+  }
+
+  private void updatePendingCounts(Session session) {
+    if (session.getPendingRecencyRequest() != null) {
+      session.getPendingRecencyRequest().setBookCount(session.getBookCount());
+    }
+    if (session.getPendingSimilarBook() != null) {
+      session.getPendingSimilarBook().request().setBookCount(session.getBookCount());
+    }
+    session.getRequests().stream()
+        .filter(
+            com.gen3.recommenderagent.domain.session.ConversationTurn
+                ::isPreferenceClarificationRequired)
+        .forEach(pending -> pending.setBookCount(session.getBookCount()));
   }
 }

@@ -218,7 +218,7 @@ class SolrAudiobookRepositoryTest {
     var document = new org.apache.solr.common.SolrInputDocument();
     document.setField("id", "title-lookup");
     document.setField("title", "The Hunger Games");
-    document.setField("authors", java.util.List.of("Suzanne Collins"));
+    document.setField("authors", java.util.List.of("Collins, Suzanne."));
     solrClient.add(SolrContainerTestSupport.COLLECTION, document);
     solrClient.commit(SolrContainerTestSupport.COLLECTION);
     var repository = new SolrAudiobookRepository(solrClient, SolrContainerTestSupport.COLLECTION);
@@ -233,7 +233,7 @@ class SolrAudiobookRepositoryTest {
             repository.findBooksByTitle("the hunger games", "other author", 6))
         .isEmpty();
     org.assertj.core.api.Assertions.assertThat(results.getFirst().authors())
-        .containsExactly("Suzanne Collins");
+        .containsExactly("Collins, Suzanne.");
     org.assertj.core.api.Assertions.assertThat(
             repository.findBooksByTitle("Suzanne Collins", null, 6))
         .isEmpty();

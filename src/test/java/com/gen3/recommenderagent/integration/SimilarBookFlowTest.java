@@ -68,6 +68,160 @@ class SimilarBookFlowTest {
     return request;
   }
 
+  private void ambiguousReference() throws Exception {
+    when(titles.findBooksByTitle(anyString(), any(), anyInt()))
+        .thenReturn(
+            List.of(
+                book, new AudiobookTitle("other", "The Hunger Games", List.of("Other Author"))));
+    service.process("session", "user", request(Intent.RECOMMENDATION, "hunger games"));
+  }
+
+  private com.gen3.recommenderagent.domain.session.SessionRequest parsedReply(String text) {
+    return new com.gen3.recommenderagent.inputparser.InputParser(
+            new com.gen3.recommenderagent.inputparser.CommandParser(),
+            mock(com.gen3.recommenderagent.inputparser.AiParser.class))
+        .parse(text);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = Intent.class,
+      names = {"CHANGE_COUNT", "RESET_PREFERENCES"})
+  void pendingReferenceUsesTheCurrentCountAfterHelpAndReload(Intent action) throws Exception {
+    ambiguousReference();
+    var change = request(Intent.CHANGE_COUNT, null);
+    change.setBookCount(2);
+    service.process("session", "user", change);
+    if (action == Intent.RESET_PREFERENCES) {
+      service.process("session", "user", request(action, null));
+    }
+    service.process("session", "user", request(Intent.HELP, null));
+    var mapper = new tools.jackson.databind.ObjectMapper();
+    sessions.updateSession(
+        mapper.readValue(
+            mapper.writeValueAsString(sessions.getSession("session", "user")),
+            com.gen3.recommenderagent.domain.session.Session.class));
+    var result = service.process("session", "user", parsedReply("1"));
+    assertThat(result.getBookCount()).isEqualTo(action == Intent.CHANGE_COUNT ? 2 : 5);
+    assertThat(result.getSimilarBook().bookId()).isEqualTo("hunger");
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "RESET_PREFERENCES,false",
+    "UPDATE_PREFERENCES,false",
+    "RESET_PREFERENCES,true",
+    "UPDATE_PREFERENCES,true"
+  })
+  void referenceSelectionReappliesCurrentPreferencesAndKeepsExplicitConstraints(
+      Intent action, boolean explicitAuthor) throws Exception {
+    service.process("session", "user", request(Intent.HELP, null));
+    var old = new com.gen3.recommenderagent.domain.session.SessionPreferences();
+    var oldFilter = new ExactCriteria();
+    oldFilter.setAuthors(List.of("Old Writer"));
+    oldFilter.setLanguage("English");
+    old.setMustInclude(oldFilter);
+    var oldTaste = new com.gen3.recommenderagent.domain.session.SemanticQuery();
+    oldTaste.setGenres(List.of("romance"));
+    old.setPositiveSemanticQuery(oldTaste);
+    var session = sessions.getSession("session", "user");
+    session.setPreferences(old);
+    sessions.updateSession(session);
+    when(titles.findBooksByTitle(anyString(), any(), anyInt()))
+        .thenReturn(
+            List.of(
+                book, new AudiobookTitle("other", "The Hunger Games", List.of("Other Author"))));
+    var search = request(Intent.RECOMMENDATION, "hunger games");
+    search.setPersonalised(true);
+    var criteria = new ExactCriteria();
+    criteria.setDuration("under 5 hours");
+    if (explicitAuthor) {
+      criteria.setAuthors(List.of("Explicit Writer"));
+    }
+    search.setMustInclude(criteria);
+    service.process("session", "user", search);
+    var edit = request(action, null);
+    if (action == Intent.UPDATE_PREFERENCES) {
+      var next = new com.gen3.recommenderagent.domain.session.SessionPreferences();
+      var filter = new ExactCriteria();
+      filter.setAuthors(List.of("New Writer"));
+      filter.setLanguage("French");
+      next.setMustInclude(filter);
+      var taste = new com.gen3.recommenderagent.domain.session.SemanticQuery();
+      taste.setGenres(List.of("horror"));
+      next.setPositiveSemanticQuery(taste);
+      edit.setPreferenceUpdates(next);
+      edit.setReplacePreferenceFields(
+          List.of("mustInclude.authors", "mustInclude.language", "positiveSemanticQuery.genres"));
+    }
+    service.process("session", "user", edit);
+    var mapper = new tools.jackson.databind.ObjectMapper();
+    sessions.updateSession(
+        mapper.readValue(
+            mapper.writeValueAsString(sessions.getSession("session", "user")),
+            com.gen3.recommenderagent.domain.session.Session.class));
+    var result = service.process("session", "user", parsedReply("1"));
+    assertThat(result.getMustInclude().getDuration()).isEqualTo("under 5 hours");
+    assertThat(result.getMustInclude().getAuthors())
+        .isEqualTo(
+            explicitAuthor
+                ? List.of("Explicit Writer")
+                : action == Intent.UPDATE_PREFERENCES ? List.of("New Writer") : null);
+    assertThat(result.getMustInclude().getLanguage())
+        .isEqualTo(action == Intent.UPDATE_PREFERENCES ? "French" : null);
+    assertThat(result.getSearchCriteria().getMustInclude().getAuthors())
+        .isEqualTo(explicitAuthor ? List.of("Explicit Writer") : null);
+    if (action == Intent.RESET_PREFERENCES) {
+      assertThat(result.getPositiveSemanticQuery()).isNull();
+    } else {
+      assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("horror");
+    }
+  }
+
+  @Test
+  void referenceAuthorVerificationAndAuthorRepliesUseNameEquivalence() throws Exception {
+    when(titles.findBooksByTitle(anyString(), any(), anyInt()))
+        .thenReturn(
+            List.of(
+                new AudiobookTitle("hunger", "The Hunger Games", List.of("Collins, Suzanne."))));
+    var search = request(Intent.RECOMMENDATION, "The Hunger Games");
+    search.setSimilarToAuthor("Suzanne Collins");
+    assertThat(service.process("session", "user", search).getSimilarBook().bookId())
+        .isEqualTo("hunger");
+    when(titles.findBooksByTitle(anyString(), any(), anyInt()))
+        .thenReturn(
+            List.of(
+                new AudiobookTitle("hunger", "The Hunger Games", List.of("Collins, Suzanne.")),
+                new AudiobookTitle("other", "The Hunger Games", List.of("Other Author"))));
+    service.process("session", "user", request(Intent.RECOMMENDATION, "hunger games"));
+    var reply = request(Intent.UNKNOWN, null);
+    reply.setRawText("Suzanne Collins");
+    reply.setExplicitSearch(false);
+    assertThat(service.process("session", "user", reply).getSimilarBook().bookId())
+        .isEqualTo("hunger");
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"none of these", "none of them", "neither", "None of those, please!"})
+  void rejectingAllReferenceChoicesAsksForAnotherTitleAndCanResume(String text) throws Exception {
+    ambiguousReference();
+    org.mockito.Mockito.clearInvocations(workflow, vectors, titles);
+    var result = service.process("session", "user", parsedReply(text));
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.SIMILAR_BOOK_REQUIRED);
+    assertThat(result.getSimilarBookChoices()).isEmpty();
+    verifyNoInteractions(workflow, vectors, titles);
+    when(titles.findBooksByTitle(anyString(), any(), anyInt()))
+        .thenReturn(
+            List.of(new AudiobookTitle("hunger", "Another Book", List.of("Another Author"))));
+    var named = request(Intent.UNKNOWN, null);
+    named.setRawText("Another Book");
+    named.setExplicitSearch(false);
+    var resumed = service.process("session", "user", named);
+    assertThat(resumed.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
+    assertThat(resumed.getSimilarBook().title()).isEqualTo("Another Book");
+  }
+
   @Test
   void exactReferenceSurvivesMoreRefineExplainAndSessionSerialization() throws Exception {
     var first =

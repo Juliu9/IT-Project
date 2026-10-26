@@ -75,7 +75,9 @@ public class CommandParser {
       parsed.setReplaceSearchFields(java.util.List.of(cleared));
       return parsed;
     }
-    if (ConversationText.isWholePageReply(rawText)
+    if (ConversationText.relativeSelectionReply(rawText, 2) != null
+        || ConversationText.isChoiceRejection(rawText)
+        || ConversationText.isWholePageReply(rawText)
         || ConversationText.isAffirmativeReply(rawText)
         || selectionReply(rawText.strip()) != null
         || com.gen3.recommenderagent.domain.conversation.ConversationText.isPreferenceDecline(

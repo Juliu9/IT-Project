@@ -1,5 +1,6 @@
 package com.gen3.recommenderagent.domain.session;
 
+import com.gen3.catalogue.model.PersonNameNormalizer;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -108,13 +109,13 @@ public class SessionPreferences {
     var mustIncludeRemoves = get(removals, SessionPreferences::getMustInclude);
     result.mustInclude = new ExactCriteria();
     result.mustInclude.setAuthors(
-        terms(
+        personTerms(
             get(mustInclude, ExactCriteria::getAuthors),
             get(mustIncludeAdds, ExactCriteria::getAuthors),
             get(mustIncludeRemoves, ExactCriteria::getAuthors),
             replace.contains("mustInclude.authors")));
     result.mustInclude.setNarrators(
-        terms(
+        personTerms(
             get(mustInclude, ExactCriteria::getNarrators),
             get(mustIncludeAdds, ExactCriteria::getNarrators),
             get(mustIncludeRemoves, ExactCriteria::getNarrators),
@@ -147,13 +148,13 @@ public class SessionPreferences {
     var mustNotIncludeRemoves = get(removals, SessionPreferences::getMustNotInclude);
     result.mustNotInclude = new ExactCriteria();
     result.mustNotInclude.setAuthors(
-        terms(
+        personTerms(
             get(mustNotInclude, ExactCriteria::getAuthors),
             get(mustNotIncludeAdds, ExactCriteria::getAuthors),
             get(mustNotIncludeRemoves, ExactCriteria::getAuthors),
             replace.contains("mustNotInclude.authors")));
     result.mustNotInclude.setNarrators(
-        terms(
+        personTerms(
             get(mustNotInclude, ExactCriteria::getNarrators),
             get(mustNotIncludeAdds, ExactCriteria::getNarrators),
             get(mustNotIncludeRemoves, ExactCriteria::getNarrators),
@@ -245,18 +246,36 @@ public class SessionPreferences {
             get(removals, SemanticQuery::getKeywords),
             replace.contains(prefix + ".keywords")));
     result.setAuthors(
-        terms(
+        personTerms(
             get(base, SemanticQuery::getAuthors),
             get(additions, SemanticQuery::getAuthors),
             get(removals, SemanticQuery::getAuthors),
             replace.contains(prefix + ".authors")));
     result.setNarrators(
-        terms(
+        personTerms(
             get(base, SemanticQuery::getNarrators),
             get(additions, SemanticQuery::getNarrators),
             get(removals, SemanticQuery::getNarrators),
             replace.contains(prefix + ".narrators")));
     return result;
+  }
+
+  private static List<String> personTerms(
+      List<String> base, List<String> additions, List<String> removals, boolean replace) {
+    var result = terms(base, additions, null, replace);
+    if (result == null || removals == null) {
+      return result;
+    }
+    var removed =
+        removals.stream()
+            .filter(java.util.Objects::nonNull)
+            .map(PersonNameNormalizer::comparisonKey)
+            .collect(java.util.stream.Collectors.toSet());
+    var remaining =
+        result.stream()
+            .filter(value -> !removed.contains(PersonNameNormalizer.comparisonKey(value)))
+            .toList();
+    return remaining.isEmpty() ? null : remaining;
   }
 
   private static List<String> terms(

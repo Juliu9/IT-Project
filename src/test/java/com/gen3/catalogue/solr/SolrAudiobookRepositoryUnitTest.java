@@ -22,6 +22,30 @@ import org.mockito.ArgumentCaptor;
 class SolrAudiobookRepositoryUnitTest {
 
   @Test
+  void referenceLookupUsesTheSharedAuthorVariants() throws Exception {
+    var client = mock(SolrClient.class);
+    var response = mock(QueryResponse.class);
+    when(response.getResults()).thenReturn(new SolrDocumentList());
+    when(client.query(
+            org.mockito.ArgumentMatchers.eq("books"),
+            org.mockito.ArgumentMatchers.any(SolrQuery.class),
+            org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST)))
+        .thenReturn(response);
+    new SolrAudiobookRepository(client, "books")
+        .findBooksByTitle("The Hunger Games", "Suzanne Collins", 6);
+    var captured = ArgumentCaptor.forClass(SolrQuery.class);
+    verify(client)
+        .query(
+            org.mockito.ArgumentMatchers.eq("books"),
+            captured.capture(),
+            org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST));
+    org.assertj.core.api.Assertions.assertThat(captured.getValue().getFilterQueries()).hasSize(1);
+    org.assertj.core.api.Assertions.assertThat(captured.getValue().getFilterQueries()[0])
+        .contains("Suzanne\\ Collins", "Collins,\\ Suzanne", "Collins,\\ Suzanne.");
+    assertEquals(Integer.valueOf(6), captured.getValue().getRows());
+  }
+
+  @Test
   void personFiltersIncludeAndExcludeBothNameOrders() throws Exception {
     var client = mock(SolrClient.class);
     var response = mock(QueryResponse.class);

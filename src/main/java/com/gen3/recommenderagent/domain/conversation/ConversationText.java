@@ -27,8 +27,39 @@ public final class ConversationText {
         .replaceFirst(
             "(?:[\\s,!.?…–—:;]+(?:cheers|ta|many thanks|thanks|thank you(?: very much)?))+[\\s,!.?…–—:;]*$",
             "")
-        .replaceFirst("[.!?,…]+$", "")
+        .replaceFirst("[\\s.!?,…]+$", "")
         .stripTrailing();
+  }
+
+  public static Integer relativeSelectionReply(String text, int size) {
+    if (text == null || size < 1) {
+      return null;
+    }
+    return switch (normalizeCommand(text)) {
+      case "last",
+          "the last",
+          "last one",
+          "the last one",
+          "last book",
+          "the last book",
+          "the final one" ->
+          size;
+      case "latter", "the latter", "the latter one" -> size == 2 ? 2 : null;
+      case "former", "the former", "the former one" -> size == 2 ? 1 : null;
+      default -> null;
+    };
+  }
+
+  public static boolean isChoiceRejection(String text) {
+    return text != null
+        && java.util.Set.of(
+                "none",
+                "none of them",
+                "none of these",
+                "none of those",
+                "neither",
+                "neither of them")
+            .contains(normalizeCommand(text));
   }
 
   public static boolean isWholePageReply(String text) {

@@ -89,9 +89,12 @@ public class QdrantAudiobookRepository
                 io.qdrant.client.ConditionFactory.matchText(
                     QdrantAudiobookSchema.TITLE, title.strip()));
     if (author != null && !author.isBlank()) {
-      filter.addMust(
-          io.qdrant.client.ConditionFactory.matchText(
-              QdrantAudiobookSchema.AUTHORS, author.strip()));
+      var names = Filter.newBuilder();
+      for (String name : com.gen3.catalogue.model.PersonNameNormalizer.variants(List.of(author))) {
+        names.addShould(
+            io.qdrant.client.ConditionFactory.matchText(QdrantAudiobookSchema.AUTHORS, name));
+      }
+      filter.addMust(io.qdrant.client.grpc.Common.Condition.newBuilder().setFilter(names));
     }
     var request =
         io.qdrant.client.grpc.Points.ScrollPoints.newBuilder()

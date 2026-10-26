@@ -94,6 +94,11 @@ Pending title clarification is separate from the displayed page; Cancel/Clear hi
 `ClarificationResolver` routes replies to the current question before catalogue access, so a later
 explanation or count question takes priority over older title choices. Title matching shares one
 normaliser for case, punctuation and catalogue `$b` markers across reference and explanation flows.
+Resuming a reference selection restores explicit search criteria and reapplies current preferences;
+preference resets cannot revive inherited filters. Count changes and resets also update pending searches.
+“None of these” asks for another reference title while retaining the search constraints. Reference author
+lookup and author replies use the same conservative person-name equivalence as exact filters.
+
 Pending choices are stored once in their request snapshot; older snapshots with a duplicate choices
 field remain readable.
 
@@ -255,6 +260,7 @@ an explicit `García Márquez, Gabriel` also tries `Gabriel García Márquez`. T
 (e.g. `J. K. Rowling` → `Rowling, J. K.`) are reversed; other longer forward names, suffix-bearing
 names, and uncertain comma formats are not guessed. Include/exclude conflict checks use the same name-order comparison. Original request
 and preference values remain unchanged, so MORE/REFINE reuse those names and regenerate variants.
+Removing saved author/narrator preferences uses this same equivalence, including semantic preferences.
 This uses no dictionary, catalogue scan, AI call, new index, or migration. Generated alternatives
 also tolerate a terminal catalogue period and compact/spaced dotted initials (`J.K.` / `J. K.`).
 Separated single-letter initials (`J K`) match those dotted forms in both name orders; compact
@@ -466,7 +472,9 @@ ignores case/punctuation and uses exact matches before unique partial matches. M
 out-of-range or conflicting references produce a ranked-title clarification. A bare ordinal is not
 an explanation request on its own. While a book-selection clarification is pending, a numeric
 reply such as “1”, “1.”, “first”, or “the first one” selects that rank from the retained page;
-invalid numbers ask again. An otherwise unrecognized reply can also identify a displayed title. HELP preserves this context; a new search replaces it. “Why the fourth book?” also resolves independently.
+a numeric title such as “1984” matches its displayed book when it is not a valid rank.
+“The last one” selects the final displayed book; “the former” and “the latter” select from exactly two
+books. Other invalid numbers ask again. An otherwise unrecognized reply can also identify a displayed title. HELP preserves this context; a new search replaces it. “Why the fourth book?” also resolves independently.
 “Explain two more” and “explain book two more” both select book 2 for more detail, never two additional
 books. Single-book explanations retain the original displayed rank.
 Model-provided ranks and counts accept large integers before conversion to bounded internal values:

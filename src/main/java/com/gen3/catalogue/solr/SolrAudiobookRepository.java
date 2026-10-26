@@ -189,7 +189,7 @@ public class SolrAudiobookRepository
     }
     var query = new SolrQuery("title:\"" + ClientUtils.escapeQueryChars(title.strip()) + "\"");
     if (author != null && !author.isBlank()) {
-      query.addFilterQuery("authors:\"" + ClientUtils.escapeQueryChars(author.strip()) + "\"");
+      addAnyValueFilter(query, "authors", PersonNameNormalizer.variants(List.of(author)), false);
     }
     query.setRows(limit);
     query.setFields("id", "title", "authors");

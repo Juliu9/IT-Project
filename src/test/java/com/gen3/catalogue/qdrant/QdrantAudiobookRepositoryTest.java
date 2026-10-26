@@ -48,6 +48,28 @@ import org.mockito.ArgumentCaptor;
 class QdrantAudiobookRepositoryTest {
 
   @Test
+  void referenceLookupTriesAuthorFormattingVariantsWithoutRequestingVectors() throws Exception {
+    var client = mock(QdrantClient.class);
+    var encoder = new Bm25SparseTextEncoder();
+    when(client.collectionExistsAsync("books")).thenReturn(Futures.immediateFuture(true));
+    when(client.scrollAsync(any(ScrollPoints.class)))
+        .thenReturn(Futures.immediateFuture(ScrollResponse.newBuilder().build()));
+    new QdrantAudiobookRepository(client, new QdrantPointMapper(encoder), encoder, "books", 2)
+        .findBooksByTitle("The Hunger Games", "Suzanne Collins", 6);
+    var captured = ArgumentCaptor.forClass(ScrollPoints.class);
+    verify(client).scrollAsync(captured.capture());
+    var author = captured.getValue().getFilter().getMust(1).getFilter();
+    assertThat(author.getShouldList())
+        .containsExactly(
+            io.qdrant.client.ConditionFactory.matchText("authors", "Suzanne Collins"),
+            io.qdrant.client.ConditionFactory.matchText("authors", "Collins, Suzanne"),
+            io.qdrant.client.ConditionFactory.matchText("authors", "Suzanne Collins."),
+            io.qdrant.client.ConditionFactory.matchText("authors", "Collins, Suzanne."));
+    assertThat(captured.getValue().getLimit()).isEqualTo(6);
+    assertThat(captured.getValue().getWithVectors().getEnable()).isFalse();
+  }
+
+  @Test
   void dottedInitialsMatchBothAuthorAndNarratorOrders() {
     var names =
         new AudiobookFilterConditions(

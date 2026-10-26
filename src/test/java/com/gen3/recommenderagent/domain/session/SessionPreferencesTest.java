@@ -40,6 +40,71 @@ class SessionPreferencesTest {
     assertThat(json.has("values")).isFalse();
   }
 
+  private SessionPreferences people(String path, List<String> names) {
+    var p = new SessionPreferences();
+    if (path.startsWith("must")) {
+      var c = new ExactCriteria();
+      if (path.endsWith("authors")) {
+        c.setAuthors(names);
+      } else {
+        c.setNarrators(names);
+      }
+      if (path.startsWith("mustInclude")) {
+        p.setMustInclude(c);
+      } else {
+        p.setMustNotInclude(c);
+      }
+    } else {
+      var q = new SemanticQuery();
+      if (path.endsWith("authors")) {
+        q.setAuthors(names);
+      } else {
+        q.setNarrators(names);
+      }
+      if (path.startsWith("positive")) {
+        p.setPositiveSemanticQuery(q);
+      } else {
+        p.setNegativeSemanticQuery(q);
+      }
+    }
+    return p;
+  }
+
+  private List<String> peopleAt(SessionPreferences p, String path) {
+    if (path.startsWith("must")) {
+      var c = path.startsWith("mustInclude") ? p.getMustInclude() : p.getMustNotInclude();
+      return path.endsWith("authors") ? c.getAuthors() : c.getNarrators();
+    }
+    var q =
+        path.startsWith("positive") ? p.getPositiveSemanticQuery() : p.getNegativeSemanticQuery();
+    return path.endsWith("authors") ? q.getAuthors() : q.getNarrators();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "mustInclude.authors",
+        "mustInclude.narrators",
+        "mustNotInclude.authors",
+        "mustNotInclude.narrators",
+        "positiveSemanticQuery.authors",
+        "positiveSemanticQuery.narrators",
+        "negativeSemanticQuery.authors",
+        "negativeSemanticQuery.narrators"
+      })
+  void removingPeopleUsesTheSameFormattingEquivalenceAsSearch(String path) {
+    var p = people(path, List.of("Collins, Suzanne.", "Other Writer"));
+    var updated = p.updated(null, people(path, List.of("Suzanne Collins")), List.of());
+    assertThat(peopleAt(updated, path)).containsExactly("Other Writer");
+    assertThat(peopleAt(p, path)).containsExactly("Collins, Suzanne.", "Other Writer");
+    var initials = people(path, List.of("Rowling, J. K."));
+    assertThat(
+            peopleAt(initials.updated(null, people(path, List.of("J K Rowling")), List.of()), path))
+        .isNullOrEmpty();
+    assertThat(peopleAt(p.updated(null, people(path, List.of("S. Collins")), List.of()), path))
+        .containsExactly("Collins, Suzanne.", "Other Writer");
+  }
+
   @Test
   void changesAreCopiedDeduplicatedAndLimitedToTheNamedFields() {
     var original = new SessionPreferences();

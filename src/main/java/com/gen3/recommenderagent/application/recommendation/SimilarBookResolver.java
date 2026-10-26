@@ -1,6 +1,7 @@
 package com.gen3.recommenderagent.application.recommendation;
 
 import com.gen3.catalogue.model.AudiobookTitle;
+import com.gen3.catalogue.model.PersonNameNormalizer;
 import com.gen3.catalogue.port.AudiobookTitleLookup;
 import com.gen3.catalogue.port.AudiobookVectorRepository;
 import com.gen3.catalogue.vector.VectorMath;
@@ -71,14 +72,15 @@ public class SimilarBookResolver {
     try {
       var matches = titles.findBooksByTitle(title, request.getSimilarToAuthor(), MAX_CHOICES + 1);
       boolean truncated = matches.size() > MAX_CHOICES;
-      String author = AudiobookTitle.normalize(request.getSimilarToAuthor());
+      String author = PersonNameNormalizer.comparisonKey(request.getSimilarToAuthor());
       if (!author.isBlank()) {
         matches =
             matches.stream()
                 .filter(
                     book ->
                         book.authors().stream()
-                            .anyMatch(value -> AudiobookTitle.normalize(value).equals(author)))
+                            .anyMatch(
+                                value -> PersonNameNormalizer.comparisonKey(value).equals(author)))
                 .toList();
       }
       var exact =
