@@ -2,6 +2,7 @@ package com.gen3.recommenderagent.retrieval.plan;
 
 import com.gen3.catalogue.model.AudiobookFilterConditions;
 import com.gen3.catalogue.model.AudiobookFilters;
+import com.gen3.catalogue.model.PersonNameNormalizer;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.conversation.ConversationHistory;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
@@ -152,9 +153,15 @@ public class ExactFilterPolicy {
     return values.stream()
         .filter(this::hasText)
         .map(String::trim)
-        .map(value -> value.toLowerCase(Locale.ROOT))
+        .map(value -> comparisonKey(value, field))
         .distinct()
         .toList();
+  }
+
+  private String comparisonKey(String value, String field) {
+    return field.equals("authors") || field.equals("narrators")
+        ? PersonNameNormalizer.comparisonKey(value)
+        : value.trim().toLowerCase(Locale.ROOT);
   }
 
   private boolean supplied(AudiobookFilterConditions filters, String field) {
@@ -173,8 +180,7 @@ public class ExactFilterPolicy {
     return values == null
         ? null
         : values.stream()
-            .filter(
-                value -> value != null && !removed.contains(value.trim().toLowerCase(Locale.ROOT)))
+            .filter(value -> value != null && !removed.contains(comparisonKey(value, field)))
             .toList();
   }
 

@@ -55,6 +55,8 @@ class ExactFilterCorrectionTest {
   @ParameterizedTest
   @CsvSource({
     "authors,A,A",
+    "authors,Suzanne Collins,'Collins, Suzanne'",
+    "narrators,'Fry, Stephen',Stephen Fry",
     "narrators,N,N",
     "language,English,english",
     "source,rnib,rnib",
@@ -82,7 +84,12 @@ class ExactFilterCorrectionTest {
   }
 
   @ParameterizedTest
-  @CsvSource({"duration,under 5 hours,under 6 hours", "year,2024,between 2020 and 2025"})
+  @CsvSource({
+    "duration,under 5 hours,under 6 hours",
+    "year,2024,between 2020 and 2025",
+    "authors,Suzanne Collins,'Collins, Suzanne'",
+    "narrators,'Fry, Stephen',Stephen Fry"
+  })
   void newRangeRequirementOverridesAnInheritedExclusion(
       String field, String include, String exclude) {
     var resolved = request(field, include, exclude);
@@ -91,7 +98,12 @@ class ExactFilterCorrectionTest {
   }
 
   @ParameterizedTest
-  @CsvSource({"duration,under 5 hours,under 6 hours", "year,2024,between 2020 and 2025"})
+  @CsvSource({
+    "duration,under 5 hours,under 6 hours",
+    "year,2024,between 2020 and 2025",
+    "authors,Suzanne Collins,'Collins, Suzanne'",
+    "narrators,'Fry, Stephen',Stephen Fry"
+  })
   void newRangeExclusionOverridesAnInheritedRequirement(
       String field, String include, String exclude) {
     var resolved = request(field, include, exclude);

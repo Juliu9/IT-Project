@@ -5,6 +5,7 @@ import com.gen3.catalogue.model.AudiobookEmbedding;
 import com.gen3.catalogue.model.AudiobookFilterConditions;
 import com.gen3.catalogue.model.AudiobookFilters;
 import com.gen3.catalogue.model.AudiobookRecord;
+import com.gen3.catalogue.model.PersonNameNormalizer;
 import com.gen3.catalogue.model.StoredAudiobook;
 import com.gen3.catalogue.port.AudiobookCandidateSearch;
 import com.gen3.catalogue.port.AudiobookCatalogueRepository;
@@ -119,8 +120,10 @@ public class SolrAudiobookRepository
     if (conditions == null || !conditions.hasConditions()) {
       return;
     }
-    addAnyValueFilter(query, "authors", conditions.authors(), excluded);
-    addAnyValueFilter(query, "narrators", conditions.narrators(), excluded);
+    addAnyValueFilter(
+        query, "authors", PersonNameNormalizer.variants(conditions.authors()), excluded);
+    addAnyValueFilter(
+        query, "narrators", PersonNameNormalizer.variants(conditions.narrators()), excluded);
     addExactFilter(query, "language", conditions.language(), excluded);
     addExactFilter(query, "source", conditions.source(), excluded);
     addRangeFilter(

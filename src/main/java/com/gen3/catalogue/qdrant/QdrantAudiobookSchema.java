@@ -6,6 +6,7 @@ import static io.qdrant.client.ConditionFactory.range;
 
 import com.gen3.catalogue.model.AudiobookFilterConditions;
 import com.gen3.catalogue.model.AudiobookFilters;
+import com.gen3.catalogue.model.PersonNameNormalizer;
 import io.qdrant.client.grpc.Collections;
 import io.qdrant.client.grpc.Common.Condition;
 import io.qdrant.client.grpc.Common.Filter;
@@ -91,11 +92,13 @@ final class QdrantAudiobookSchema {
     if (conditions == null || !conditions.hasConditions()) {
       return;
     }
-    if (conditions.authors() != null && !conditions.authors().isEmpty()) {
-      addCondition(builder, matchKeywords(AUTHORS, conditions.authors()), excluded);
+    var authors = PersonNameNormalizer.variants(conditions.authors());
+    if (!authors.isEmpty()) {
+      addCondition(builder, matchKeywords(AUTHORS, authors), excluded);
     }
-    if (conditions.narrators() != null && !conditions.narrators().isEmpty()) {
-      addCondition(builder, matchKeywords(NARRATORS, conditions.narrators()), excluded);
+    var narrators = PersonNameNormalizer.variants(conditions.narrators());
+    if (!narrators.isEmpty()) {
+      addCondition(builder, matchKeywords(NARRATORS, narrators), excluded);
     }
     if (conditions.language() != null && !conditions.language().isBlank()) {
       addCondition(builder, matchKeyword(LANGUAGE, conditions.language()), excluded);

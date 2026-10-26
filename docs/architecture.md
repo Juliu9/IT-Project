@@ -220,6 +220,16 @@ allowing A or B while excluding A remains valid. A range conflicts only when its
 the entire required interval. Semantic combinations, such as romantic horror, are not conflicts.
 This checks logical impossibility, not whether the current catalogue happens to contain matches.
 
+Author/narrator filters share `PersonNameNormalizer` in the catalogue model. Each database adapter
+adds conservative OR variants at query time: `Suzanne Collins` also tries `Collins, Suzanne`, and
+an explicit `García Márquez, Gabriel` also tries `Gabriel García Márquez`. Only two-word forward
+names are reversed; longer forward names, suffix-bearing names, and uncertain comma formats are
+not guessed. Include/exclude conflict checks use the same name-order comparison. Original request
+and preference values remain unchanged, so MORE/REFINE reuse those names and regenerate variants.
+This uses no dictionary, catalogue scan, AI call, new index, or migration. Generated alternatives
+are not verified catalogue identities; typo matching, initials aliases, arbitrary stored casing,
+and complete discovery of longer-name variants remain outside this limited approach.
+
 ### Semantic criteria and personalisation
 
 Author-only and narrator-only semantic criteria select semantic retrieval. Exact names in

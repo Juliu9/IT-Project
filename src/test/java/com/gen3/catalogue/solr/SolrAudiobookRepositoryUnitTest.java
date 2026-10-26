@@ -22,6 +22,44 @@ import org.mockito.ArgumentCaptor;
 class SolrAudiobookRepositoryUnitTest {
 
   @Test
+  void personFiltersIncludeAndExcludeBothNameOrders() throws Exception {
+    var client = mock(SolrClient.class);
+    var response = mock(QueryResponse.class);
+    when(response.getResults()).thenReturn(new SolrDocumentList());
+    when(client.query(
+            org.mockito.ArgumentMatchers.eq("books"),
+            org.mockito.ArgumentMatchers.any(SolrQuery.class),
+            org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST)))
+        .thenReturn(response);
+    var conditions =
+        new AudiobookFilterConditions(
+            List.of("Suzanne Collins"),
+            List.of("Fry, Stephen"),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    new SolrAudiobookRepository(client, "books")
+        .searchKeyword("fantasy", new AudiobookFilters(conditions, conditions, List.of()), 5);
+    var captured = ArgumentCaptor.forClass(SolrQuery.class);
+    verify(client)
+        .query(
+            org.mockito.ArgumentMatchers.eq("books"),
+            captured.capture(),
+            org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST));
+    assertEquals(
+        List.of(
+            "authors:(\"Suzanne\\ Collins\" OR \"Collins,\\ Suzanne\")",
+            "narrators:(\"Fry,\\ Stephen\" OR \"Stephen\\ Fry\")",
+            "-authors:(\"Suzanne\\ Collins\" OR \"Collins,\\ Suzanne\")",
+            "-narrators:(\"Fry,\\ Stephen\" OR \"Stephen\\ Fry\")"),
+        java.util.Arrays.asList(captured.getValue().getFilterQueries()));
+    assertEquals(List.of("Suzanne Collins"), conditions.authors());
+  }
+
+  @Test
   void vectorLookupBatchesExactIdsAndSkipsMissingVectors() throws Exception {
     var client = mock(SolrClient.class);
     var response = new QueryResponse();

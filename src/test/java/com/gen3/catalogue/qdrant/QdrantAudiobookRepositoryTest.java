@@ -48,6 +48,37 @@ import org.mockito.ArgumentCaptor;
 class QdrantAudiobookRepositoryTest {
 
   @Test
+  void personFiltersIncludeAndExcludeBothNameOrders() {
+    var conditions =
+        new AudiobookFilterConditions(
+            List.of("Suzanne Collins"),
+            List.of("Fry, Stephen"),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    var actual =
+        QdrantAudiobookSchema.filter(new AudiobookFilters(conditions, conditions, List.of()));
+    var authors =
+        io.qdrant.client.ConditionFactory.matchKeywords(
+            "authors", List.of("Suzanne Collins", "Collins, Suzanne"));
+    var narrators =
+        io.qdrant.client.ConditionFactory.matchKeywords(
+            "narrators", List.of("Fry, Stephen", "Stephen Fry"));
+    assertThat(actual)
+        .isEqualTo(
+            io.qdrant.client.grpc.Common.Filter.newBuilder()
+                .addMust(authors)
+                .addMust(narrators)
+                .addMustNot(authors)
+                .addMustNot(narrators)
+                .build());
+    assertThat(conditions.authors()).containsExactly("Suzanne Collins");
+  }
+
+  @Test
   void metadataLookupUsesPayloadBookIdsAndDoesNotRequestVectors() throws Exception {
     var client = mock(QdrantClient.class);
     var encoder = new Bm25SparseTextEncoder();
