@@ -21,7 +21,7 @@ class RankingServiceTest {
           new CompositeScorer(List.of(new WeightedScorer(new RetrievalRelevanceScorer(), 1.0))));
 
   @Test
-  void retainsCatalogueDurationForLaterRelativeRefinements() {
+  void retainsCatalogueMetadataForLaterRelativeRefinements() {
     var record =
         new AudiobookRecord(
             "science",
@@ -36,6 +36,7 @@ class RankingServiceTest {
             "Summary");
     var result = rankingService.rank(List.of(new AudiobookCandidate(record, 1.0)), 1);
     assertEquals(180, result.getFirst().getDurationMinutes());
+    assertEquals(2024, result.getFirst().getPublicationYear());
   }
 
   @Test

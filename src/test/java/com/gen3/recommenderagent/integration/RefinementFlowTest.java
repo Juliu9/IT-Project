@@ -76,19 +76,392 @@ class RefinementFlowTest {
   }
 
   @Test
-  void moreRecentRetainsSearchContentAndReplacesThePreviousYearConstraint() {
-    var old = new ExactCriteria();
-    old.setAuthors(List.of("Suzanne Collins"));
-    old.setPublicationYear("around 2000");
-    search(old, null);
+  void moreRecentUsesTheFlooredPageAverageAndPreservesThePeriodUpperBoundAfterReload() {
+    var years = List.of(1960, 1975, 1980, 1990, 2005);
+    var books =
+        java.util.stream.IntStream.range(0, years.size())
+            .mapToObj(
+                i -> {
+                  var book = new Recommendation("dated-" + i, i + 1, 1.0, "Book " + i);
+                  book.setPublicationYear(years.get(i));
+                  return book;
+                })
+            .toList();
+    when(workflow.recommend(any(), any())).thenReturn(books, List.of());
+    var original = request(Intent.RECOMMENDATION);
+    var query = new SemanticQuery();
+    query.setGenres(List.of("fantasy"));
+    original.setPositiveSemanticQuery(query);
+    var include = new ExactCriteria();
+    include.setAuthors(List.of("Suzanne Collins"));
+    include.setPublicationYear("1950 to 2000s");
+    original.setMustInclude(include);
+    process(original);
+    var mapper = new ObjectMapper();
+    sessions.updateSession(
+        mapper.readValue(
+            mapper.writeValueAsString(sessions.getSession("session", "user")), Session.class));
     var result = service.process("session", "user", command("more recent"));
     assertThat(result.getIntent()).isEqualTo(Intent.REFINE);
     assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
     assertThat(result.getMustInclude().getAuthors()).containsExactly("Suzanne Collins");
-    assertThat(result.getMustInclude().getPublicationYear()).isEqualTo("recent");
+    assertThat(result.getMustInclude().getPublicationYear()).isEqualTo("between 1982 and 2009");
     assertThat(result.getSearchCriteria().getMustInclude().getPublicationYear())
-        .isEqualTo("recent");
+        .isEqualTo("between 1982 and 2009");
     assertThat(sessions.getSession("session", "user").getPreferences()).isNull();
+  }
+
+  @Test
+  void moreRecentIgnoresUnknownYearsWhenSomeDisplayedYearsAreKnown() {
+    var dated = new Recommendation("dated", 1, 1.0, "Dated");
+    dated.setPublicationYear(2000);
+    var second = new Recommendation("second", 2, 1.0, "Second");
+    second.setPublicationYear(2005);
+    var unknown = new Recommendation("unknown", 3, 1.0, "Unknown");
+    when(workflow.recommend(any(), any())).thenReturn(List.of(dated, second, unknown), List.of());
+    var original = request(Intent.RECOMMENDATION);
+    var include = new ExactCriteria();
+    include.setPublicationYear("1950 to 2000s");
+    original.setMustInclude(include);
+    process(original);
+    var result = service.process("session", "user", command("more recent"));
+    assertThat(result.getMustInclude().getPublicationYear()).isEqualTo("between 2002 and 2009");
+  }
+
+  @Test
+  void unknownDisplayedYearsAskForABoundaryWithoutConsumingHistoryOrCachedBooks() {
+    search(null, null);
+    var before = sessions.getSession("session", "user");
+    var pendingIds = Recommendation.bookIds(before.getPendingRecommendations());
+    var question = service.process("session", "user", command("more recent"));
+    assertThat(question.getDecision()).isEqualTo(ConversationDecision.RECENCY_YEAR_CLARIFICATION);
+    assertThat(sessions.getSession("session", "user").getPendingQuestion())
+        .isEqualTo(ConversationDecision.RECENCY_YEAR_CLARIFICATION);
+    assertThat(
+            Recommendation.bookIds(
+                sessions.getSession("session", "user").getPendingRecommendations()))
+        .isEqualTo(pendingIds);
+    verifyNoInteractions(workflow);
+    var mapper = new ObjectMapper();
+    sessions.updateSession(
+        mapper.readValue(
+            mapper.writeValueAsString(sessions.getSession("session", "user")), Session.class));
+    var resumed = service.process("session", "user", command("2000"));
+    assertThat(resumed.getIntent()).isEqualTo(Intent.REFINE);
+    assertThat(resumed.getMustInclude().getPublicationYear()).isEqualTo("from 2000");
+    assertThat(resumed.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
+    assertThat(sessions.getSession("session", "user").getPendingQuestion()).isNull();
+    verify(workflow).recommend(any(), any());
+  }
+
+  private void askForYearWithinPeriod() {
+    var include = new ExactCriteria();
+    include.setPublicationYear("between 1950 and 2009");
+    search(include, null);
+    service.process("session", "user", command("more recent"));
+    clearInvocations(workflow);
+  }
+
+  private ConversationDraft yearReply(String expression) {
+    var reply = request(Intent.UNKNOWN);
+    reply.setRawText(expression);
+    var include = new ExactCriteria();
+    include.setPublicationYear(expression);
+    reply.setMustInclude(include);
+    return reply;
+  }
+
+  @Test
+  void unrelatedRefinementAbandonsTheYearQuestion() {
+    askForYearWithinPeriod();
+    var refine = request(Intent.REFINE);
+    var include = new ExactCriteria();
+    include.setDuration("under 5 hours");
+    refine.setMustInclude(include);
+    var result = process(refine);
+    assertThat(result.isSearchClarificationRequired()).isFalse();
+    assertThat(result.getMustInclude().getDuration()).isEqualTo("under 5 hours");
+    assertThat(result.getMustInclude().getPublicationYear()).isEqualTo("between 1950 and 2009");
+    assertThat(sessions.getSession("session", "user").getPendingQuestion()).isNull();
+    verify(workflow).recommend(any(), any());
+  }
+
+  @Test
+  void upperBoundReplyReplacesTheUnfinishedRecencyRequest() {
+    askForYearWithinPeriod();
+    var result = process(yearReply("before 2000"));
+    assertThat(result.isSearchClarificationRequired()).isFalse();
+    assertThat(result.getMustInclude().getPublicationYear()).isEqualTo("before 2000");
+    assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
+    assertThat(sessions.getSession("session", "user").getPendingQuestion()).isNull();
+    verify(workflow).recommend(any(), any());
+  }
+
+  @Test
+  void conflictingStartingYearRequiresConfirmationAndSurvivesHelpCountAndReload() {
+    askForYearWithinPeriod();
+    var pending =
+        Recommendation.bookIds(sessions.getSession("session", "user").getPendingRecommendations());
+    var question = service.process("session", "user", command("2010"));
+    assertThat(question.getDecision()).isEqualTo(ConversationDecision.RECENCY_RANGE_CONFIRMATION);
+    assertThat(
+            Recommendation.bookIds(
+                sessions.getSession("session", "user").getPendingRecommendations()))
+        .isEqualTo(pending);
+    process(request(Intent.HELP));
+    var count = request(Intent.CHANGE_COUNT);
+    count.setBookCount(2);
+    process(count);
+    var mapper = new ObjectMapper();
+    sessions.updateSession(
+        mapper.readValue(
+            mapper.writeValueAsString(sessions.getSession("session", "user")), Session.class));
+    verifyNoInteractions(workflow);
+    var confirmed = service.process("session", "user", command("yes please"));
+    assertThat(confirmed.isSearchClarificationRequired()).isFalse();
+    assertThat(confirmed.getBookCount()).isEqualTo(2);
+    assertThat(confirmed.getMustInclude().getPublicationYear()).isEqualTo("from 2010");
+    assertThat(confirmed.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
+    assertThat(sessions.getSession("session", "user").getPendingRecencyRequest()).isNull();
+    verify(workflow).recommend(any(), any());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"no", "no thanks", "not now"})
+  void decliningTheYearExtensionPreservesTheOriginalBatch(String answer) {
+    askForYearWithinPeriod();
+    var pending =
+        Recommendation.bookIds(sessions.getSession("session", "user").getPendingRecommendations());
+    service.process("session", "user", command("2010"));
+    var result = service.process("session", "user", command(answer));
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.CANCELLED);
+    assertThat(
+            Recommendation.bookIds(
+                sessions.getSession("session", "user").getPendingRecommendations()))
+        .isEqualTo(pending);
+    assertThat(sessions.getSession("session", "user").getPendingRecencyRequest()).isNull();
+    var repeated = process(request(Intent.REPEAT_RECOMMENDATIONS));
+    assertThat(repeated.getRecommendations())
+        .extracting(Recommendation::getBookId)
+        .containsExactly("one");
+    verifyNoInteractions(workflow);
+  }
+
+  @Test
+  void confirmationPreservesTheRequestedEndYearAfterReload() {
+    askForYearWithinPeriod();
+    var question = process(yearReply("between 2010 and 2020"));
+    assertThat(question.getDecision()).isEqualTo(ConversationDecision.RECENCY_RANGE_CONFIRMATION);
+    var mapper = new ObjectMapper();
+    sessions.updateSession(
+        mapper.readValue(
+            mapper.writeValueAsString(sessions.getSession("session", "user")), Session.class));
+    verifyNoInteractions(workflow);
+    var result = service.process("session", "user", command("yes"));
+    assertThat(result.getMustInclude().getPublicationYear()).isEqualTo("between 2010 and 2020");
+    assertThat(result.getSearchCriteria().getMustInclude().getPublicationYear())
+        .isEqualTo("between 2010 and 2020");
+    verify(workflow).recommend(any(), any());
+  }
+
+  @Test
+  void resettingPreferencesUpdatesTheCountInThePendingConfirmation() {
+    askForYearWithinPeriod();
+    service.process("session", "user", command("2010"));
+    var count = request(Intent.CHANGE_COUNT);
+    count.setBookCount(2);
+    process(count);
+    process(request(Intent.RESET_PREFERENCES));
+    assertThat(sessions.getSession("session", "user").getPendingQuestion())
+        .isEqualTo(ConversationDecision.RECENCY_RANGE_CONFIRMATION);
+    var result = service.process("session", "user", command("yes"));
+    assertThat(result.getBookCount()).isEqualTo(5);
+    assertThat(result.getMustInclude().getPublicationYear()).isEqualTo("from 2010");
+    assertThat(sessions.getSession("session", "user").getBookCount()).isEqualTo(5);
+    verify(workflow).recommend(any(), any());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"2000.", "2000!", "2000?", "2000, please"})
+  void bareYearAnswersAcceptPunctuationAndCourtesy(String text) {
+    askForYearWithinPeriod();
+    var result = service.process("session", "user", command(text));
+    assertThat(result.getIntent()).isEqualTo(Intent.REFINE);
+    assertThat(result.getMustInclude().getPublicationYear()).isEqualTo("between 2000 and 2009");
+    assertThat(result.isSearchClarificationRequired()).isFalse();
+    verify(workflow).recommend(any(), any());
+  }
+
+  @Test
+  void aBareReplacementYearAcceptsPunctuationDuringConfirmation() {
+    askForYearWithinPeriod();
+    service.process("session", "user", command("2010"));
+    var result = service.process("session", "user", command("2015."));
+    assertThat(result.getMustInclude().getPublicationYear()).isEqualTo("from 2015");
+    assertThat(result.isSearchClarificationRequired()).isFalse();
+    verify(workflow).recommend(any(), any());
+  }
+
+  @Test
+  void alternativeRangeReplacesTheProposedYearExtension() {
+    askForYearWithinPeriod();
+    service.process("session", "user", command("2010"));
+    var result = process(yearReply("between 2015 and 2020"));
+    assertThat(result.getMustInclude().getPublicationYear()).isEqualTo("between 2015 and 2020");
+    assertThat(result.isSearchClarificationRequired()).isFalse();
+    verify(workflow).recommend(any(), any());
+  }
+
+  @Test
+  void aNewSearchWithAYearDoesNotAnswerThePendingConfirmation() {
+    askForYearWithinPeriod();
+    service.process("session", "user", command("2010"));
+    var fresh = yearReply("between 2020 and 2025");
+    fresh.setIntent(Intent.RECOMMENDATION);
+    fresh.setExplicitSearch(true);
+    var query = new SemanticQuery();
+    query.setGenres(List.of("horror"));
+    fresh.setPositiveSemanticQuery(query);
+    var result = process(fresh);
+    assertThat(result.getIntent()).isEqualTo(Intent.RECOMMENDATION);
+    assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("horror");
+    assertThat(result.getMustInclude().getPublicationYear()).isEqualTo("between 2020 and 2025");
+    assertThat(sessions.getSession("session", "user").getPendingRecencyRequest()).isNull();
+  }
+
+  @Test
+  void aReplacementRangeKeepsTheOtherProposedConstraints() {
+    askForYearWithinPeriod();
+    var proposal = yearReply("from 2010");
+    proposal.getMustInclude().setDuration("under 5 hours");
+    assertThat(process(proposal).getDecision())
+        .isEqualTo(ConversationDecision.RECENCY_RANGE_CONFIRMATION);
+    var result = process(yearReply("between 2015 and 2020"));
+    assertThat(result.getMustInclude().getPublicationYear()).isEqualTo("between 2015 and 2020");
+    assertThat(result.getMustInclude().getDuration()).isEqualTo("under 5 hours");
+  }
+
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "RESET_PREFERENCES,false,yes",
+    "UPDATE_PREFERENCES,false,yes",
+    "RESET_PREFERENCES,false,range",
+    "UPDATE_PREFERENCES,false,range",
+    "RESET_PREFERENCES,true,yes",
+    "UPDATE_PREFERENCES,true,yes"
+  })
+  void confirmingRecencyReappliesCurrentPreferencesAndPreservesExplicitConstraints(
+      Intent action, boolean explicitAuthor, String answer) {
+    var initial = request(Intent.RECOMMENDATION);
+    initial.setPersonalised(true);
+    var include = new ExactCriteria();
+    include.setPublicationYear("between 1950 and 2009");
+    if (explicitAuthor) {
+      include.setAuthors(List.of("Explicit Writer"));
+    }
+    initial.setMustInclude(include);
+    when(workflow.recommend(any(), any()))
+        .thenReturn(List.of(new Recommendation("old", 1, 1.0, "Old")));
+    var preferences = new SessionPreferences();
+    var inherited = new ExactCriteria();
+    inherited.setAuthors(List.of("Old Writer"));
+    preferences.setMustInclude(inherited);
+    var genre = new SemanticQuery();
+    genre.setGenres(List.of("fantasy"));
+    preferences.setPositiveSemanticQuery(genre);
+    var save = request(Intent.UPDATE_PREFERENCES);
+    save.setPreferenceUpdates(preferences);
+    process(save);
+    process(initial);
+    service.process("session", "user", command("more recent"));
+    service.process("session", "user", command("2010"));
+    var edit = request(action);
+    if (action == Intent.UPDATE_PREFERENCES) {
+      var updates = new SessionPreferences();
+      var replacement = new ExactCriteria();
+      replacement.setAuthors(List.of("New Writer"));
+      updates.setMustInclude(replacement);
+      var newGenre = new SemanticQuery();
+      newGenre.setGenres(List.of("horror"));
+      updates.setPositiveSemanticQuery(newGenre);
+      edit.setPreferenceUpdates(updates);
+      edit.setReplacePreferenceFields(
+          List.of("mustInclude.authors", "positiveSemanticQuery.genres"));
+    }
+    process(edit);
+    clearInvocations(workflow);
+    var result =
+        answer.equals("yes")
+            ? service.process("session", "user", command("yes"))
+            : process(yearReply("between 2015 and 2020"));
+    assertThat(result.isSearchClarificationRequired()).isFalse();
+    if (explicitAuthor) {
+      assertThat(result.getMustInclude().getAuthors()).containsExactly("Explicit Writer");
+      assertThat(result.getSearchCriteria().getMustInclude().getAuthors())
+          .containsExactly("Explicit Writer");
+    } else {
+      assertThat(result.getSearchCriteria().getMustInclude().getAuthors()).isNullOrEmpty();
+      if (action == Intent.RESET_PREFERENCES) {
+        assertThat(result.getMustInclude().getAuthors()).isNullOrEmpty();
+      } else {
+        assertThat(result.getMustInclude().getAuthors()).containsExactly("New Writer");
+      }
+    }
+    if (action == Intent.RESET_PREFERENCES) {
+      assertThat(result.getPositiveSemanticQuery()).isNull();
+    } else {
+      assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("horror");
+    }
+    verify(workflow).recommend(any(), any());
+  }
+
+  @Test
+  void unchangedAverageAdvancesOneYearAndExhaustionPreservesThePageAndQueue() {
+    var include = new ExactCriteria();
+    include.setPublicationYear("between 2005 and 2005");
+    search(include, null);
+    var session = sessions.getSession("session", "user");
+    session
+        .getRequests()
+        .getFirst()
+        .getRecommendations()
+        .forEach(book -> book.setPublicationYear(2005));
+    sessions.updateSession(session);
+    var pending = Recommendation.bookIds(session.getPendingRecommendations());
+    var exhausted = service.process("session", "user", command("more recent"));
+    assertThat(exhausted.getDecision()).isEqualTo(ConversationDecision.RECENCY_EXHAUSTED);
+    assertThat(process(request(Intent.REPEAT)).getDecision())
+        .isEqualTo(ConversationDecision.RECENCY_EXHAUSTED);
+    assertThat(process(request(Intent.REPEAT_RECOMMENDATIONS)).getRecommendations())
+        .extracting(Recommendation::getBookId)
+        .containsExactly("one");
+    assertThat(
+            Recommendation.bookIds(
+                sessions.getSession("session", "user").getPendingRecommendations()))
+        .isEqualTo(pending);
+    verifyNoInteractions(workflow);
+    var more = request(Intent.MORE_RESULTS);
+    more.setBookCount(1);
+    assertThat(process(more).getRecommendations())
+        .extracting(Recommendation::getBookId)
+        .containsExactly("two");
+    verifyNoInteractions(workflow);
+  }
+
+  @Test
+  void unchangedAverageAdvancesTheLowerBoundWhenThePeriodAllowsIt() {
+    var include = new ExactCriteria();
+    include.setPublicationYear("between 2005 and 2010");
+    search(include, null);
+    var session = sessions.getSession("session", "user");
+    session
+        .getRequests()
+        .getFirst()
+        .getRecommendations()
+        .forEach(book -> book.setPublicationYear(2005));
+    sessions.updateSession(session);
+    var result = service.process("session", "user", command("more recent"));
+    assertThat(result.getMustInclude().getPublicationYear()).isEqualTo("between 2006 and 2010");
     verify(workflow).recommend(any(), any());
   }
 

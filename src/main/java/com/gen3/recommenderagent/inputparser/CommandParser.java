@@ -51,11 +51,12 @@ public class CommandParser {
       parsed.setIntent(Intent.REFINE);
       parsed.setExplicitSearch(true);
       var criteria = new ExactCriteria();
-      criteria.setPublicationYear("recent");
+      criteria.setPublicationYear("more recent");
       parsed.setMustInclude(criteria);
       return parsed;
     }
-    if (selectionReply(rawText.strip()) != null
+    if (ConversationText.isAffirmativeReply(rawText)
+        || selectionReply(rawText.strip()) != null
         || com.gen3.recommenderagent.domain.conversation.ConversationText.isPreferenceDecline(
             rawText)) {
       var parsed = new ParsedRequest();

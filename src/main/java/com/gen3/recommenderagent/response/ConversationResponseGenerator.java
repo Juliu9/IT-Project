@@ -112,6 +112,11 @@ public class ConversationResponseGenerator implements ResponseGenerator {
           "I can't use that book to find similar audiobooks right now. Would you like to try another title?";
       case SHORTER_DURATION_CLARIFICATION ->
           "How short would you like the audiobooks to be? For example, under 3 hours.";
+      case RECENCY_RANGE_CONFIRMATION ->
+          "Those years extend beyond your previous period. Would you like to use the new year range instead?";
+      case RECENCY_EXHAUSTED -> "There are no newer books within your selected period.";
+      case RECENCY_YEAR_CLARIFICATION ->
+          "I don't have publication years for those books. What year would you like me to start from? For example, from 2000.";
       case COUNT_CLARIFICATION -> "How many recommendations would you like at a time?";
       case COUNT_CHANGED -> {
         int count = Math.clamp(currentRequest.getBookCount(), 1, MAX_BOOK_COUNT);

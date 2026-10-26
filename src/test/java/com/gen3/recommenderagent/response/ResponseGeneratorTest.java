@@ -16,6 +16,24 @@ import org.junit.jupiter.api.Test;
 
 class ResponseGeneratorTest {
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "RECENCY_EXHAUSTED,There are no newer books within your selected period.",
+    "RECENCY_RANGE_CONFIRMATION,Those years extend beyond your previous period. Would you like to use the new year range instead?"
+  })
+  void recencyOutcomesUseFixedResponses(
+      com.gen3.recommenderagent.domain.session.ConversationDecision decision, String expected) {
+    var request = new ConversationDraft();
+    request.setIntent(Intent.REFINE);
+    request.setDecision(decision);
+    var ai = org.mockito.Mockito.mock(AiResponseGenerator.class);
+    assertEquals(
+        expected,
+        new ConversationResponseGenerator(ai)
+            .generate(List.of(), ConversationTurn.fromDraft(request)));
+    org.mockito.Mockito.verifyNoInteractions(ai);
+  }
+
   @Test
   void usesTheResolvedDecisionWithoutReinterpretingIntent() {
     var request = new ConversationDraft();

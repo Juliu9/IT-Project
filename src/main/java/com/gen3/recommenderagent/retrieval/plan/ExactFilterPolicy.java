@@ -5,6 +5,8 @@ import com.gen3.catalogue.model.AudiobookFilters;
 import com.gen3.catalogue.model.PersonNameNormalizer;
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.conversation.ConversationHistory;
+import com.gen3.recommenderagent.domain.conversation.ConversationText;
+import com.gen3.recommenderagent.domain.session.ConversationDecision;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.Session;
@@ -26,7 +28,8 @@ import org.springframework.stereotype.Component;
 public class ExactFilterPolicy {
 
   private static final Pattern YEAR_RANGE =
-      Pattern.compile("^(?:between (\\d{4}) and (\\d{4})|(?:from )?(\\d{4}) *(?:-|to) *(\\d{4}))$");
+      Pattern.compile(
+          "^(?:between (\\d{4}|\\d{3}0s) and (\\d{4}|\\d{3}0s)|(?:from )?(\\d{4}|\\d{3}0s) *(?:-|to) *(\\d{4}|\\d{3}0s))$");
   private static final Pattern YEAR_COMPARISON =
       Pattern.compile(
           "^(?:(after|before|from|since|newer than|older than|over|under|more than|less than|at least|at most|minimum(?: of)?|maximum(?: of)?|up to|exactly) )?(\\d{4})$");
@@ -65,6 +68,12 @@ public class ExactFilterPolicy {
         && resolved.getIntent() != Intent.MORE_RESULTS
         && resolved.getIntent() != Intent.UPDATE_PREFERENCES)) {
       return;
+    }
+    if (incoming != null
+        && incoming.getMustInclude() != null
+        && ConversationText.isRecencyRefinement(incoming.getMustInclude().getPublicationYear())) {
+      incoming = SessionPreferences.fromRequest(incoming).asRequest();
+      incoming.getMustInclude().setPublicationYear(resolved.getMustInclude().getPublicationYear());
     }
     var own = filters(incoming, Set.of());
     requireCompatible(own);
@@ -262,10 +271,16 @@ public class ExactFilterPolicy {
       }
       return new RangeBounds(currentYear - years, currentYear);
     }
+    if (normalized.matches("[0-9]{3}0s")) {
+      int start = Integer.parseInt(normalized.substring(0, 4));
+      return new RangeBounds(start, start + 9);
+    }
     Matcher range = YEAR_RANGE.matcher(normalized);
     if (range.matches()) {
-      int lower = Integer.parseInt(range.group(1) != null ? range.group(1) : range.group(3));
-      int upper = Integer.parseInt(range.group(2) != null ? range.group(2) : range.group(4));
+      String first = range.group(1) != null ? range.group(1) : range.group(3);
+      String last = range.group(2) != null ? range.group(2) : range.group(4);
+      int lower = Integer.parseInt(first.substring(0, 4));
+      int upper = Integer.parseInt(last.substring(0, 4)) + (last.endsWith("s") ? 9 : 0);
       if (lower <= upper) {
         return new RangeBounds(lower, upper);
       }
@@ -303,6 +318,78 @@ public class ExactFilterPolicy {
     }
   }
 
+  private void resolveRecencyRefinement(ConversationDraft request, Session session) {
+    if (request.getIntent() != Intent.REFINE || request.getMustInclude() == null) {
+      return;
+    }
+    String expression = request.getMustInclude().getPublicationYear();
+    boolean relative = ConversationText.isRecencyRefinement(expression);
+    boolean answeringYear =
+        session != null
+            && session.getPendingQuestion() == ConversationDecision.RECENCY_YEAR_CLARIFICATION;
+    if (!relative && !answeringYear) {
+      return;
+    }
+    var previous = session == null ? null : ConversationHistory.latestSearch(session);
+    var page = previous == null ? null : previous.getRecommendations();
+    var years =
+        page == null
+            ? List.<Integer>of()
+            : page.stream()
+                .map(com.gen3.recommenderagent.domain.session.Recommendation::getPublicationYear)
+                .filter(year -> year != null && year > 0 && year <= 9999)
+                .toList();
+    Integer lower =
+        relative
+            ? (years.isEmpty()
+                ? null
+                : years.stream().mapToInt(Integer::intValue).sum() / years.size())
+            : yearBounds(expression).minimum();
+    if (!relative && lower == null && yearBounds(expression).maximum() != null) {
+      return;
+    }
+    if (lower == null) {
+      request.setDecision(ConversationDecision.RECENCY_YEAR_CLARIFICATION);
+      request.setSearchClarificationRequired(true);
+      return;
+    }
+    var previousBounds =
+        yearBounds(
+            previous == null || previous.getMustInclude() == null
+                ? null
+                : previous.getMustInclude().getPublicationYear());
+    Integer upper = previousBounds.maximum();
+    if (relative && previousBounds.minimum() != null && lower <= previousBounds.minimum()) {
+      lower = previousBounds.minimum() + 1;
+    }
+    if (lower > 9999 || (upper != null && lower > upper)) {
+      if (relative) {
+        request.setDecision(ConversationDecision.RECENCY_EXHAUSTED);
+      } else {
+        request.setDecision(ConversationDecision.RECENCY_RANGE_CONFIRMATION);
+        session.setPendingRecencyRequest(
+            com.gen3.recommenderagent.domain.session.ConversationTurn.fromDraft(request));
+      }
+      request.setSearchClarificationRequired(true);
+      return;
+    }
+    if (!relative) {
+      Integer specifiedUpper = yearBounds(expression).maximum();
+      if (specifiedUpper != null) {
+        upper = upper == null ? specifiedUpper : Math.min(upper, specifiedUpper);
+      }
+    }
+    String bounded = upper == null ? "from " + lower : "between " + lower + " and " + upper;
+    request.getMustInclude().setPublicationYear(bounded);
+    if (request.getSearchCriteria() != null) {
+      var criteria = request.getSearchCriteria();
+      if (criteria.getMustInclude() == null) {
+        criteria.setMustInclude(new ExactCriteria());
+      }
+      criteria.getMustInclude().setPublicationYear(bounded);
+    }
+  }
+
   public void validateTransition(
       ConversationDraft resolved, SessionRequest original, Session session) {
     if (resolved.getIntent() == Intent.UPDATE_PREFERENCES) {
@@ -323,6 +410,10 @@ public class ExactFilterPolicy {
       resolved.getPreferenceUpdates().setMustNotInclude(proposed.getMustNotInclude());
       return;
     }
+    if (resolved.isSearchClarificationRequired()) {
+      return;
+    }
+    resolveRecencyRefinement(resolved, session);
     if (resolved.isSearchClarificationRequired()) {
       return;
     }

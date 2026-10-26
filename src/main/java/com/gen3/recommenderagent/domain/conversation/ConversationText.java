@@ -31,9 +31,19 @@ public final class ConversationText {
         .stripTrailing();
   }
 
+  public static boolean isAffirmativeReply(String text) {
+    return text != null
+        && java.util.Set.of("yes", "yeah", "yep", "sure", "go ahead", "ok", "okay")
+            .contains(normalizeCommand(text));
+  }
+
   public static boolean isRecencyRefinement(String text) {
     return text != null
-        && java.util.Set.of("more recent", "more recent books", "more recent audiobooks")
+        && java.util.Set.of(
+                "more recent",
+                "more recent books",
+                "more recent audiobooks",
+                "i want books from more recent times")
             .contains(normalizeCommand(text));
   }
 

@@ -32,6 +32,17 @@ public class Session {
     suspendedQuestion = value;
   }
 
+  // The proposed refinement must survive HELP, count changes and cache reloads.
+  private ConversationTurn pendingRecencyRequest;
+
+  public ConversationTurn getPendingRecencyRequest() {
+    return pendingRecencyRequest;
+  }
+
+  public void setPendingRecencyRequest(ConversationTurn value) {
+    pendingRecencyRequest = value;
+  }
+
   private PendingSimilarBook pendingSimilarBook;
 
   public PendingSimilarBook getPendingSimilarBook() {
@@ -225,6 +236,7 @@ public class Session {
 
   public void clearHistory() {
     pendingSimilarBook = null;
+    pendingRecencyRequest = null;
     pendingQuestion = null;
     suspendedQuestion = null;
     this.awaitingPreferenceUpdate = false;

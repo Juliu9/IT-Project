@@ -32,6 +32,9 @@ public final class SessionActionHandler implements ConversationHandler {
       case CHANGE_COUNT -> {
         if (request.getBookCount() != null) {
           session.setBookCount(request.getBookCount());
+          if (session.getPendingRecencyRequest() != null) {
+            session.getPendingRecencyRequest().setBookCount(session.getBookCount());
+          }
           session.getRequests().stream()
               .filter(
                   com.gen3.recommenderagent.domain.session.ConversationTurn
@@ -46,6 +49,9 @@ public final class SessionActionHandler implements ConversationHandler {
       case RESET_PREFERENCES -> {
         session.setPreferences(null);
         session.setBookCount(null);
+        if (session.getPendingRecencyRequest() != null) {
+          session.getPendingRecencyRequest().setBookCount(session.getBookCount());
+        }
         request.setBookCount(session.getBookCount());
         session.clearPreferenceQuestions();
       }

@@ -14,9 +14,18 @@ import org.junit.jupiter.api.Test;
 class AudiobookRetrievalPlannerTest {
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
-    "around 2000,1995,2005", "the period 2000,1995,2005", "period 2000,1995,2005",
-    "from the period 2000,1995,2005", "around 0000,0,5", "around 9999,9994,9999",
-    "2000,2000,2000", "from 2000,2000,"
+    "around 2000,1995,2005",
+    "1950 to 2000s,1950,2009",
+    "between 1950 and 2000s,1950,2009",
+    "from 1950s to 2000s,1950,2009",
+    "2000s,2000,2009",
+    "the period 2000,1995,2005",
+    "period 2000,1995,2005",
+    "from the period 2000,1995,2005",
+    "around 0000,0,5",
+    "around 9999,9994,9999",
+    "2000,2000,2000",
+    "from 2000,2000,"
   })
   void approximateYearsUseInclusiveFiveYearBoundsWithoutChangingExactYears(
       String text, int minimum, Integer maximum) {

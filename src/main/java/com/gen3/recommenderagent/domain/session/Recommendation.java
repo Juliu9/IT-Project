@@ -10,6 +10,15 @@ public class Recommendation {
   private String title;
   private String shortDescription;
   private Integer durationMinutes;
+  private Integer publicationYear;
+
+  public Integer getPublicationYear() {
+    return publicationYear;
+  }
+
+  public void setPublicationYear(Integer value) {
+    publicationYear = value;
+  }
 
   public Integer getDurationMinutes() {
     return durationMinutes;

@@ -38,11 +38,11 @@ class InputParserTest {
   }
 
   @Test
-  void moreRecentIsARefinementUsingTheExistingRecentWindowWithoutAi() {
+  void moreRecentIsARefinementComparedWithTheDisplayedPageWithoutAi() {
     var ai = mock(AiParser.class);
     var result = new InputParser(new CommandParser(), ai).parse("more recent");
     assertEquals(Intent.REFINE, result.getIntent());
-    assertEquals("recent", result.getMustInclude().getPublicationYear());
+    assertEquals("more recent", result.getMustInclude().getPublicationYear());
     assertEquals(null, result.getPositiveSemanticQuery());
     assertEquals(false, result.isPersonalised());
     verifyNoInteractions(ai);
@@ -55,6 +55,15 @@ class InputParserTest {
     var ai = mock(AiParser.class);
     var parsed = new InputParser(new CommandParser(), ai).parse(text);
     assertEquals(Intent.UNKNOWN, parsed.getIntent());
+    verifyNoInteractions(ai);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"yes", "yes please", "yeah", "sure", "go ahead", "okay"})
+  void confirmationsSkipAiAndLetTheSessionResolveTheirMeaning(String text) {
+    var ai = mock(AiParser.class);
+    assertEquals(Intent.UNKNOWN, new InputParser(new CommandParser(), ai).parse(text).getIntent());
     verifyNoInteractions(ai);
   }
 

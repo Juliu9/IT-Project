@@ -50,6 +50,8 @@ public final class ClarificationResolver {
             && session.getPendingQuestion() != ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
             && session.getPendingQuestion() != ConversationDecision.COUNT_CLARIFICATION
             && session.getPendingQuestion() != ConversationDecision.SHORTER_DURATION_CLARIFICATION
+            && session.getPendingQuestion() != ConversationDecision.RECENCY_YEAR_CLARIFICATION
+            && session.getPendingQuestion() != ConversationDecision.RECENCY_RANGE_CONFIRMATION
             && !effective.isExplicitSearch()
             && (effective.getIntent() == Intent.RECOMMENDATION
                 || effective.getIntent() == Intent.REFINE
@@ -75,8 +77,60 @@ public final class ClarificationResolver {
       effective.setNegativeSemanticQuery(updates.getNegativeSemanticQuery());
       return effective;
     }
+    if (session.getPendingQuestion() == ConversationDecision.RECENCY_RANGE_CONFIRMATION
+        && session.getPendingRecencyRequest() != null) {
+      String answer = ConversationText.normalizeCommand(reply);
+      if (java.util.Set.of("no", "no thanks", "not now", "keep the previous search")
+          .contains(answer)) {
+        effective.setIntent(Intent.CANCEL);
+        normalizeInput(effective);
+        return effective;
+      }
+      if (ConversationText.isAffirmativeReply(reply)) {
+        var resumed = pendingRecencyCriteria(session);
+        resumed.setRequestId(effective.getRequestId());
+        resumed.setRawText(effective.getRawText());
+        resumed.setCreatedAt(effective.getCreatedAt());
+        resumed.setSearchClarificationRequired(false);
+        resumed.setDecision(null);
+        session.setPendingQuestion(null);
+        session.setPendingRecencyRequest(null);
+        return resumed;
+      }
+    }
     // The parser has no session context; resolve short answers against the outstanding question.
     Integer selection = ConversationText.selectionReply(reply);
+    String yearReply = ConversationText.normalizeCommand(reply);
+    if ((session.getPendingQuestion() == ConversationDecision.RECENCY_YEAR_CLARIFICATION
+            || session.getPendingQuestion() == ConversationDecision.RECENCY_RANGE_CONFIRMATION)
+        && !effective.isExplicitSearch()
+        && (effective.getIntent() == Intent.UNKNOWN
+            || effective.getIntent() == Intent.RECOMMENDATION
+            || effective.getIntent() == Intent.REFINE)
+        && (yearReply.matches("[0-9]{4}")
+            || (effective.getMustInclude() != null
+                && effective.getMustInclude().getPublicationYear() != null))) {
+      effective.setIntent(Intent.REFINE);
+      normalizeInput(effective);
+      var include =
+          effective.getMustInclude() == null
+              ? new com.gen3.recommenderagent.domain.session.ExactCriteria()
+              : effective.getMustInclude();
+      if (yearReply.matches("[0-9]{4}")) {
+        include.setPublicationYear("from " + yearReply);
+      } else if (include.getPublicationYear().matches("[0-9]{4}")) {
+        include.setPublicationYear("from " + include.getPublicationYear());
+      }
+      effective.setMustInclude(include);
+      if (session.getPendingQuestion() == ConversationDecision.RECENCY_RANGE_CONFIRMATION) {
+        if (session.getPendingRecencyRequest() != null) {
+          SearchCriteriaMerger.merge(pendingRecencyCriteria(session), effective);
+        }
+        session.setPendingQuestion(null);
+        session.setPendingRecencyRequest(null);
+      }
+      return effective;
+    }
     if (session.getPendingQuestion() == ConversationDecision.COUNT_CLARIFICATION
         && selection != null) {
       effective.setIntent(Intent.CHANGE_COUNT);
@@ -142,6 +196,22 @@ public final class ClarificationResolver {
       session.setPendingSimilarBook(null);
     }
     return effective;
+  }
+
+  private ConversationDraft pendingRecencyCriteria(Session session) {
+    var resumed = session.getPendingRecencyRequest().toDraft();
+    // Keep explicit constraints; the search handler reapplies current preferences after
+    // confirmation.
+    if (resumed.getSearchCriteria() != null) {
+      var explicit = resumed.getSearchCriteria().copy();
+      resumed.setPositiveSemanticQuery(explicit.getPositiveSemanticQuery());
+      resumed.setNegativeSemanticQuery(explicit.getNegativeSemanticQuery());
+      resumed.setMustInclude(explicit.getMustInclude());
+      resumed.setMustNotInclude(explicit.getMustNotInclude());
+    }
+    resumed.setUserPreferenceSnapshot(null);
+    resumed.setUserPreferencesLoaded(false);
+    return resumed;
   }
 
   private ConversationDraft resolveSimilarBook(
@@ -244,6 +314,8 @@ public final class ClarificationResolver {
           PREFERENCE_UPDATE_CLARIFICATION,
           SEARCH_CLARIFICATION,
           SHORTER_DURATION_CLARIFICATION,
+          RECENCY_YEAR_CLARIFICATION,
+          RECENCY_RANGE_CONFIRMATION,
           SIMILAR_BOOK_SELECTION,
           SIMILAR_BOOK_NOT_FOUND,
           SIMILAR_BOOK_REQUIRED ->
@@ -292,12 +364,17 @@ public final class ClarificationResolver {
       return;
     }
     if (intent == Intent.CANCEL) {
+      session.setPendingRecencyRequest(null);
       session.setSuspendedQuestion(null);
     }
     if (isQuestion(request.getDecision())) {
       session.setPendingQuestion(request.getDecision());
     } else if (intent != Intent.UNKNOWN) {
       session.setPendingQuestion(null);
+    }
+    if (session.getPendingQuestion() != ConversationDecision.RECENCY_RANGE_CONFIRMATION
+        && session.getSuspendedQuestion() != ConversationDecision.RECENCY_RANGE_CONFIRMATION) {
+      session.setPendingRecencyRequest(null);
     }
   }
 }
