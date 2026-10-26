@@ -222,9 +222,9 @@ This checks logical impossibility, not whether the current catalogue happens to 
 
 Author/narrator filters share `PersonNameNormalizer` in the catalogue model. Each database adapter
 adds conservative OR variants at query time: `Suzanne Collins` also tries `Collins, Suzanne`, and
-an explicit `García Márquez, Gabriel` also tries `Gabriel García Márquez`. Only two-word forward
-names are reversed; longer forward names, suffix-bearing names, and uncertain comma formats are
-not guessed. Include/exclude conflict checks use the same name-order comparison. Original request
+an explicit `García Márquez, Gabriel` also tries `Gabriel García Márquez`. Two-word forward names and dotted-initial prefixes with a single-word surname
+(e.g. `J. K. Rowling` → `Rowling, J. K.`) are reversed; other longer forward names, suffix-bearing
+names, and uncertain comma formats are not guessed. Include/exclude conflict checks use the same name-order comparison. Original request
 and preference values remain unchanged, so MORE/REFINE reuse those names and regenerate variants.
 This uses no dictionary, catalogue scan, AI call, new index, or migration. Generated alternatives
 are not verified catalogue identities; typo matching, initials aliases, arbitrary stored casing,
@@ -232,7 +232,10 @@ and complete discovery of longer-name variants remain outside this limited appro
 
 ### Semantic criteria and personalisation
 
-Author-only and narrator-only semantic criteria select semantic retrieval. Exact names in
+Author-only and narrator-only semantic criteria select semantic retrieval. “A book by Suzanne
+Collins” sets `mustInclude.authors`; “books similar to Suzanne Collins style” sets
+`positiveSemanticQuery.authors`, without an author filter or a similar-book title lookup. Narrator
+requirements versus narrator-style similarity follow the same distinction. Exact names in
 `mustInclude` and `mustNotInclude` use separate `ExactCriteria` instances and remain mandatory
 database filters.
 

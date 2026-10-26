@@ -91,6 +91,16 @@ class SolrAudiobookRepositoryTest {
           "narrators", java.util.List.of(id.equals("comma") ? "Fry, Stephen" : "Stephen Fry"));
       solrClient.add(collection, document);
     }
+    for (var entry :
+        java.util.Map.of("initials-forward", "J. K. Rowling", "initials-comma", "Rowling, J. K.")
+            .entrySet()) {
+      var document = new org.apache.solr.common.SolrInputDocument();
+      document.setField("id", entry.getKey());
+      document.setField("source", "initials-test");
+      document.setField("authors", java.util.List.of(entry.getValue()));
+      document.setField("narrators", java.util.List.of(entry.getValue()));
+      solrClient.add(collection, document);
+    }
     solrClient.commit(collection);
     var repository = new SolrAudiobookRepository(solrClient, collection);
     var names =
@@ -104,6 +114,38 @@ class SolrAudiobookRepositoryTest {
             null,
             null);
     var empty = com.gen3.catalogue.model.AudiobookFilterConditions.empty();
+    var initials =
+        new com.gen3.catalogue.model.AudiobookFilterConditions(
+            java.util.List.of("J. K. Rowling"),
+            java.util.List.of("J. K. Rowling"),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    org.assertj.core.api.Assertions.assertThat(
+            repository.searchByFilters(
+                new com.gen3.catalogue.model.AudiobookFilters(initials, empty, java.util.List.of()),
+                10))
+        .extracting(book -> book.audiobook().id())
+        .containsExactlyInAnyOrder("initials-forward", "initials-comma");
+    var excludeInitials =
+        new com.gen3.catalogue.model.AudiobookFilterConditions(
+            java.util.List.of(),
+            java.util.List.of("Rowling, J. K."),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    org.assertj.core.api.Assertions.assertThat(
+            repository.searchByFilters(
+                new com.gen3.catalogue.model.AudiobookFilters(
+                    initials, excludeInitials, java.util.List.of()),
+                10))
+        .isEmpty();
     org.assertj.core.api.Assertions.assertThat(
             repository.searchByFilters(
                 new com.gen3.catalogue.model.AudiobookFilters(names, empty, java.util.List.of()),
@@ -236,6 +278,16 @@ class SolrAudiobookRepositoryTest {
     original.addField("title", "Original");
     original.addField("description", "Old description");
     solrClient.add(collection, original);
+    for (var entry :
+        java.util.Map.of("initials-forward", "J. K. Rowling", "initials-comma", "Rowling, J. K.")
+            .entrySet()) {
+      var document = new org.apache.solr.common.SolrInputDocument();
+      document.setField("id", entry.getKey());
+      document.setField("source", "initials-test");
+      document.setField("authors", java.util.List.of(entry.getValue()));
+      document.setField("narrators", java.util.List.of(entry.getValue()));
+      solrClient.add(collection, document);
+    }
     solrClient.commit(collection);
     var repository = new SolrAudiobookRepository(solrClient, collection);
     var store = new com.gen3.embeddingjob.store.SolrEmbeddingStore(repository);

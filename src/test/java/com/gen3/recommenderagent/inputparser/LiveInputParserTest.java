@@ -31,6 +31,36 @@ class LiveInputParserTest {
 
   @ParameterizedTest
   @CsvSource({
+    "I want a book by Suzanne Collins,authors,false,Suzanne Collins",
+    "I want books similar to Suzanne Collins style,authors,true,Suzanne Collins",
+    "I want a book narrated by Stephen Fry,narrators,false,Stephen Fry",
+    "I want books with narration similar to Stephen Fry's style,narrators,true,Stephen Fry"
+  })
+  void distinguishesMandatoryPeopleFromStyleSimilarity(
+      String text, String role, boolean semantic, String name) {
+    var result = parser.parse(text);
+    assertThat(result.getIntent()).as(text).isEqualTo(Intent.RECOMMENDATION);
+    assertThat(result.getSimilarToTitle()).as(text).isNullOrEmpty();
+    assertThat(result.getSimilarToAuthor()).as(text).isNullOrEmpty();
+    var hard = result.getMustInclude();
+    var soft = result.getPositiveSemanticQuery();
+    var hardNames =
+        hard == null ? null : role.equals("authors") ? hard.getAuthors() : hard.getNarrators();
+    var softNames =
+        soft == null ? null : role.equals("authors") ? soft.getAuthors() : soft.getNarrators();
+    if (semantic) {
+      assertThat(softNames).as(text).containsExactly(name);
+      assertThat(hardNames).as(text).isNullOrEmpty();
+      assertThat(result.getMustNotInclude()).as(text).isNull();
+    } else {
+      assertThat(hardNames).as(text).containsExactly(name);
+      assertThat(softNames).as(text).isNullOrEmpty();
+    }
+    assertThat(result.isPersonalised()).as(text).isFalse();
+  }
+
+  @ParameterizedTest
+  @CsvSource({
     "Which operations do you support,HELP,,",
     "Start my session preferences and recommendation count over from scratch,RESET_PREFERENCES,,",
     "Could you explain how this service works,HELP,,",

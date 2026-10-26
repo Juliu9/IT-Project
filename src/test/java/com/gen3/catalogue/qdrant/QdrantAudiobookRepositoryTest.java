@@ -48,6 +48,25 @@ import org.mockito.ArgumentCaptor;
 class QdrantAudiobookRepositoryTest {
 
   @Test
+  void dottedInitialsMatchBothAuthorAndNarratorOrders() {
+    var names =
+        new AudiobookFilterConditions(
+            List.of("J. K. Rowling"), List.of("J. K. Rowling"), null, null, null, null, null, null);
+    var actual = QdrantAudiobookSchema.filter(new AudiobookFilters(names, names, List.of()));
+    var expectedNames = List.of("J. K. Rowling", "Rowling, J. K.");
+    var author = io.qdrant.client.ConditionFactory.matchKeywords("authors", expectedNames);
+    var narrator = io.qdrant.client.ConditionFactory.matchKeywords("narrators", expectedNames);
+    assertThat(actual)
+        .isEqualTo(
+            io.qdrant.client.grpc.Common.Filter.newBuilder()
+                .addMust(author)
+                .addMust(narrator)
+                .addMustNot(author)
+                .addMustNot(narrator)
+                .build());
+  }
+
+  @Test
   void personFiltersIncludeAndExcludeBothNameOrders() {
     var conditions =
         new AudiobookFilterConditions(

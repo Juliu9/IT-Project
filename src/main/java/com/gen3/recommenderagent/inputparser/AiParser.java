@@ -97,7 +97,9 @@ public class AiParser {
                         Only RECOMMENDATION/REFINE allow positiveSemanticQuery/negativeSemanticQuery or personalised=true.
                         Genres, moods, plots and character traits belong in semantic genres/topics/keywords, never author/narrator fields.
                         Author/narrator fields contain only names explicitly identified as writers/narrators; a protagonist is a story character.
-                        Liked/similar author or narrator names stay semantic; explicit by/narrated-by constraints use mustInclude/mustNotInclude.
+                        "I want a book by Suzanne Collins" -> mustInclude.authors=["Suzanne Collins"] (mandatory author).
+                        "I want books similar to Suzanne Collins style" -> positiveSemanticQuery.authors=["Suzanne Collins"], never an author filter or similarToTitle.
+                        Apply the same distinction to narrators: by/narrated-by requirements use mustInclude/mustNotInclude; liked/similar styles use positive/negativeSemanticQuery names, without invented themes.
                         Explicit language/duration/publication-year/source constraints also use mustInclude/mustNotInclude.
                         Extract every stated constraint alongside semantic criteria; compact output must not omit supplied values.
                         Preserve contradictions. Author/narrator lists replace by default; addAuthors/addNarrators=true only for explicit additions.

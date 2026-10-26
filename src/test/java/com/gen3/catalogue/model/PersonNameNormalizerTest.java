@@ -13,6 +13,10 @@ class PersonNameNormalizerTest {
   @ParameterizedTest
   @CsvSource({
     "Suzanne Collins,'Collins, Suzanne'",
+    "J. K. Rowling,'Rowling, J. K.'",
+    "'Rowling, J. K.',J. K. Rowling",
+    "J. V. Rowling,'Rowling, J. V.'",
+    "'Rowling, J. V.',J. V. Rowling",
     "'Collins, Suzanne',Suzanne Collins",
     "'García Márquez, Gabriel',Gabriel García Márquez"
   })
@@ -28,6 +32,8 @@ class PersonNameNormalizerTest {
         "Gabriel García Márquez",
         "Martin Luther King, Jr.",
         "John Smith Jr.",
+        "John Smith V",
+        "John K. Rowling",
         "Smith, John, Jr.",
         "Cher",
         "Collins,",
