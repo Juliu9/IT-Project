@@ -53,7 +53,18 @@ class QdrantAudiobookRepositoryTest {
         new AudiobookFilterConditions(
             List.of("J. K. Rowling"), List.of("J. K. Rowling"), null, null, null, null, null, null);
     var actual = QdrantAudiobookSchema.filter(new AudiobookFilters(names, names, List.of()));
-    var expectedNames = List.of("J. K. Rowling", "Rowling, J. K.");
+    var expectedNames =
+        List.of(
+            "J. K. Rowling",
+            "Rowling, J. K.",
+            "J.K. Rowling",
+            "Rowling, J.K.",
+            "J K Rowling",
+            "Rowling, J K",
+            "J. K. Rowling.",
+            "J.K. Rowling.",
+            "J K Rowling.",
+            "Rowling, J K.");
     var author = io.qdrant.client.ConditionFactory.matchKeywords("authors", expectedNames);
     var narrator = io.qdrant.client.ConditionFactory.matchKeywords("narrators", expectedNames);
     assertThat(actual)
@@ -82,10 +93,12 @@ class QdrantAudiobookRepositoryTest {
         QdrantAudiobookSchema.filter(new AudiobookFilters(conditions, conditions, List.of()));
     var authors =
         io.qdrant.client.ConditionFactory.matchKeywords(
-            "authors", List.of("Suzanne Collins", "Collins, Suzanne"));
+            "authors",
+            List.of(
+                "Suzanne Collins", "Collins, Suzanne", "Suzanne Collins.", "Collins, Suzanne."));
     var narrators =
         io.qdrant.client.ConditionFactory.matchKeywords(
-            "narrators", List.of("Fry, Stephen", "Stephen Fry"));
+            "narrators", List.of("Fry, Stephen", "Stephen Fry", "Fry, Stephen.", "Stephen Fry."));
     assertThat(actual)
         .isEqualTo(
             io.qdrant.client.grpc.Common.Filter.newBuilder()

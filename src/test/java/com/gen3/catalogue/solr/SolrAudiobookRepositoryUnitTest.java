@@ -51,10 +51,10 @@ class SolrAudiobookRepositoryUnitTest {
             org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST));
     assertEquals(
         List.of(
-            "authors:(\"Suzanne\\ Collins\" OR \"Collins,\\ Suzanne\")",
-            "narrators:(\"Fry,\\ Stephen\" OR \"Stephen\\ Fry\")",
-            "-authors:(\"Suzanne\\ Collins\" OR \"Collins,\\ Suzanne\")",
-            "-narrators:(\"Fry,\\ Stephen\" OR \"Stephen\\ Fry\")"),
+            "authors:(\"Suzanne\\ Collins\" OR \"Collins,\\ Suzanne\" OR \"Suzanne\\ Collins.\" OR \"Collins,\\ Suzanne.\")",
+            "narrators:(\"Fry,\\ Stephen\" OR \"Stephen\\ Fry\" OR \"Fry,\\ Stephen.\" OR \"Stephen\\ Fry.\")",
+            "-authors:(\"Suzanne\\ Collins\" OR \"Collins,\\ Suzanne\" OR \"Suzanne\\ Collins.\" OR \"Collins,\\ Suzanne.\")",
+            "-narrators:(\"Fry,\\ Stephen\" OR \"Stephen\\ Fry\" OR \"Fry,\\ Stephen.\" OR \"Stephen\\ Fry.\")"),
         java.util.Arrays.asList(captured.getValue().getFilterQueries()));
     assertEquals(List.of("Suzanne Collins"), conditions.authors());
   }

@@ -13,6 +13,13 @@ class PersonNameNormalizerTest {
   @ParameterizedTest
   @CsvSource({
     "Suzanne Collins,'Collins, Suzanne'",
+    "Suzanne Collins,'Collins, Suzanne.'",
+    "'Collins, Suzanne.',Suzanne Collins",
+    "J.K. Rowling,'Rowling, J. K.'",
+    "J K Rowling,'Rowling, J. K.'",
+    "'Rowling, J K',J. K. Rowling",
+    "'Rowling, J K.',J. K. Rowling",
+    "J. K. Rowling,'Rowling, J.K.'",
     "J. K. Rowling,'Rowling, J. K.'",
     "'Rowling, J. K.',J. K. Rowling",
     "J. V. Rowling,'Rowling, J. V.'",
@@ -36,6 +43,8 @@ class PersonNameNormalizerTest {
         "John K. Rowling",
         "Smith, John, Jr.",
         "Cher",
+        "J. K.",
+        "J K",
         "Collins,",
         ", Suzanne"
       })
@@ -44,11 +53,20 @@ class PersonNameNormalizerTest {
   }
 
   @Test
+  void compactUndottedNamesAreNotAssumedToBeInitials() {
+    assertThat(PersonNameNormalizer.variants(List.of("JK Rowling")))
+        .doesNotContain("J. K. Rowling", "Rowling, J. K.");
+    assertThat(PersonNameNormalizer.comparisonKey("JK Rowling"))
+        .isNotEqualTo(PersonNameNormalizer.comparisonKey("J. K. Rowling"));
+  }
+
+  @Test
   void deduplicatesVariantsAndIgnoresMissingNames() {
     assertThat(
             PersonNameNormalizer.variants(
                 Arrays.asList(null, " ", "Suzanne Collins", "Collins, Suzanne", "Suzanne Collins")))
-        .containsExactly("Suzanne Collins", "Collins, Suzanne");
+        .containsExactly(
+            "Suzanne Collins", "Collins, Suzanne", "Suzanne Collins.", "Collins, Suzanne.");
     assertThat(PersonNameNormalizer.variants(null)).isEmpty();
     assertThat(PersonNameNormalizer.comparisonKey("  Collins,   Suzanne  "))
         .isEqualTo("suzanne collins");

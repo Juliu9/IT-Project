@@ -56,6 +56,7 @@ class ExactFilterCorrectionTest {
   @CsvSource({
     "authors,A,A",
     "authors,J. K. Rowling,'Rowling, J. K.'",
+    "authors,J K Rowling,'Rowling, J. K.'",
     "authors,Suzanne Collins,'Collins, Suzanne'",
     "narrators,'Fry, Stephen',Stephen Fry",
     "narrators,N,N",

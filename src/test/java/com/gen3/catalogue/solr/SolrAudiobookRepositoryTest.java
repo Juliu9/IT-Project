@@ -75,7 +75,7 @@ class SolrAudiobookRepositoryTest {
                   field.equals("authors") || field.equals("narrators")))
           .process(solrClient, collection);
     }
-    for (String id : java.util.List.of("forward", "comma", "other")) {
+    for (String id : java.util.List.of("forward", "comma", "period", "other")) {
       var document = new org.apache.solr.common.SolrInputDocument();
       document.setField("id", id);
       document.setField("source", "name-test");
@@ -85,6 +85,7 @@ class SolrAudiobookRepositoryTest {
               switch (id) {
                 case "forward" -> "Suzanne Collins";
                 case "comma" -> "Collins, Suzanne";
+                case "period" -> "Collins, Suzanne.";
                 default -> "Another Author";
               }));
       document.setField(
@@ -92,7 +93,15 @@ class SolrAudiobookRepositoryTest {
       solrClient.add(collection, document);
     }
     for (var entry :
-        java.util.Map.of("initials-forward", "J. K. Rowling", "initials-comma", "Rowling, J. K.")
+        java.util.Map.of(
+                "initials-forward",
+                "J. K. Rowling",
+                "initials-comma",
+                "Rowling, J. K.",
+                "initials-compact",
+                "Rowling, J.K.",
+                "initials-separated",
+                "J K Rowling")
             .entrySet()) {
       var document = new org.apache.solr.common.SolrInputDocument();
       document.setField("id", entry.getKey());
@@ -129,7 +138,8 @@ class SolrAudiobookRepositoryTest {
                 new com.gen3.catalogue.model.AudiobookFilters(initials, empty, java.util.List.of()),
                 10))
         .extracting(book -> book.audiobook().id())
-        .containsExactlyInAnyOrder("initials-forward", "initials-comma");
+        .containsExactlyInAnyOrder(
+            "initials-forward", "initials-comma", "initials-compact", "initials-separated");
     var excludeInitials =
         new com.gen3.catalogue.model.AudiobookFilterConditions(
             java.util.List.of(),
@@ -151,7 +161,7 @@ class SolrAudiobookRepositoryTest {
                 new com.gen3.catalogue.model.AudiobookFilters(names, empty, java.util.List.of()),
                 10))
         .extracting(book -> book.audiobook().id())
-        .containsExactlyInAnyOrder("forward", "comma");
+        .containsExactlyInAnyOrder("forward", "comma", "period");
     var all =
         new com.gen3.catalogue.model.AudiobookFilterConditions(
             java.util.List.of(), java.util.List.of(), null, "name-test", null, null, null, null);
