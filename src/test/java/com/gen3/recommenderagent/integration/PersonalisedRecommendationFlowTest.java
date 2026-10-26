@@ -79,7 +79,7 @@ class PersonalisedRecommendationFlowTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
-      strings = {"Recommend an audiobook", "Recommend an audiobook for me"})
+      strings = {"Recommend an audiobook", "Recommend an audiobook for me", "give me some books"})
   void genericRequestForNewUserAsksForTasteWithoutSearching(String text) {
     var request = new ConversationDraft();
     request.setIntent(Intent.RECOMMENDATION);

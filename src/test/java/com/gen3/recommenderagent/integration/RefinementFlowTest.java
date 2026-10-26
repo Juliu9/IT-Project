@@ -63,12 +63,54 @@ class RefinementFlowTest {
   }
 
   private com.gen3.recommenderagent.domain.session.SessionRequest shorterCommand() {
+    return command("make them shorter");
+  }
+
+  private com.gen3.recommenderagent.domain.session.SessionRequest command(String text) {
     return new com.gen3.recommenderagent.inputparser.InputParser(
             new com.gen3.recommenderagent.inputparser.CommandParser(),
             new com.gen3.recommenderagent.inputparser.AiParser(
                 mock(org.springframework.ai.chat.client.ChatClient.class),
                 com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
-        .parse("make them shorter");
+        .parse(text);
+  }
+
+  @Test
+  void moreRecentRetainsSearchContentAndReplacesThePreviousYearConstraint() {
+    var old = new ExactCriteria();
+    old.setAuthors(List.of("Suzanne Collins"));
+    old.setPublicationYear("around 2000");
+    search(old, null);
+    var result = service.process("session", "user", command("more recent"));
+    assertThat(result.getIntent()).isEqualTo(Intent.REFINE);
+    assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
+    assertThat(result.getMustInclude().getAuthors()).containsExactly("Suzanne Collins");
+    assertThat(result.getMustInclude().getPublicationYear()).isEqualTo("recent");
+    assertThat(result.getSearchCriteria().getMustInclude().getPublicationYear())
+        .isEqualTo("recent");
+    assertThat(sessions.getSession("session", "user").getPreferences()).isNull();
+    verify(workflow).recommend(any(), any());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"fresh", "cleared", "new-session"})
+  void moreRecentWithoutSearchContextAsksForContent(String scenario) {
+    if (!scenario.equals("fresh")) {
+      search(null, null);
+      if (scenario.equals("cleared")) {
+        process(request(Intent.CLEAR_HISTORY));
+      }
+      clearInvocations(workflow);
+    }
+    var result =
+        service.process(
+            scenario.equals("new-session") ? "new-session" : "session",
+            "user",
+            command("more recent"));
+    assertThat(result.getIntent()).isEqualTo(Intent.REFINE);
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.SEARCH_CLARIFICATION);
+    assertThat(result.getRecommendations()).isEmpty();
+    verifyNoInteractions(workflow);
   }
 
   @Test

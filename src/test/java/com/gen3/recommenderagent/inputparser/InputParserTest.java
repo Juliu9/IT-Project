@@ -25,6 +25,31 @@ import tools.jackson.databind.ObjectMapper;
 class InputParserTest {
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"give me some books", "Give me some audiobooks please", "recommend some books"})
+  void genericBookRequestsUsePersonalisedRecommendationsWithoutAi(String text) {
+    var ai = mock(AiParser.class);
+    var result = new InputParser(new CommandParser(), ai).parse(text);
+    assertEquals(Intent.RECOMMENDATION, result.getIntent());
+    assertEquals(true, result.isPersonalised());
+    assertEquals(true, result.isExplicitSearch());
+    assertEquals(null, result.getMustInclude());
+    assertEquals(null, result.getPositiveSemanticQuery());
+    verifyNoInteractions(ai);
+  }
+
+  @Test
+  void moreRecentIsARefinementUsingTheExistingRecentWindowWithoutAi() {
+    var ai = mock(AiParser.class);
+    var result = new InputParser(new CommandParser(), ai).parse("more recent");
+    assertEquals(Intent.REFINE, result.getIntent());
+    assertEquals("recent", result.getMustInclude().getPublicationYear());
+    assertEquals(null, result.getPositiveSemanticQuery());
+    assertEquals(false, result.isPersonalised());
+    verifyNoInteractions(ai);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
       strings = {"no", "not now", "keep my preferences", "nothing", "No, thanks!"})
   void preferenceDeclinesSkipAiButNeedContextToCancel(String text) {
     var ai = mock(AiParser.class);
@@ -364,6 +389,8 @@ class InputParserTest {
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {
         "help me find fantasy books",
+        "give me some books by Suzanne Collins",
+        "more recent than 2000",
         "do not reset",
         "clear and recommend fantasy",
         "only three at a time by Jane Austen",

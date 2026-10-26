@@ -51,7 +51,9 @@ public final class SearchContextResolver implements ConversationHandler {
     if (effective.getIntent() == Intent.REFINE
         && latestSearch(session) == null
         && !session.isAwaitingPersonalisedPreferences()) {
-      if (effective.isShorter() || !hasSearchCriteria(effective)) {
+      if (effective.isShorter()
+          || ConversationText.isRecencyRefinement(effective.getRawText())
+          || !hasSearchCriteria(effective)) {
         effective.setSearchClarificationRequired(true);
         return effective;
       }

@@ -204,6 +204,8 @@ the first refill. New searches record the full snapshot metadata; no database mi
 ### Refinements and exact-filter corrections
 
 Self-contained criteria, such as “fantasy under five hours”, route to `RECOMMENDATION`.
+“More recent” is a `REFINE` that keeps the search content and applies the existing `recent`
+publication window. Without an active search, it asks what kind of audiobook the user wants.
 A context-dependent `REFINE` without a previous search asks for criteria without embedding or
 retrieval; stored user preferences alone are not a previous search. A self-contained request can
 still answer a pending preference question and save that taste for the session.
@@ -262,13 +264,16 @@ abandon it. Corrections and contradictions use the existing exact-filter policy 
 | Filter | Accepted expressions | Boundaries |
 | --- | --- | --- |
 | Duration | Hours/minutes, decimals, `1h 30m`, `between 2 and 3 hours` | `under`/`over` are strict; `at most`/`at least` inclusive; bare duration exact |
-| Publication year | Four-digit year, comparisons, inclusive ranges, `recent`, `past year`, `last N years` | `after`/`before` are strict; bare year exact; relative windows include both boundary years |
+| Publication year | Four-digit year, comparisons, inclusive ranges, `around YYYY`, `period YYYY`, `recent`, `past year`, `last N years` | `after`/`before` are strict; bare year exact; relative windows include both boundary years |
 
 The parser preserves relative publication phrases rather than guessing a calendar year. Retrieval
 resolves them against the current UTC year: `recent`/`recently` means the last five years; `past year`
 means one year; `last 4 years` and `last four years` mean four. Both include and exclude filters use
 these rules. In 2026 these become 2021–2026, 2025–2026, and 2022–2026 respectively, excluding future
 years. Zero, fractional, negative, and unrepresentably large windows return `400`.
+
+Approximate phrases such as “around 2000” and “the period 2000” mean an inclusive ±5-year
+range: 1995–2005. Bounds stay within calendar years 0–9999; a bare “2000” remains exact.
 
 Catalogue metadata contains years only, so these are inclusive year ranges, not exact rolling
 month/day cutoffs. Cached pages remain snapshots of the search that produced them.
@@ -399,7 +404,8 @@ and cached books. These phrases skip AI as UNKNOWN and become cancellation only 
 Unrecognized replies no longer become personalised searches merely because a taste
 question is pending.
 
-Generic recommendation requests without criteria, such as “Recommend an audiobook”, use the
+Generic recommendation requests without criteria, such as “Recommend an audiobook” or “give me
+some books”, use the
 personalised path. Existing users can use stored taste vectors; users without usable preferences
 are asked what they like before candidate retrieval. Explicit criteria still work without requiring
 personalisation.

@@ -31,6 +31,12 @@ public final class ConversationText {
         .stripTrailing();
   }
 
+  public static boolean isRecencyRefinement(String text) {
+    return text != null
+        && java.util.Set.of("more recent", "more recent books", "more recent audiobooks")
+            .contains(normalizeCommand(text));
+  }
+
   public static boolean isPreferenceDecline(String reply) {
     return java.util.Set.of(
             "nothing",

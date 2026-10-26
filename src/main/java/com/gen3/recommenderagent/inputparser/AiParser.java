@@ -77,6 +77,8 @@ public class AiParser {
                         A same-books/list reference takes precedence over REPEAT; "repeat your last explanation" is REPEAT, not a new explanation.
                         EXPLAIN_RECOMMENDATION=why recommended; HELP=capabilities/usage; CHANGE_COUNT=recommendation count;
                         REFINE changes the current results; UPDATE_PREFERENCES explicitly edits saved tastes/constraints.
+                        "give me some books" -> RECOMMENDATION, personalised=true, explicitSearch=true; no invented criteria.
+                        "more recent" -> REFINE, mustInclude.publicationYear="recent"; preserve the search, never MORE_RESULTS.
                         "make them shorter" -> REFINE, shorter=true, explicitSearch=true; no invented genre or hour limit.
                         shorter=true only compares previous results' runtimes without an explicit numeric limit; Java uses their durations.
                         shorter refers to runtime, not response length. Never invent genres or numeric limits for an underspecified refinement.
@@ -118,6 +120,7 @@ public class AiParser {
                         Duration comparisons belong in mustInclude.duration (including "under"/"over", not just exact lengths); use digits plus hours/minutes; convert words/fractions ("under ten hours" -> "under 10 hours";
                         "one and a half hours" -> "1.5 hours"). Preserve under/over/at most/at least/exactly/between and both endpoints; vague duration=null.
                         Years=preserve after/before/at least/at most/exactly/between and both YYYY endpoints. recent/recently=last 5 years;
+                        "books from around 2000" / "books from the period 2000" -> publicationYear="around 2000" / "period 2000"; Java applies inclusive +/-5 years. Preserve these approximate phrases, never extract only the exact year.
                         retain relative wording/counts ("recent", "past year", "last four years") in publicationYear, never guess years.
                         Keep exclusions and duration comparisons separate. "mystery, not too dark" -> positive genres=["mystery"], negative keywords=["dark"].
 

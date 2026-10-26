@@ -12,6 +12,25 @@ import org.junit.jupiter.api.Test;
 
 /** Verifies conversion of a mixed user request into searchable text and exact filters. */
 class AudiobookRetrievalPlannerTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "around 2000,1995,2005", "the period 2000,1995,2005", "period 2000,1995,2005",
+    "from the period 2000,1995,2005", "around 0000,0,5", "around 9999,9994,9999",
+    "2000,2000,2000", "from 2000,2000,"
+  })
+  void approximateYearsUseInclusiveFiveYearBoundsWithoutChangingExactYears(
+      String text, int minimum, Integer maximum) {
+    var request = new ConversationDraft();
+    var exact = new ExactCriteria();
+    exact.setPublicationYear(text);
+    request.setMustInclude(exact);
+    request.setMustNotInclude(exact);
+    var filters = new AudiobookRetrievalPlanner().plan(50, request, Set.of()).filters();
+    for (var conditions : List.of(filters.mustInclude(), filters.mustNotInclude())) {
+      assertThat(conditions.minimumPublicationYear()).isEqualTo(minimum);
+      assertThat(conditions.maximumPublicationYear()).isEqualTo(maximum);
+    }
+  }
 
   /** Keeps fantasy and desert as lexical terms while making narrator and duration exact filters. */
   @Test

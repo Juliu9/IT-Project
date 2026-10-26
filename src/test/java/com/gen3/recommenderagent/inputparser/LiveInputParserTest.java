@@ -30,6 +30,23 @@ class LiveInputParserTest {
   @Autowired private InputParser parser;
 
   @ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"books from around 2000", "books from the period 2000"})
+  void approximatePublicationYearsProduceAnInclusiveFiveYearRange(String text) {
+    var result = parser.parse(text);
+    assertThat(result.getIntent()).as(text).isEqualTo(Intent.RECOMMENDATION);
+    assertThat(result.getMustInclude()).as(text).isNotNull();
+    var bounds =
+        new com.gen3.recommenderagent.retrieval.plan.ExactFilterPolicy()
+            .filters(result, java.util.Set.of())
+            .mustInclude();
+    assertThat(bounds.minimumPublicationYear()).as(text).isEqualTo(1995);
+    assertThat(bounds.maximumPublicationYear()).as(text).isEqualTo(2005);
+    assertThat(result.getPositiveSemanticQuery()).as(text).isNull();
+    assertThat(result.isPersonalised()).as(text).isFalse();
+  }
+
+  @ParameterizedTest
   @CsvSource({
     "I want a book by Suzanne Collins,authors,false,Suzanne Collins",
     "I want books similar to Suzanne Collins style,authors,true,Suzanne Collins",

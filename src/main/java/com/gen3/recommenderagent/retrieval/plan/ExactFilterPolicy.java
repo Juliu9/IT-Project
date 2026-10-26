@@ -31,6 +31,8 @@ public class ExactFilterPolicy {
       Pattern.compile(
           "^(?:(after|before|from|since|newer than|older than|over|under|more than|less than|at least|at most|minimum(?: of)?|maximum(?: of)?|up to|exactly) )?(\\d{4})$");
 
+  private static final Pattern APPROXIMATE_YEAR =
+      Pattern.compile("^(?:from )?(?:around|(?:the )?period) (\\d{4})$");
   private static final Pattern RELATIVE_YEARS =
       Pattern.compile(
           "^(?:in |within |from )?(?:the )?(?:last|past) (?:([0-9]+|a|an|one|two|three|four|five|six|seven|eight|nine|ten) )?years?$");
@@ -220,6 +222,11 @@ public class ExactFilterPolicy {
       return RangeBounds.empty();
     }
     String normalized = publicationYear.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
+    Matcher approximate = APPROXIMATE_YEAR.matcher(normalized);
+    if (approximate.matches()) {
+      int year = Integer.parseInt(approximate.group(1));
+      return new RangeBounds(Math.max(0, year - 5), Math.min(9999, year + 5));
+    }
     Matcher relative = RELATIVE_YEARS.matcher(normalized);
     if (normalized.equals("recent") || normalized.equals("recently") || relative.matches()) {
       int years;

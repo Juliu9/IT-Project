@@ -4,6 +4,8 @@ import static com.gen3.recommenderagent.domain.conversation.ConversationText.nor
 import static com.gen3.recommenderagent.domain.conversation.ConversationText.selectionReply;
 
 import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.conversation.ConversationText;
+import com.gen3.recommenderagent.domain.session.ExactCriteria;
 import java.math.BigInteger;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
@@ -32,6 +34,27 @@ public class CommandParser {
 
   public ParsedRequest parse(String rawText) {
     String command = normalizeCommand(rawText);
+    if (java.util.Set.of(
+            "give me some books",
+            "give me some audiobooks",
+            "recommend some books",
+            "recommend some audiobooks")
+        .contains(command)) {
+      var parsed = new ParsedRequest();
+      parsed.setIntent(Intent.RECOMMENDATION);
+      parsed.setPersonalised(true);
+      parsed.setExplicitSearch(true);
+      return parsed;
+    }
+    if (ConversationText.isRecencyRefinement(command)) {
+      var parsed = new ParsedRequest();
+      parsed.setIntent(Intent.REFINE);
+      parsed.setExplicitSearch(true);
+      var criteria = new ExactCriteria();
+      criteria.setPublicationYear("recent");
+      parsed.setMustInclude(criteria);
+      return parsed;
+    }
     if (selectionReply(rawText.strip()) != null
         || com.gen3.recommenderagent.domain.conversation.ConversationText.isPreferenceDecline(
             rawText)) {
