@@ -22,7 +22,7 @@ class AudiobookRetrievalPlannerTest {
     "the period 2000,1995,2005",
     "period 2000,1995,2005",
     "from the period 2000,1995,2005",
-    "around 0000,0,5",
+    "around 0001,1,6",
     "around 9999,9994,9999",
     "2000,2000,2000",
     "from 2000,2000,"

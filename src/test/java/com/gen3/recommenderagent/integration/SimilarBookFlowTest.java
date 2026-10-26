@@ -223,6 +223,24 @@ class SimilarBookFlowTest {
   }
 
   @Test
+  void exactTitleAtTheLookupBoundaryIsIncludedInDisplayedChoices() throws Exception {
+    var matches = new java.util.ArrayList<AudiobookTitle>();
+    for (int i = 0; i < 5; i++) {
+      matches.add(
+          new AudiobookTitle("partial-" + i, "The Hunger Games companion " + i, List.of("Writer")));
+    }
+    matches.add(new AudiobookTitle("hunger", "The Hunger Games", List.of("Suzanne Collins")));
+    when(titles.findBooksByTitle(anyString(), any(), anyInt())).thenReturn(matches);
+    var result =
+        service.process("session", "user", request(Intent.RECOMMENDATION, "The Hunger Games"));
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.SIMILAR_BOOK_SELECTION);
+    assertThat(result.getSimilarBookChoices()).hasSize(5);
+    assertThat(result.getSimilarBookChoices().getFirst().bookId()).isEqualTo("hunger");
+    var selected = service.process("session", "user", parsedReply("1"));
+    assertThat(selected.getSimilarBook().bookId()).isEqualTo("hunger");
+  }
+
+  @Test
   void exactReferenceSurvivesMoreRefineExplainAndSessionSerialization() throws Exception {
     var first =
         service.process("session", "user", request(Intent.RECOMMENDATION, "the hunger games"));

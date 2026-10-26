@@ -15,6 +15,32 @@ import org.junit.jupiter.params.provider.CsvSource;
 class ExactFilterCorrectionTest {
   private final ExactFilterPolicy planner = new ExactFilterPolicy();
 
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"2000s", "from 2000s", "from the 2000s", "since the 2000s"})
+  void acceptsDecadePrefixes(String expression) {
+    var filters = planner.filters(request("year", expression, null), Set.of()).mustInclude();
+    assertThat(filters.minimumPublicationYear()).isEqualTo(2000);
+    assertThat(filters.maximumPublicationYear()).isEqualTo(2009);
+  }
+
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "0000",
+        "before 0000",
+        "before 0001",
+        "after 9999",
+        "0000s",
+        "from 0000s",
+        "between 0000 and 2000",
+        "around 0000"
+      })
+  void rejectsImpossibleCalendarBounds(String expression) {
+    assertThatThrownBy(() -> planner.filters(request("year", expression, null), Set.of()))
+        .isInstanceOf(InvalidRequestException.class);
+  }
+
   private ConversationDraft request(String field, String required, String forbidden) {
     var request = new ConversationDraft();
     request.setIntent(Intent.REFINE);

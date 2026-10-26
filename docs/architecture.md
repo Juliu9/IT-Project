@@ -96,7 +96,7 @@ explanation or count question takes priority over older title choices. Title mat
 normaliser for case, punctuation and catalogue `$b` markers across reference and explanation flows.
 Resuming a reference selection restores explicit search criteria and reapplies current preferences;
 preference resets cannot revive inherited filters. Count changes and resets also update pending searches.
-“None of these” asks for another reference title while retaining the search constraints. Reference author
+“None of these” asks for another reference title while retaining the search constraints. Exact title matches appear before partial matches when the displayed choices are capped. Reference author
 lookup and author replies use the same conservative person-name equivalence as exact filters.
 
 Pending choices are stored once in their request snapshot; older snapshots with a duplicate choices
@@ -228,7 +228,9 @@ When the average would not advance the existing lower bound, advance it by one y
 that exceeds the period's end, return a fixed exhaustion message without consuming the page or queue;
 MORE and REPEAT_RECOMMENDATIONS remain available, while REPEAT repeats the exhaustion message.
 Explicit periods stay literal:
-“1950 to the 2000s” means 1950–2009. Ordinary “recent books” still means the last five years.
+“1950 to the 2000s” means 1950–2009. A standalone decade, including “from the 2000s”,
+means 2000–2009. Publication years must be within 1–9999; exclusive bounds outside that range
+ask for a valid range before retrieval. Ordinary “recent books” still means the last five years.
 Without an active search, a comparative refinement asks what kind of audiobook the user wants.
 A context-dependent `REFINE` without a previous search asks for criteria without embedding or
 retrieval; stored user preferences alone are not a previous search. A self-contained request can
@@ -243,7 +245,10 @@ with the search through cache reloads, MORE and later refinements, preventing sa
 reintroducing a cleared filter or replaced genre. A new recommendation request starts fresh.
 
 New exact author/narrator lists replace the previous list by default. Explicit “also”/“add” wording
-sets the parser's `addAuthors`/`addNarrators` flags and extends that list instead. Unrelated filters
+sets the parser's `addAuthors`/`addNarrators` flags and extends that list instead.
+For leading “also”/“add” instructions, supplied values remain additions even when another field is
+removed in the same message; empty replacement fields still clear their filters. Explicit
+“instead”/“replace” wording retains replacement behavior. Unrelated filters
 and semantic criteria remain inherited for refinements.
 
 Before queue invalidation or recommendation work, the planner checks exact include/exclude

@@ -25,6 +25,48 @@ public class InputParser {
     this.aiParser = aiParser;
   }
 
+  private boolean hasSearchValue(ParsedRequest parsed, String path) {
+    String[] parts = path.split("\\.");
+    Object value;
+    if (parts[0].equals("mustInclude") || parts[0].equals("mustNotInclude")) {
+      var criteria =
+          parts[0].equals("mustInclude") ? parsed.getMustInclude() : parsed.getMustNotInclude();
+      if (criteria == null) {
+        return false;
+      }
+      value =
+          switch (parts[1]) {
+            case "authors" -> criteria.getAuthors();
+            case "narrators" -> criteria.getNarrators();
+            case "duration" -> criteria.getDuration();
+            case "publicationYear" -> criteria.getPublicationYear();
+            case "language" -> criteria.getLanguage();
+            case "source" -> criteria.getSource();
+            default -> null;
+          };
+    } else {
+      var query =
+          parts[0].equals("positiveSemanticQuery")
+              ? parsed.getPositiveSemanticQuery()
+              : parsed.getNegativeSemanticQuery();
+      if (query == null) {
+        return false;
+      }
+      value =
+          switch (parts[1]) {
+            case "authors" -> query.getAuthors();
+            case "narrators" -> query.getNarrators();
+            case "genres" -> query.getGenres();
+            case "topics" -> query.getTopics();
+            case "keywords" -> query.getKeywords();
+            default -> null;
+          };
+    }
+    return value instanceof List<?> list
+        ? !list.isEmpty()
+        : value instanceof String text && !text.isBlank();
+  }
+
   public SessionRequest parse(String rawText) {
     long started = System.nanoTime();
     String mode = "VALIDATION";
@@ -66,9 +108,13 @@ public class InputParser {
             com.gen3.recommenderagent.domain.conversation.ConversationText.normalizeCommand(
                 rawText);
         if (command.matches("^(?:also|add|additionally)\\b.*")
-            && !command.matches(".*\\b(?:instead|replace|rather than|switch|remove|clear)\\b.*")) {
-          // Explicit additions cannot erase criteria, even if the model supplies replacement paths.
-          request.setReplaceSearchFields(List.of());
+            && !command.matches(".*\\b(?:instead|replace|rather than|switch)\\b.*")) {
+          // Keep field removals while protecting supplied additions from model replacement flags.
+          var search = parsed;
+          request.setReplaceSearchFields(
+              parsed.getReplaceSearchFields().stream()
+                  .filter(path -> !hasSearchValue(search, path))
+                  .toList());
         }
       }
       request.setAddAuthors(parsed.isAddAuthors());

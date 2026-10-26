@@ -88,6 +88,23 @@ class InputParserTest {
   }
 
   @Test
+  void compoundAdditionKeepsTheRemovalButCannotReplaceTheAddedGenre() {
+    var ai = mock(AiParser.class);
+    var parsed = new ParsedRequest();
+    parsed.setIntent(Intent.REFINE);
+    parsed.setReplaceSearchFields(List.of("positiveSemanticQuery.genres", "mustInclude.duration"));
+    var query = new SemanticQuery();
+    query.setGenres(List.of("mystery"));
+    parsed.setPositiveSemanticQuery(query);
+    when(ai.parse(anyString())).thenReturn(parsed);
+    var result =
+        new InputParser(new CommandParser(), ai)
+            .parse("Also include mystery and remove the time limit");
+    assertEquals(List.of("mustInclude.duration"), result.getReplaceSearchFields());
+    assertEquals(List.of("mystery"), result.getPositiveSemanticQuery().getGenres());
+  }
+
+  @Test
   void modelSearchReplacementsAreCopiedAndInvalidPathsAreRejected() {
     var ai = mock(AiParser.class);
     var parsed = new ParsedRequest();

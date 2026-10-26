@@ -234,7 +234,10 @@ public class ExactFilterPolicy {
     Matcher approximate = APPROXIMATE_YEAR.matcher(normalized);
     if (approximate.matches()) {
       int year = Integer.parseInt(approximate.group(1));
-      return new RangeBounds(Math.max(0, year - 5), Math.min(9999, year + 5));
+      if (year == 0) {
+        throw new InvalidRequestException("Please give a publication year between 1 and 9999.");
+      }
+      return new RangeBounds(Math.max(1, year - 5), Math.min(9999, year + 5));
     }
     Matcher relative = RELATIVE_YEARS.matcher(normalized);
     if (normalized.equals("recent") || normalized.equals("recently") || relative.matches()) {
@@ -271,9 +274,10 @@ public class ExactFilterPolicy {
       }
       return new RangeBounds(currentYear - years, currentYear);
     }
-    if (normalized.matches("[0-9]{3}0s")) {
+    if (normalized.matches("(?:(?:from|since) (?:the )?)?[0-9]{3}0s")) {
+      normalized = normalized.replaceFirst("^(?:from|since) (?:the )?", "");
       int start = Integer.parseInt(normalized.substring(0, 4));
-      return new RangeBounds(start, start + 9);
+      return boundedYearRange(start, start + 9);
     }
     Matcher range = YEAR_RANGE.matcher(normalized);
     if (range.matches()) {
@@ -281,17 +285,20 @@ public class ExactFilterPolicy {
       String last = range.group(2) != null ? range.group(2) : range.group(4);
       int lower = Integer.parseInt(first.substring(0, 4));
       int upper = Integer.parseInt(last.substring(0, 4)) + (last.endsWith("s") ? 9 : 0);
-      if (lower <= upper) {
+      if (lower >= 1 && lower <= upper && upper <= 9999) {
         return new RangeBounds(lower, upper);
       }
     } else {
       Matcher comparison = YEAR_COMPARISON.matcher(normalized);
       if (comparison.matches()) {
         int year = Integer.parseInt(comparison.group(2));
+        if (year == 0) {
+          throw new InvalidRequestException("Please give a publication year between 1 and 9999.");
+        }
         String operator = comparison.group(1) == null ? "exactly" : comparison.group(1);
         return switch (operator) {
-          case "after", "newer than", "over", "more than" -> new RangeBounds(year + 1, null);
-          case "before", "older than", "under", "less than" -> new RangeBounds(null, year - 1);
+          case "after", "newer than", "over", "more than" -> boundedYearRange(year + 1, null);
+          case "before", "older than", "under", "less than" -> boundedYearRange(null, year - 1);
           case "from", "since", "at least", "minimum", "minimum of" -> new RangeBounds(year, null);
           case "at most", "maximum", "maximum of", "up to" -> new RangeBounds(null, year);
           default -> new RangeBounds(year, year);
@@ -300,6 +307,14 @@ public class ExactFilterPolicy {
     }
     throw new InvalidRequestException(
         "What publication year or year range would you like? You can also say 'after 2020' or 'in the last 5 years'.");
+  }
+
+  private RangeBounds boundedYearRange(Integer lower, Integer upper) {
+    if ((lower != null && (lower < 1 || lower > 9999))
+        || (upper != null && (upper < 1 || upper > 9999))) {
+      throw new InvalidRequestException("Please give a publication year range within 1 to 9999.");
+    }
+    return new RangeBounds(lower, upper);
   }
 
   /** Creates an immutable, null-safe filter list. */

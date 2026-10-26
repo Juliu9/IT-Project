@@ -104,7 +104,10 @@ public class SimilarBookResolver {
             session,
             request,
             ConversationDecision.SIMILAR_BOOK_SELECTION,
-            matches.stream().limit(MAX_CHOICES).toList());
+            java.util.stream.Stream.concat(exact.stream(), matches.stream())
+                .distinct()
+                .limit(MAX_CHOICES)
+                .toList());
       }
     } catch (IOException exception) {
       throw new CandidateRetrievalException("catalogue title lookup", exception);
