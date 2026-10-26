@@ -76,6 +76,29 @@ class LiveInputParserTest {
     assertThat(result.isPersonalised()).as(text).isFalse();
   }
 
+  @org.junit.jupiter.api.Test
+  void explicitPersonalisationCanAccompanyAuthorStyle() {
+    var result =
+        parser.parse(
+            "Recommend books similar to Suzanne Collins style for me based on my reading preferences");
+    assertThat(result.getIntent()).isEqualTo(Intent.RECOMMENDATION);
+    assertThat(result.isPersonalised()).isTrue();
+    assertThat(result.getPositiveSemanticQuery().getAuthors()).contains("Suzanne Collins");
+    assertThat(result.getMustInclude() == null ? null : result.getMustInclude().getAuthors())
+        .isNullOrEmpty();
+  }
+
+  @org.junit.jupiter.api.Test
+  void explicitPeriodIncludesTheWholeFinalDecade() {
+    var result = parser.parse("I want books from 1950 to the 2000s");
+    var bounds =
+        new com.gen3.recommenderagent.retrieval.plan.ExactFilterPolicy()
+            .filters(result, java.util.Set.of())
+            .mustInclude();
+    assertThat(bounds.minimumPublicationYear()).isEqualTo(1950);
+    assertThat(bounds.maximumPublicationYear()).isEqualTo(2009);
+  }
+
   @ParameterizedTest
   @CsvSource({
     "Which operations do you support,HELP,,",

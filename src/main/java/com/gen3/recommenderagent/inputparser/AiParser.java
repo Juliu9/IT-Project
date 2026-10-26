@@ -78,7 +78,7 @@ public class AiParser {
                         EXPLAIN_RECOMMENDATION=why recommended; HELP=capabilities/usage; CHANGE_COUNT=recommendation count;
                         REFINE changes the current results; UPDATE_PREFERENCES explicitly edits saved tastes/constraints.
                         "give me some books" -> RECOMMENDATION, personalised=true, explicitSearch=true; no invented criteria.
-                        "more recent" -> REFINE, mustInclude.publicationYear="recent"; preserve the search, never MORE_RESULTS.
+                        Comparative recency ("more recent", "I want books from more recent times") -> REFINE, mustInclude.publicationYear="more recent"; Java compares displayed years, never MORE_RESULTS or a guessed calendar cutoff.
                         "make them shorter" -> REFINE, shorter=true, explicitSearch=true; no invented genre or hour limit.
                         shorter=true only compares previous results' runtimes without an explicit numeric limit; Java uses their durations.
                         shorter refers to runtime, not response length. Never invent genres or numeric limits for an underspecified refinement.
@@ -100,12 +100,12 @@ public class AiParser {
                         Genres, moods, plots and character traits belong in semantic genres/topics/keywords, never author/narrator fields.
                         Author/narrator fields contain only names explicitly identified as writers/narrators; a protagonist is a story character.
                         "I want a book by Suzanne Collins" -> mustInclude.authors=["Suzanne Collins"] (mandatory author).
-                        "I want books similar to Suzanne Collins style" -> positiveSemanticQuery.authors=["Suzanne Collins"], never an author filter or similarToTitle.
+                        "I want books similar to Suzanne Collins style" -> positiveSemanticQuery.authors=["Suzanne Collins"], personalised=false; never an author filter or similarToTitle.
                         Apply the same distinction to narrators: by/narrated-by requirements use mustInclude/mustNotInclude; liked/similar styles use positive/negativeSemanticQuery names, without invented themes.
                         Explicit language/duration/publication-year/source constraints also use mustInclude/mustNotInclude.
                         Extract every stated constraint alongside semantic criteria; compact output must not omit supplied values.
                         Preserve contradictions. Author/narrator lists replace by default; addAuthors/addNarrators=true only for explicit additions.
-                        personalised=true for taste/favourites/history or generic recommendations without criteria; never invent taste.
+                        personalised=true only for explicit use of the user's preferences/favourites/history or generic requests without criteria. Author/narrator style similarity alone is personalised=false; "for me based on my preferences" can make it true. Never invent taste.
                         Personalisation never removes stated criteria: "books I would like by Suzanne Collins" -> personalised=true, mustInclude.authors=["Suzanne Collins"].
                         explicitSearch=true for explicit new-search commands; bare taste replies like "horror" are RECOMMENDATION/REFINE with explicitSearch=false, never UPDATE_PREFERENCES.
                         "Only three at a time" / "3 per page" / "change count to three books" -> CHANGE_COUNT, bookCount=3, never UPDATE_PREFERENCES.
@@ -119,7 +119,7 @@ public class AiParser {
                         Filters:
                         Duration comparisons belong in mustInclude.duration (including "under"/"over", not just exact lengths); use digits plus hours/minutes; convert words/fractions ("under ten hours" -> "under 10 hours";
                         "one and a half hours" -> "1.5 hours"). Preserve under/over/at most/at least/exactly/between and both endpoints; vague duration=null.
-                        Years=preserve after/before/at least/at most/exactly/between and both YYYY endpoints. recent/recently=last 5 years;
+                        Years=preserve after/before/at least/at most/exactly/between and both endpoints; decades include all ten years ("1950 to the 2000s" -> "between 1950 and 2009"). recent/recently=last 5 years;
                         "books from around 2000" / "books from the period 2000" -> publicationYear="around 2000" / "period 2000"; Java applies inclusive +/-5 years. Preserve these approximate phrases, never extract only the exact year.
                         retain relative wording/counts ("recent", "past year", "last four years") in publicationYear, never guess years.
                         Keep exclusions and duration comparisons separate. "mystery, not too dark" -> positive genres=["mystery"], negative keywords=["dark"].
