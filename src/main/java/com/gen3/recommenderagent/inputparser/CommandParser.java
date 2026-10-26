@@ -12,6 +12,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class CommandParser {
   private static final String COUNT = "[0-9]+|one|two|three|four|five|six|seven|eight|nine|ten";
+  private static final Pattern CHANGE_COUNT =
+      Pattern.compile(
+          "(?:(?:change|set)(?: the| my)? (?:recommendation )?count to ("
+              + COUNT
+              + ")(?: books?| audiobooks?| recommendations?)?(?: at a time| per request| per page)?"
+              + "|(?:give me |show me |i want |i'd like |i would like )?(?:only )?("
+              + COUNT
+              + ")(?: books?| audiobooks?| recommendations?)? (?:at a time|per request|per page))");
   private static final Pattern COUNTED_MORE =
       Pattern.compile(
           "(?:show me |give me |can i have |could i have |i'd like |i would like |recommend )?"
@@ -24,9 +32,20 @@ public class CommandParser {
 
   public ParsedRequest parse(String rawText) {
     String command = normalizeCommand(rawText);
-    if (selectionReply(rawText.strip()) != null) {
+    if (selectionReply(rawText.strip()) != null
+        || com.gen3.recommenderagent.domain.conversation.ConversationText.isPreferenceDecline(
+            rawText)) {
       var parsed = new ParsedRequest();
       parsed.setIntent(Intent.UNKNOWN);
+      return parsed;
+    }
+    var changedCount = CHANGE_COUNT.matcher(command);
+    if (changedCount.matches()) {
+      var parsed = new ParsedRequest();
+      parsed.setIntent(Intent.CHANGE_COUNT);
+      parsed.setBookCount(
+          countValue(
+              changedCount.group(1) == null ? changedCount.group(2) : changedCount.group(1)));
       return parsed;
     }
     if (command.startsWith("explain ")) {
@@ -60,12 +79,7 @@ public class CommandParser {
       var parsed = new ParsedRequest();
       parsed.setIntent(Intent.MORE_RESULTS);
       String count = countedMore.group(1) == null ? countedMore.group(2) : countedMore.group(1);
-      parsed.setBookCount(
-          count == null
-              ? BigInteger.ONE
-              : Character.isDigit(count.charAt(0))
-                  ? new BigInteger(count)
-                  : BigInteger.valueOf(selectionReply(count)));
+      parsed.setBookCount(count == null ? BigInteger.ONE : countValue(count));
       return parsed;
     }
     Intent intent =
@@ -162,5 +176,11 @@ public class CommandParser {
     var parsed = new ParsedRequest();
     parsed.setIntent(intent);
     return parsed;
+  }
+
+  private static BigInteger countValue(String count) {
+    return Character.isDigit(count.charAt(0))
+        ? new BigInteger(count)
+        : BigInteger.valueOf(selectionReply(count));
   }
 }

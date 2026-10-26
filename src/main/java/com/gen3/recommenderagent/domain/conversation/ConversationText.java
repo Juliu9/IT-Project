@@ -31,6 +31,19 @@ public final class ConversationText {
         .stripTrailing();
   }
 
+  public static boolean isPreferenceDecline(String reply) {
+    return java.util.Set.of(
+            "nothing",
+            "no changes",
+            "nothing to change",
+            "leave them as they are",
+            "no",
+            "not now",
+            "keep my preferences",
+            "keep my current preferences")
+        .contains(normalizeCommand(reply));
+  }
+
   public static Integer selectionReply(String reply) {
     var match = SELECTION_REPLY.matcher(ConversationText.normalizeCommand(reply));
     if (!match.matches()) {

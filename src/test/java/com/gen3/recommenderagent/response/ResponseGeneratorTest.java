@@ -262,6 +262,27 @@ class ResponseGeneratorTest {
   }
 
   @Test
+  void personalisedNoMatchesDescribesTheCombinedSearchWithoutBlamingASingleFilter() {
+    var generator = new ConversationResponseGenerator(new AiResponseGenerator(null));
+    var request = new ConversationDraft();
+    request.setIntent(Intent.RECOMMENDATION);
+    request.setPersonalised(true);
+    request.setRawText("personalised for me");
+    var exact = new ExactCriteria();
+    exact.setAuthors(List.of("jk rowling"));
+    request.setMustInclude(exact);
+    var genre = new SemanticQuery();
+    genre.setGenres(List.of("romance"));
+    request.setPositiveSemanticQuery(genre);
+    assertEquals(
+        "I couldn't find audiobooks matching your current search and saved preferences. "
+            + "Try changing the author, genre, or another filter.",
+        generator.generate(List.of(), ConversationTurn.fromDraft(request)));
+    assertEquals(List.of("jk rowling"), request.getMustInclude().getAuthors());
+    assertEquals(List.of("romance"), request.getPositiveSemanticQuery().getGenres());
+  }
+
+  @Test
   void shouldAcknowledgeChangingTheRecommendationCount() {
     ConversationResponseGenerator generator =
         new ConversationResponseGenerator(new AiResponseGenerator(null));

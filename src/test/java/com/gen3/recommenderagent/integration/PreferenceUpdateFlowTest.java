@@ -45,6 +45,35 @@ import org.mockito.ArgumentCaptor;
 import tools.jackson.databind.ObjectMapper;
 
 class PreferenceUpdateFlowTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "change count to 3 at a time",
+        "only three at a time",
+        "3 per page",
+        "change count to three books"
+      })
+  void countCommandsStillWorkWhileAPreferenceEditQuestionIsPending(String command) {
+    process(update(tastes("romance")));
+    process(request(Intent.UPDATE_PREFERENCES));
+    var ai = mock(AiParser.class);
+    var parser = new InputParser(new CommandParser(), ai);
+    var first = service.process("session", "user", parser.parse(command));
+    assertThat(first.getDecision()).isEqualTo(ConversationDecision.COUNT_CHANGED);
+    assertThat(sessions.getSession("session", "user").getBookCount()).isEqualTo(3);
+    var second = service.process("session", "user", parser.parse("4 books at a time"));
+    assertThat(second.getDecision()).isEqualTo(ConversationDecision.COUNT_CHANGED);
+    assertThat(sessions.getSession("session", "user").getBookCount()).isEqualTo(4);
+    assertThat(
+            sessions
+                .getSession("session", "user")
+                .getPreferences()
+                .getPositiveSemanticQuery()
+                .getGenres())
+        .containsExactly("romance");
+    verifyNoInteractions(ai, vectors, retriever, ranker);
+  }
+
   private final CandidateRetriever retriever = mock(CandidateRetriever.class);
   private final Ranker ranker = mock(Ranker.class);
   private final SemanticQueryVectorService vectors = mock(SemanticQueryVectorService.class);

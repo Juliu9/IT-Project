@@ -104,6 +104,7 @@ public class AiParser {
                         personalised=true for taste/favourites/history or generic recommendations without criteria; never invent taste.
                         Personalisation never removes stated criteria: "books I would like by Suzanne Collins" -> personalised=true, mustInclude.authors=["Suzanne Collins"].
                         explicitSearch=true for explicit new-search commands; bare taste replies like "horror" are RECOMMENDATION/REFINE with explicitSearch=false, never UPDATE_PREFERENCES.
+                        "Only three at a time" / "3 per page" / "change count to three books" -> CHANGE_COUNT, bookCount=3, never UPDATE_PREFERENCES.
                         bookCount=null unless a recommendation count is requested ("2 more" -> MORE_RESULTS, bookCount=2).
                         Explanation ordinals select ONE book: "the second one’s reason" -> referenceRank=2; "why the sixth book" -> referenceRank=6; intent=EXPLAIN_RECOMMENDATION, omit bookCount.
                         "Explain two more" and "explain book two more" mean explain rank 2 in more detail, not two books.

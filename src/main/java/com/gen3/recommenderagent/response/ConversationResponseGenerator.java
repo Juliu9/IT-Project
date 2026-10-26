@@ -167,6 +167,10 @@ public class ConversationResponseGenerator implements ResponseGenerator {
 
   // Safe node output
   private String generateFallbackResponse(ConversationTurn currentRequest) {
+    if (currentRequest != null && currentRequest.isPersonalised()) {
+      return "I couldn't find audiobooks matching your current search and saved preferences. "
+          + "Try changing the author, genre, or another filter.";
+    }
     if (currentRequest != null
         && currentRequest.getMustInclude() != null
         && currentRequest.getMustInclude().getPublicationYear() != null) {

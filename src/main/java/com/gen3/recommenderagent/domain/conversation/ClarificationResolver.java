@@ -36,6 +36,11 @@ public final class ClarificationResolver {
     if (reply.matches("(?i)(?:never mind|nevermind|cancel|stop|forget it)[.!?]?")) {
       effective.setIntent(Intent.CANCEL);
     }
+    if ((session.getPendingQuestion() == ConversationDecision.PREFERENCE_CLARIFICATION
+            || session.getPendingQuestion() == ConversationDecision.PREFERENCE_UPDATE_CLARIFICATION)
+        && ConversationText.isPreferenceDecline(reply)) {
+      effective.setIntent(Intent.CANCEL);
+    }
     if (effective.getIntent() == Intent.CANCEL) {
       normalizeInput(effective);
       return effective;

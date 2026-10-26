@@ -346,7 +346,10 @@ page explanations, clear history and cancellation.
 Matching ignores case, extra whitespace, curly apostrophe differences, and boundary punctuation.
 It removes supported polite wording such as “please”/“kindly”, opening greetings or “sorry”/“excuse me”,
 and trailing “cheers”/“ta”/“many thanks”. The original input is preserved. Explicit numeric More commands such as “2 more”, “show me 2 more”
-and “2 more audiobooks” preserve their count without calling AI. Bare selections such as “1”,
+and “2 more audiobooks” preserve their count without calling AI. Settings commands such as
+“only three at a time”, “3 per page”, “change count to three books”, and “4 books at a time” use
+CHANGE_COUNT, including while a preference
+question is pending; they do not edit saved tastes. Bare selections such as “1”,
 “one” and “the second audiobook” also skip AI as UNKNOWN; pending session context resolves their
 meaning. Without a pending question they stay UNKNOWN. Negations and extra criteria still go through the model; “2 more but shorter” and “more British authors” are not
 reduced to a plain More command.
@@ -376,7 +379,11 @@ on `MORE_RESULTS`, such as “2 more”, applies to that page without changing t
 
 `CANCEL` acknowledges cancellation and clears pending preference clarification without clearing
 search history, preferences, or queued books. “Never mind” and “cancel” also end count and book-selection
-questions. Unrecognized replies no longer become personalised searches merely because a taste
+questions. While a preference question is pending, clear declines such as “no”, “not now”,
+“keep my preferences”, “nothing”, or “no changes” cancel it without changing saved preferences or
+count. Declining a genre question abandons that unfinished search while preserving earlier results
+and cached books. These phrases skip AI as UNKNOWN and become cancellation only in preference-question context.
+Unrecognized replies no longer become personalised searches merely because a taste
 question is pending.
 
 Generic recommendation requests without criteria, such as “Recommend an audiobook”, use the
@@ -395,6 +402,10 @@ personalised flag. Other intents discard these fields. `MORE_RESULTS`, `REPEAT_R
 `UPDATE_PREFERENCES` carries semantic and exact changes through separate `SessionPreferences` values;
 its search-semantic fields remain empty. Standalone criteria route to `RECOMMENDATION`; context can
 resolve them as an answer to a pending preference question.
+
+A personalised search with zero matches reports that the combined current search and saved
+preferences found no matches. It does not blame a particular filter, echo only the latest message,
+change preferences, or retry with relaxed constraints.
 
 ## Explaining recommendations
 

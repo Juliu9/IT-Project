@@ -25,6 +25,35 @@ import tools.jackson.databind.ObjectMapper;
 class InputParserTest {
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"no", "not now", "keep my preferences", "nothing", "No, thanks!"})
+  void preferenceDeclinesSkipAiButNeedContextToCancel(String text) {
+    var ai = mock(AiParser.class);
+    var parsed = new InputParser(new CommandParser(), ai).parse(text);
+    assertEquals(Intent.UNKNOWN, parsed.getIntent());
+    verifyNoInteractions(ai);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "change count to 3 at a time,3",
+    "4 books at a time,4",
+    "three audiobooks at a time,3",
+    "set the count to two,2",
+    "give me four recommendations at a time,4",
+    "only three at a time,3",
+    "3 per page,3",
+    "change count to three books,3",
+    "only 2 audiobooks per page,2"
+  })
+  void explicitCountCommandsDoNotBecomePreferenceUpdates(String text, int count) {
+    var parsed = new CommandParser().parse(text);
+    assertNotNull(parsed);
+    assertEquals(Intent.CHANGE_COUNT, parsed.getIntent());
+    assertEquals(count, parsed.getBookCount().intValue());
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
       strings = {
         "explain two more",
         "explain book two more",
@@ -331,6 +360,11 @@ class InputParserTest {
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {
         "help me find fantasy books",
+        "only three at a time by Jane Austen",
+        "not now but add horror to my preferences",
+        "no horror",
+        "4 books at a time by Jane Austen",
+        "do not change count to 3 at a time",
         "more, but shorter books",
         "2 more but shorter",
         "2 more by Jane Austen",

@@ -22,6 +22,48 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 class ConversationDispatcherTest {
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "nothing",
+        "Nothing, thanks!",
+        "no changes",
+        "no",
+        "not now",
+        "keep my preferences"
+      })
+  void decliningPreferenceChangesCancelsTheQuestion(String text) {
+    var session = new Session();
+    session.setBookCount(3);
+    var preferences = new SessionPreferences();
+    preferences.setPositiveSemanticQuery(queryWithGenres("romance"));
+    session.setPreferences(preferences);
+    var update = request(Intent.UPDATE_PREFERENCES);
+    var question = conversationState.begin(session, update);
+    conversationState.finish(session, question, update);
+    var answer = request(Intent.UPDATE_PREFERENCES);
+    answer.setRawText(text);
+    var result = conversationState.begin(session, answer);
+    conversationState.finish(session, result, answer);
+    assertEquals(ConversationDecision.CANCELLED, result.getDecision());
+    assertNull(session.getPendingQuestion());
+    assertFalse(session.isAwaitingPreferenceUpdate());
+    assertEquals(preferences, session.getPreferences());
+    assertEquals(3, session.getBookCount());
+  }
+
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"no", "not now", "keep my preferences"})
+  void declinePhrasesDoNotCancelWithoutAPreferenceQuestion(String text) {
+    var session = new Session();
+    session.setPendingQuestion(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+    var reply = request(Intent.UNKNOWN);
+    reply.setRawText(text);
+    var result = new ClarificationResolver().resolve(session, reply);
+    assertTrue(result.getIntent() != Intent.CANCEL);
+    assertEquals(
+        ConversationDecision.EXPLANATION_TARGET_CLARIFICATION, session.getPendingQuestion());
+  }
 
   private final ConversationDispatcher conversationState = ConversationTestSupport.dispatcher();
 

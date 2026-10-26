@@ -182,10 +182,9 @@ class PersonalisedRecommendationFlowTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.EnumSource(
-      value = Intent.class,
-      names = {"CANCEL", "RESET_PREFERENCES"})
-  void abandoningANewTasteQuestionKeepsThePreviousSearchAndCachedBatch(Intent action) {
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"CANCEL", "RESET_PREFERENCES", "no", "not now", "keep my preferences"})
+  void abandoningANewTasteQuestionKeepsThePreviousSearchAndCachedBatch(String action) {
     var search = new ConversationDraft();
     search.setIntent(Intent.RECOMMENDATION);
     var genre = new SemanticQuery();
@@ -200,7 +199,11 @@ class PersonalisedRecommendationFlowTest {
     personalised.setExplicitSearch(true);
     assertThat(process(personalised).isPreferenceClarificationRequired()).isTrue();
     var cancel = new ConversationDraft();
-    cancel.setIntent(action);
+    cancel.setIntent(
+        action.equals("CANCEL") || action.equals("RESET_PREFERENCES")
+            ? Intent.valueOf(action)
+            : Intent.UNKNOWN);
+    cancel.setRawText(action);
     process(cancel);
     org.mockito.Mockito.clearInvocations(books, embeddingModel, ranker);
     var more = new ConversationDraft();
@@ -212,6 +215,56 @@ class PersonalisedRecommendationFlowTest {
         .extracting(Recommendation::getBookId)
         .containsExactly("remaining");
     verifyNoInteractions(books, embeddingModel, ranker);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"horror", "romance"})
+  void tasteReplyPreservesTheRequestedAuthorWithoutChangingTheSuppliedGenre(String genre) {
+    var request = personalisedRequest();
+    request.setExplicitSearch(true);
+    request.setRawText("personalised book by jk rowling");
+    var include = new ExactCriteria();
+    include.setAuthors(List.of("jk rowling"));
+    request.setMustInclude(include);
+    assertThat(process(request).isPreferenceClarificationRequired()).isTrue();
+    var reply = new ConversationDraft();
+    reply.setIntent(Intent.RECOMMENDATION);
+    reply.setRawText(genre);
+    var query = new SemanticQuery();
+    query.setGenres(List.of(genre));
+    reply.setPositiveSemanticQuery(query);
+    var result = process(reply);
+    assertThat(result.getRawText()).isEqualTo(genre);
+    assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly(genre);
+    assertThat(result.getMustInclude().getAuthors()).containsExactly("jk rowling");
+    var saved = sessions.getSession("session", "user").getPreferences();
+    assertThat(saved.getPositiveSemanticQuery().getGenres()).containsExactly(genre);
+    assertThat(saved.getMustInclude().getAuthors()).isNull();
+  }
+
+  @Test
+  void updatingAnAuthorPreservesSavedGenresForTheNextPersonalisedSearch() {
+    var session = new Session();
+    session.setSessionId("session");
+    session.setUserId("user");
+    var saved = new SessionPreferences();
+    var genre = new SemanticQuery();
+    genre.setGenres(List.of("romance"));
+    saved.setPositiveSemanticQuery(genre);
+    session.setPreferences(saved);
+    sessions.updateSession(session);
+    var update = new ConversationDraft();
+    update.setIntent(Intent.UPDATE_PREFERENCES);
+    var changes = new SessionPreferences();
+    var author = new ExactCriteria();
+    author.setAuthors(List.of("jk rowling"));
+    changes.setMustInclude(author);
+    update.setPreferenceUpdates(changes);
+    process(update);
+    var result = process(personalisedRequest());
+    assertThat(result.isPreferenceClarificationRequired()).isFalse();
+    assertThat(result.getMustInclude().getAuthors()).containsExactly("jk rowling");
+    assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("romance");
   }
 
   @Test
