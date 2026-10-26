@@ -269,6 +269,53 @@ class LiveInputParserTest {
     assertThat(result.getPositiveSemanticQuery().getGenres()).contains("horror");
   }
 
+  @ParameterizedTest
+  @CsvSource({"why the last book,last", "why the former,former", "why the latter,latter"})
+  void relativeTargetsRemainContextual(String text, String selector) {
+    var result = parser.parse(text);
+    assertThat(result.getIntent()).isEqualTo(Intent.EXPLAIN_RECOMMENDATION);
+    assertThat(result.getReferenceRank()).isNull();
+    assertThat(result.getExplanationSelection().include().getFirst()).contains(selector);
+  }
+
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "Give me zero mystery books",
+        "Give me minus two mystery books",
+        "Give me 2.5 mystery books",
+        "I want two and a half mystery books"
+      })
+  void invalidCountsKeepSearchCriteriaForClarification(String text) {
+    var result = parser.parse(text);
+    assertThat(result.isInvalidBookCount()).isTrue();
+    assertThat(result.getBookCount()).isNull();
+    assertThat(result.getIntent()).isEqualTo(Intent.RECOMMENDATION);
+    assertThat(result.getPositiveSemanticQuery().getGenres()).contains("mystery");
+  }
+
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"the same but less violent", "Please adjust those to be less violent"})
+  void negativeComparisonsAreNotDropped(String text) {
+    var result = parser.parse(text);
+    assertThat(result.getIntent()).isEqualTo(Intent.REFINE);
+    assertThat(result.getNegativeSemanticQuery()).isNotNull();
+    assertThat(result.getNegativeSemanticQuery().hasValues()).isTrue();
+  }
+
+  @org.junit.jupiter.api.Test
+  void multiTitleExplanationUsesListsAndPreservesEachTitle() {
+    var result = parser.parse("Explain The Hobbit and Dune");
+    assertThat(result.getIntent()).isEqualTo(Intent.EXPLAIN_RECOMMENDATION);
+    assertThat(result.getExplanationSelection().include())
+        .containsExactlyInAnyOrder("The Hobbit", "Dune");
+    result = parser.parse("Explain all except The Hobbit and Dune");
+    assertThat(result.getExplanationSelection().include()).isEmpty();
+    assertThat(result.getExplanationSelection().exclude())
+        .containsExactlyInAnyOrder("The Hobbit", "Dune");
+  }
+
   @Configuration(proxyBeanMethods = false)
   @Profile("live-parser-evaluation")
   @EnableAutoConfiguration
