@@ -214,6 +214,69 @@ class SolrAudiobookRepositoryTest {
   }
 
   @Test
+  void exactTitlesBeyondTheFirstPageRemainDiscoverableAndAmbiguous() throws Exception {
+    String collection = SolrContainerTestSupport.COLLECTION;
+    var documents = new java.util.ArrayList<org.apache.solr.common.SolrInputDocument>();
+    for (int i = 0; i < 102; i++) {
+      var doc = new org.apache.solr.common.SolrInputDocument();
+      doc.setField("id", String.format("boundary-%03d", i));
+      doc.setField("title", i < 100 ? "Boundary Reference companion " + i : "Boundary Reference");
+      documents.add(doc);
+    }
+    try {
+      solrClient.add(collection, documents);
+      solrClient.commit(collection);
+      var result =
+          new SolrAudiobookRepository(solrClient, collection)
+              .findBooksByTitle("Boundary Reference", null, 6);
+      org.assertj.core.api.Assertions.assertThat(result)
+          .extracting(com.gen3.catalogue.model.AudiobookTitle::bookId)
+          .containsExactly("boundary-100", "boundary-101");
+    } finally {
+      solrClient.deleteById(
+          collection, documents.stream().map(doc -> doc.getFieldValue("id").toString()).toList());
+      solrClient.commit(collection);
+    }
+  }
+
+  @Test
+  void maintenancePagesDoNotShiftWhenEarlierRecordsAreInsertedOrDeleted() throws Exception {
+    String collection = SolrContainerTestSupport.COLLECTION;
+    var repository = new SolrAudiobookRepository(solrClient, collection);
+    var before = repository.findAllBooks(null, 1000);
+    org.assertj.core.api.Assertions.assertThat(before.size()).isGreaterThan(2);
+    var firstPage = repository.findAllBooks(null, 2);
+    String deletedId = firstPage.getFirst().id();
+    String lastId = firstPage.getLast().id();
+    var deleted = solrClient.getById(collection, deletedId);
+    var inserted = new org.apache.solr.common.SolrInputDocument();
+    inserted.setField("id", "000-before-maintenance-cursor");
+    inserted.setField("title", "Inserted earlier");
+    try {
+      solrClient.deleteById(collection, deletedId);
+      solrClient.add(collection, inserted);
+      solrClient.commit(collection);
+      org.assertj.core.api.Assertions.assertThat(repository.findAllBooks(lastId, 1000))
+          .extracting(com.gen3.catalogue.model.AudiobookRecord::id)
+          .containsExactlyElementsOf(
+              before.subList(2, before.size()).stream()
+                  .map(com.gen3.catalogue.model.AudiobookRecord::id)
+                  .toList());
+    } finally {
+      solrClient.deleteById(collection, "000-before-maintenance-cursor");
+      var restored = new org.apache.solr.common.SolrInputDocument();
+      deleted.forEach(
+          (key, value) -> {
+            if (!key.equals("_version_")) {
+              restored.setField(key, value);
+            }
+          });
+      solrClient.add(collection, restored);
+      solrClient.commit(collection);
+    }
+  }
+
+  @Test
   void titleLookupUsesOnlyTitleAndReturnsEditionMetadata() throws Exception {
     var document = new org.apache.solr.common.SolrInputDocument();
     document.setField("id", "title-lookup");
@@ -273,7 +336,8 @@ class SolrAudiobookRepositoryTest {
     float[] expected = new float[1536];
     expected[0] = 0.6f;
     expected[1] = 0.8f;
-    org.assertj.core.api.Assertions.assertThat(repository.findStoredBooks(0, 1).getFirst().vector())
+    org.assertj.core.api.Assertions.assertThat(
+            repository.findStoredBooks(null, 1).getFirst().vector())
         .containsExactly(expected);
     org.mockito.Mockito.verify(model).embed(org.mockito.ArgumentMatchers.anyList());
   }

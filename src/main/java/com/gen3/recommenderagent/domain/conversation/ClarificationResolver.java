@@ -250,22 +250,13 @@ public final class ClarificationResolver {
       Session session, ConversationDraft input, String reply, Integer selection) {
     var pending = session.getPendingSimilarBook();
     var choices = pending.request().getSimilarBookChoices();
-    if (!choices.isEmpty() && ConversationText.isChoiceRejection(reply)) {
-      var another = restoreSearchCriteria(pending.request());
-      another.setIntent(Intent.RECOMMENDATION);
-      another.setExplicitSearch(true);
-      another.setRequestId(input.getRequestId());
-      another.setRawText(input.getRawText());
-      another.setCreatedAt(input.getCreatedAt());
-      another.setSimilarToTitle(null);
-      another.setSimilarToAuthor(null);
-      another.setSimilarToClarificationRequired(true);
-      another.getSearchContext().setSimilarBook(null);
-      another.getSearchContext().setSimilarityQueryVector(null);
-      another.setSimilarBookChoices(List.of());
-      another.setSearchClarificationRequired(false);
-      another.setDecision(null);
-      return another;
+    if ((!choices.isEmpty() && ConversationText.isChoiceRejection(reply))
+        || (pending.decision() == ConversationDecision.SIMILAR_BOOK_UNAVAILABLE
+            && ConversationText.isAffirmativeReply(reply))) {
+      return anotherReference(pending.request(), input);
+    }
+    if (selection == null) {
+      selection = ConversationText.relativeSelectionReply(reply, choices.size());
     }
     // A bare choice belongs to the pending question, regardless of model-inferred search flags.
     if (selection == null
@@ -310,13 +301,17 @@ public final class ClarificationResolver {
         return again;
       }
       if (choices.isEmpty()
-          && pending.decision() == ConversationDecision.SIMILAR_BOOK_REQUIRED
+          && (pending.decision() == ConversationDecision.SIMILAR_BOOK_REQUIRED
+              || pending.decision() == ConversationDecision.SIMILAR_BOOK_UNAVAILABLE)
           && input.getIntent() == Intent.UNKNOWN
           && !reply.isBlank()) {
         var named = restoreSearchCriteria(pending.request());
         named.setRequestId(input.getRequestId());
         named.setRawText(input.getRawText());
         named.setCreatedAt(input.getCreatedAt());
+        named.getSearchContext().setSimilarBook(null);
+        named.getSearchContext().setSimilarityQueryVector(null);
+        named.setSimilarToAuthor(null);
         named.setSimilarToTitle(reply);
         named.setSimilarToClarificationRequired(false);
         named.setSearchClarificationRequired(false);
@@ -353,6 +348,24 @@ public final class ClarificationResolver {
     return resumed;
   }
 
+  private ConversationDraft anotherReference(ConversationTurn pending, SessionRequest input) {
+    var another = restoreSearchCriteria(pending);
+    another.setIntent(Intent.RECOMMENDATION);
+    another.setExplicitSearch(true);
+    another.setRequestId(input.getRequestId());
+    another.setRawText(input.getRawText());
+    another.setCreatedAt(input.getCreatedAt());
+    another.setSimilarToTitle(null);
+    another.setSimilarToAuthor(null);
+    another.setSimilarToClarificationRequired(true);
+    another.getSearchContext().setSimilarBook(null);
+    another.getSearchContext().setSimilarityQueryVector(null);
+    another.setSimilarBookChoices(List.of());
+    another.setSearchClarificationRequired(false);
+    another.setDecision(null);
+    return another;
+  }
+
   private static boolean isQuestion(ConversationDecision decision) {
     if (decision == null) {
       return false;
@@ -368,7 +381,8 @@ public final class ClarificationResolver {
           RECENCY_RANGE_CONFIRMATION,
           SIMILAR_BOOK_SELECTION,
           SIMILAR_BOOK_NOT_FOUND,
-          SIMILAR_BOOK_REQUIRED ->
+          SIMILAR_BOOK_REQUIRED,
+          SIMILAR_BOOK_UNAVAILABLE ->
           true;
       default -> false;
     };

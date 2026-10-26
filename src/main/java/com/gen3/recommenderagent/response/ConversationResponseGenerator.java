@@ -109,7 +109,7 @@ public class ConversationResponseGenerator implements ResponseGenerator {
       case SIMILAR_BOOK_REQUIRED ->
           "Which book would you like similar recommendations for? Please give me one title.";
       case SIMILAR_BOOK_UNAVAILABLE ->
-          "I can't use that book to find similar audiobooks right now. Would you like to try another title?";
+          "I can't use that book to find similar audiobooks right now. Please give me another title.";
       case SHORTER_DURATION_CLARIFICATION ->
           "How short would you like the audiobooks to be? For example, under 3 hours.";
       case RECENCY_RANGE_CONFIRMATION ->

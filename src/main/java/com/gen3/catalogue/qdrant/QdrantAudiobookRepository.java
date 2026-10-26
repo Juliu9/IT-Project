@@ -96,26 +96,31 @@ public class QdrantAudiobookRepository
       }
       filter.addMust(io.qdrant.client.grpc.Common.Condition.newBuilder().setFilter(names));
     }
+    var matches = new com.gen3.catalogue.model.AudiobookTitleMatches(title, author, limit);
     var request =
         io.qdrant.client.grpc.Points.ScrollPoints.newBuilder()
             .setCollectionName(collection)
             .setFilter(filter)
-            .setLimit(limit)
+            .setLimit(100)
             .setWithPayload(
                 io.qdrant.client.WithPayloadSelectorFactory.include(
                     List.of(
                         QdrantAudiobookSchema.BOOK_ID,
                         QdrantAudiobookSchema.TITLE,
                         QdrantAudiobookSchema.AUTHORS)))
-            .setWithVectors(io.qdrant.client.WithVectorsSelectorFactory.enable(false))
-            .build();
-    return await(client.scrollAsync(request), "look up Qdrant book title").getResultList().stream()
-        .map(mapper::toRecord)
-        .map(
-            record ->
-                new com.gen3.catalogue.model.AudiobookTitle(
-                    record.id(), record.title(), record.authors()))
-        .toList();
+            .setWithVectors(io.qdrant.client.WithVectorsSelectorFactory.enable(false));
+    while (true) {
+      var page = await(client.scrollAsync(request.build()), "look up Qdrant book title");
+      for (var point : page.getResultList()) {
+        var book = mapper.toRecord(point);
+        matches.add(
+            new com.gen3.catalogue.model.AudiobookTitle(book.id(), book.title(), book.authors()));
+      }
+      if (matches.full() || !page.hasNextPageOffset()) {
+        return matches.results();
+      }
+      request.setOffset(page.getNextPageOffset());
+    }
   }
 
   /** Searches the named dense vector while applying structured payload filters. */

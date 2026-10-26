@@ -49,7 +49,7 @@ class QdrantShownBookExclusionTest {
       var results = repository.findBooksByTitle("the hunger games", null, 6);
       assertThat(results)
           .extracting(com.gen3.catalogue.model.AudiobookTitle::bookId)
-          .containsExactlyInAnyOrder("hunger", "guide");
+          .containsExactly("hunger");
       assertThat(repository.findBooksByTitle("doesnotexist", null, 6)).isEmpty();
       assertThat(repository.findBooksByTitle("the hunger games", "suzanne collins", 6))
           .extracting(com.gen3.catalogue.model.AudiobookTitle::bookId)

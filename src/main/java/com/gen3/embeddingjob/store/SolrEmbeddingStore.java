@@ -18,10 +18,8 @@ public class SolrEmbeddingStore implements AudiobookEmbeddingStore {
 
   @Override
   public Page embeddingPage(String cursor, int limit) throws IOException {
-    int offset = cursor == null ? 0 : Integer.parseInt(cursor);
-    var records = repository.findEmbeddingRecords(offset, limit);
-    return new Page(
-        records, records.size() < limit ? null : Integer.toString(offset + records.size()));
+    var records = repository.findEmbeddingRecords(cursor, limit);
+    return new Page(records, records.size() < limit ? null : records.getLast().record().id());
   }
 
   @Override

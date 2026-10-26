@@ -74,6 +74,23 @@ class InputParserTest {
   }
 
   @Test
+  void modelRecencyCriteriaNormalizeBeforeLeavingTheParser() {
+    var ai = mock(AiParser.class);
+    var parsed = new ParsedRequest();
+    parsed.setIntent(Intent.RECOMMENDATION);
+    var exact = new com.gen3.recommenderagent.domain.session.ExactCriteria();
+    exact.setPublicationYear("more recent");
+    parsed.setMustInclude(exact);
+    when(ai.parse(anyString())).thenReturn(parsed);
+    var result =
+        new InputParser(new CommandParser(), ai)
+            .parse("I want the same kinds of books but from more recent times");
+    assertEquals(Intent.REFINE, result.getIntent());
+    assertEquals("more recent", result.getMustInclude().getPublicationYear());
+    assertEquals(true, result.isExplicitSearch());
+  }
+
+  @Test
   void anAdditionCanAlsoExplicitlyReplaceAnotherField() {
     var ai = mock(AiParser.class);
     var parsed = new ParsedRequest();

@@ -42,7 +42,7 @@ class SolrAudiobookRepositoryUnitTest {
     org.assertj.core.api.Assertions.assertThat(captured.getValue().getFilterQueries()).hasSize(1);
     org.assertj.core.api.Assertions.assertThat(captured.getValue().getFilterQueries()[0])
         .contains("Suzanne\\ Collins", "Collins,\\ Suzanne", "Collins,\\ Suzanne.");
-    assertEquals(Integer.valueOf(6), captured.getValue().getRows());
+    assertEquals(Integer.valueOf(100), captured.getValue().getRows());
   }
 
   @Test
@@ -183,7 +183,7 @@ class SolrAudiobookRepositoryUnitTest {
             org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST)))
         .thenReturn(response);
     var records =
-        new SolrAudiobookRepository(client, "books", "stored_vector", 2).findStoredBooks(0, 2);
+        new SolrAudiobookRepository(client, "books", "stored_vector", 2).findStoredBooks(null, 2);
     org.junit.jupiter.api.Assertions.assertArrayEquals(
         new float[] {2, 3}, records.getFirst().vector());
     assertEquals("Stored summary", records.getFirst().record().shortDescription());

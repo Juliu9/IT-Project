@@ -54,6 +54,7 @@ public class SimilarBookResolver {
     if (reference != null) {
       if (reference.vector() == null) {
         loadVector(
+            session,
             request,
             new AudiobookTitle(reference.bookId(), reference.title(), reference.authors()));
       }
@@ -91,7 +92,7 @@ public class SimilarBookResolver {
                           .equals(AudiobookTitle.normalize(title)))
               .toList();
       if (!truncated && exact.size() == 1) {
-        loadVector(request, exact.getFirst());
+        loadVector(session, request, exact.getFirst());
         if (request.getDecision() == ConversationDecision.SIMILAR_BOOK_UNAVAILABLE) {
           request.setSearchClarificationRequired(true);
         } else {
@@ -114,17 +115,17 @@ public class SimilarBookResolver {
     }
   }
 
-  private void loadVector(ConversationDraft request, AudiobookTitle book) {
+  private void loadVector(Session session, ConversationDraft request, AudiobookTitle book) {
     try {
       var vector = vectors.findEmbeddingByBookId(book.bookId()).orElse(null);
       if (vector == null || vector.length == 0) {
-        unavailable(request, book);
+        unavailable(session, request, book);
         return;
       }
       try {
         vector = VectorMath.normalize(vector);
       } catch (IllegalArgumentException exception) {
-        unavailable(request, book);
+        unavailable(session, request, book);
         return;
       }
       request
@@ -136,10 +137,9 @@ public class SimilarBookResolver {
     }
   }
 
-  private void unavailable(ConversationDraft request, AudiobookTitle book) {
+  private void unavailable(Session session, ConversationDraft request, AudiobookTitle book) {
     LOGGER.warn("similar.book.vector.unavailable bookId={}", book.bookId());
-    request.setDecision(ConversationDecision.SIMILAR_BOOK_UNAVAILABLE);
-    request.setSearchClarificationRequired(true);
+    clarify(session, request, ConversationDecision.SIMILAR_BOOK_UNAVAILABLE, List.of());
   }
 
   private void clarify(

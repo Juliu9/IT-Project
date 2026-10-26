@@ -40,21 +40,23 @@ public class SolrToQdrantMigrator implements ApplicationRunner {
   @Override
   public void run(ApplicationArguments arguments) throws Exception {
     destination.initialize();
-    int offset = 0;
+    int scanned = 0;
+    String afterId = null;
     int migrated = 0;
     while (true) {
-      int remaining = maximumRecords == 0 ? batchSize : maximumRecords - offset;
+      int remaining = maximumRecords == 0 ? batchSize : maximumRecords - scanned;
       if (remaining <= 0) {
         break;
       }
       int pageLimit = Math.min(batchSize, remaining);
-      List<AudiobookEmbedding> books = source.findStoredBooks(offset, pageLimit);
+      List<AudiobookEmbedding> books = source.findStoredBooks(afterId, pageLimit);
       if (books.isEmpty()) {
         break;
       }
 
       migrated += destination.importStoredBooks(books);
-      offset += books.size();
+      scanned += books.size();
+      afterId = books.getLast().record().id();
       LOGGER.info("Migrated {} audiobook records from Solr to Qdrant", migrated);
 
       if (books.size() < pageLimit) {

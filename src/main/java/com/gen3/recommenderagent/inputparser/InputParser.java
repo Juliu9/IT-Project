@@ -124,9 +124,9 @@ public class InputParser {
       request.setPersonalised(parsed.isPersonalised());
       request.setPositiveSemanticQuery(parsed.getPositiveSemanticQuery());
       request.setNegativeSemanticQuery(parsed.getNegativeSemanticQuery());
-      ConversationRules.normalizeInput(request);
       request.setMustInclude(parsed.getMustInclude());
       request.setMustNotInclude(parsed.getMustNotInclude());
+      ConversationRules.normalizeInput(request);
       request.setBookCount(boundedInteger(parsed.getBookCount()));
       request.setRequestId(createUuidV7().toString());
       request.setRawText(rawText);

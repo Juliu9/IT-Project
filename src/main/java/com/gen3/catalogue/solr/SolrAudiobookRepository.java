@@ -191,18 +191,28 @@ public class SolrAudiobookRepository
     if (author != null && !author.isBlank()) {
       addAnyValueFilter(query, "authors", PersonNameNormalizer.variants(List.of(author)), false);
     }
-    query.setRows(limit);
+    query.setRows(100);
     query.setFields("id", "title", "authors");
     query.setSort("id", SolrQuery.ORDER.asc);
+    var matches = new com.gen3.catalogue.model.AudiobookTitleMatches(title, author, limit);
+    String afterId = null;
     try {
-      return solrClient.query(collection, query, SolrRequest.METHOD.POST).getResults().stream()
-          .map(
-              document ->
-                  new com.gen3.catalogue.model.AudiobookTitle(
-                      field(document, "id"),
-                      field(document, "title"),
-                      stringList(document.getFieldValue("authors"))))
-          .toList();
+      while (true) {
+        var pageQuery = query.getCopy();
+        setAfterId(pageQuery, afterId);
+        var page = solrClient.query(collection, pageQuery, SolrRequest.METHOD.POST).getResults();
+        for (var document : page) {
+          matches.add(
+              new com.gen3.catalogue.model.AudiobookTitle(
+                  field(document, "id"),
+                  field(document, "title"),
+                  stringList(document.getFieldValue("authors"))));
+        }
+        if (matches.full() || page.size() < 100) {
+          return matches.results();
+        }
+        afterId = field(page.getLast(), "id");
+      }
     } catch (SolrServerException | SolrException exception) {
       throw new IOException("Solr title lookup failed", exception);
     }
@@ -295,14 +305,14 @@ public class SolrAudiobookRepository
 
   /** Reads the complete catalogue in deterministic pages for the startup importer. */
   @Override
-  public List<AudiobookRecord> findAllBooks(int offset, int limit) throws IOException {
-    return cataloguePage(offset, limit, false).stream().map(this::toRecord).toList();
+  public List<AudiobookRecord> findAllBooks(String afterId, int limit) throws IOException {
+    return cataloguePage(afterId, limit, false).stream().map(this::toRecord).toList();
   }
 
   /** Retains each record's source version across the model call. */
-  public List<StoredAudiobook> findEmbeddingRecords(int offset, int limit) throws IOException {
+  public List<StoredAudiobook> findEmbeddingRecords(String afterId, int limit) throws IOException {
     var records = new ArrayList<StoredAudiobook>();
-    for (var document : cataloguePage(offset, limit, false)) {
+    for (var document : cataloguePage(afterId, limit, false)) {
       Object version = document.getFieldValue("_version_");
       if (!(version instanceof Number number) || number.longValue() <= 1) {
         throw new IOException("Solr must return an exact _version_ for embedding maintenance");
@@ -313,9 +323,9 @@ public class SolrAudiobookRepository
   }
 
   /** Reads existing catalogue values and vectors without generating or normalizing anything. */
-  public List<AudiobookEmbedding> findStoredBooks(int offset, int limit) throws IOException {
+  public List<AudiobookEmbedding> findStoredBooks(String afterId, int limit) throws IOException {
     List<AudiobookEmbedding> records = new ArrayList<>();
-    for (SolrDocument document : cataloguePage(offset, limit, true)) {
+    for (SolrDocument document : cataloguePage(afterId, limit, true)) {
       Object stored = document.getFieldValue(vectorField);
       float[] vector = null;
       if (stored instanceof float[] values) {
@@ -339,10 +349,16 @@ public class SolrAudiobookRepository
     return records;
   }
 
-  private SolrDocumentList cataloguePage(int offset, int limit, boolean includeVectors)
+  private void setAfterId(SolrQuery query, String afterId) {
+    if (afterId != null) {
+      query.addFilterQuery("id:{\"" + ClientUtils.escapeQueryChars(afterId) + "\" TO *]");
+    }
+  }
+
+  private SolrDocumentList cataloguePage(String afterId, int limit, boolean includeVectors)
       throws IOException {
     SolrQuery solrQuery = new SolrQuery("*:* ".trim());
-    solrQuery.setStart(Math.max(offset, 0));
+    setAfterId(solrQuery, afterId);
     solrQuery.setRows(Math.max(limit, 1));
     solrQuery.setSort("id", SolrQuery.ORDER.asc);
     solrQuery.setFields(CATALOGUE_FIELDS);

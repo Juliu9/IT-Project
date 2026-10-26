@@ -48,6 +48,43 @@ import org.mockito.ArgumentCaptor;
 class QdrantAudiobookRepositoryTest {
 
   @Test
+  void referenceLookupFindsExactTitlesBeyondTheFirstPageAndKeepsDuplicateEditions()
+      throws Exception {
+    var client = mock(QdrantClient.class);
+    var encoder = new Bm25SparseTextEncoder();
+    when(client.collectionExistsAsync("books")).thenReturn(Futures.immediateFuture(true));
+    var first =
+        ScrollResponse.newBuilder().setNextPageOffset(io.qdrant.client.PointIdFactory.id(100L));
+    for (int i = 0; i < 100; i++) {
+      first.addResult(
+          RetrievedPoint.newBuilder()
+              .putPayload("bookId", io.qdrant.client.ValueFactory.value("partial-" + i))
+              .putPayload(
+                  "title",
+                  io.qdrant.client.ValueFactory.value("Boundary Reference companion " + i)));
+    }
+    var last = ScrollResponse.newBuilder();
+    for (String id : List.of("exact-one", "exact-two")) {
+      last.addResult(
+          RetrievedPoint.newBuilder()
+              .putPayload("bookId", io.qdrant.client.ValueFactory.value(id))
+              .putPayload("title", io.qdrant.client.ValueFactory.value("Boundary Reference")));
+    }
+    when(client.scrollAsync(any(ScrollPoints.class)))
+        .thenReturn(Futures.immediateFuture(first.build()), Futures.immediateFuture(last.build()));
+    var result =
+        new QdrantAudiobookRepository(client, new QdrantPointMapper(encoder), encoder, "books", 2)
+            .findBooksByTitle("Boundary Reference", null, 6);
+    assertThat(result)
+        .extracting(com.gen3.catalogue.model.AudiobookTitle::bookId)
+        .containsExactly("exact-one", "exact-two");
+    var captured = ArgumentCaptor.forClass(ScrollPoints.class);
+    verify(client, times(2)).scrollAsync(captured.capture());
+    assertThat(captured.getAllValues().get(1).getOffset())
+        .isEqualTo(io.qdrant.client.PointIdFactory.id(100L));
+  }
+
+  @Test
   void referenceLookupTriesAuthorFormattingVariantsWithoutRequestingVectors() throws Exception {
     var client = mock(QdrantClient.class);
     var encoder = new Bm25SparseTextEncoder();
@@ -65,7 +102,7 @@ class QdrantAudiobookRepositoryTest {
             io.qdrant.client.ConditionFactory.matchText("authors", "Collins, Suzanne"),
             io.qdrant.client.ConditionFactory.matchText("authors", "Suzanne Collins."),
             io.qdrant.client.ConditionFactory.matchText("authors", "Collins, Suzanne."));
-    assertThat(captured.getValue().getLimit()).isEqualTo(6);
+    assertThat(captured.getValue().getLimit()).isEqualTo(100);
     assertThat(captured.getValue().getWithVectors().getEnable()).isFalse();
   }
 

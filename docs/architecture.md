@@ -72,13 +72,17 @@ A single named title goes to catalogue lookup even when it is also the name of a
 `SimilarBookResolver` uses the configured `AudiobookTitleLookup` adapter before replacing the active
 search. A unique exact title match (ignoring case/punctuation) selects the reference. Its author can
 narrow editions; otherwise the user chooses from at most five title/author matches using a number,
-ordinal, title or unique author. Partial title matches always need confirmation. Lookups are bounded;
-a truncated result set never automatically selects a reference. No match asks which aspects the user
+ordinal, title or unique author. “The last one” selects the final reference choice; “the former”
+and “the latter” work with exactly two choices. Partial title matches always need confirmation.
+Adapters scan matching title pages while retaining bounded choices, returning exact titles when
+present before falling back to partial titles. A truncated exact-match set never automatically
+selects a reference. No match asks which aspects the user
 liked; a taste reply keeps the original exact constraints and starts a normal semantic search.
 
 The selected book must have a usable existing dense vector. Missing vectors produce a fixed response
-and warning, preserving the old search and cached page; no catalogue vectors are generated or written
-at request time. Storage failures follow the normal retrieval-error contract. Title and vector lookup
+and warning, asking for another title while preserving the search constraints, old search and cached
+page. A bare replacement title resumes that search; “yes” first asks which title. No catalogue vectors
+are generated or written at request time. Storage failures follow the normal retrieval-error contract. Title and vector lookup
 are shared ports implemented by both Solr and Qdrant, without database types in conversation policy.
 
 The reference vector is combined with additional positive/negative semantic vectors using the normal
@@ -96,7 +100,7 @@ explanation or count question takes priority over older title choices. Title mat
 normaliser for case, punctuation and catalogue `$b` markers across reference and explanation flows.
 Resuming a reference selection restores explicit search criteria and reapplies current preferences;
 preference resets cannot revive inherited filters. Count changes and resets also update pending searches.
-“None of these” asks for another reference title while retaining the search constraints. Exact title matches appear before partial matches when the displayed choices are capped. Reference author
+“None of these” asks for another reference title while retaining the search constraints. Reference author
 lookup and author replies use the same conservative person-name equivalence as exact filters.
 
 Pending choices are stored once in their request snapshot; older snapshots with a duplicate choices

@@ -40,7 +40,7 @@ class SolrShortDescriptionStoreTest {
             60,
             2020,
             "Existing summary");
-    when(catalogue.findAllBooks(0, 500)).thenReturn(List.of(missing, present));
+    when(catalogue.findAllBooks(null, 500)).thenReturn(List.of(missing, present));
     assertThat(store.findRecordsWithoutShortDescription(10))
         .hasSize(1)
         .first()
@@ -53,8 +53,8 @@ class SolrShortDescriptionStoreTest {
   void skipsUnusableRecordsBeforeCountingTheLimitAcrossPages() throws Exception {
     var invalid = new AudiobookRecord("invalid", "s", "Title", List.of(), " ");
     var valid = new AudiobookRecord("valid", "s", "Title", List.of(), "Description");
-    when(catalogue.findAllBooks(0, 500)).thenReturn(java.util.Collections.nCopies(500, invalid));
-    when(catalogue.findAllBooks(500, 500)).thenReturn(List.of(valid));
+    when(catalogue.findAllBooks(null, 500)).thenReturn(java.util.Collections.nCopies(500, invalid));
+    when(catalogue.findAllBooks("invalid", 500)).thenReturn(List.of(valid));
     assertThat(store.findRecordsWithoutShortDescription(1))
         .extracting(book -> book.record().id())
         .containsExactly("valid");

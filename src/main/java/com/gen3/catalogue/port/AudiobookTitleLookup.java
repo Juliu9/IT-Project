@@ -4,7 +4,7 @@ import com.gen3.catalogue.model.AudiobookTitle;
 import java.io.IOException;
 import java.util.List;
 
-/** Returns bounded title candidates; the caller must verify exactness and ambiguity. */
+/** Returns bounded exact-title matches when present, otherwise partial candidates. */
 public interface AudiobookTitleLookup {
   List<AudiobookTitle> findBooksByTitle(String title, String author, int limit) throws IOException;
 }

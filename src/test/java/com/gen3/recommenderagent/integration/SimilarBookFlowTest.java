@@ -433,6 +433,53 @@ class SimilarBookFlowTest {
         .isTrue();
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "the last one,other",
+    "the latter,other",
+    "the former,hunger"
+  })
+  void relativeReferenceSelectionsUseTheDisplayedChoices(String text, String expected)
+      throws Exception {
+    ambiguousReference();
+    service.process("session", "user", request(Intent.HELP, null));
+    var json = new tools.jackson.databind.ObjectMapper();
+    sessions.updateSession(
+        json.readValue(
+            json.writeValueAsString(sessions.getSession("session", "user")),
+            com.gen3.recommenderagent.domain.session.Session.class));
+    var result = service.process("session", "user", parsedReply(text));
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
+    assertThat(result.getSimilarBook().bookId()).isEqualTo(expected);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void unavailableReferenceAcceptsAnotherTitleAndRetainsConstraints(boolean saysYes)
+      throws Exception {
+    when(vectors.findEmbeddingByBookId("hunger")).thenReturn(Optional.empty());
+    var search = request(Intent.RECOMMENDATION, "The Hunger Games");
+    var exact = new ExactCriteria();
+    exact.setDuration("under 5 hours");
+    search.setMustInclude(exact);
+    assertThat(service.process("session", "user", search).getDecision())
+        .isEqualTo(ConversationDecision.SIMILAR_BOOK_UNAVAILABLE);
+    service.process("session", "user", request(Intent.HELP, null));
+    if (saysYes) {
+      assertThat(service.process("session", "user", parsedReply("yes")).getDecision())
+          .isEqualTo(ConversationDecision.SIMILAR_BOOK_REQUIRED);
+    }
+    when(titles.findBooksByTitle(anyString(), any(), anyInt()))
+        .thenReturn(List.of(new AudiobookTitle("other", "Another Title", List.of("Writer"))));
+    var reply = request(Intent.UNKNOWN, null);
+    reply.setRawText("Another Title");
+    reply.setExplicitSearch(false);
+    var result = service.process("session", "user", reply);
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
+    assertThat(result.getSimilarBook().bookId()).isEqualTo("other");
+    assertThat(result.getMustInclude().getDuration()).isEqualTo("under 5 hours");
+  }
+
   @Test
   void missingVectorPreservesPreviousSearchAndPendingPage() throws Exception {
     service.process("session", "user", request(Intent.RECOMMENDATION, "The Hunger Games"));
