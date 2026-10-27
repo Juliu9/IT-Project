@@ -291,7 +291,8 @@ class LiveInputParserTest {
     assertThat(result.isInvalidBookCount()).isTrue();
     assertThat(result.getBookCount()).isNull();
     assertThat(result.getIntent()).isEqualTo(Intent.RECOMMENDATION);
-    assertThat(result.getPositiveSemanticQuery().getGenres()).contains("mystery");
+    assertThat(result.getPositiveSemanticQuery()).as(text).isNotNull();
+    assertThat(result.getPositiveSemanticQuery().getGenres()).as(text).contains("mystery");
   }
 
   @ParameterizedTest

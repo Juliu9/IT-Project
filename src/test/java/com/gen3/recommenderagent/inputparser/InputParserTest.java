@@ -73,6 +73,49 @@ class InputParserTest {
     assertEquals(List.of("mystery"), result.getPositiveSemanticQuery().getGenres());
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource(
+      delimiter = '|',
+      value = {
+        "I want two and a half mystery books|I want some mystery books",
+        "Give me zero mystery books|Give me some mystery books",
+        "Give me minus two mystery books|Give me some mystery books",
+        "Give me 2.5 mystery books|Give me some mystery books"
+      })
+  void invalidRecommendationCountsDoNotInventANumericCountForAi(String text, String modelText) {
+    var ai = mock(AiParser.class);
+    var countOnly = new ParsedRequest();
+    countOnly.setIntent(Intent.CHANGE_COUNT);
+    when(ai.parse(anyString())).thenReturn(countOnly);
+    var recommendation = new ParsedRequest();
+    recommendation.setIntent(Intent.RECOMMENDATION);
+    var query = new SemanticQuery();
+    query.setGenres(List.of("mystery"));
+    recommendation.setPositiveSemanticQuery(query);
+    when(ai.parse(modelText)).thenReturn(recommendation);
+    var result = new InputParser(new CommandParser(), ai).parse(text);
+    assertEquals(true, result.isInvalidBookCount());
+    assertEquals(null, result.getBookCount());
+    assertNotNull(result.getPositiveSemanticQuery());
+    assertEquals(List.of("mystery"), result.getPositiveSemanticQuery().getGenres());
+    org.mockito.Mockito.verify(ai).parse(modelText);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource(
+      delimiter = '|',
+      value = {
+        "0 more|1 more",
+        "set count to zero|set count to 1",
+        "2.5|1",
+        "more and make it zero at a time|more and make it 1 at a time"
+      })
+  void invalidControlCountsKeepARecognisableNumericCommand(String text, String modelText) {
+    var check = CountInput.check(text);
+    assertEquals(true, check.invalid());
+    assertEquals(modelText, check.modelText());
+  }
+
   @Test
   void invalidCountIntentCorrectionHappensBeforeSemanticFieldsCanBeCleared() {
     var ai = mock(AiParser.class);

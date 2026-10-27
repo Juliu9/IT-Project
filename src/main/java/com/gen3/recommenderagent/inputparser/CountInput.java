@@ -45,11 +45,18 @@ final class CountInput {
         invalid = value.signum() <= 0 || value.stripTrailingZeros().scale() > 0;
       }
       if (invalid) {
+        // A synthetic numeric count can distract the model from the remaining search criteria.
+        String replacement = setting(text) || more(text) ? "1" : "some";
         return new Check(
-            true, text.substring(0, match.start(group)) + "1" + text.substring(match.end(group)));
+            true,
+            text.substring(0, match.start(group)) + replacement + text.substring(match.end(group)));
       }
     }
     return new Check(false, text);
+  }
+
+  static boolean more(String text) {
+    return text.toLowerCase(java.util.Locale.ROOT).matches("(?s).*\\b(?:more|another)\\b.*");
   }
 
   static boolean setting(String text) {

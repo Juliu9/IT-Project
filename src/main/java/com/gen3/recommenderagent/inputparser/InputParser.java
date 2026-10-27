@@ -104,9 +104,7 @@ public class InputParser {
                 ? com.gen3.recommenderagent.domain.Intent.MORE_RESULTS
                 : CountInput.setting(rawText) || countInput.modelText().equals("1")
                     ? com.gen3.recommenderagent.domain.Intent.CHANGE_COUNT
-                    : rawText
-                            .toLowerCase(java.util.Locale.ROOT)
-                            .matches("(?s).*\\b(?:more|another)\\b.*")
+                    : CountInput.more(rawText)
                         ? com.gen3.recommenderagent.domain.Intent.MORE_RESULTS
                         : com.gen3.recommenderagent.domain.Intent.RECOMMENDATION);
       }
