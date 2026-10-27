@@ -100,7 +100,8 @@ explanation or count question takes priority over older title choices. Title mat
 normaliser for case, punctuation and catalogue `$b` markers across reference and explanation flows.
 Resuming a reference selection restores explicit search criteria and reapplies current preferences;
 preference resets cannot revive inherited filters. Count changes and resets also update pending searches.
-“None of these” asks for another reference title while retaining the search constraints. Reference author
+“None of these” asks for another reference title while retaining the search constraints.
+“None of those, try The Hobbit” immediately looks up the replacement title with those constraints. Reference author
 lookup and author replies use the same conservative person-name equivalence as exact filters.
 
 Pending choices are stored once in their request snapshot; older snapshots with a duplicate choices
@@ -117,12 +118,17 @@ retrieval. `Session.pendingCountRequest` retains the original action and criteri
 reloads. Correcting a search/More count resumes that action with a temporary count; only explicit
 count settings change the saved default. Settings corrections repeat the interrupted question.
 Positive whole counts above five retain the existing cap and notice.
+With no previous search, “2 more” asks for criteria and retains two through HELP/cache reloads.
+“Yes” after a no-match or exhausted-results offer asks what to change without retrieving again;
+the prior explicit criteria remain available until the user supplies changes or starts a new search.
 Preference updates preserve unrelated questions. Both direct semantic updates and answers to an update
 question can supply the missing genres and resume the waiting personalised search.
 New recommendations/refinements replace the pending selection; MORE and REPEAT_RECOMMENDATIONS clear
 selection questions when showing a page. While genres are still required, MORE (including counted
 variants) repeats the genre question without embedding, retrieving, consuming cached books, or
-saving inherited criteria as preferences. CANCEL/CLEAR_HISTORY clear the question; RESET_PREFERENCES
+saving inherited criteria as preferences. EXPLAIN and REPEAT_RECOMMENDATIONS still use the latest
+completed page, including an empty result, and remind users of the pending genre question. They do
+not discard the unfinished personalised search; a later taste reply resumes it. CANCEL/CLEAR_HISTORY clear the question; RESET_PREFERENCES
 clears preference questions while preserving unrelated book selections. Abandoning a genre question
 discards its unfinished search; any earlier completed search and cached batch remain available.
 
@@ -457,13 +463,16 @@ Simple actions share `SessionActionHandler`; a new intent does not require a new
 A pending result-count question also accepts short answers such as “3” and “three”. The resolved
 count updates the session without consuming the pending recommendation queue. An explicit count
 on `MORE_RESULTS`, such as “2 more”, applies to that page without changing the saved default.
+“More, make it three at a time” also uses a temporary count: each message executes one intent.
+Use a separate CHANGE_COUNT request to save a new default.
 
 `CANCEL` acknowledges cancellation and clears pending preference clarification without clearing
 search history, preferences, or queued books. “Never mind” and “cancel” also end count and book-selection
 questions. While a preference question is pending, clear declines such as “no”, “not now”,
 “keep my preferences”, “nothing”, or “no changes” cancel it without changing saved preferences or
 count. Declining a genre question abandons that unfinished search while preserving earlier results
-and cached books. These phrases skip AI as UNKNOWN and become cancellation only in preference-question context.
+and cached books. “Not now” and “leave it” use the CANCEL fast path alongside explicit cancellation commands.
+Bare “no” declines any pending question; preference-specific declines remain contextual and skip AI.
 Unrecognized replies no longer become personalised searches merely because a taste
 question is pending.
 

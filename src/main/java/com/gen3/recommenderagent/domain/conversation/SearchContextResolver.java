@@ -45,7 +45,10 @@ public final class SearchContextResolver implements ConversationHandler {
                 .noneMatch(
                     previous ->
                         previous != null && isRecommendationIntent(previous.getIntent())))) {
+      effective.setBookCount(resolveBookCount(effective, session));
       effective.setSearchClarificationRequired(true);
+      session.setPendingRefinementRequest(
+          com.gen3.recommenderagent.domain.session.ConversationTurn.fromDraft(effective));
       return effective;
     }
     if (effective.getIntent() == Intent.REFINE

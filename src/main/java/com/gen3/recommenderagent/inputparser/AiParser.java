@@ -74,6 +74,7 @@ public class AiParser {
                         Intents:
                         RECOMMENDATION=new/self-contained criteria (even without a verb); REFINE=context-dependent search change/taste reply.
                         MORE_RESULTS=different books; REPEAT=latest action/answer; REPEAT_RECOMMENDATIONS=the same previous books/list,
+                        One intent per message. "more and make it three at a time" -> MORE_RESULTS, bookCount=3 (temporary); only a separate count-setting request is CHANGE_COUNT.
                         A same-books/list reference takes precedence over REPEAT; "repeat your last explanation" is REPEAT, not a new explanation.
                         EXPLAIN_RECOMMENDATION=why recommended; HELP=capabilities/usage; CHANGE_COUNT=recommendation count;
                         REFINE changes the current results; UPDATE_PREFERENCES explicitly edits saved tastes/constraints.

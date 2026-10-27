@@ -1,7 +1,7 @@
 package com.gen3.recommenderagent.domain.conversation;
 
 import static com.gen3.recommenderagent.domain.conversation.ConversationHistory.historyEntry;
-import static com.gen3.recommenderagent.domain.conversation.ConversationHistory.latestSearch;
+import static com.gen3.recommenderagent.domain.conversation.ConversationHistory.latestDisplayedSearch;
 import static com.gen3.recommenderagent.domain.conversation.ConversationRules.decisionFor;
 
 import com.gen3.recommenderagent.domain.Intent;
@@ -25,7 +25,7 @@ public final class ReplayConversationHandler implements ConversationHandler {
       return resolveRepeat(session, effective);
     }
     if (effective.getIntent() == Intent.REPEAT_RECOMMENDATIONS) {
-      ConversationDraft previous = latestSearch(session);
+      ConversationDraft previous = latestDisplayedSearch(session);
       ConversationDraft repeated = restoreRequest(previous, effective);
       repeated.setPreferenceClarificationRequired(false);
       repeated.setSearchClarificationRequired(false);

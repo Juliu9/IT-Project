@@ -679,7 +679,8 @@ class ExplanationFlowTest {
     pending.setPreferenceClarificationRequired(true);
     sessions.getSession("session", "user").getRequests().add(ConversationTurn.fromDraft(pending));
     var explain = explain(4, null);
-    assertThat(explain.getDecision()).isEqualTo(ConversationDecision.EMPTY_EXPLANATION_PAGE);
+    assertThat(explain.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(explain.getRecommendations()).extracting(Recommendation::getRank).containsExactly(4);
     assertThat(
             sessions
                 .getSession("session", "user")

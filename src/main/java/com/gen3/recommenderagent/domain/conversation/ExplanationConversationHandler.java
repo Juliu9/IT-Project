@@ -1,6 +1,6 @@
 package com.gen3.recommenderagent.domain.conversation;
 
-import static com.gen3.recommenderagent.domain.conversation.ConversationHistory.latestSearch;
+import static com.gen3.recommenderagent.domain.conversation.ConversationHistory.latestDisplayedSearch;
 import static com.gen3.recommenderagent.domain.conversation.SearchCriteriaMerger.merge;
 
 import com.gen3.catalogue.model.AudiobookTitle;
@@ -32,7 +32,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
     target.setMustInclude(null);
     target.setMustNotInclude(null);
     target.setBookCount(null);
-    ConversationDraft previous = latestSearch(session);
+    ConversationDraft previous = latestDisplayedSearch(session);
     if (previous == null) {
       target.setDecision(ConversationDecision.NOTHING_TO_EXPLAIN);
       return;
@@ -147,7 +147,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
   }
 
   static boolean matchesDisplayedTitle(Session session, String title) {
-    var previous = latestSearch(session);
+    var previous = latestDisplayedSearch(session);
     String normalized = AudiobookTitle.normalize(title);
     return previous != null
         && previous.getRecommendations() != null

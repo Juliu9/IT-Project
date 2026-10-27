@@ -193,7 +193,7 @@ class InputParserTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
-      strings = {"no", "not now", "keep my preferences", "nothing", "No, thanks!"})
+      strings = {"no", "keep my preferences", "nothing", "No, thanks!"})
   void preferenceDeclinesSkipAiButNeedContextToCancel(String text) {
     var ai = mock(AiParser.class);
     var parsed = new InputParser(new CommandParser(), ai).parse(text);

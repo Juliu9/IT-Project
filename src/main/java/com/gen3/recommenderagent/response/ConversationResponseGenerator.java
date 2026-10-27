@@ -66,14 +66,32 @@ public class ConversationResponseGenerator implements ResponseGenerator {
             default -> false;
           };
       RequestTelemetry.responseMode(noResults ? "NO_RESULTS" : "ACTION_RESPONSE");
-      return switch (decision) {
-        case NO_MORE_RESULTS, NOTHING_TO_REPEAT, NO_RECOMMENDATIONS_TO_REPEAT -> fixedResponse;
-        default -> limitNotice + fixedResponse;
-      };
+      return withPreferenceReminder(
+          switch (decision) {
+            case NO_MORE_RESULTS, NOTHING_TO_REPEAT, NO_RECOMMENDATIONS_TO_REPEAT -> fixedResponse;
+            default -> limitNotice + fixedResponse;
+          },
+          currentRequest);
     }
 
-    return ai.generate(
-        recommendations, currentRequest, decision == ConversationDecision.EXPLANATION, limitNotice);
+    String response =
+        ai.generate(
+            recommendations,
+            currentRequest,
+            decision == ConversationDecision.EXPLANATION,
+            limitNotice);
+    return withPreferenceReminder(response, currentRequest);
+  }
+
+  private String withPreferenceReminder(String response, ConversationTurn request) {
+    return request != null
+            && request.getPendingQuestion() == ConversationDecision.PREFERENCE_CLARIFICATION
+            && (request.getIntent()
+                    == com.gen3.recommenderagent.domain.Intent.EXPLAIN_RECOMMENDATION
+                || request.getIntent()
+                    == com.gen3.recommenderagent.domain.Intent.REPEAT_RECOMMENDATIONS)
+        ? response + " To continue your personalised request, what genres do you like?"
+        : response;
   }
 
   private String limitNotice(ConversationTurn request) {
@@ -165,6 +183,7 @@ public class ConversationResponseGenerator implements ResponseGenerator {
       case NO_MATCHES -> generateFallbackResponse(currentRequest);
       case UNAVAILABLE -> PROCESSING_FALLBACK;
       case SEARCH_CLARIFICATION -> "What kind of audiobook would you like?";
+      case SEARCH_CHANGE_CLARIFICATION -> "What would you like to change about your search?";
       case PREFERENCE_CLARIFICATION -> "What genres do you like?";
       case RECOMMENDATIONS, EXPLANATION -> null;
     };

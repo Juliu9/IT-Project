@@ -36,7 +36,9 @@ public final class ClarificationResolver {
       }
     }
     String reply = effective.getRawText() == null ? "" : effective.getRawText().strip();
-    if (reply.matches("(?i)(?:never mind|nevermind|cancel|stop|forget it)[.!?]?")) {
+    if (ConversationText.isCancellationReply(reply)
+        || (isQuestion(session.getPendingQuestion())
+            && ConversationText.normalizeCommand(reply).equals("no"))) {
       effective.setIntent(Intent.CANCEL);
     }
     if ((session.getPendingQuestion() == ConversationDecision.PREFERENCE_CLARIFICATION
@@ -47,6 +49,38 @@ public final class ClarificationResolver {
     if (effective.getIntent() == Intent.CANCEL) {
       normalizeInput(effective);
       return effective;
+    }
+    if (ConversationText.isAffirmativeReply(reply)
+        && (session.getLastDecision() == ConversationDecision.NO_MATCHES
+            || session.getLastDecision() == ConversationDecision.NO_MORE_RESULTS
+            || session.getLastDecision() == ConversationDecision.EMPTY_EXPLANATION_PAGE)) {
+      var previous = ConversationHistory.latestDisplayedSearch(session);
+      if (previous != null) {
+        session.setPendingRefinementRequest(ConversationTurn.fromDraft(previous));
+      }
+      effective.setIntent(Intent.RECOMMENDATION);
+      normalizeInput(effective);
+      effective.setDecision(ConversationDecision.SEARCH_CHANGE_CLARIFICATION);
+      effective.setSearchClarificationRequired(true);
+      return effective;
+    }
+    if ((session.getPendingQuestion() == ConversationDecision.SEARCH_CLARIFICATION
+            || session.getPendingQuestion() == ConversationDecision.SEARCH_CHANGE_CLARIFICATION)
+        && session.getPendingRefinementRequest() != null
+        && !effective.isExplicitSearch()
+        && (effective.getIntent() == Intent.RECOMMENDATION
+            || effective.getIntent() == Intent.REFINE)) {
+      var pending = session.getPendingRefinementRequest();
+      effective.setIntent(
+          session.getPendingQuestion() == ConversationDecision.SEARCH_CLARIFICATION
+              ? Intent.RECOMMENDATION
+              : Intent.REFINE);
+      if (effective.getBookCount() == null) {
+        effective.setBookCount(pending.getBookCount());
+      }
+      SearchCriteriaMerger.merge(restoreSearchCriteria(pending), effective);
+      session.setPendingRefinementRequest(null);
+      session.setPendingQuestion(null);
     }
     if (effective.isInvalidBookCount()
         && (session.getPendingQuestion() == ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
@@ -105,11 +139,7 @@ public final class ClarificationResolver {
         || (session.isAwaitingPreferenceUpdate()
             && session.getPendingQuestion() != ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
             && session.getPendingQuestion() != ConversationDecision.COUNT_CLARIFICATION
-            && session.getPendingQuestion() != ConversationDecision.LONGER_DURATION_CLARIFICATION
-            && session.getPendingQuestion() != ConversationDecision.DURATION_RANGE_CONFIRMATION
-            && session.getPendingQuestion() != ConversationDecision.SHORTER_DURATION_CLARIFICATION
-            && session.getPendingQuestion() != ConversationDecision.RECENCY_YEAR_CLARIFICATION
-            && session.getPendingQuestion() != ConversationDecision.RECENCY_RANGE_CONFIRMATION
+            && !isRefinementQuestion(session.getPendingQuestion())
             && !effective.isExplicitSearch()
             && (effective.getIntent() == Intent.RECOMMENDATION
                 || effective.getIntent() == Intent.REFINE
@@ -171,7 +201,7 @@ public final class ClarificationResolver {
         && (effective.getIntent() == Intent.UNKNOWN
             || effective.getIntent() == Intent.RECOMMENDATION
             || effective.getIntent() == Intent.REFINE)) {
-      var search = ConversationHistory.latestSearch(session);
+      var search = ConversationHistory.latestDisplayedSearch(session);
       var page = search == null ? List.<Recommendation>of() : search.getRecommendations();
       String unresolved =
           ExplanationConversationHandler.firstUnresolved(session.getPendingExplanation(), page);
@@ -187,7 +217,7 @@ public final class ClarificationResolver {
     }
     Integer selection = ConversationText.selectionReply(reply);
     if (session.getPendingQuestion() == ConversationDecision.EXPLANATION_TARGET_CLARIFICATION) {
-      var search = ConversationHistory.latestSearch(session);
+      var search = ConversationHistory.latestDisplayedSearch(session);
       var page =
           search == null || search.getRecommendations() == null
               ? List.<Recommendation>of()
@@ -355,6 +385,13 @@ public final class ClarificationResolver {
       Session session, ConversationDraft input, String reply, Integer selection) {
     var pending = session.getPendingSimilarBook();
     var choices = pending.request().getSimilarBookChoices();
+    String replacement = ConversationText.replacementReferenceTitle(reply);
+    if (replacement != null) {
+      var named = anotherReference(pending.request(), input);
+      named.setSimilarToTitle(replacement);
+      named.setSimilarToClarificationRequired(false);
+      return named;
+    }
     if ((!choices.isEmpty() && ConversationText.isChoiceRejection(reply))
         || (pending.decision() == ConversationDecision.SIMILAR_BOOK_UNAVAILABLE
             && ConversationText.isAffirmativeReply(reply))) {
@@ -472,6 +509,7 @@ public final class ClarificationResolver {
           PREFERENCE_CLARIFICATION,
           PREFERENCE_UPDATE_CLARIFICATION,
           SEARCH_CLARIFICATION,
+          SEARCH_CHANGE_CLARIFICATION,
           SHORTER_DURATION_CLARIFICATION,
           LONGER_DURATION_CLARIFICATION,
           DURATION_RANGE_CONFIRMATION,
@@ -487,7 +525,9 @@ public final class ClarificationResolver {
   }
 
   private boolean isRefinementQuestion(ConversationDecision decision) {
-    return decision == ConversationDecision.RECENCY_RANGE_CONFIRMATION
+    return decision == ConversationDecision.SEARCH_CLARIFICATION
+        || decision == ConversationDecision.SEARCH_CHANGE_CLARIFICATION
+        || decision == ConversationDecision.RECENCY_RANGE_CONFIRMATION
         || decision == ConversationDecision.RECENCY_YEAR_CLARIFICATION
         || decision == ConversationDecision.SHORTER_DURATION_CLARIFICATION
         || decision == ConversationDecision.LONGER_DURATION_CLARIFICATION
@@ -498,7 +538,7 @@ public final class ClarificationResolver {
     request.setPendingQuestion(session.getPendingQuestion());
     if (session.getPendingQuestion() == ConversationDecision.EXPLANATION_TARGET_CLARIFICATION) {
       request.setExplanationSelection(session.getPendingExplanation());
-      var search = ConversationHistory.latestSearch(session);
+      var search = ConversationHistory.latestDisplayedSearch(session);
       if (search != null) {
         request.setRecommendations(search.getRecommendations());
       }
@@ -518,6 +558,14 @@ public final class ClarificationResolver {
       return;
     }
     if (intent == Intent.HELP) {
+      attachQuestion(session, request);
+      return;
+    }
+    if ((intent == Intent.EXPLAIN_RECOMMENDATION || intent == Intent.REPEAT_RECOMMENDATIONS)
+        && session.isAwaitingPersonalisedPreferences()
+        && request.getDecision() != ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
+        && request.getDecision() != ConversationDecision.EMPTY_EXPLANATION_SELECTION) {
+      session.setPendingQuestion(ConversationDecision.PREFERENCE_CLARIFICATION);
       attachQuestion(session, request);
       return;
     }

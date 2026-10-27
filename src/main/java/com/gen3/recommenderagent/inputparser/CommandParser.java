@@ -32,8 +32,27 @@ public class CommandParser {
               + "))?)"
               + "(?: books?| audiobooks?| recommendations?)?");
 
+  private static final Pattern TEMPORARY_MORE_COUNT =
+      Pattern.compile(
+          "^(.+?)(?:, (?:and )?| and )(?:make (?:it|that) )?("
+              + COUNT
+              + ")(?: books?| audiobooks?| recommendations?)? (?:at a time|per page|per request)$");
+
   public ParsedRequest parse(String rawText) {
     String command = normalizeCommand(rawText);
+    if (ConversationText.isCancellationReply(command)) {
+      var parsed = new ParsedRequest();
+      parsed.setIntent(Intent.CANCEL);
+      return parsed;
+    }
+    var temporaryCount = TEMPORARY_MORE_COUNT.matcher(command);
+    if (temporaryCount.matches()) {
+      var action = parse(temporaryCount.group(1));
+      if (action != null && action.getIntent() == Intent.MORE_RESULTS) {
+        action.setBookCount(countValue(temporaryCount.group(2)));
+        return action;
+      }
+    }
     var removal =
         Pattern.compile(
                 "^(?:remove (.+) from (?:my |the )?(?:session )?preferences|i no longer like (.+))$")
@@ -137,7 +156,8 @@ public class CommandParser {
       parsed.setReplaceSearchFields(java.util.List.of(cleared));
       return parsed;
     }
-    if (ConversationText.relativeSelectionReply(rawText, 2) != null
+    if (ConversationText.replacementReferenceTitle(rawText) != null
+        || ConversationText.relativeSelectionReply(rawText, 2) != null
         || ConversationText.isChoiceRejection(rawText)
         || ConversationText.isWholePageReply(rawText)
         || ConversationText.isAffirmativeReply(rawText)
@@ -270,15 +290,6 @@ public class CommandParser {
               "clear recommendation history",
               "clear my recommendation history" ->
               Intent.CLEAR_HISTORY;
-          case "cancel",
-              "cancel that",
-              "cancel this",
-              "cancel the request",
-              "never mind",
-              "nevermind",
-              "stop",
-              "forget it" ->
-              Intent.CANCEL;
           default -> null;
         };
     if (intent == null) {

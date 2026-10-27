@@ -47,10 +47,24 @@ public final class ConversationHistory {
   }
 
   public static ConversationDraft latestSearch(Session session) {
+    return latestSearch(session, false);
+  }
+
+  /** Unfinished questions must not replace the latest completed page, including empty pages. */
+  public static ConversationDraft latestDisplayedSearch(Session session) {
+    return latestSearch(session, true);
+  }
+
+  private static ConversationDraft latestSearch(Session session, boolean completedOnly) {
     return session.getRequests() == null
         ? null
         : session.getRequests().stream()
             .filter(ConversationRules::isSearchContext)
+            .filter(
+                turn ->
+                    !completedOnly
+                        || (!turn.isPreferenceClarificationRequired()
+                            && !turn.isSearchClarificationRequired()))
             .reduce((first, second) -> second)
             .map(ConversationTurn::toDraft)
             .orElse(null);

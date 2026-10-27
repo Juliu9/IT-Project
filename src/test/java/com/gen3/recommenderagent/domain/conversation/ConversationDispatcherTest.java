@@ -53,12 +53,24 @@ class ConversationDispatcherTest {
   }
 
   @ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(strings = {"no", "not now", "keep my preferences"})
-  void declinePhrasesDoNotCancelWithoutAPreferenceQuestion(String text) {
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"no", "not now", "leave it"})
+  void decliningAPendingSelectionCancelsIt(String text) {
     var session = new Session();
     session.setPendingQuestion(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
     var reply = request(Intent.UNKNOWN);
     reply.setRawText(text);
+    var result = conversationState.begin(session, reply);
+    conversationState.finish(session, result, reply);
+    assertEquals(ConversationDecision.CANCELLED, result.getDecision());
+    assertNull(session.getPendingQuestion());
+  }
+
+  @Test
+  void preferenceSpecificDeclinesDoNotCancelOtherQuestions() {
+    var session = new Session();
+    session.setPendingQuestion(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+    var reply = request(Intent.UNKNOWN);
+    reply.setRawText("keep my preferences");
     var result = new ClarificationResolver().resolve(session, reply);
     assertTrue(result.getIntent() != Intent.CANCEL);
     assertEquals(

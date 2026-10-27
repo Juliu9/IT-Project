@@ -9,6 +9,10 @@ public final class ConversationText {
       Pattern.compile(
           "(?i)^(?:(?:choose|pick|select)\\s+)?(?:the\\s+)?(?:(?:book|audiobook)\\s+)?(?:number\\s+)?([0-9]+(?:st|nd|rd|th)?|one|two|three|four|five|six|seven|eight|nine|ten|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)(?:\\s+(?:one|book|audiobook|recommendation))?(?:\\s+please)?[.!?]?$");
 
+  private static final Pattern REPLACEMENT_REFERENCE =
+      Pattern.compile(
+          "(?i)^(?:none of (?:these|those|them)|neither(?: of them)?)[,;.!]?\\s+(?:try|use)\\s+(.+)$");
+
   private ConversationText() {}
 
   public static String normalizeCommand(String rawText) {
@@ -55,6 +59,30 @@ public final class ConversationText {
       case "former", "the former", "the former one", "former book", "the former book" -> 1;
       default -> null;
     };
+  }
+
+  public static boolean isCancellationReply(String text) {
+    return text != null
+        && java.util.Set.of(
+                "cancel",
+                "cancel that",
+                "cancel this",
+                "cancel the request",
+                "never mind",
+                "nevermind",
+                "stop",
+                "forget it",
+                "not now",
+                "leave it")
+            .contains(normalizeCommand(text));
+  }
+
+  public static String replacementReferenceTitle(String text) {
+    if (text == null) {
+      return null;
+    }
+    var match = REPLACEMENT_REFERENCE.matcher(text.strip());
+    return match.matches() ? match.group(1).strip() : null;
   }
 
   public static boolean isChoiceRejection(String text) {

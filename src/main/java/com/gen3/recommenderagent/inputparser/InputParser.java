@@ -100,13 +100,15 @@ public class InputParser {
                   || (parsed.getBookCount() != null && parsed.getBookCount().signum() <= 0));
       if (invalidCount && countInput.invalid()) {
         parsed.setIntent(
-            CountInput.setting(rawText) || countInput.modelText().equals("1")
-                ? com.gen3.recommenderagent.domain.Intent.CHANGE_COUNT
-                : rawText
-                        .toLowerCase(java.util.Locale.ROOT)
-                        .matches("(?s).*\\b(?:more|another)\\b.*")
-                    ? com.gen3.recommenderagent.domain.Intent.MORE_RESULTS
-                    : com.gen3.recommenderagent.domain.Intent.RECOMMENDATION);
+            parsed.getIntent() == com.gen3.recommenderagent.domain.Intent.MORE_RESULTS
+                ? com.gen3.recommenderagent.domain.Intent.MORE_RESULTS
+                : CountInput.setting(rawText) || countInput.modelText().equals("1")
+                    ? com.gen3.recommenderagent.domain.Intent.CHANGE_COUNT
+                    : rawText
+                            .toLowerCase(java.util.Locale.ROOT)
+                            .matches("(?s).*\\b(?:more|another)\\b.*")
+                        ? com.gen3.recommenderagent.domain.Intent.MORE_RESULTS
+                        : com.gen3.recommenderagent.domain.Intent.RECOMMENDATION);
       }
       SessionRequest request = new SessionRequest();
       request.setIntent(parsed.getIntent());

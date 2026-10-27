@@ -56,7 +56,8 @@ class ApprovedInputFlowTest {
           new RecommendationPager(workflow),
           new ExactFilterPolicy(),
           new SimilarBookResolver(titles, vectors));
-  private final AiResponseGenerator narration = mock(AiResponseGenerator.class);
+  private final AiResponseGenerator narration =
+      mock(AiResponseGenerator.class, invocation -> "Here are your books.");
   private final ConversationResponseGenerator responses =
       new ConversationResponseGenerator(narration);
   private Session session = new Session();
@@ -70,6 +71,15 @@ class ApprovedInputFlowTest {
     when(workflow.recommend(any(), any()))
         .thenAnswer(
             call -> {
+              com.gen3.recommenderagent.domain.session.ConversationDraft input =
+                  call.getArgument(0);
+              if (input.isPersonalised()
+                  && input.getPositiveSemanticQuery() == null
+                  && input.getNegativeSemanticQuery() == null
+                  && session.getPreferences() == null) {
+                input.setPreferenceClarificationRequired(true);
+                return List.of();
+              }
               int generation = ++batch;
               return IntStream.rangeClosed(1, 20)
                   .mapToObj(
@@ -453,5 +463,157 @@ class ApprovedInputFlowTest {
     assertThat(responses.generate(count.getRecommendations(), count))
         .contains("3 recommendations", "Which book");
     assertThat(process("2").getSimilarBook().bookId()).isEqualTo("b");
+  }
+
+  private void referenceChoices() throws Exception {
+    when(titles.findBooksByTitle(anyString(), any(), anyInt()))
+        .thenReturn(
+            List.of(
+                new AudiobookTitle("a", "Reference", List.of("One")),
+                new AudiobookTitle("b", "Reference", List.of("Two"))));
+    when(vectors.findEmbeddingByBookId(anyString())).thenReturn(Optional.of(new float[] {1, 0}));
+    var input = request(Intent.RECOMMENDATION, "similar to Reference under two hours");
+    input.setSimilarToTitle("Reference");
+    input.setBookCount(2);
+    input.setExplicitSearch(true);
+    var criteria = new ExactCriteria();
+    criteria.setDuration("under 2 hours");
+    input.setMustInclude(criteria);
+    engine.process(session, input);
+  }
+
+  @Test
+  void rejectingChoicesWithAReplacementTitlePreservesTheSearch() throws Exception {
+    referenceChoices();
+    when(titles.findBooksByTitle(anyString(), any(), anyInt()))
+        .thenReturn(List.of(new AudiobookTitle("hobbit", "The Hobbit", List.of("Tolkien"))));
+    reload();
+    var result = process("None of those, try The Hobbit");
+    assertThat(result.getIntent()).isEqualTo(Intent.RECOMMENDATION);
+    assertThat(result.getSimilarBook().bookId()).isEqualTo("hobbit");
+    assertThat(result.getMustInclude().getDuration()).isEqualTo("under 2 hours");
+    assertThat(result.getRecommendations()).hasSize(2);
+    verifyNoInteractions(ai);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"Not now", "Leave it", "Never mind", "No, thanks"})
+  void decliningAReferenceQuestionPreservesThePreviousPage(String reply) throws Exception {
+    var displayed = search();
+    referenceChoices();
+    var result = process(reply);
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.CANCELLED);
+    assertThat(session.getPendingSimilarBook()).isNull();
+    assertThat(process("repeat the recommendations").getRecommendations())
+        .extracting(Recommendation::getBookId)
+        .containsExactlyElementsOf(
+            displayed.getRecommendations().stream().map(Recommendation::getBookId).toList());
+    verifyNoInteractions(ai);
+  }
+
+  @Test
+  void firstSearchKeepsTheMoreCountAcrossHelpAndReload() {
+    var question = process("2 more");
+    assertThat(question.getDecision()).isEqualTo(ConversationDecision.SEARCH_CLARIFICATION);
+    verifyNoInteractions(workflow);
+    process("help");
+    reload();
+    var taste = request(Intent.RECOMMENDATION, "fantasy");
+    var query = new SemanticQuery();
+    query.setGenres(List.of("fantasy"));
+    taste.setPositiveSemanticQuery(query);
+    var result = engine.process(session, taste);
+    assertThat(result.getRecommendations()).hasSize(2);
+    assertThat(session.getBookCount()).isEqualTo(5);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"More please and make it three at a time", "More, three per page"})
+  void combinedMoreCountIsTemporary(String text) {
+    search();
+    var result = process(text);
+    assertThat(result.getIntent()).isEqualTo(Intent.MORE_RESULTS);
+    assertThat(result.getRecommendations()).hasSize(3);
+    assertThat(session.getBookCount()).isEqualTo(5);
+    assertThat(process("more").getRecommendations()).hasSize(5);
+    process("change count to three books");
+    assertThat(session.getBookCount()).isEqualTo(3);
+    verifyNoInteractions(ai);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"no matches", "no more", "empty explanation"})
+  void acceptingNoMatchRecoveryAsksForChangesWithoutRetrieval(String outcome) {
+    org.mockito.Mockito.doReturn(List.of()).when(workflow).recommend(any(), any());
+    search();
+    if (outcome.equals("no more")) {
+      process("more");
+    } else if (outcome.equals("empty explanation")) {
+      process("explain");
+    }
+    org.mockito.Mockito.clearInvocations(workflow);
+    var before = session.getRequests().getLast();
+    var question = process("yes");
+    assertThat(question.getDecision()).isEqualTo(ConversationDecision.SEARCH_CHANGE_CLARIFICATION);
+    assertThat(responses.generate(question.getRecommendations(), question))
+        .contains("What would you like to change");
+    assertThat(session.getRequests().getLast().getRequestId()).isEqualTo(before.getRequestId());
+    verifyNoInteractions(workflow);
+    process("help");
+    reload();
+    var change = request(Intent.REFINE, "under two hours");
+    var criteria = new ExactCriteria();
+    criteria.setDuration("under 2 hours");
+    change.setMustInclude(criteria);
+    var result = engine.process(session, change);
+    assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
+    assertThat(result.getMustInclude().getDuration()).isEqualTo("under 2 hours");
+    org.mockito.Mockito.verify(workflow).recommend(any(), any());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"explain", "repeat the recommendations"})
+  void pendingPersonalisationDoesNotHideTheDisplayedPage(String action) {
+    var displayed = search();
+    var personalised = request(Intent.RECOMMENDATION, "personalised for me");
+    personalised.setPersonalised(true);
+    personalised.setExplicitSearch(true);
+    var question = engine.process(session, personalised);
+    assertThat(question.isPreferenceClarificationRequired()).isTrue();
+    reload();
+    if (action.equals("explain")) {
+      assertThat(selection(List.of("99"), List.of()).getDecision())
+          .isEqualTo(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+      var chosen = process("2");
+      assertThat(chosen.getRecommendations())
+          .extracting(Recommendation::getRank)
+          .containsExactly(2);
+      assertThat(session.isAwaitingPersonalisedPreferences()).isTrue();
+    }
+    var result = process(action);
+    assertThat(result.getRecommendations())
+        .extracting(Recommendation::getBookId)
+        .containsExactlyElementsOf(
+            displayed.getRecommendations().stream().map(Recommendation::getBookId).toList());
+    assertThat(responses.generate(result.getRecommendations(), result))
+        .endsWith("To continue your personalised request, what genres do you like?");
+    assertThat(session.isAwaitingPersonalisedPreferences()).isTrue();
+    var answer = request(Intent.RECOMMENDATION, "horror");
+    var query = new SemanticQuery();
+    query.setGenres(List.of("horror"));
+    answer.setPositiveSemanticQuery(query);
+    var resumed = engine.process(session, answer);
+    assertThat(resumed.isPersonalised()).isTrue();
+    assertThat(resumed.getPositiveSemanticQuery().getGenres()).containsExactly("horror");
+    assertThat(session.isAwaitingPersonalisedPreferences()).isFalse();
+  }
+
+  @Test
+  void invalidCombinedMoreCountStillResumesWithATemporaryCount() {
+    search();
+    assertThat(process("more and make it zero at a time").getDecision())
+        .isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
+    assertThat(process("2").getRecommendations()).hasSize(2);
+    assertThat(session.getBookCount()).isEqualTo(5);
   }
 }
