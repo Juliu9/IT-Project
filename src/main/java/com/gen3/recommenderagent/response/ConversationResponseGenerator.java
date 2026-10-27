@@ -229,8 +229,9 @@ public class ConversationResponseGenerator implements ResponseGenerator {
           + "Would you like to try a different author, genre, or filter?";
     }
     if (currentRequest != null
-        && currentRequest.getMustInclude() != null
-        && currentRequest.getMustInclude().getPublicationYear() != null) {
+        && (currentRequest.getIntent() == com.gen3.recommenderagent.domain.Intent.REFINE
+            || (currentRequest.getMustInclude() != null
+                && currentRequest.getMustInclude().getPublicationYear() != null))) {
       return "I couldn't find books matching those criteria. Would you like to try a different author, genre, or filter?";
     }
     if (currentRequest != null

@@ -121,6 +121,21 @@ public final class ConversationText {
             .contains(normalizeCommand(text));
   }
 
+  public static String durationReply(String text, boolean longer) {
+    String reply = normalizeCommand(text);
+    if (!reply.matches(
+        "(?:(?:under|over|less than|more than|at most|at least|up to|exactly|no more than|no less than) )?[0-9]+(?:\\.[0-9]+)?(?: ?(?:hours?|hrs?|h|minutes?|mins?|m))?")) {
+      return null;
+    }
+    if (!reply.matches(".*[a-z]$")) {
+      reply += " hours";
+    }
+    if (Character.isDigit(reply.charAt(0))) {
+      reply = (longer ? "at least " : "at most ") + reply;
+    }
+    return reply;
+  }
+
   public static boolean isRecencyRefinement(String text) {
     return text != null
         && java.util.Set.of(

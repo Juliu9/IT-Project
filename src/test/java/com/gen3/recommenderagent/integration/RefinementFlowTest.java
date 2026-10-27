@@ -696,6 +696,57 @@ class RefinementFlowTest {
     verifyNoInteractions(workflow);
   }
 
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource(
+      delimiter = '|',
+      value = {
+        "under 3 hours|under 3 hours|SHORTER_DURATION_CLARIFICATION",
+        "5 hours|at most 5 hours|SHORTER_DURATION_CLARIFICATION",
+        "5|at most 5 hours|SHORTER_DURATION_CLARIFICATION",
+        "5|at least 5 hours|LONGER_DURATION_CLARIFICATION",
+        "over 5 hours|over 5 hours|LONGER_DURATION_CLARIFICATION"
+      })
+  void durationOnlyAnswersResumeThePendingSearchDespiteModelSearchFlags(
+      String text, String duration, ConversationDecision question) throws Exception {
+    search(null, null);
+    var initial =
+        service.process(
+            "session",
+            "user",
+            command(
+                question == ConversationDecision.SHORTER_DURATION_CLARIFICATION
+                    ? "make them shorter"
+                    : "make them longer"));
+    assertThat(initial.getDecision()).isEqualTo(question);
+    var mapper = new ObjectMapper();
+    var session =
+        mapper.readValue(
+            mapper.writeValueAsString(sessions.getSession("session", "user")), Session.class);
+    sessions.updateSession(session);
+    var reply = request(Intent.RECOMMENDATION);
+    reply.setRawText(text);
+    reply.setExplicitSearch(true);
+    reply.setBookCount(5);
+    var invented = new SemanticQuery();
+    invented.setGenres(List.of("mystery"));
+    reply.setPositiveSemanticQuery(invented);
+    when(workflow.recommend(any(), any())).thenReturn(List.of());
+    var refined = process(reply);
+    assertThat(refined.getIntent()).isEqualTo(Intent.REFINE);
+    assertThat(refined.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
+    assertThat(refined.getMustInclude().getDuration()).isEqualTo(duration);
+    assertThat(refined.getDecision()).isEqualTo(ConversationDecision.NO_MATCHES);
+    assertThat(sessions.getSession("session", "user").getPendingQuestion()).isNull();
+    String response =
+        new com.gen3.recommenderagent.response.ConversationResponseGenerator(
+                new com.gen3.recommenderagent.response.AiResponseGenerator(null))
+            .generate(refined.getRecommendations(), refined);
+    assertThat(response)
+        .contains("matching those criteria")
+        .doesNotContain("good match for " + text);
+    verify(workflow).recommend(any(), any());
+  }
+
   @Test
   void oldRecommendationsWithoutDurationsAskForALimitAndKeepTheSearch() {
     search(null, null);

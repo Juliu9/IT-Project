@@ -50,6 +50,42 @@ public final class ClarificationResolver {
       normalizeInput(effective);
       return effective;
     }
+    if (session.getPendingQuestion() == ConversationDecision.SHORTER_DURATION_CLARIFICATION
+        || session.getPendingQuestion() == ConversationDecision.LONGER_DURATION_CLARIFICATION) {
+      String duration =
+          ConversationText.durationReply(
+              reply,
+              session.getPendingQuestion() == ConversationDecision.LONGER_DURATION_CLARIFICATION);
+      boolean parsedReply =
+          !effective.isExplicitSearch()
+              && effective.getMustInclude() != null
+              && effective.getMustInclude().getDuration() != null
+              && (effective.getIntent() == Intent.RECOMMENDATION
+                  || effective.getIntent() == Intent.REFINE
+                  || effective.getIntent() == Intent.UNKNOWN);
+      if (duration != null || parsedReply) {
+        effective.setIntent(Intent.REFINE);
+        effective.setShorter(false);
+        effective.setLonger(false);
+        if (duration != null) {
+          var include = new com.gen3.recommenderagent.domain.session.ExactCriteria();
+          include.setDuration(duration);
+          effective.setMustInclude(include);
+          effective.setMustNotInclude(null);
+          effective.setPositiveSemanticQuery(null);
+          effective.setNegativeSemanticQuery(null);
+          effective.setPersonalised(false);
+          effective.setBookCount(null);
+          effective.setInvalidBookCount(false);
+        }
+        normalizeInput(effective);
+        if (session.getPendingRefinementRequest() != null) {
+          SearchCriteriaMerger.merge(
+              restoreSearchCriteria(session.getPendingRefinementRequest()), effective);
+        }
+        return effective;
+      }
+    }
     if (ConversationText.isAffirmativeReply(reply)
         && (session.getLastDecision() == ConversationDecision.NO_MATCHES
             || session.getLastDecision() == ConversationDecision.NO_MORE_RESULTS
@@ -306,24 +342,6 @@ public final class ClarificationResolver {
       normalizeInput(effective);
       effective.setReferenceRank(selection);
       effective.setReferenceTitle(selection == null ? reply : null);
-      return effective;
-    }
-    if ((session.getPendingQuestion() == ConversationDecision.SHORTER_DURATION_CLARIFICATION
-            || session.getPendingQuestion() == ConversationDecision.LONGER_DURATION_CLARIFICATION)
-        && !effective.isExplicitSearch()
-        && effective.getMustInclude() != null
-        && effective.getMustInclude().getDuration() != null
-        && (effective.getIntent() == Intent.RECOMMENDATION
-            || effective.getIntent() == Intent.REFINE
-            || effective.getIntent() == Intent.UNKNOWN)) {
-      effective.setIntent(Intent.REFINE);
-      effective.setShorter(false);
-      effective.setLonger(false);
-      normalizeInput(effective);
-      if (session.getPendingRefinementRequest() != null) {
-        SearchCriteriaMerger.merge(
-            restoreSearchCriteria(session.getPendingRefinementRequest()), effective);
-      }
       return effective;
     }
     if (session.getPendingSimilarBook() != null
