@@ -137,7 +137,9 @@ public class AiParser {
                         "Give me zero mystery books" -> {"intent":"RECOMMENDATION","explicitSearch":true,"invalidBookCount":true,"positiveSemanticQuery":{"genres":["mystery"]}}.
 
                         Duration comparisons belong in mustInclude.duration (including "under"/"over", not just exact lengths); use digits plus hours/minutes; convert words/fractions ("under ten hours" -> "under 10 hours";
-                        "one and a half hours" -> "1.5 hours"). Preserve under/over/at most/at least/exactly/between and both endpoints; omit vague durations.
+                        "one and a half hours" -> "1.5 hours"). Common forms: "a couple of hours"=2 hours, "a hundred minutes"=100 minutes,
+                        "two thousand minutes"=2000 minutes, "2 hours 30"=2 hours 30 minutes. Convert written quantities, preserve units and all stated criteria.
+                        Preserve under/over/at most/at least/exactly/between and both endpoints; omit vague durations such as "a few hours" or "about two hours" rather than inventing a limit.
                         Years=preserve after/before/at least/at most/exactly/between and both endpoints; decades include all ten years ("1950 to the 2000s" -> "between 1950 and 2009"). recent/recently=last 5 years;
                         "books from around 2000" / "books from the period 2000" -> RECOMMENDATION, explicitSearch=true, publicationYear="around 2000" / "period 2000"; Java applies inclusive +/-5 years. Preserve these approximate phrases, never extract only the exact year.
                         retain relative wording/counts ("recent", "past year", "last four years") in publicationYear, never guess years.
@@ -162,7 +164,9 @@ public class AiParser {
                         replace only named fields; clearing adds no values. Empty commands leave edits empty.
                         Standalone RECOMMENDATION/REFINE taste replies use search criteria only; omit preferenceUpdates.
                         Java derives preference edits from these criteria when needed. Explicit UPDATE_PREFERENCES still uses the edit fields.
-                        Before returning, check intent is present/non-null, all stated criteria are retained, and counts, explanation ranks, reference authors and required authors remain distinct.
+                        Final checks: intent is present/non-null. Bare tastes ("horror") have explicitSearch=false; a search command such as "Suggest" has explicitSearch=true.
+                        Retain each stated positive genre even alongside author, duration and negative themes; do not let these other fields replace positiveSemanticQuery.
+                        Keep counts, explanation ranks, reference authors and required authors distinct; never invent values.
                         """)
                               .user(rawText)
                               .call()

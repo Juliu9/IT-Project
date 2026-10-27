@@ -56,7 +56,11 @@ class InputParserTest {
         "Recommend zero  gravity audiobooks",
         "Recommend zero\tgravity audiobooks",
         "Recommend zero\ngravity audiobooks",
-        "Recommend zero\u00a0gravity audiobooks"
+        "Recommend zero\u00a0gravity audiobooks",
+        "Recommend zero-gravity audiobooks",
+        "Recommend zero\u2010gravity audiobooks",
+        "Recommend zero\u2011gravity audiobooks",
+        "Recommend zero\u2013gravity audiobooks"
       })
   void zeroSubjectChecksIgnoreWhitespaceDifferences(String text) {
     var ai = mock(AiParser.class);
@@ -81,6 +85,25 @@ class InputParserTest {
     assertEquals(Intent.EXPLAIN_RECOMMENDATION, result.getIntent());
     assertEquals(0, result.getReferenceRank());
     verifyNoInteractions(ai);
+  }
+
+  @Test
+  void zeroTopicComparisonDoesNotSuppressAnExplicitInvalidQuantityOrChangePeople() {
+    var ai = mock(AiParser.class);
+    var parsed = new ParsedRequest();
+    parsed.setIntent(Intent.RECOMMENDATION);
+    var query = new SemanticQuery();
+    query.setKeywords(List.of("zero gravity"));
+    parsed.setPositiveSemanticQuery(query);
+    var exact = new com.gen3.recommenderagent.domain.session.ExactCriteria();
+    exact.setAuthors(List.of("Anne-Marie Smith"));
+    parsed.setMustInclude(exact);
+    when(ai.parse(anyString())).thenReturn(parsed);
+    var result =
+        new InputParser(new CommandParser(), ai)
+            .parse("Recommend 0 books about zero-gravity by Anne-Marie Smith");
+    assertEquals(true, result.isInvalidBookCount());
+    assertEquals(List.of("Anne-Marie Smith"), result.getMustInclude().getAuthors());
   }
 
   @Test
@@ -447,6 +470,9 @@ class InputParserTest {
     org.assertj.core.api.Assertions.assertThat(schema.findValues("required")).hasSize(1);
     assertEquals("boolean", schema.path("properties").path("explicitSearch").path("type").asText());
     assertEquals(false, schema.path("additionalProperties").asBoolean());
+    org.assertj.core.api.Assertions.assertThat(
+            schema.path("properties").path("positiveSemanticQuery").path("description").asText())
+        .contains("every stated positive taste", "exact filters");
   }
 
   @Test

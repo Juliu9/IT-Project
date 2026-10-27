@@ -543,8 +543,102 @@ class ApprovedInputFlowTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"no matches", "no more", "empty explanation"})
-  void acceptingNoMatchRecoveryAsksForChangesWithoutRetrieval(String outcome) {
+  @ValueSource(strings = {"more", "repeat the recommendations"})
+  void switchingActionsDiscardsTheAbandonedCountRequest(String action) {
+    search();
+    var invalid = request(Intent.RECOMMENDATION, "zero mystery books");
+    invalid.setInvalidBookCount(true);
+    invalid.setExplicitSearch(true);
+    var query = new SemanticQuery();
+    query.setGenres(List.of("mystery"));
+    invalid.setPositiveSemanticQuery(query);
+    assertThat(engine.process(session, invalid).getDecision())
+        .isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
+    process(action);
+    assertThat(session.getPendingCountRequest()).isNull();
+    assertThat(process("0 more").getDecision()).isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
+    process("help");
+    process("repeat");
+    reload();
+    var more = process("2");
+    assertThat(more.getIntent()).isEqualTo(Intent.MORE_RESULTS);
+    assertThat(more.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
+    assertThat(more.getRecommendations()).hasSize(2);
+  }
+
+  @ParameterizedTest
+  @CsvSource(
+      delimiter = '|',
+      value = {
+        "no matches|no",
+        "no matches|no thanks",
+        "no matches|not now",
+        "no more|no thanks",
+        "empty explanation|no thanks"
+      })
+  void decliningASearchOfferKeepsPreferencesAndSearchHistory(String outcome, String reply) {
+    org.mockito.Mockito.doReturn(List.of()).when(workflow).recommend(any(), any());
+    search();
+    if (outcome.equals("no more")) {
+      process("more");
+    } else if (outcome.equals("empty explanation")) {
+      process("explain");
+    }
+    var preferences = new SessionPreferences();
+    var tastes = new SemanticQuery();
+    tastes.setGenres(List.of("horror"));
+    preferences.setPositiveSemanticQuery(tastes);
+    session.setPreferences(preferences);
+    var before =
+        com.gen3.recommenderagent.domain.conversation.ConversationHistory.latestDisplayedSearch(
+            session);
+    org.mockito.Mockito.clearInvocations(workflow);
+    process("help");
+    process("repeat");
+    process("3 per page");
+    reload();
+    assertThat(session.getPendingQuestion()).isEqualTo(ConversationDecision.SEARCH_CHANGE_OFFER);
+    var declined = process(reply);
+    assertThat(declined.getDecision()).isEqualTo(ConversationDecision.SEARCH_DECLINED);
+    assertThat(responses.generate(declined.getRecommendations(), declined))
+        .contains("No problem.", "try another search");
+    assertThat(session.getPreferences().getPositiveSemanticQuery().getGenres())
+        .containsExactly("horror");
+    var after =
+        com.gen3.recommenderagent.domain.conversation.ConversationHistory.latestDisplayedSearch(
+            session);
+    assertThat(after.getRequestId()).isEqualTo(before.getRequestId());
+    assertThat(after.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
+    assertThat(process("repeat").getDecision()).isEqualTo(ConversationDecision.SEARCH_DECLINED);
+    verifyNoInteractions(workflow);
+  }
+
+  @Test
+  void repeatingNoMatchesUsesTheSavedOutcomeWithoutSearchingForRepeat() {
+    org.mockito.Mockito.doReturn(List.of()).when(workflow).recommend(any(), any());
+    search();
+    org.mockito.Mockito.clearInvocations(workflow);
+    reload();
+    var repeated = process("repeat");
+    assertThat(repeated.getIntent()).isEqualTo(Intent.REPEAT);
+    assertThat(repeated.getDecision()).isEqualTo(ConversationDecision.NO_MATCHES);
+    assertThat(repeated.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
+    assertThat(responses.generate(repeated.getRecommendations(), repeated))
+        .contains("matching those search criteria")
+        .doesNotContain("match for repeat");
+    verifyNoInteractions(workflow);
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "no matches,false",
+    "no matches,true",
+    "no more,false",
+    "no more,true",
+    "empty explanation,false",
+    "empty explanation,true"
+  })
+  void acceptingNoMatchRecoveryAsksForChangesWithoutRetrieval(String outcome, boolean interrupted) {
     org.mockito.Mockito.doReturn(List.of()).when(workflow).recommend(any(), any());
     search();
     if (outcome.equals("no more")) {
@@ -553,6 +647,14 @@ class ApprovedInputFlowTest {
       process("explain");
     }
     org.mockito.Mockito.clearInvocations(workflow);
+    if (interrupted) {
+      var help = process("help");
+      assertThat(responses.generate(help.getRecommendations(), help))
+          .contains("Would you like to try a different author, genre, or filter?");
+      process("repeat");
+      process("3 per page");
+      reload();
+    }
     var before = session.getRequests().getLast();
     var question = process("yes");
     assertThat(question.getDecision()).isEqualTo(ConversationDecision.SEARCH_CHANGE_CLARIFICATION);

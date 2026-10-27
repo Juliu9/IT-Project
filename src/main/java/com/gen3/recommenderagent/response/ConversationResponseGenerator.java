@@ -195,6 +195,7 @@ public class ConversationResponseGenerator implements ResponseGenerator {
               + MAX_BOOK_COUNT
               + " recommendations at a time.";
       case HISTORY_CLEARED -> "All set, I've cleared this session's recommendation history.";
+      case SEARCH_DECLINED -> "No problem. Let me know when you’d like to try another search.";
       case CANCELLED -> "No problem, I've cancelled that. What would you like to do next?";
       case HELP ->
           "I can help you find audiobooks, adjust your search, or explore more books. You can ask me to "
@@ -217,6 +218,7 @@ public class ConversationResponseGenerator implements ResponseGenerator {
       case NO_MATCHES -> generateFallbackResponse(currentRequest, labelWords);
       case UNAVAILABLE -> PROCESSING_FALLBACK;
       case SEARCH_CLARIFICATION -> "What kind of audiobook would you like?";
+      case SEARCH_CHANGE_OFFER -> "Would you like to try a different author, genre, or filter?";
       case SEARCH_CHANGE_CLARIFICATION -> "What would you like to change about your search?";
       case PREFERENCE_CLARIFICATION -> "What genres do you like?";
       case RECOMMENDATIONS, EXPLANATION -> null;
@@ -263,6 +265,10 @@ public class ConversationResponseGenerator implements ResponseGenerator {
     if (currentRequest != null && currentRequest.isPersonalised()) {
       return "I couldn't find audiobooks matching your current search and saved preferences. "
           + "Would you like to try a different author, genre, or filter?";
+    }
+    if (currentRequest != null
+        && currentRequest.getIntent() == com.gen3.recommenderagent.domain.Intent.REPEAT) {
+      return "I couldn't find any audiobooks matching those search criteria. Would you like to try a different genre, author, narrator, or description?";
     }
     if (currentRequest != null
         && (currentRequest.getIntent() == com.gen3.recommenderagent.domain.Intent.REFINE

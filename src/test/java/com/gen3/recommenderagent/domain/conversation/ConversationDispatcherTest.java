@@ -310,7 +310,7 @@ class ConversationDispatcherTest {
     resumed.setRecommendations(List.of());
     conversationState.finish(session, resumed, answer);
     assertFalse(session.isAwaitingPersonalisedPreferences());
-    assertNull(session.getPendingQuestion());
+    assertEquals(ConversationDecision.SEARCH_CHANGE_OFFER, session.getPendingQuestion());
   }
 
   private static Stream<Arguments> followUpIntents() {

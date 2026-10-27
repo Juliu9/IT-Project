@@ -173,6 +173,17 @@ and Help preserve it; preference-update behaviour is specified below. The sessio
 500 shown IDs, so older books can eventually reappear. Clear history removes searches, shown IDs,
 pending recommendations and clarification state, while preserving preferences and result count.
 
+Outstanding clarification questions and search-change offers are saved in session state, independently
+of the latest response. HELP, REPEAT, count changes and cache reloads preserve the outstanding
+question. A new search or cancellation abandons the applicable pending action. After no matches,
+no more results or an empty explanation page, "yes" opens a search-change question and "no" declines
+without removing preferences or history, including after those interruptions.
+
+Duration replies share parsing with exact filters: "a couple of hours", "a hundred minutes",
+"two thousand minutes" and "2 hours 30" retain the pending search and shorter/longer direction.
+AI parsing also recognises these forms in complete requests. Vague limits such as "a few hours"
+remain clarification cases.
+
 A zero-match search still supplies context for `MORE_RESULTS`; clearing history removes it.
 `MORE_RESULTS` restores saved search criteria. `REPEAT` replays the latest resolved request,
 including explanations, help, clarifications, and empty results, without retrieving or applying

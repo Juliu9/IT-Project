@@ -36,6 +36,14 @@ public final class ClarificationResolver {
       }
     }
     String reply = effective.getRawText() == null ? "" : effective.getRawText().strip();
+    if ((session.getPendingQuestion() == ConversationDecision.SEARCH_CHANGE_OFFER
+            || offersSearchChange(session.getLastDecision()))
+        && ConversationText.isPreferenceDecline(reply)) {
+      effective.setIntent(Intent.CANCEL);
+      normalizeInput(effective);
+      effective.setDecision(ConversationDecision.SEARCH_DECLINED);
+      return effective;
+    }
     if (ConversationText.isCancellationReply(reply)
         || (isQuestion(session.getPendingQuestion())
             && ConversationText.normalizeCommand(reply).equals("no"))) {
@@ -56,6 +64,16 @@ public final class ClarificationResolver {
           ConversationText.durationReply(
               reply,
               session.getPendingQuestion() == ConversationDecision.LONGER_DURATION_CLARIFICATION);
+      if (duration == null && ConversationText.isDurationOnlyReply(reply)) {
+        var clarification =
+            session.getPendingRefinementRequest() == null
+                ? effective
+                : restoreSearchCriteria(session.getPendingRefinementRequest(), effective);
+        clarification.setIntent(Intent.REFINE);
+        clarification.setDecision(session.getPendingQuestion());
+        clarification.setSearchClarificationRequired(true);
+        return clarification;
+      }
       boolean parsedReply =
           !effective.isExplicitSearch()
               && effective.getMustInclude() != null
@@ -87,9 +105,8 @@ public final class ClarificationResolver {
       }
     }
     if (ConversationText.isAffirmativeReply(reply)
-        && (session.getLastDecision() == ConversationDecision.NO_MATCHES
-            || session.getLastDecision() == ConversationDecision.NO_MORE_RESULTS
-            || session.getLastDecision() == ConversationDecision.EMPTY_EXPLANATION_PAGE)) {
+        && (session.getPendingQuestion() == ConversationDecision.SEARCH_CHANGE_OFFER
+            || offersSearchChange(session.getLastDecision()))) {
       var previous = ConversationHistory.latestDisplayedSearch(session);
       if (previous != null) {
         session.setPendingRefinementRequest(ConversationTurn.fromDraft(previous));
@@ -390,6 +407,7 @@ public final class ClarificationResolver {
       session.setSuspendedQuestion(null);
       session.setPendingSimilarBook(null);
       session.setPendingExplanation(null);
+      session.setPendingCountRequest(null);
     }
     return effective;
   }
@@ -536,6 +554,12 @@ public final class ClarificationResolver {
     return another;
   }
 
+  private static boolean offersSearchChange(ConversationDecision decision) {
+    return decision == ConversationDecision.NO_MATCHES
+        || decision == ConversationDecision.NO_MORE_RESULTS
+        || decision == ConversationDecision.EMPTY_EXPLANATION_PAGE;
+  }
+
   private static boolean isQuestion(ConversationDecision decision) {
     if (decision == null) {
       return false;
@@ -547,6 +571,7 @@ public final class ClarificationResolver {
           PREFERENCE_UPDATE_CLARIFICATION,
           SEARCH_CLARIFICATION,
           SEARCH_CHANGE_CLARIFICATION,
+          SEARCH_CHANGE_OFFER,
           SHORTER_DURATION_CLARIFICATION,
           LONGER_DURATION_CLARIFICATION,
           DURATION_RANGE_CONFIRMATION,
@@ -637,6 +662,8 @@ public final class ClarificationResolver {
     }
     if (request.getDecision() == ConversationDecision.EMPTY_EXPLANATION_SELECTION) {
       session.setPendingQuestion(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+    } else if (offersSearchChange(request.getDecision())) {
+      session.setPendingQuestion(ConversationDecision.SEARCH_CHANGE_OFFER);
     } else if (isQuestion(request.getDecision())) {
       session.setPendingQuestion(request.getDecision());
     } else if (intent != Intent.UNKNOWN) {

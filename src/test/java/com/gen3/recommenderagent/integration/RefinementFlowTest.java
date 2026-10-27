@@ -728,6 +728,18 @@ class RefinementFlowTest {
         "five|at most 5 hours|SHORTER_DURATION_CLARIFICATION",
         "2 and a half hours|at most 2.5 hours|SHORTER_DURATION_CLARIFICATION",
         "half an hour|at most 0.5 hour|SHORTER_DURATION_CLARIFICATION",
+        "an hour and a half|at most 1.5 hour|SHORTER_DURATION_CLARIFICATION",
+        "two hours and a half|at most 2.5 hours|SHORTER_DURATION_CLARIFICATION",
+        "three quarters of an hour|at most 0.75 hour|SHORTER_DURATION_CLARIFICATION",
+        "one hundred minutes|at most 100 minutes|SHORTER_DURATION_CLARIFICATION",
+        "a couple of hours|at most 2 hours|SHORTER_DURATION_CLARIFICATION",
+        "a hundred minutes|at most 100 minutes|SHORTER_DURATION_CLARIFICATION",
+        "two thousand minutes|at most 2000 minutes|SHORTER_DURATION_CLARIFICATION",
+        "2 hours 30|at most 2 hours 30 minutes|SHORTER_DURATION_CLARIFICATION",
+        "a couple of hours|at least 2 hours|LONGER_DURATION_CLARIFICATION",
+        "under a couple of hours|under 2 hours|SHORTER_DURATION_CLARIFICATION",
+        "two thousand three hundred and twenty minutes|at most 2320 minutes|SHORTER_DURATION_CLARIFICATION",
+        "exactly an hour and a half|exactly 1.5 hour|LONGER_DURATION_CLARIFICATION",
         ".5 hours|at most .5 hours|SHORTER_DURATION_CLARIFICATION",
         "between two and three hours|between 2 and 3 hours|SHORTER_DURATION_CLARIFICATION",
         "one hour and thirty minutes|at most 1 hour and 30 minutes|SHORTER_DURATION_CLARIFICATION",
@@ -766,7 +778,8 @@ class RefinementFlowTest {
     assertThat(refined.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
     assertThat(refined.getMustInclude().getDuration()).isEqualTo(duration);
     assertThat(refined.getDecision()).isEqualTo(ConversationDecision.NO_MATCHES);
-    assertThat(sessions.getSession("session", "user").getPendingQuestion()).isNull();
+    assertThat(sessions.getSession("session", "user").getPendingQuestion())
+        .isEqualTo(ConversationDecision.SEARCH_CHANGE_OFFER);
     String response =
         new com.gen3.recommenderagent.response.ConversationResponseGenerator(
                 new com.gen3.recommenderagent.response.AiResponseGenerator(null))
@@ -774,6 +787,30 @@ class RefinementFlowTest {
     assertThat(response)
         .contains("matching those criteria")
         .doesNotContain("good match for " + text);
+    verify(workflow).recommend(any(), any());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"about two hours", "two or three hours", "a few hours"})
+  void unclearDurationAnswersRepeatTheQuestionWithoutStartingANewSearch(String text) {
+    search(null, null);
+    service.process("session", "user", shorterCommand());
+    clearInvocations(workflow);
+    var reply = request(Intent.RECOMMENDATION);
+    reply.setRawText(text);
+    reply.setExplicitSearch(true);
+    var limit = new ExactCriteria();
+    limit.setDuration("2 hours");
+    reply.setMustInclude(limit);
+    var result = process(reply);
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.SHORTER_DURATION_CLARIFICATION);
+    assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
+    assertThat(result.getRecommendations()).isEmpty();
+    verifyNoInteractions(workflow);
+    var valid = service.process("session", "user", command("2"));
+    assertThat(valid.getIntent()).isEqualTo(Intent.REFINE);
+    assertThat(valid.getMustInclude().getDuration()).isEqualTo("at most 2 hours");
+    assertThat(valid.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
     verify(workflow).recommend(any(), any());
   }
 

@@ -148,6 +148,16 @@ public final class ConversationText {
     }
   }
 
+  public static boolean isDurationOnlyReply(String text) {
+    String value = DurationRange.normalize(normalizeCommand(text));
+    return (value.matches(".*[0-9].*") || value.matches(".*\\b(?:hours?|hrs?|minutes?|mins?)\\b.*"))
+        && value
+            .replaceAll(
+                "\\b(?:about|around|roughly|approximately|between|and|or|to|from|under|over|less|more|than|at|most|least|up|exactly|no|below|above|maximum|minimum|of|a|an|few|several|couple|half|quarters?|hundred|thousand|so|hours?|hrs?|h|minutes?|mins?|m)\\b",
+                " ")
+            .matches("[0-9.\\s,/+−-]+");
+  }
+
   public static boolean isRecencyRefinement(String text) {
     return text != null
         && java.util.Set.of(

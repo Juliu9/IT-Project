@@ -65,15 +65,70 @@ public record DurationRange(Integer minimum, Integer maximum) {
     for (int number = 0; number < words.size(); number++) {
       value = value.replaceAll("\\b" + words.get(number) + "\\b", Integer.toString(number));
     }
+    value = value.replaceAll("\\b(?:a|an) (hundred|thousand)\\b", "1 $1");
     value =
-        Pattern.compile("([0-9]+) and a half\\b")
+        Pattern.compile("([0-9]+) hundred(?: (?:and )?([0-9]+))?\\b")
             .matcher(value)
             .replaceAll(
-                match -> new BigDecimal(match.group(1)).add(new BigDecimal("0.5")).toPlainString());
+                match ->
+                    new BigDecimal(match.group(1))
+                        .multiply(BigDecimal.valueOf(100))
+                        .add(
+                            match.group(2) == null
+                                ? BigDecimal.ZERO
+                                : new BigDecimal(match.group(2)))
+                        .toPlainString());
+    value =
+        Pattern.compile("([0-9]+) thousand(?: (?:and )?([0-9]+))?\\b")
+            .matcher(value)
+            .replaceAll(
+                match ->
+                    new BigDecimal(match.group(1))
+                        .multiply(BigDecimal.valueOf(1000))
+                        .add(
+                            match.group(2) == null
+                                ? BigDecimal.ZERO
+                                : new BigDecimal(match.group(2)))
+                        .toPlainString());
+    value = value.replaceAll("\\b(?:a )?couple of (hours?|minutes?)\\b", "2 $1");
+    value = value.replaceAll("\\b([0-9]+) (hours?|hrs?|h) ([0-9]+)$", "$1 $2 $3 minutes");
+    value =
+        Pattern.compile("([0-9]+) and (?:a )?(half|quarter)\\b")
+            .matcher(value)
+            .replaceAll(
+                match ->
+                    new BigDecimal(match.group(1))
+                        .add(
+                            match.group(2).equals("half")
+                                ? new BigDecimal("0.5")
+                                : new BigDecimal("0.25"))
+                        .toPlainString());
+    value =
+        Pattern.compile("([0-9]+) quarters? of (?:an? )?(hour|minute)")
+            .matcher(value)
+            .replaceAll(
+                match ->
+                    new BigDecimal(match.group(1)).divide(BigDecimal.valueOf(4)).toPlainString()
+                        + " "
+                        + match.group(2));
+    value = value.replaceAll("\\b(?:a )?quarter of (?:an? )?(hour|minute)", "0.25 $1");
     value =
         value
             .replaceAll("\\bhalf (?:an? )?(hour|minute)", "0.5 $1")
             .replaceAll("\\b(?:a|an) (hour|minute)", "1 $1");
+    value =
+        Pattern.compile("(" + NUMBER + ") (" + UNIT + ") and (?:a )?(half|quarter)\\b")
+            .matcher(value)
+            .replaceAll(
+                match ->
+                    new BigDecimal(match.group(1))
+                            .add(
+                                match.group(3).equals("half")
+                                    ? new BigDecimal("0.5")
+                                    : new BigDecimal("0.25"))
+                            .toPlainString()
+                        + " "
+                        + match.group(2));
     return value;
   }
 

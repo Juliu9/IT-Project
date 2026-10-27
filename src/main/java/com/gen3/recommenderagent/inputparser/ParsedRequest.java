@@ -180,7 +180,11 @@ public class ParsedRequest {
   }
 
   private Intent intent;
+
+  @com.fasterxml.jackson.annotation.JsonPropertyDescription(
+      "Explicitly requested positive genres, themes or styles. Include every stated positive taste even alongside exact filters or negativeSemanticQuery; omit only when none is stated.")
   private SemanticQuery positiveSemanticQuery;
+
   private SemanticQuery negativeSemanticQuery;
   private ExactCriteria mustInclude;
   private ExactCriteria mustNotInclude;

@@ -183,6 +183,32 @@ class LiveInputParserTest {
     assertThat(result.getPreferenceUpdates()).isNull();
   }
 
+  @ParameterizedTest
+  @CsvSource(
+      value = {
+        "under a couple of hours,null,119",
+        "a hundred minutes,100,100",
+        "two thousand minutes,2000,2000",
+        "2 hours 30,150,150",
+        "at least a couple of hours,120,null",
+        "between a hundred and two hundred minutes,100,200"
+      },
+      nullValues = "null")
+  void commonDurationPhrasesPreserveBoundsAndGenre(
+      String phrase, Integer minimum, Integer maximum) {
+    var result = parser.parse("Recommend mystery audiobooks " + phrase);
+    assertThat(result.getIntent()).as(phrase).isEqualTo(Intent.RECOMMENDATION);
+    assertThat(result.getMustInclude()).as(phrase).isNotNull();
+    assertThat(result.getMustInclude().getDuration()).as(phrase).isNotBlank();
+    var bounds =
+        com.gen3.recommenderagent.domain.session.DurationRange.parse(
+            result.getMustInclude().getDuration());
+    assertThat(bounds.minimum()).as(phrase).isEqualTo(minimum);
+    assertThat(bounds.maximum()).as(phrase).isEqualTo(maximum);
+    assertThat(result.getPositiveSemanticQuery()).as(phrase).isNotNull();
+    assertThat(result.getPositiveSemanticQuery().getGenres()).as(phrase).contains("mystery");
+  }
+
   @org.junit.jupiter.api.Test
   void extractsReferenceWithoutInventingThemesOrFilteringByItsAuthor() {
     var result =
@@ -356,7 +382,11 @@ class LiveInputParserTest {
         parser.parse(
             "Suggest fantasy audiobooks by Ursula K. Le Guin under eight hours, avoiding graphic violence");
     assertThat(result.getIntent()).isEqualTo(Intent.RECOMMENDATION);
-    assertThat(result.getPositiveSemanticQuery()).isNotNull();
+    assertThat(result.getPositiveSemanticQuery())
+        .as(
+            "mixed request parsed=%s",
+            new tools.jackson.databind.ObjectMapper().writeValueAsString(result))
+        .isNotNull();
     assertThat(result.getPositiveSemanticQuery().getGenres()).contains("fantasy");
     assertThat(result.getMustInclude()).isNotNull();
     assertThat(result.getMustInclude().getAuthors()).containsExactly("Ursula K. Le Guin");
