@@ -19,6 +19,9 @@ public final class ConversationRules {
 
   /** Shared eligibility rule for parsed inputs and restored conversation requests. */
   public static SessionRequest normalizeInput(SessionRequest request) {
+    if (request.getIntent() == null) {
+      request.setIntent(Intent.UNKNOWN);
+    }
     // Control intents may carry exact filters, but cannot introduce new semantic preferences.
     if (!acceptsSemanticInformation(request.getIntent())) {
       request.setPositiveSemanticQuery(null);

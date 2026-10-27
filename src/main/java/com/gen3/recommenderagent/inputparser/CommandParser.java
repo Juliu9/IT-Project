@@ -231,6 +231,8 @@ public class CommandParser {
           case "help",
               "show help",
               "what can you do",
+              "which operations do you support",
+              "what operations do you support",
               "what else can you do",
               "what do you do",
               "how do i use this",

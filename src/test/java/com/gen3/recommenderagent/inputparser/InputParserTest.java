@@ -155,6 +155,21 @@ class InputParserTest {
     assertEquals(null, new CommandParser().parse(text));
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "{\"positiveSemanticQuery\":{\"genres\":[\"fantasy\"]}}",
+        "{\"intent\":null,\"positiveSemanticQuery\":{\"genres\":[\"fantasy\"]}}"
+      })
+  void missingOrNullModelIntentsBecomeUnknown(String json) {
+    var ai = mock(AiParser.class);
+    var parsed = new ObjectMapper().readValue(json, ParsedRequest.class);
+    when(ai.parse(anyString())).thenReturn(parsed);
+    var result = new InputParser(new CommandParser(), ai).parse("an unrecognised request");
+    assertEquals(Intent.UNKNOWN, result.getIntent());
+    assertEquals(null, result.getPositiveSemanticQuery());
+  }
+
   @Test
   void invalidCountIntentCorrectionHappensBeforeSemanticFieldsCanBeCleared() {
     var ai = mock(AiParser.class);
@@ -511,6 +526,8 @@ class InputParserTest {
     "help,HELP",
     "show help,HELP",
     "what can you do,HELP",
+    "which operations do you support,HELP",
+    "what operations do you support,HELP",
     "what else can you do,HELP",
     "what do you do,HELP",
     "how do i use this,HELP",
