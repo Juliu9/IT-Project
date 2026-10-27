@@ -66,7 +66,7 @@ final class CountInput {
   }
 
   static boolean describesZero(String text, ParsedRequest parsed) {
-    String normalized = text.toLowerCase(java.util.Locale.ROOT);
+    String normalized = text.toLowerCase(java.util.Locale.ROOT).replaceAll("(?U)\\s+", " ");
     return java.util.stream.Stream.of(
             parsed.getPositiveSemanticQuery(), parsed.getNegativeSemanticQuery())
         .filter(java.util.Objects::nonNull)
@@ -77,7 +77,7 @@ final class CountInput {
         .filter(java.util.Objects::nonNull)
         .flatMap(java.util.Collection::stream)
         .filter(java.util.Objects::nonNull)
-        .map(value -> value.toLowerCase(java.util.Locale.ROOT).strip())
+        .map(value -> value.toLowerCase(java.util.Locale.ROOT).replaceAll("(?U)\\s+", " ").strip())
         .anyMatch(value -> value.matches("zero\\s+.+") && normalized.contains(value));
   }
 

@@ -50,6 +50,39 @@ class InputParserTest {
     org.mockito.Mockito.verify(ai).parse(text);
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "Recommend zero  gravity audiobooks",
+        "Recommend zero\tgravity audiobooks",
+        "Recommend zero\ngravity audiobooks",
+        "Recommend zero\u00a0gravity audiobooks"
+      })
+  void zeroSubjectChecksIgnoreWhitespaceDifferences(String text) {
+    var ai = mock(AiParser.class);
+    var parsed = new ParsedRequest();
+    parsed.setIntent(Intent.RECOMMENDATION);
+    parsed.setInvalidBookCount(true);
+    var query = new SemanticQuery();
+    query.setKeywords(List.of("zero gravity"));
+    parsed.setPositiveSemanticQuery(query);
+    when(ai.parse(text)).thenReturn(parsed);
+    var result = new InputParser(new CommandParser(), ai).parse(text);
+    assertEquals(false, result.isInvalidBookCount());
+    assertEquals(text, result.getRawText());
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"explain .5", "explain 2.5", "why book .5"})
+  void fractionalExplanationPositionsCannotBecomeWholeRanks(String text) {
+    var ai = mock(AiParser.class);
+    var result = new InputParser(new CommandParser(), ai).parse(text);
+    assertEquals(Intent.EXPLAIN_RECOMMENDATION, result.getIntent());
+    assertEquals(0, result.getReferenceRank());
+    verifyNoInteractions(ai);
+  }
+
   @Test
   void ambiguousWordCountsCanStillBeRejectedByAiWithoutLosingCriteria() {
     var ai = mock(AiParser.class);

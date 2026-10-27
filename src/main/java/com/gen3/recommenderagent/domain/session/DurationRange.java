@@ -1,4 +1,4 @@
-package com.gen3.recommenderagent.retrieval.plan;
+package com.gen3.recommenderagent.domain.session;
 
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import java.math.BigDecimal;
@@ -8,7 +8,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /** Translates explicit duration expressions to inclusive bounds for whole-minute catalogue data. */
-record DurationRange(Integer minimum, Integer maximum) {
+public record DurationRange(Integer minimum, Integer maximum) {
   private static final String NUMBER = "(?:\\d+(?:\\.\\d+)?|\\.\\d+)";
   private static final String UNIT = "(?:hours?|hrs?|h|minutes?|mins?|m)";
   private static final Pattern TERM =
@@ -21,11 +21,67 @@ record DurationRange(Integer minimum, Integer maximum) {
       Pattern.compile(
           "^(under|less than|below|over|more than|above|at most|no more than|up to|maximum(?: of)?|at least|no less than|minimum(?: of)?|exactly)\\s+(.+)$");
 
-  static DurationRange parse(String text) {
+  public static String normalize(String text) {
+    String value = text.strip().toLowerCase(Locale.ROOT).replaceAll("(?U)\\s+", " ");
+    var words =
+        java.util.List.of(
+            "zero",
+            "one",
+            "two",
+            "three",
+            "four",
+            "five",
+            "six",
+            "seven",
+            "eight",
+            "nine",
+            "ten",
+            "eleven",
+            "twelve",
+            "thirteen",
+            "fourteen",
+            "fifteen",
+            "sixteen",
+            "seventeen",
+            "eighteen",
+            "nineteen",
+            "twenty");
+    var tens =
+        java.util.List.of(
+            "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety");
+    for (int index = 0; index < tens.size(); index++) {
+      int base = (index + 2) * 10;
+      value =
+          Pattern.compile(
+                  "\\b"
+                      + tens.get(index)
+                      + "(?:[ -](one|two|three|four|five|six|seven|eight|nine))?\\b")
+              .matcher(value)
+              .replaceAll(
+                  match ->
+                      Integer.toString(
+                          base + (match.group(1) == null ? 0 : words.indexOf(match.group(1)))));
+    }
+    for (int number = 0; number < words.size(); number++) {
+      value = value.replaceAll("\\b" + words.get(number) + "\\b", Integer.toString(number));
+    }
+    value =
+        Pattern.compile("([0-9]+) and a half\\b")
+            .matcher(value)
+            .replaceAll(
+                match -> new BigDecimal(match.group(1)).add(new BigDecimal("0.5")).toPlainString());
+    value =
+        value
+            .replaceAll("\\bhalf (?:an? )?(hour|minute)", "0.5 $1")
+            .replaceAll("\\b(?:a|an) (hour|minute)", "1 $1");
+    return value;
+  }
+
+  public static DurationRange parse(String text) {
     if (text == null || text.isBlank()) {
       return new DurationRange(null, null);
     }
-    String normalized = text.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
+    String normalized = normalize(text);
     try {
       Matcher range = RANGE.matcher(normalized);
       if (range.matches()) {

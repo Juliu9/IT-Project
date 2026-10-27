@@ -34,6 +34,92 @@ class ResponseGeneratorTest {
     org.mockito.Mockito.verifyNoInteractions(ai);
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = Intent.class,
+      names = {"RECOMMENDATION", "EXPLAIN_RECOMMENDATION", "REPEAT_RECOMMENDATIONS"})
+  void finalBudgetKeepsAllBooksAndThePreferenceReminderWithoutChangingMetadata(Intent intent) {
+    var request = new ConversationDraft();
+    request.setIntent(intent);
+    if (intent != Intent.RECOMMENDATION) {
+      request.setPendingQuestion(
+          com.gen3.recommenderagent.domain.session.ConversationDecision.PREFERENCE_CLARIFICATION);
+    }
+    var books =
+        java.util.stream.IntStream.rangeClosed(1, 5)
+            .mapToObj(
+                rank -> {
+                  var book =
+                      new Recommendation(
+                          "id-" + rank,
+                          rank,
+                          0.9,
+                          "Title " + rank + " long ".repeat(80),
+                          "description ".repeat(200));
+                  book.setReadingPreferencesUsed(true);
+                  return book;
+                })
+            .toList();
+    String originalTitle = books.getFirst().getTitle();
+    var generator = new ConversationResponseGenerator(new AiResponseGenerator(null));
+    String result = generator.generate(books, ConversationTurn.fromDraft(request));
+    org.assertj.core.api.Assertions.assertThat(result.split("\\s+")).hasSizeLessThanOrEqualTo(150);
+    for (int rank = 1; rank <= 5; rank++) {
+      assertTrue(result.contains("Number " + rank + ", Title " + rank));
+    }
+    if (intent != Intent.RECOMMENDATION) {
+      assertTrue(result.endsWith("what genres do you like?"));
+    }
+    assertEquals(originalTitle, books.getFirst().getTitle());
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = com.gen3.recommenderagent.domain.session.ConversationDecision.class,
+      names = {"SIMILAR_BOOK_SELECTION", "EXPLANATION_TARGET_CLARIFICATION", "HELP", "NO_MATCHES"})
+  void fixedMessagesAndAppendedQuestionsRespectTheFinalBudget(
+      com.gen3.recommenderagent.domain.session.ConversationDecision decision) {
+    var request = new ConversationDraft();
+    request.setIntent(
+        decision == com.gen3.recommenderagent.domain.session.ConversationDecision.HELP
+            ? Intent.HELP
+            : Intent.RECOMMENDATION);
+    request.setDecision(decision);
+    request.setRawText("fantasy ".repeat(200));
+    var books =
+        java.util.stream.IntStream.rangeClosed(1, 5)
+            .mapToObj(
+                rank ->
+                    new Recommendation(
+                        "id-" + rank, rank, 0.9, "Title " + rank + " long ".repeat(60)))
+            .toList();
+    request.setRecommendations(books);
+    request.setSimilarBookChoices(
+        java.util.stream.IntStream.rangeClosed(1, 5)
+            .mapToObj(
+                rank ->
+                    new com.gen3.catalogue.model.AudiobookTitle(
+                        "id-" + rank,
+                        books.get(rank - 1).getTitle(),
+                        List.of("author ".repeat(100))))
+            .toList());
+    if (decision == com.gen3.recommenderagent.domain.session.ConversationDecision.HELP) {
+      request.setPendingQuestion(
+          com.gen3.recommenderagent.domain.session.ConversationDecision
+              .EXPLANATION_TARGET_CLARIFICATION);
+    }
+    String result =
+        new ConversationResponseGenerator(new AiResponseGenerator(null))
+            .generate(books, ConversationTurn.fromDraft(request));
+    org.assertj.core.api.Assertions.assertThat(result.split("\\s+")).hasSizeLessThanOrEqualTo(150);
+    if (decision != com.gen3.recommenderagent.domain.session.ConversationDecision.NO_MATCHES) {
+      for (int rank = 1; rank <= 5; rank++) {
+        assertTrue(result.contains(rank + ". Title " + rank));
+      }
+    }
+    assertEquals("Title 1" + " long ".repeat(60), books.getFirst().getTitle());
+  }
+
   @Test
   void usesTheResolvedDecisionWithoutReinterpretingIntent() {
     var request = new ConversationDraft();

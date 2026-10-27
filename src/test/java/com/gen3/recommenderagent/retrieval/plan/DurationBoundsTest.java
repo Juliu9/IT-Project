@@ -22,6 +22,49 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 class DurationBoundsTest {
   @ParameterizedTest
+  @CsvSource(
+      delimiter = '|',
+      value = {
+        "under 5 hours|false|240|299", "under 3 hours|true|null|179",
+        "between 2 and 5 hours|true|120|300", "at least 5 hours|false|300|360",
+        "at least 7 hours|true|420|null"
+      },
+      nullValues = "null")
+  void durationAnswersPreserveUnchangedBoundsAndConfirmExtensions(
+      String duration, boolean confirmation, Integer minimum, Integer maximum) {
+    var session = new Session();
+    session.setPendingQuestion(ConversationDecision.SHORTER_DURATION_CLARIFICATION);
+    var pending = new ConversationDraft();
+    pending.setIntent(Intent.REFINE);
+    var old = new ExactCriteria();
+    old.setDuration("between 4 and 6 hours");
+    pending.setMustInclude(old);
+    session.setPendingRefinementRequest(ConversationTurn.fromDraft(pending));
+    var answer = new ConversationDraft();
+    answer.setIntent(Intent.REFINE);
+    var updated = new ExactCriteria();
+    updated.setDuration(duration);
+    answer.setMustInclude(updated);
+    var policy = new ExactFilterPolicy();
+    policy.validateTransition(answer, answer, session);
+    assertThat(answer.isSearchClarificationRequired()).isEqualTo(confirmation);
+    if (confirmation) {
+      assertThat(answer.getDecision()).isEqualTo(ConversationDecision.DURATION_RANGE_CONFIRMATION);
+      var resolver = new ClarificationResolver();
+      resolver.complete(session, answer);
+      var yes = new ConversationDraft();
+      yes.setIntent(Intent.UNKNOWN);
+      yes.setRawText("yes");
+      answer = resolver.resolve(session, yes);
+      policy.validateTransition(answer, yes, session);
+      assertThat(answer.isSearchClarificationRequired()).isFalse();
+    }
+    var bounds = policy.filters(answer, Set.of()).mustInclude();
+    assertThat(bounds.minimumDurationMinutes()).isEqualTo(minimum);
+    assertThat(bounds.maximumDurationMinutes()).isEqualTo(maximum);
+  }
+
+  @ParameterizedTest
   @CsvSource({"4,false", "5,true"})
   void shorterPreservesTheMinimumOrConfirmsExtendingTheRange(int minimumHours, boolean confirm) {
     var previous = new ConversationDraft();
@@ -66,6 +109,10 @@ class DurationBoundsTest {
   @CsvSource(
       value = {
         "under 10 hours|null|599",
+        ".5 hours|30|30",
+        "two and a half hours|150|150",
+        "one hour and thirty minutes|90|90",
+        "between twenty five and thirty hours|1500|1800",
         "under 1.5 hours|null|89",
         "at most 1.5 hours|null|90",
         "over 90 minutes|91|null",

@@ -1,5 +1,7 @@
 package com.gen3.recommenderagent.domain.conversation;
 
+import com.gen3.recommenderagent.domain.session.DurationRange;
+import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
@@ -24,7 +26,7 @@ public final class ConversationText {
         .replaceAll("\\b(?:please|kindly)\\b", " ")
         .replaceAll("(?U)\\s+", " ")
         .strip()
-        .replaceFirst("^[,!.?…–—:;]+\\s*", "")
+        .replaceFirst("^(?:[,!?…–—:;]|\\.(?![0-9]))+\\s*", "")
         .replaceFirst(
             "^(?:(?:hi|hello|hey|sorry|excuse me|just|can you|could you|would you)[\\s,!.?…–—:;]+)+",
             "")
@@ -122,18 +124,28 @@ public final class ConversationText {
   }
 
   public static String durationReply(String text, boolean longer) {
-    String reply = normalizeCommand(text);
-    if (!reply.matches(
-        "(?:(?:under|over|less than|more than|at most|at least|up to|exactly|no more than|no less than) )?[0-9]+(?:\\.[0-9]+)?(?: ?(?:hours?|hrs?|h|minutes?|mins?|m))?")) {
+    String reply = DurationRange.normalize(normalizeCommand(text));
+    if (reply.isBlank()) {
       return null;
     }
-    if (!reply.matches(".*[a-z]$")) {
+    if (reply.matches(".*[0-9]$")) {
       reply += " hours";
     }
-    if (Character.isDigit(reply.charAt(0))) {
-      reply = (longer ? "at least " : "at most ") + reply;
+    try {
+      var range = DurationRange.parse(reply);
+      if (range.minimum() != null
+          && range.minimum().equals(range.maximum())
+          && !reply.startsWith("exactly ")
+          && !reply.startsWith("between ")
+          && !reply.startsWith("from ")
+          && !reply.contains("-")
+          && !reply.contains("to")) {
+        reply = (longer ? "at least " : "at most ") + reply;
+      }
+      return reply;
+    } catch (InvalidRequestException exception) {
+      return null;
     }
-    return reply;
   }
 
   public static boolean isRecencyRefinement(String text) {

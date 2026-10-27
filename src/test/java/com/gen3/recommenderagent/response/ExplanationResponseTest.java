@@ -110,8 +110,12 @@ class ExplanationResponseTest {
     assertThat(result).isEqualTo("4. Harry Potter A school of magic fits your fantasy request.");
   }
 
-  @Test
-  void oversizedModelOutputUsesABoundedFallbackThatStillIncludesEveryBook() {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = com.gen3.recommenderagent.domain.Intent.class,
+      names = {"RECOMMENDATION", "EXPLAIN_RECOMMENDATION"})
+  void oversizedModelOutputUsesABoundedFallbackThatStillIncludesEveryBook(
+      com.gen3.recommenderagent.domain.Intent intent) {
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(client.prompt().system(anyString()).user(anyString()).call().chatResponse())
         .thenReturn(
@@ -135,7 +139,9 @@ class ExplanationResponseTest {
     var generator =
         new ConversationResponseGenerator(
             new AiResponseGenerator(client, AiOperationObserver.noop()));
-    String result = generator.generate(books, ConversationTurn.fromDraft(request()));
+    var request = request();
+    request.setIntent(intent);
+    String result = generator.generate(books, ConversationTurn.fromDraft(request));
     assertThat(result.split("\\s+")).hasSizeLessThanOrEqualTo(150);
     assertThat(result).doesNotContain("*", "(", ")", "verbose");
     for (int rank = 1; rank <= 5; rank++) {
@@ -143,7 +149,7 @@ class ExplanationResponseTest {
     }
     String offline =
         new ConversationResponseGenerator(new AiResponseGenerator(null))
-            .generate(books, ConversationTurn.fromDraft(request()));
+            .generate(books, ConversationTurn.fromDraft(request));
     assertThat(offline).isEqualTo(result);
     assertThat(offline).contains(". Number 2,", ". Number 5,").endsWith(".");
   }

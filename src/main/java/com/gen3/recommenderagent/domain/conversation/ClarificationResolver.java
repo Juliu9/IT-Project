@@ -166,7 +166,10 @@ public final class ClarificationResolver {
       return effective;
     }
     if (effective.isInvalidBookCount()) {
-      if (session.getPendingCountRequest() == null) {
+      if (session.getPendingCountRequest() == null
+          || (input.isExplicitSearch()
+              && (input.getIntent() == Intent.RECOMMENDATION
+                  || input.getIntent() == Intent.REFINE))) {
         session.setPendingCountRequest(copyOf(input));
       }
       if (session.getPendingQuestion() != ConversationDecision.COUNT_CLARIFICATION) {
@@ -227,6 +230,16 @@ public final class ClarificationResolver {
       }
     }
     // The parser has no session context; resolve short answers against the outstanding question.
+    if (session.getPendingQuestion() == ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
+        && ConversationText.normalizeCommand(reply).matches("[-−]?(?:[0-9]+\\.[0-9]+|\\.[0-9]+)")) {
+      effective.setIntent(Intent.EXPLAIN_RECOMMENDATION);
+      normalizeInput(effective);
+      effective.setInvalidBookCount(false);
+      effective.setReferenceRank(0);
+      effective.setReferenceTitle(null);
+      effective.setExplanationSelection(null);
+      return effective;
+    }
     if (session.getPendingQuestion() == ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
         && ConversationText.isWholePageReply(reply)) {
       effective.setIntent(Intent.EXPLAIN_RECOMMENDATION);

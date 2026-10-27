@@ -98,6 +98,28 @@ class RefinementFlowTest {
   }
 
   @Test
+  void newerInvalidSearchReplacesThePendingRequestWithoutConsumingTheDisplayedBatch() {
+    search(null, null);
+    var before = sessions.getSession("session", "user").getPendingRecommendations();
+    for (String genre : List.of("fantasy", "romance")) {
+      var pending = request(Intent.RECOMMENDATION);
+      pending.setRawText("Recommend zero " + genre + " books");
+      pending.setExplicitSearch(true);
+      pending.setInvalidBookCount(true);
+      var query = new SemanticQuery();
+      query.setGenres(List.of(genre));
+      pending.setPositiveSemanticQuery(query);
+      assertThat(process(pending).getDecision())
+          .isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
+      assertThat(sessions.getSession("session", "user").getPendingRecommendations())
+          .hasSize(before.size());
+    }
+    var result = service.process("session", "user", command("3"));
+    assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("romance");
+    assertThat(result.getBookCount()).isEqualTo(3);
+  }
+
+  @Test
   void moreRecentUsesTheFlooredPageAverageAndPreservesThePeriodUpperBoundAfterReload() {
     var years = List.of(1960, 1975, 1980, 1990, 2005);
     var books =
@@ -703,6 +725,14 @@ class RefinementFlowTest {
         "under 3 hours|under 3 hours|SHORTER_DURATION_CLARIFICATION",
         "5 hours|at most 5 hours|SHORTER_DURATION_CLARIFICATION",
         "5|at most 5 hours|SHORTER_DURATION_CLARIFICATION",
+        "five|at most 5 hours|SHORTER_DURATION_CLARIFICATION",
+        "2 and a half hours|at most 2.5 hours|SHORTER_DURATION_CLARIFICATION",
+        "half an hour|at most 0.5 hour|SHORTER_DURATION_CLARIFICATION",
+        ".5 hours|at most .5 hours|SHORTER_DURATION_CLARIFICATION",
+        "between two and three hours|between 2 and 3 hours|SHORTER_DURATION_CLARIFICATION",
+        "one hour and thirty minutes|at most 1 hour and 30 minutes|SHORTER_DURATION_CLARIFICATION",
+        "exactly 2.5 hours|exactly 2.5 hours|SHORTER_DURATION_CLARIFICATION",
+        "two and a half hours|at least 2.5 hours|LONGER_DURATION_CLARIFICATION",
         "5|at least 5 hours|LONGER_DURATION_CLARIFICATION",
         "over 5 hours|over 5 hours|LONGER_DURATION_CLARIFICATION"
       })

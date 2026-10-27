@@ -1,6 +1,8 @@
 package com.gen3.recommenderagent.response;
 
 import static com.gen3.recommenderagent.domain.RecommendationPolicy.MAX_BOOK_COUNT;
+import static com.gen3.recommenderagent.response.ResponseBudget.limitWords;
+import static com.gen3.recommenderagent.response.ResponseBudget.wordCount;
 
 import com.gen3.recommenderagent.ai.AiProviderCalls;
 import com.gen3.recommenderagent.ai.AiProviderException;
@@ -9,7 +11,6 @@ import com.gen3.recommenderagent.domain.session.Recommendation;
 import com.gen3.recommenderagent.domain.session.SemanticQuery;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -25,7 +26,7 @@ public class AiResponseGenerator {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(AiResponseGenerator.class);
 
-  private static final int MAX_EXPLANATION_WORDS = 150;
+  private static final int MAX_EXPLANATION_WORDS = ResponseBudget.MAX_WORDS;
   // Holds the AI
   private final ChatClient chatClient;
   private final AiOperationObserver aiOperationObserver;
@@ -98,6 +99,7 @@ public class AiResponseGenerator {
                             Invent nothing, recommend no new books. Speak naturally without markdown.
                             """
                                       : """
+                            Use at most 150 words TOTAL, including titles and any limit notice.
                             Give a brief, friendly spoken audiobook response addressing the user's intent. Include every supplied
                             title and available short description; explain each fit by linking description details to the request
                             and supplied preferences. Use only supplied facts: invent no book details/preferences or unsupported
@@ -315,31 +317,7 @@ public class AiResponseGenerator {
   }
 
   private String explanationFallback(List<Recommendation> books) {
-    List<Recommendation> page = getTopRecommendations(books);
-    int budget = MAX_EXPLANATION_WORDS / Math.max(1, page.size());
-    return page.stream()
-        .map(
-            book -> {
-              String prefix =
-                  "Number "
-                      + book.getRank()
-                      + ", "
-                      + limitWords(plainExplanation(book.getTitle()), 12)
-                      + ". "
-                      + (book.isReadingPreferencesUsed()
-                          ? "I used your reading preferences to help choose this book. "
-                          : "");
-              String description = plainExplanation(book.getShortDescription());
-              String reason =
-                  description.isBlank()
-                      ? "I don't have enough detail in this book's description to explain the match."
-                      : "Its description says " + description;
-              return (prefix + limitWords(reason, budget - wordCount(prefix)))
-                      .replaceAll("[.,!?]+$", "")
-                  + ".";
-            })
-        .collect(Collectors.joining(" "))
-        .trim();
+    return boundedNarration(books, true, "", MAX_EXPLANATION_WORDS);
   }
 
   private String plainExplanation(String text) {
@@ -351,12 +329,52 @@ public class AiResponseGenerator {
             .trim();
   }
 
-  private int wordCount(String text) {
-    return text.isBlank() ? 0 : text.trim().split("\\s+").length;
+  String boundedFallback(
+      List<Recommendation> books,
+      ConversationTurn request,
+      boolean explanation,
+      String notice,
+      int maximumWords) {
+    if (!explanation) {
+      String original = notice + buildHumanReadableResponse(books, request);
+      if (wordCount(original) <= maximumWords) {
+        return original;
+      }
+    }
+    return boundedNarration(books, explanation, notice, maximumWords);
   }
 
-  private String limitWords(String text, int maximum) {
-    String[] words = text.trim().split("\\s+");
-    return String.join(" ", Arrays.copyOf(words, Math.max(0, Math.min(maximum, words.length))));
+  private String boundedNarration(
+      List<Recommendation> books, boolean explanation, String notice, int maximumWords) {
+    List<Recommendation> page = getTopRecommendations(books);
+    int budget = Math.max(0, maximumWords - wordCount(notice)) / Math.max(1, page.size());
+    return notice
+        + page.stream()
+            .map(
+                book -> {
+                  String preference =
+                      !book.isReadingPreferencesUsed()
+                          ? ""
+                          : budget > 60
+                              ? "I used your reading preferences to help choose this book. "
+                              : "I used your reading preferences. ";
+                  String title =
+                      ResponseBudget.label(
+                          plainExplanation(book.getTitle()),
+                          Math.max(1, budget - wordCount(preference) - 8));
+                  String prefix = "Number " + book.getRank() + ", " + title + ". " + preference;
+                  String description = plainExplanation(book.getShortDescription());
+                  if (description.isBlank()) {
+                    description =
+                        "I don't have enough detail in this book's description to explain the match.";
+                  } else if (explanation) {
+                    description = "Its description says " + description;
+                  }
+                  return (prefix + limitWords(description, budget - wordCount(prefix)))
+                          .strip()
+                          .replaceAll("[.,!?]+$", "")
+                      + ".";
+                })
+            .collect(Collectors.joining(" "));
   }
 }

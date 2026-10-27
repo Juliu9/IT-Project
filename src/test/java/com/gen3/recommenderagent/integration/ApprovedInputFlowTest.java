@@ -410,6 +410,7 @@ class ApprovedInputFlowTest {
   void invalidCountsDoNotRetrieveAndTheCorrectionResumesTheOriginalSearch(String text) {
     var parsed = new ParsedRequest();
     parsed.setIntent(Intent.RECOMMENDATION);
+    parsed.setInvalidBookCount(true);
     parsed.setBookCount(BigInteger.ONE);
     var query = new SemanticQuery();
     query.setGenres(List.of("mystery"));

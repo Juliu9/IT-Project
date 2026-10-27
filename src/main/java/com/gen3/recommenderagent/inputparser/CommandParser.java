@@ -326,6 +326,13 @@ public class CommandParser {
     } else {
       return null;
     }
+    if (target.matches(
+        "(?:(?:the |book |number ))?[-−]?(?:[0-9]+\\.[0-9]+|\\.[0-9]+)(?: (?:book|one))?(?: more| in more detail)?")) {
+      var invalid = new ParsedRequest();
+      invalid.setIntent(Intent.EXPLAIN_RECOMMENDATION);
+      invalid.setReferenceRank(BigInteger.ZERO);
+      return invalid;
+    }
     String[] sides = target.split(" (?:except|except for|but|but not) ", 2);
     var included = selectors(sides[0]);
     var excluded =

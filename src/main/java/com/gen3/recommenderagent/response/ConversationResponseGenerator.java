@@ -31,6 +31,37 @@ public class ConversationResponseGenerator implements ResponseGenerator {
 
   @Override
   public String generate(List<Recommendation> recommendations, ConversationTurn currentRequest) {
+    String response = render(recommendations, currentRequest, Integer.MAX_VALUE);
+    if (ResponseBudget.wordCount(response) <= ResponseBudget.MAX_WORDS) {
+      return response;
+    }
+    var decision =
+        currentRequest != null && currentRequest.getDecision() != null
+            ? currentRequest.getDecision()
+            : ConversationRules.decisionFor(
+                recommendations, currentRequest == null ? null : currentRequest.toDraft());
+    if (decision == ConversationDecision.RECOMMENDATIONS
+        || decision == ConversationDecision.EXPLANATION) {
+      String reminder = withPreferenceReminder("", currentRequest);
+      String notice =
+          decision == ConversationDecision.EXPLANATION ? "" : limitNotice(currentRequest);
+      response =
+          ai.boundedFallback(
+                  recommendations,
+                  currentRequest,
+                  decision == ConversationDecision.EXPLANATION,
+                  notice,
+                  ResponseBudget.MAX_WORDS - ResponseBudget.wordCount(reminder))
+              + reminder;
+      RequestTelemetry.responseMode("FALLBACK");
+    } else {
+      response = render(recommendations, currentRequest, 8);
+    }
+    return ResponseBudget.limitWords(response, ResponseBudget.MAX_WORDS);
+  }
+
+  private String render(
+      List<Recommendation> recommendations, ConversationTurn currentRequest, int labelWords) {
     // if both inputs are missing, the method returns a polite error message instead
     // of crashing
     if (recommendations == null && currentRequest == null) {
@@ -45,16 +76,17 @@ public class ConversationResponseGenerator implements ResponseGenerator {
     if (decision == ConversationDecision.SEARCH_CLARIFICATION
         || decision == ConversationDecision.PREFERENCE_CLARIFICATION) {
       RequestTelemetry.responseMode(decision.name());
-      return generateOutcomeResponse(decision, currentRequest);
+      return generateOutcomeResponse(decision, currentRequest, labelWords);
     }
     String limitNotice =
         decision == ConversationDecision.EXPLANATION ? "" : limitNotice(currentRequest);
-    String fixedResponse = generateOutcomeResponse(decision, currentRequest);
+    String fixedResponse = generateOutcomeResponse(decision, currentRequest, labelWords);
     if (fixedResponse != null) {
       if ((decision == ConversationDecision.HELP || decision == ConversationDecision.COUNT_CHANGED)
           && currentRequest.getPendingQuestion() != null) {
         String question =
-            generateOutcomeResponse(currentRequest.getPendingQuestion(), currentRequest);
+            generateOutcomeResponse(
+                currentRequest.getPendingQuestion(), currentRequest, labelWords);
         if (question != null) {
           fixedResponse += " " + question;
         }
@@ -106,7 +138,7 @@ public class ConversationResponseGenerator implements ResponseGenerator {
   }
 
   private String generateOutcomeResponse(
-      ConversationDecision decision, ConversationTurn currentRequest) {
+      ConversationDecision decision, ConversationTurn currentRequest, int labelWords) {
     return switch (decision) {
       case SIMILAR_BOOK_SELECTION ->
           "I found a few possible matches. Which book did you mean? "
@@ -116,10 +148,12 @@ public class ConversationResponseGenerator implements ResponseGenerator {
                         var book = currentRequest.getSimilarBookChoices().get(index);
                         return (index + 1)
                             + ". "
-                            + book.title()
-                            + (book.authors().isEmpty()
-                                ? ""
-                                : " by " + String.join(", ", book.authors()));
+                            + ResponseBudget.label(
+                                book.title()
+                                    + (book.authors().isEmpty()
+                                        ? ""
+                                        : " by " + String.join(", ", book.authors())),
+                                labelWords);
                       })
                   .collect(Collectors.joining(". "))
               + ". You can choose a number, or share a more specific title and author.";
@@ -175,12 +209,12 @@ public class ConversationResponseGenerator implements ResponseGenerator {
           "I haven't recommended any books in this session yet. What kind of audiobook would you like?";
       case EMPTY_EXPLANATION_PAGE ->
           "I didn't find any books in the latest search to explain. Would you like to try a different search?";
-      case EXPLANATION_TARGET_CLARIFICATION -> explanationClarification(currentRequest);
+      case EXPLANATION_TARGET_CLARIFICATION -> explanationClarification(currentRequest, labelWords);
       case NO_MORE_RESULTS ->
           "There are no more audiobooks matching your current search. Would you like to try a different author, genre, or filter?";
       case NOTHING_TO_REPEAT ->
           "I don't have an earlier request to repeat yet. Would you like recommendations or help getting started?";
-      case NO_MATCHES -> generateFallbackResponse(currentRequest);
+      case NO_MATCHES -> generateFallbackResponse(currentRequest, labelWords);
       case UNAVAILABLE -> PROCESSING_FALLBACK;
       case SEARCH_CLARIFICATION -> "What kind of audiobook would you like?";
       case SEARCH_CHANGE_CLARIFICATION -> "What would you like to change about your search?";
@@ -195,11 +229,11 @@ public class ConversationResponseGenerator implements ResponseGenerator {
             request.getMustInclude().getPublicationYear());
   }
 
-  private String explanationClarification(ConversationTurn request) {
+  private String explanationClarification(ConversationTurn request, int labelWords) {
     List<Recommendation> page = request.getRecommendations();
     String titles =
         page.stream()
-            .map(book -> book.getRank() + ". " + book.getTitle())
+            .map(book -> book.getRank() + ". " + ResponseBudget.label(book.getTitle(), labelWords))
             .collect(Collectors.joining(". "));
     var selection = request.getExplanationSelection();
     String unresolved =
@@ -212,7 +246,9 @@ public class ConversationResponseGenerator implements ResponseGenerator {
                         page.stream().noneMatch(book -> book.getRank().toString().equals(value)))
                 .findFirst()
                 .orElse(null);
-    return (unresolved == null ? "" : "I couldn't uniquely identify " + unresolved + ". ")
+    return (unresolved == null
+            ? ""
+            : "I couldn't uniquely identify " + ResponseBudget.label(unresolved, labelWords) + ". ")
         + "I shared "
         + page.size()
         + " book"
@@ -223,7 +259,7 @@ public class ConversationResponseGenerator implements ResponseGenerator {
   }
 
   // Safe node output
-  private String generateFallbackResponse(ConversationTurn currentRequest) {
+  private String generateFallbackResponse(ConversationTurn currentRequest, int labelWords) {
     if (currentRequest != null && currentRequest.isPersonalised()) {
       return "I couldn't find audiobooks matching your current search and saved preferences. "
           + "Would you like to try a different author, genre, or filter?";
@@ -238,7 +274,7 @@ public class ConversationResponseGenerator implements ResponseGenerator {
         && currentRequest.getRawText() != null
         && !currentRequest.getRawText().isBlank()) {
       return "I couldn't find a good match for "
-          + currentRequest.getRawText()
+          + ResponseBudget.label(currentRequest.getRawText(), labelWords)
           + " just yet. Would you like to try a different genre, author, narrator, or description?";
     }
 

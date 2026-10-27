@@ -8,6 +8,25 @@ hide empty members
 package "recommenderagent" as recommenderagent {
   package "domain" {
     package "session" {
+      class "DurationRange" as C89 {
+        - Integer minimum
+        - Integer maximum
+        - {static} String NUMBER
+        - {static} String UNIT
+        - {static} Pattern TERM
+        - {static} Pattern QUANTITY
+        - {static} Pattern RANGE
+        - {static} Pattern COMPARISON
+        + {static} DurationRange parse(String)
+        + {static} String normalize(String)
+        - {static} BigDecimal minutes(String)
+        - {static} DurationRange bounded(BigDecimal,BigDecimal)
+        - {static} int whole(BigDecimal,RoundingMode)
+        - {static} DurationRange checked(Integer,Integer)
+        - {static} InvalidRequestException invalidDuration()
+        + Integer maximum()
+        + Integer minimum()
+      }
       class "SessionRequest" as C0 {
         - boolean shorter
         - String similarToTitle
@@ -916,24 +935,7 @@ package "recommenderagent" as recommenderagent {
         +  FILTER_ONLY
         +  NONE
       }
-      class "DurationRange" as C89 {
-        - Integer minimum
-        - Integer maximum
-        - {static} String NUMBER
-        - {static} String UNIT
-        - {static} Pattern TERM
-        - {static} Pattern QUANTITY
-        - {static} Pattern RANGE
-        - {static} Pattern COMPARISON
-        ~ {static} DurationRange parse(String)
-        - {static} BigDecimal minutes(String)
-        - {static} DurationRange bounded(BigDecimal,BigDecimal)
-        - {static} int whole(BigDecimal,RoundingMode)
-        - {static} DurationRange checked(Integer,Integer)
-        - {static} InvalidRequestException invalidDuration()
-        + Integer maximum()
-        + Integer minimum()
-      }
+
     }
     interface "CandidateRetriever" as C43 {
       ~ List<AudiobookCandidate> getCandidates(SessionRequest,SemanticQueryVectors,int,Set<String>)

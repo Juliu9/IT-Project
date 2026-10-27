@@ -9,6 +9,7 @@ import com.gen3.recommenderagent.domain.conversation.ConversationText;
 import com.gen3.recommenderagent.domain.session.ConversationDecision;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
 import com.gen3.recommenderagent.domain.session.ConversationTurn;
+import com.gen3.recommenderagent.domain.session.DurationRange;
 import com.gen3.recommenderagent.domain.session.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
@@ -443,6 +444,53 @@ public class ExactFilterPolicy {
     }
   }
 
+  private void resolveDurationAnswer(ConversationDraft request, Session session) {
+    if (session == null
+        || request.getIntent() != Intent.REFINE
+        || request.getMustInclude() == null
+        || request.getMustInclude().getDuration() == null
+        || (session.getPendingQuestion() != ConversationDecision.SHORTER_DURATION_CLARIFICATION
+            && session.getPendingQuestion() != ConversationDecision.LONGER_DURATION_CLARIFICATION)
+        || session.getPendingRefinementRequest() == null) {
+      return;
+    }
+    var pending = session.getPendingRefinementRequest().getMustInclude();
+    var old = DurationRange.parse(pending == null ? null : pending.getDuration());
+    var supplied = DurationRange.parse(request.getMustInclude().getDuration());
+    Integer minimum = supplied.minimum() == null ? old.minimum() : supplied.minimum();
+    Integer maximum = supplied.maximum() == null ? old.maximum() : supplied.maximum();
+    if (minimum != null && maximum != null && minimum > maximum) {
+      minimum = supplied.minimum();
+      maximum = supplied.maximum();
+    }
+    if (!java.util.Objects.equals(minimum, supplied.minimum())
+        || !java.util.Objects.equals(maximum, supplied.maximum())) {
+      setDuration(
+          request,
+          minimum == null
+              ? "at most " + maximum + " minutes"
+              : maximum == null
+                  ? "at least " + minimum + " minutes"
+                  : "between " + minimum + " and " + maximum + " minutes");
+    }
+    if ((old.minimum() != null && (minimum == null || minimum < old.minimum()))
+        || (old.maximum() != null && (maximum == null || maximum > old.maximum()))) {
+      awaitRefinement(request, session, ConversationDecision.DURATION_RANGE_CONFIRMATION);
+    }
+  }
+
+  private void setDuration(ConversationDraft request, String value) {
+    var include = request.getMustInclude() == null ? new ExactCriteria() : request.getMustInclude();
+    include.setDuration(value);
+    request.setMustInclude(include);
+    if (request.getSearchCriteria() != null) {
+      if (request.getSearchCriteria().getMustInclude() == null) {
+        request.getSearchCriteria().setMustInclude(new ExactCriteria());
+      }
+      request.getSearchCriteria().getMustInclude().setDuration(value);
+    }
+  }
+
   private void resolveDurationRefinement(ConversationDraft request, Session session) {
     if (request.getIntent() != Intent.REFINE || (!request.isShorter() && !request.isLonger())) {
       return;
@@ -486,14 +534,7 @@ public class ExactFilterPolicy {
             : old.minimum() == null || conflict
                 ? "under " + boundary + " minutes"
                 : "between " + old.minimum() + " and " + next + " minutes";
-    include.setDuration(bounded);
-    request.setMustInclude(include);
-    if (request.getSearchCriteria() != null) {
-      if (request.getSearchCriteria().getMustInclude() == null) {
-        request.getSearchCriteria().setMustInclude(new ExactCriteria());
-      }
-      request.getSearchCriteria().getMustInclude().setDuration(bounded);
-    }
+    setDuration(request, bounded);
     request.setShorter(false);
     request.setLonger(false);
     if (conflict) {
@@ -521,6 +562,10 @@ public class ExactFilterPolicy {
       resolved.getPreferenceUpdates().setMustNotInclude(proposed.getMustNotInclude());
       return;
     }
+    if (resolved.isSearchClarificationRequired()) {
+      return;
+    }
+    resolveDurationAnswer(resolved, session);
     if (resolved.isSearchClarificationRequired()) {
       return;
     }
