@@ -93,6 +93,14 @@ public class InputParser {
         parsed = aiParser.parse(countInput.modelText());
       }
 
+      // A number retained as a stated subject is not also a quantity error.
+      if (!countInput.invalid() && CountInput.describesZero(rawText, parsed)) {
+        parsed.setInvalidBookCount(false);
+        if (parsed.getBookCount() != null && parsed.getBookCount().signum() <= 0) {
+          parsed.setBookCount(null);
+        }
+      }
+
       boolean invalidCount =
           parsed.getIntent() != com.gen3.recommenderagent.domain.Intent.EXPLAIN_RECOMMENDATION
               && (countInput.invalid()

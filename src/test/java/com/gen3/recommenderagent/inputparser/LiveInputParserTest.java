@@ -31,6 +31,25 @@ class LiveInputParserTest {
 
   @ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"Recommend zero gravity audiobooks", "Recommend zero waste books"})
+  void descriptiveZeroIsNotAnInvalidCount(String text) {
+    var result = parser.parse(text);
+    assertThat(result.getIntent()).isEqualTo(Intent.RECOMMENDATION);
+    assertThat(result.isInvalidBookCount())
+        .as("%s -> %s", text, new tools.jackson.databind.ObjectMapper().writeValueAsString(result))
+        .isFalse();
+    assertThat(result.getPositiveSemanticQuery()).isNotNull();
+    var query = result.getPositiveSemanticQuery();
+    var terms =
+        java.util.stream.Stream.of(query.getTopics(), query.getGenres(), query.getKeywords())
+            .filter(java.util.Objects::nonNull)
+            .flatMap(java.util.Collection::stream)
+            .collect(java.util.stream.Collectors.joining(" "));
+    assertThat(terms.toLowerCase(java.util.Locale.ROOT)).contains("zero");
+  }
+
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
       strings = {"books from around 2000", "books from the period 2000"})
   void approximatePublicationYearsProduceAnInclusiveFiveYearRange(String text) {
     var result = parser.parse(text);

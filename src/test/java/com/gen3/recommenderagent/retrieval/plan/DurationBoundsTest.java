@@ -3,15 +3,65 @@ package com.gen3.recommenderagent.retrieval.plan;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.domain.conversation.ClarificationResolver;
+import com.gen3.recommenderagent.domain.conversation.SearchContextResolver;
+import com.gen3.recommenderagent.domain.conversation.SearchCriteriaMerger;
+import com.gen3.recommenderagent.domain.session.ConversationDecision;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.session.ConversationTurn;
 import com.gen3.recommenderagent.domain.session.ExactCriteria;
+import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
+import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class DurationBoundsTest {
+  @ParameterizedTest
+  @CsvSource({"4,false", "5,true"})
+  void shorterPreservesTheMinimumOrConfirmsExtendingTheRange(int minimumHours, boolean confirm) {
+    var previous = new ConversationDraft();
+    previous.setIntent(Intent.RECOMMENDATION);
+    var criteria = new ExactCriteria();
+    criteria.setDuration("between " + minimumHours + " and 6 hours");
+    previous.setMustInclude(criteria);
+    var book = new Recommendation("id", 1, 0.9, "Title");
+    book.setDurationMinutes(300);
+    previous.setRecommendations(List.of(book));
+    var session = new Session();
+    session.getRequests().add(ConversationTurn.fromDraft(previous));
+    var incoming = new ConversationDraft();
+    incoming.setIntent(Intent.REFINE);
+    incoming.setShorter(true);
+    incoming.setRawText("make them shorter");
+    var result =
+        new SearchContextResolver().resolve(session, SearchCriteriaMerger.copyOf(incoming));
+    var policy = new ExactFilterPolicy();
+    policy.validateTransition(result, incoming, session);
+    assertThat(result.isSearchClarificationRequired()).isEqualTo(confirm);
+    if (confirm) {
+      assertThat(result.getDecision()).isEqualTo(ConversationDecision.DURATION_RANGE_CONFIRMATION);
+      var clarification = new ClarificationResolver();
+      clarification.complete(session, result);
+      var answer = new ConversationDraft();
+      answer.setIntent(Intent.UNKNOWN);
+      answer.setRawText("yes");
+      result = clarification.resolve(session, answer);
+      policy.validateTransition(result, answer, session);
+      assertThat(result.isSearchClarificationRequired()).isFalse();
+      assertThat(policy.filters(result, Set.of()).mustInclude().minimumDurationMinutes()).isNull();
+    } else {
+      assertThat(policy.filters(result, Set.of()).mustInclude().minimumDurationMinutes())
+          .isEqualTo(240);
+    }
+    assertThat(policy.filters(result, Set.of()).mustInclude().maximumDurationMinutes())
+        .isEqualTo(299);
+  }
+
   @ParameterizedTest
   @CsvSource(
       value = {

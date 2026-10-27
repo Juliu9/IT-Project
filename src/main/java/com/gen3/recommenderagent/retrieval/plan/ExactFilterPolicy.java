@@ -102,7 +102,7 @@ public class ExactFilterPolicy {
       throw new InvalidRequestException(
           "Your "
               + String.join(" and ", fields)
-              + " requirements conflict. Which requirement would you like to keep?");
+              + " requirements conflict. Please restate your full request with only the requirements you want to keep.");
     }
   }
 
@@ -474,13 +474,18 @@ public class ExactFilterPolicy {
           "Could you give me a smaller minimum duration in hours or minutes?");
     }
     int next = longer ? boundary + 1 : boundary - 1;
-    boolean conflict = longer && old.maximum() != null && next > old.maximum();
+    boolean conflict =
+        longer
+            ? old.maximum() != null && next > old.maximum()
+            : old.minimum() != null && next < old.minimum();
     String bounded =
         longer
             ? old.maximum() == null || conflict
                 ? "at least " + next + " minutes"
                 : "between " + next + " and " + old.maximum() + " minutes"
-            : "under " + boundary + " minutes";
+            : old.minimum() == null || conflict
+                ? "under " + boundary + " minutes"
+                : "between " + old.minimum() + " and " + next + " minutes";
     include.setDuration(bounded);
     request.setMustInclude(include);
     if (request.getSearchCriteria() != null) {

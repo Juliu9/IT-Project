@@ -75,6 +75,28 @@ class RefinementFlowTest {
         .parse(text);
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"3", "change count to 3", "three books per page"})
+  void validCountRepliesResumeThePendingSearch(String reply) {
+    var pending = request(Intent.RECOMMENDATION);
+    pending.setExplicitSearch(true);
+    pending.setInvalidBookCount(true);
+    pending.setRawText("Recommend zero fantasy books");
+    var query = new SemanticQuery();
+    query.setGenres(List.of("fantasy"));
+    pending.setPositiveSemanticQuery(query);
+    assertThat(process(pending).getDecision()).isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
+    verifyNoInteractions(workflow);
+    when(workflow.recommend(any(), any()))
+        .thenReturn(List.of(new Recommendation("id", 1, 0.9, "Fantasy")));
+    var result = service.process("session", "user", command(reply));
+    assertThat(result.getIntent()).isEqualTo(Intent.RECOMMENDATION);
+    assertThat(result.getBookCount()).isEqualTo(3);
+    assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
+    assertThat(sessions.getSession("session", "user").getPendingCountRequest()).isNull();
+  }
+
   @Test
   void moreRecentUsesTheFlooredPageAverageAndPreservesThePeriodUpperBoundAfterReload() {
     var years = List.of(1960, 1975, 1980, 1990, 2005);
@@ -764,7 +786,7 @@ class RefinementFlowTest {
     refinement.setMustNotInclude(exclude);
     assertThatThrownBy(() -> process(refinement))
         .isInstanceOf(InvalidRequestException.class)
-        .hasMessageContaining("Which requirement");
+        .hasMessageContaining("Please restate your full request");
     assertThat(mapper.writeValueAsString(sessions.getSession("session", "user"))).isEqualTo(before);
     verifyNoInteractions(workflow);
   }

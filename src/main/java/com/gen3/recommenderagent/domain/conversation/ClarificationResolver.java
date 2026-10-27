@@ -93,6 +93,11 @@ public final class ClarificationResolver {
     if (session.getPendingQuestion() == ConversationDecision.COUNT_CLARIFICATION
         && session.getPendingCountRequest() != null) {
       Integer count = ConversationText.selectionReply(reply);
+      if (count == null
+          && effective.getIntent() == Intent.CHANGE_COUNT
+          && !effective.isInvalidBookCount()) {
+        count = effective.getBookCount();
+      }
       if (count != null && count > 0) {
         var pending = copyOf(session.getPendingCountRequest());
         pending.setBookCount(count);
@@ -116,6 +121,7 @@ public final class ClarificationResolver {
     }
     if (session.getPendingQuestion() == ConversationDecision.COUNT_CLARIFICATION
         && (effective.getIntent() == Intent.UNKNOWN || effective.getIntent() == Intent.CHANGE_COUNT)
+        && (effective.getBookCount() == null || effective.getBookCount() <= 0)
         && (ConversationText.selectionReply(reply) == null
             || ConversationText.selectionReply(reply) <= 0)) {
       effective.setIntent(Intent.CHANGE_COUNT);

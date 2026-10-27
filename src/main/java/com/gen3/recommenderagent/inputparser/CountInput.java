@@ -38,6 +38,16 @@ final class CountInput {
     while (match.find()) {
       int group = match.group(1) == null ? 2 : 1;
       String number = match.group(group).toLowerCase(java.util.Locale.ROOT).replace('−', '-');
+      // Descriptive phrases such as "zero gravity books" need semantic parsing, not count
+      // rewriting.
+      if (group == 2
+          && number.equals("zero")
+          && !text.substring(match.end(group), match.end())
+              .strip()
+              .matches(
+                  "(?i)(?:(?:more )?(?:books?|audiobooks?|recommendations?)|more|at a time|per page|per request)")) {
+        continue;
+      }
       boolean invalid =
           number.equals("zero") || number.startsWith("minus") || number.contains("half");
       if (number.matches("[-0-9.]+")) {
@@ -53,6 +63,22 @@ final class CountInput {
       }
     }
     return new Check(false, text);
+  }
+
+  static boolean describesZero(String text, ParsedRequest parsed) {
+    String normalized = text.toLowerCase(java.util.Locale.ROOT);
+    return java.util.stream.Stream.of(
+            parsed.getPositiveSemanticQuery(), parsed.getNegativeSemanticQuery())
+        .filter(java.util.Objects::nonNull)
+        .flatMap(
+            query ->
+                java.util.stream.Stream.of(
+                    query.getTopics(), query.getGenres(), query.getKeywords()))
+        .filter(java.util.Objects::nonNull)
+        .flatMap(java.util.Collection::stream)
+        .filter(java.util.Objects::nonNull)
+        .map(value -> value.toLowerCase(java.util.Locale.ROOT).strip())
+        .anyMatch(value -> value.matches("zero\\s+.+") && normalized.contains(value));
   }
 
   static boolean more(String text) {

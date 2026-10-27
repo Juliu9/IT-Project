@@ -99,7 +99,7 @@ class ExactFilterCorrectionTest {
                 planner.resolveFilterCorrections(
                     request(field, include, exclude), request(field, include, exclude)))
         .isInstanceOf(InvalidRequestException.class)
-        .hasMessageContaining("Which requirement");
+        .hasMessageContaining("Please restate your full request");
   }
 
   @ParameterizedTest

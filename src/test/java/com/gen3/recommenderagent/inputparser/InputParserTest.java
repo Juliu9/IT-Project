@@ -25,6 +25,48 @@ import tools.jackson.databind.ObjectMapper;
 class InputParserTest {
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "Recommend zero gravity audiobooks",
+        "Recommend zero waste books",
+        "zero tolerance books"
+      })
+  void descriptiveZeroPhrasesReachAiWithoutBeingRewritten(String text) {
+    var ai = mock(AiParser.class);
+    var parsed = new ParsedRequest();
+    parsed.setIntent(Intent.RECOMMENDATION);
+    parsed.setInvalidBookCount(true);
+    parsed.setBookCount(java.math.BigInteger.ZERO);
+    var query = new SemanticQuery();
+    String subject =
+        text.substring(text.toLowerCase(java.util.Locale.ROOT).indexOf("zero"))
+            .replaceFirst(" (?:audiobooks|books)$", "");
+    query.setKeywords(List.of(subject));
+    parsed.setPositiveSemanticQuery(query);
+    when(ai.parse(text)).thenReturn(parsed);
+    var result = new InputParser(new CommandParser(), ai).parse(text);
+    assertEquals(false, result.isInvalidBookCount());
+    assertEquals(List.of(subject), result.getPositiveSemanticQuery().getKeywords());
+    assertEquals(null, result.getBookCount());
+    org.mockito.Mockito.verify(ai).parse(text);
+  }
+
+  @Test
+  void ambiguousWordCountsCanStillBeRejectedByAiWithoutLosingCriteria() {
+    var ai = mock(AiParser.class);
+    var parsed = new ParsedRequest();
+    parsed.setIntent(Intent.RECOMMENDATION);
+    parsed.setInvalidBookCount(true);
+    var query = new SemanticQuery();
+    query.setGenres(List.of("mystery"));
+    parsed.setPositiveSemanticQuery(query);
+    when(ai.parse("Give me zero mystery books")).thenReturn(parsed);
+    var result = new InputParser(new CommandParser(), ai).parse("Give me zero mystery books");
+    assertEquals(true, result.isInvalidBookCount());
+    assertEquals(List.of("mystery"), result.getPositiveSemanticQuery().getGenres());
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
       strings = {"give me some books", "Give me some audiobooks please", "recommend some books"})
   void genericBookRequestsUsePersonalisedRecommendationsWithoutAi(String text) {
     var ai = mock(AiParser.class);
@@ -78,7 +120,7 @@ class InputParserTest {
       delimiter = '|',
       value = {
         "I want two and a half mystery books|I want some mystery books",
-        "Give me zero mystery books|Give me some mystery books",
+        "Give me 0 mystery books|Give me some mystery books",
         "Give me minus two mystery books|Give me some mystery books",
         "Give me 2.5 mystery books|Give me some mystery books"
       })
@@ -106,6 +148,7 @@ class InputParserTest {
       delimiter = '|',
       value = {
         "0 more|1 more",
+        "zero books|some books",
         "set count to zero|set count to 1",
         "2.5|1",
         "more and make it zero at a time|more and make it 1 at a time"

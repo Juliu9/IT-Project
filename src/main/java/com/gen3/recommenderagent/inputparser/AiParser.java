@@ -131,7 +131,10 @@ public class AiParser {
                         "Explain all except The Hobbit and Dune" -> explanationSelection={exclude:["The Hobbit","Dune"]}; omit referenceRank/referenceTitle when using explanationSelection.
 
                         Counts and filters:
+                        Numbers inside topics or titles, such as "zero gravity" or "zero waste", are not recommendation counts.
+                        "Recommend zero gravity audiobooks" -> {"intent":"RECOMMENDATION","explicitSearch":true,"positiveSemanticQuery":{"keywords":["zero gravity"]}}; "zero waste" is likewise a topic. Neither sets invalidBookCount.
                         Invalid recommendation counts (zero, negative, fractional) set invalidBookCount=true; preserve the action and criteria, omit bookCount. Counts above five remain positive integers; never round fractional counts or interpret zero as REPEAT.
+                        "Give me zero mystery books" -> {"intent":"RECOMMENDATION","explicitSearch":true,"invalidBookCount":true,"positiveSemanticQuery":{"genres":["mystery"]}}.
 
                         Duration comparisons belong in mustInclude.duration (including "under"/"over", not just exact lengths); use digits plus hours/minutes; convert words/fractions ("under ten hours" -> "under 10 hours";
                         "one and a half hours" -> "1.5 hours"). Preserve under/over/at most/at least/exactly/between and both endpoints; omit vague durations.
@@ -140,6 +143,7 @@ public class AiParser {
                         retain relative wording/counts ("recent", "past year", "last four years") in publicationYear, never guess years.
 
                         Extraction examples (copy only values stated in the actual request):
+                        "Recommend fantasy audiobooks with a strong female protagonist" -> {"intent":"RECOMMENDATION","explicitSearch":true,"positiveSemanticQuery":{"genres":["fantasy"],"keywords":["strong female protagonist"]}}.
                         "Make it horror instead" -> {"intent":"REFINE","positiveSemanticQuery":{"genres":["horror"]},"replaceSearchFields":["positiveSemanticQuery.genres"]}
                         "Could you describe the kinds of requests this assistant supports?" -> {"intent":"HELP"}
                         "Recommend fantasy audiobooks by Ursula K. Le Guin under eight hours, avoiding graphic violence" ->
