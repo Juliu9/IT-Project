@@ -616,4 +616,20 @@ class ApprovedInputFlowTest {
     assertThat(process("2").getRecommendations()).hasSize(2);
     assertThat(session.getBookCount()).isEqualTo(5);
   }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"books from around 2000", "books from the period 2000"})
+  void completeApproximateYearSearchDoesNotInheritThePreviousGenre(String text) {
+    search();
+    var result = process(text);
+    assertThat(result.getIntent()).isEqualTo(Intent.RECOMMENDATION);
+    assertThat(result.getPositiveSemanticQuery()).isNull();
+    assertThat(result.getRecommendations()).hasSize(5);
+    var bounds =
+        new ExactFilterPolicy().filters(result.toDraft(), java.util.Set.of()).mustInclude();
+    assertThat(bounds.minimumPublicationYear()).isEqualTo(1995);
+    assertThat(bounds.maximumPublicationYear()).isEqualTo(2005);
+    assertThat(batch).isEqualTo(2);
+    verifyNoInteractions(ai);
+  }
 }

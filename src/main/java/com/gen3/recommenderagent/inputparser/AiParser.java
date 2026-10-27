@@ -134,7 +134,7 @@ public class AiParser {
                         Duration comparisons belong in mustInclude.duration (including "under"/"over", not just exact lengths); use digits plus hours/minutes; convert words/fractions ("under ten hours" -> "under 10 hours";
                         "one and a half hours" -> "1.5 hours"). Preserve under/over/at most/at least/exactly/between and both endpoints; vague duration=null.
                         Years=preserve after/before/at least/at most/exactly/between and both endpoints; decades include all ten years ("1950 to the 2000s" -> "between 1950 and 2009"). recent/recently=last 5 years;
-                        "books from around 2000" / "books from the period 2000" -> publicationYear="around 2000" / "period 2000"; Java applies inclusive +/-5 years. Preserve these approximate phrases, never extract only the exact year.
+                        "books from around 2000" / "books from the period 2000" -> RECOMMENDATION, explicitSearch=true, publicationYear="around 2000" / "period 2000"; Java applies inclusive +/-5 years. Preserve these approximate phrases, never extract only the exact year.
                         retain relative wording/counts ("recent", "past year", "last four years") in publicationYear, never guess years.
                         Keep exclusions and duration comparisons separate. "mystery, not too dark" -> positive genres=["mystery"], negative keywords=["dark"].
 

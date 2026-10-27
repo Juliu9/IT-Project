@@ -38,6 +38,11 @@ public class CommandParser {
               + COUNT
               + ")(?: books?| audiobooks?| recommendations?)? (?:at a time|per page|per request)$");
 
+  private static final Pattern APPROXIMATE_YEAR_REQUEST =
+      Pattern.compile(
+          "(?:(?:recommend|show me|give me|i want|i'd like|i would like) )?"
+              + "(?:some )?(?:books|audiobooks) from ((?:around|(?:the )?period) [0-9]{4})");
+
   public ParsedRequest parse(String rawText) {
     String command = normalizeCommand(rawText);
     if (ConversationText.isCancellationReply(command)) {
@@ -87,6 +92,16 @@ public class CommandParser {
       }
       parsed.setNegativeSemanticQuery(query);
       parsed.setExplicitSearch(true);
+      return parsed;
+    }
+    var approximateYear = APPROXIMATE_YEAR_REQUEST.matcher(command);
+    if (approximateYear.matches()) {
+      var parsed = new ParsedRequest();
+      parsed.setIntent(Intent.RECOMMENDATION);
+      parsed.setExplicitSearch(true);
+      var criteria = new ExactCriteria();
+      criteria.setPublicationYear(approximateYear.group(1));
+      parsed.setMustInclude(criteria);
       return parsed;
     }
     if (ConversationText.isOlderRefinement(command)) {

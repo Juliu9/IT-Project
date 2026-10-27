@@ -116,6 +116,45 @@ class InputParserTest {
     assertEquals(modelText, check.modelText());
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "books from around 2000", "books from the period 2000",
+        "Recommend audiobooks from around 2000",
+            "Please give me some books from the period 2000, thanks!"
+      })
+  void completeApproximateYearRequestsUseRecommendationsWithoutAi(String text) {
+    var ai = mock(AiParser.class);
+    var wrongIntent = new ParsedRequest();
+    wrongIntent.setIntent(Intent.REFINE);
+    when(ai.parse(anyString())).thenReturn(wrongIntent);
+    var result = new InputParser(new CommandParser(), ai).parse(text);
+    assertEquals(Intent.RECOMMENDATION, result.getIntent());
+    assertEquals(true, result.isExplicitSearch());
+    assertEquals(false, result.isPersonalised());
+    var bounds =
+        new com.gen3.recommenderagent.retrieval.plan.ExactFilterPolicy()
+            .filters(result, java.util.Set.of())
+            .mustInclude();
+    assertEquals(1995, bounds.minimumPublicationYear());
+    assertEquals(2005, bounds.maximumPublicationYear());
+    assertEquals(null, result.getPositiveSemanticQuery());
+    verifyNoInteractions(ai);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "books from around 2000 under two hours",
+        "three books from around 2000",
+        "a book from around 2000",
+        "change the year to around 2000",
+        "books from around 2000 by Suzanne Collins"
+      })
+  void approximateYearFastPathDoesNotSwallowOtherCriteriaOrContext(String text) {
+    assertEquals(null, new CommandParser().parse(text));
+  }
+
   @Test
   void invalidCountIntentCorrectionHappensBeforeSemanticFieldsCanBeCleared() {
     var ai = mock(AiParser.class);
