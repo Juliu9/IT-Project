@@ -140,7 +140,7 @@ class PreferenceUpdateFlowTest {
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {"more", "another", "2 more", "another five"})
-  void moreCannotAnswerThePendingGenreQuestion(String text) {
+  void moreAbandonsTheUnfinishedPersonalisedSearchAndAsksForCriteria(String text) {
     var search = request(Intent.RECOMMENDATION);
     search.setPersonalised(true);
     search.setExplicitSearch(true);
@@ -150,23 +150,20 @@ class PreferenceUpdateFlowTest {
     org.mockito.Mockito.clearInvocations(vectors, retriever, ranker);
     var parser = new InputParser(new CommandParser(), mock(AiParser.class));
     var result = service.process("session", "user", parser.parse(text));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.PREFERENCE_CLARIFICATION);
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.SEARCH_CLARIFICATION);
     assertThat(result.getRecommendations()).isEmpty();
-    assertThat(sessions.getSession("session", "user").isAwaitingPersonalisedPreferences()).isTrue();
+    assertThat(sessions.getSession("session", "user").isAwaitingPersonalisedPreferences())
+        .isFalse();
     assertThat(sessions.getSession("session", "user").getPreferences()).isNull();
     verifyNoInteractions(vectors, retriever, ranker);
     var answer = request(Intent.REFINE);
     answer.setPositiveSemanticQuery(tastes("adventure").getPositiveSemanticQuery());
     var resumed = process(answer);
     assertThat(resumed.isPreferenceClarificationRequired()).isFalse();
-    assertThat(resumed.getRecommendations()).hasSize(5);
-    assertThat(
-            sessions
-                .getSession("session", "user")
-                .getPreferences()
-                .getPositiveSemanticQuery()
-                .getGenres())
-        .containsExactly("adventure");
+    assertThat(resumed.getRecommendations())
+        .hasSize(text.equals("2 more") ? 2 : text.equals("another") ? 1 : 5);
+    assertThat(sessions.getSession("session", "user").getPreferences()).isNull();
+    assertThat(resumed.getPositiveSemanticQuery().getGenres()).containsExactly("adventure");
   }
 
   @Test
@@ -199,7 +196,7 @@ class PreferenceUpdateFlowTest {
   }
 
   @Test
-  void explicitPreferenceUpdateAnswersPendingGenreQuestionAndResumesSearch() {
+  void explicitPreferenceUpdateAbandonsTheUnfinishedSearch() {
     var search = request(Intent.RECOMMENDATION);
     search.setPersonalised(true);
     var filter = new ExactCriteria();
@@ -208,8 +205,8 @@ class PreferenceUpdateFlowTest {
     process(search);
     process(request(Intent.HELP));
     var result = process(update(tastes("horror")));
-    assertThat(result.getRecommendations()).hasSize(5);
-    assertThat(result.getMustInclude().getAuthors()).containsExactly("Suzanne Collins");
+    assertThat(result.getRecommendations()).isEmpty();
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.PREFERENCES_UPDATED);
     assertThat(
             sessions
                 .getSession("session", "user")
@@ -217,11 +214,11 @@ class PreferenceUpdateFlowTest {
                 .getPositiveSemanticQuery()
                 .getGenres())
         .containsExactly("horror");
-    assertThat(sessions.getSession("session", "user").getPendingQuestion()).isNull();
+    assertThat(sessions.getSession("session", "user").getPendingDecision()).isNull();
   }
 
   @Test
-  void countAndHelpPreservePendingGenreQuestionAndCountChoice() {
+  void countAbandonsGenreQuestionAndHelpDoesNotRestoreIt() {
     var search = request(Intent.RECOMMENDATION);
     search.setPersonalised(true);
     process(search);
@@ -229,15 +226,14 @@ class PreferenceUpdateFlowTest {
     count.setBookCount(2);
     process(count);
     process(request(Intent.HELP));
-    assertThat(sessions.getSession("session", "user").getPendingQuestion())
-        .isEqualTo(ConversationDecision.PREFERENCE_CLARIFICATION);
+    assertThat(sessions.getSession("session", "user").getPendingDecision()).isNull();
     var reply = request(Intent.RECOMMENDATION);
     reply.setPositiveSemanticQuery(tastes("horror").getPositiveSemanticQuery());
     assertThat(process(reply).getRecommendations()).hasSize(2);
   }
 
   @Test
-  void unrelatedPreferenceEditPreservesThePendingGenreQuestion() {
+  void unrelatedPreferenceEditAbandonsThePendingGenreQuestion() {
     var search = request(Intent.RECOMMENDATION);
     search.setPersonalised(true);
     process(search);
@@ -247,8 +243,7 @@ class PreferenceUpdateFlowTest {
     filterPreferences.setMustInclude(filter);
     var result = process(update(filterPreferences));
     assertThat(result.getDecision()).isEqualTo(ConversationDecision.PREFERENCES_UPDATED);
-    assertThat(sessions.getSession("session", "user").getPendingQuestion())
-        .isEqualTo(ConversationDecision.PREFERENCE_CLARIFICATION);
+    assertThat(sessions.getSession("session", "user").getPendingDecision()).isNull();
     var answer = request(Intent.RECOMMENDATION);
     answer.setPositiveSemanticQuery(tastes("horror").getPositiveSemanticQuery());
     assertThat(process(answer).getRecommendations()).hasSize(5);

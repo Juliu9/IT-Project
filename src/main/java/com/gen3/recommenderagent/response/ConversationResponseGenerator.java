@@ -42,17 +42,15 @@ public class ConversationResponseGenerator implements ResponseGenerator {
                 recommendations, currentRequest == null ? null : currentRequest.toDraft());
     if (decision == ConversationDecision.RECOMMENDATIONS
         || decision == ConversationDecision.EXPLANATION) {
-      String reminder = withPreferenceReminder("", currentRequest);
       String notice =
           decision == ConversationDecision.EXPLANATION ? "" : limitNotice(currentRequest);
       response =
           ai.boundedFallback(
-                  recommendations,
-                  currentRequest,
-                  decision == ConversationDecision.EXPLANATION,
-                  notice,
-                  ResponseBudget.MAX_WORDS - ResponseBudget.wordCount(reminder))
-              + reminder;
+              recommendations,
+              currentRequest,
+              decision == ConversationDecision.EXPLANATION,
+              notice,
+              ResponseBudget.MAX_WORDS);
       RequestTelemetry.responseMode("FALLBACK");
     } else {
       response = render(recommendations, currentRequest, 8);
@@ -82,13 +80,16 @@ public class ConversationResponseGenerator implements ResponseGenerator {
         decision == ConversationDecision.EXPLANATION ? "" : limitNotice(currentRequest);
     String fixedResponse = generateOutcomeResponse(decision, currentRequest, labelWords);
     if (fixedResponse != null) {
-      if ((decision == ConversationDecision.HELP || decision == ConversationDecision.COUNT_CHANGED)
+      if ((decision == ConversationDecision.HELP || decision == ConversationDecision.UNKNOWN)
           && currentRequest.getPendingQuestion() != null) {
         String question =
             generateOutcomeResponse(
                 currentRequest.getPendingQuestion(), currentRequest, labelWords);
         if (question != null) {
-          fixedResponse += " " + question;
+          fixedResponse =
+              decision == ConversationDecision.UNKNOWN
+                  ? "I didn't quite catch that. Just to clarify, " + question
+                  : fixedResponse + " " + question;
         }
       }
       boolean noResults =
@@ -98,12 +99,10 @@ public class ConversationResponseGenerator implements ResponseGenerator {
             default -> false;
           };
       RequestTelemetry.responseMode(noResults ? "NO_RESULTS" : "ACTION_RESPONSE");
-      return withPreferenceReminder(
-          switch (decision) {
-            case NO_MORE_RESULTS, NOTHING_TO_REPEAT, NO_RECOMMENDATIONS_TO_REPEAT -> fixedResponse;
-            default -> limitNotice + fixedResponse;
-          },
-          currentRequest);
+      return switch (decision) {
+        case NO_MORE_RESULTS, NOTHING_TO_REPEAT, NO_RECOMMENDATIONS_TO_REPEAT -> fixedResponse;
+        default -> limitNotice + fixedResponse;
+      };
     }
 
     String response =
@@ -112,18 +111,7 @@ public class ConversationResponseGenerator implements ResponseGenerator {
             currentRequest,
             decision == ConversationDecision.EXPLANATION,
             limitNotice);
-    return withPreferenceReminder(response, currentRequest);
-  }
-
-  private String withPreferenceReminder(String response, ConversationTurn request) {
-    return request != null
-            && request.getPendingQuestion() == ConversationDecision.PREFERENCE_CLARIFICATION
-            && (request.getIntent()
-                    == com.gen3.recommenderagent.domain.Intent.EXPLAIN_RECOMMENDATION
-                || request.getIntent()
-                    == com.gen3.recommenderagent.domain.Intent.REPEAT_RECOMMENDATIONS)
-        ? response + " To continue your personalised request, what genres do you like?"
-        : response;
+    return response;
   }
 
   private String limitNotice(ConversationTurn request) {
@@ -232,7 +220,8 @@ public class ConversationResponseGenerator implements ResponseGenerator {
   }
 
   private String explanationClarification(ConversationTurn request, int labelWords) {
-    List<Recommendation> page = request.getRecommendations();
+    List<Recommendation> page =
+        request.getRecommendations() == null ? List.of() : request.getRecommendations();
     String titles =
         page.stream()
             .map(book -> book.getRank() + ". " + ResponseBudget.label(book.getTitle(), labelWords))

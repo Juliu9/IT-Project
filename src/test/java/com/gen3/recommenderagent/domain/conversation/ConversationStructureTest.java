@@ -90,14 +90,14 @@ class ConversationStructureTest {
     var session =
         mapper.readValue(
             """
-        {"pendingSimilarBook":{
+        {"pendingQuestion":"SIMILAR_BOOK_SELECTION","pendingSimilarBook":{
           "request":{"intent":"RECOMMENDATION","similarBookChoices":[{"bookId":"hunger","title":"The Hunger Games","authors":["Suzanne Collins"]}]},
           "decision":"SIMILAR_BOOK_SELECTION",
           "choices":[{"bookId":"hunger","title":"The Hunger Games","authors":["Suzanne Collins"]}]}}
         """,
             Session.class);
     assertThat(session.getPendingSimilarBook().request().getSimilarBookChoices()).hasSize(1);
-    var pending = mapper.readTree(mapper.writeValueAsString(session)).get("pendingSimilarBook");
+    var pending = mapper.readTree(mapper.writeValueAsString(session)).get("pendingQuestion");
     assertThat(pending.has("choices")).isFalse();
     assertThat(pending.get("request").get("similarBookChoices").size()).isEqualTo(1);
   }

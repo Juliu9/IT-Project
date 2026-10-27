@@ -33,7 +33,7 @@ class DurationBoundsTest {
   void durationAnswersPreserveUnchangedBoundsAndConfirmExtensions(
       String duration, boolean confirmation, Integer minimum, Integer maximum) {
     var session = new Session();
-    session.setPendingQuestion(ConversationDecision.SHORTER_DURATION_CLARIFICATION);
+    session.setPendingDecision(ConversationDecision.SHORTER_DURATION_CLARIFICATION);
     var pending = new ConversationDraft();
     pending.setIntent(Intent.REFINE);
     var old = new ExactCriteria();

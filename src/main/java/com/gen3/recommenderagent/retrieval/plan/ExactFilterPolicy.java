@@ -243,38 +243,7 @@ public class ExactFilterPolicy {
     }
     Matcher relative = RELATIVE_YEARS.matcher(normalized);
     if (normalized.equals("recent") || normalized.equals("recently") || relative.matches()) {
-      int years;
-      if (normalized.equals("recent") || normalized.equals("recently")) {
-        years = 5;
-      } else {
-        years =
-            switch (relative.group(1) == null ? "one" : relative.group(1)) {
-              case "a", "an", "one" -> 1;
-              case "two" -> 2;
-              case "three" -> 3;
-              case "four" -> 4;
-              case "five" -> 5;
-              case "six" -> 6;
-              case "seven" -> 7;
-              case "eight" -> 8;
-              case "nine" -> 9;
-              case "ten" -> 10;
-              default -> {
-                try {
-                  yield Integer.parseInt(relative.group(1));
-                } catch (NumberFormatException exception) {
-                  throw new InvalidRequestException(
-                      "Please give a whole number of years within the available calendar range.");
-                }
-              }
-            };
-      }
-      int currentYear = Year.now(clock).getValue();
-      if (years < 1 || years >= currentYear) {
-        throw new InvalidRequestException(
-            "Please give a positive number of years within the available calendar range.");
-      }
-      return new RangeBounds(currentYear - years, currentYear);
+      return relativeYearBounds(normalized, relative);
     }
     if (normalized.matches("(?:(?:from|since) (?:the )?)?[0-9]{3}0s")) {
       normalized = normalized.replaceFirst("^(?:from|since) (?:the )?", "");
@@ -311,6 +280,41 @@ public class ExactFilterPolicy {
         "What publication year or year range would you like? You can also say 'after 2020' or 'in the last 5 years'.");
   }
 
+  private RangeBounds relativeYearBounds(String normalized, Matcher relative) {
+    int years;
+    if (normalized.equals("recent") || normalized.equals("recently")) {
+      years = 5;
+    } else {
+      years =
+          switch (relative.group(1) == null ? "one" : relative.group(1)) {
+            case "a", "an", "one" -> 1;
+            case "two" -> 2;
+            case "three" -> 3;
+            case "four" -> 4;
+            case "five" -> 5;
+            case "six" -> 6;
+            case "seven" -> 7;
+            case "eight" -> 8;
+            case "nine" -> 9;
+            case "ten" -> 10;
+            default -> {
+              try {
+                yield Integer.parseInt(relative.group(1));
+              } catch (NumberFormatException exception) {
+                throw new InvalidRequestException(
+                    "Please give a whole number of years within the available calendar range.");
+              }
+            }
+          };
+    }
+    int currentYear = Year.now(clock).getValue();
+    if (years < 1 || years >= currentYear) {
+      throw new InvalidRequestException(
+          "Please give a positive number of years within the available calendar range.");
+    }
+    return new RangeBounds(currentYear - years, currentYear);
+  }
+
   private RangeBounds boundedYearRange(Integer lower, Integer upper) {
     if ((lower != null && (lower < 1 || lower > 9999))
         || (upper != null && (upper < 1 || upper > 9999))) {
@@ -344,7 +348,7 @@ public class ExactFilterPolicy {
     boolean relative = ConversationText.isYearRefinement(expression);
     boolean answeringYear =
         session != null
-            && session.getPendingQuestion() == ConversationDecision.RECENCY_YEAR_CLARIFICATION;
+            && session.getPendingDecision() == ConversationDecision.RECENCY_YEAR_CLARIFICATION;
     if (!relative && !answeringYear) {
       return;
     }
@@ -358,33 +362,46 @@ public class ExactFilterPolicy {
                 .filter(year -> year != null && year > 0 && year <= 9999)
                 .toList();
     if (older) {
-      if (years.isEmpty()) {
-        awaitRefinement(request, session, ConversationDecision.RECENCY_YEAR_CLARIFICATION);
-        return;
-      }
-      int upper = years.stream().mapToInt(Integer::intValue).sum() / years.size() - 1;
-      if (upper < 1) {
-        request.setDecision(ConversationDecision.RECENCY_EXHAUSTED);
-        request.setSearchClarificationRequired(true);
-        return;
-      }
-      var old =
-          yearBounds(
-              previous != null && previous.getMustInclude() != null
-                  ? previous.getMustInclude().getPublicationYear()
-                  : null);
-      Integer lower = old.minimum();
-      boolean conflict = lower != null && lower > upper;
-      String bounded =
-          conflict || lower == null
-              ? "before " + (upper + 1)
-              : "between " + lower + " and " + upper;
-      setYear(request, bounded);
-      if (conflict) {
-        awaitRefinement(request, session, ConversationDecision.RECENCY_RANGE_CONFIRMATION);
-      }
+      resolveOlderRefinement(request, session, previous, years);
+    } else {
+      resolveNewerRefinement(request, session, previous, years, relative);
+    }
+  }
+
+  private void resolveOlderRefinement(
+      ConversationDraft request, Session session, ConversationDraft previous, List<Integer> years) {
+    if (years.isEmpty()) {
+      awaitRefinement(request, session, ConversationDecision.RECENCY_YEAR_CLARIFICATION);
       return;
     }
+    int upper = years.stream().mapToInt(Integer::intValue).sum() / years.size() - 1;
+    if (upper < 1) {
+      request.setDecision(ConversationDecision.RECENCY_EXHAUSTED);
+      request.setSearchClarificationRequired(true);
+      return;
+    }
+    var old =
+        yearBounds(
+            previous != null && previous.getMustInclude() != null
+                ? previous.getMustInclude().getPublicationYear()
+                : null);
+    Integer lower = old.minimum();
+    boolean conflict = lower != null && lower > upper;
+    String bounded =
+        conflict || lower == null ? "before " + (upper + 1) : "between " + lower + " and " + upper;
+    setYear(request, bounded);
+    if (conflict) {
+      awaitRefinement(request, session, ConversationDecision.RECENCY_RANGE_CONFIRMATION);
+    }
+  }
+
+  private void resolveNewerRefinement(
+      ConversationDraft request,
+      Session session,
+      ConversationDraft previous,
+      List<Integer> years,
+      boolean relative) {
+    String expression = request.getMustInclude().getPublicationYear();
     Integer lower =
         relative
             ? (years.isEmpty()
@@ -449,8 +466,8 @@ public class ExactFilterPolicy {
         || request.getIntent() != Intent.REFINE
         || request.getMustInclude() == null
         || request.getMustInclude().getDuration() == null
-        || (session.getPendingQuestion() != ConversationDecision.SHORTER_DURATION_CLARIFICATION
-            && session.getPendingQuestion() != ConversationDecision.LONGER_DURATION_CLARIFICATION)
+        || (session.getPendingDecision() != ConversationDecision.SHORTER_DURATION_CLARIFICATION
+            && session.getPendingDecision() != ConversationDecision.LONGER_DURATION_CLARIFICATION)
         || session.getPendingRefinementRequest() == null) {
       return;
     }

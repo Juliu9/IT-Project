@@ -7,7 +7,6 @@ import static com.gen3.recommenderagent.domain.conversation.ConversationRules.de
 import com.gen3.recommenderagent.domain.Intent;
 import com.gen3.recommenderagent.domain.session.ConversationDecision;
 import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.ConversationTurn;
 import com.gen3.recommenderagent.domain.session.Session;
 import java.util.List;
 
@@ -43,16 +42,6 @@ public final class ReplayConversationHandler implements ConversationHandler {
     ConversationDraft previous =
         session.getLastRequest() == null ? null : session.getLastRequest().toDraft();
     ConversationDecision decision = session.getLastDecision();
-    if (previous == null && session.getRequests() != null) {
-      // Sessions saved before replay snapshots can still repeat their latest retained request.
-      previous =
-          session.getRequests().stream()
-              .filter(java.util.Objects::nonNull)
-              .reduce((first, second) -> second)
-              .map(ConversationTurn::toDraft)
-              .orElse(null);
-      decision = null;
-    }
     if (previous == null) {
       incoming.setRecommendations(List.of());
       incoming.setDecision(ConversationDecision.NOTHING_TO_REPEAT);

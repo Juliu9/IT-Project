@@ -87,7 +87,7 @@ class SimilarBookFlowTest {
   @org.junit.jupiter.params.provider.EnumSource(
       value = Intent.class,
       names = {"CHANGE_COUNT", "RESET_PREFERENCES"})
-  void pendingReferenceUsesTheCurrentCountAfterHelpAndReload(Intent action) throws Exception {
+  void settingsAbandonPendingReferenceAcrossHelpAndReload(Intent action) throws Exception {
     ambiguousReference();
     var change = request(Intent.CHANGE_COUNT, null);
     change.setBookCount(2);
@@ -102,8 +102,9 @@ class SimilarBookFlowTest {
             mapper.writeValueAsString(sessions.getSession("session", "user")),
             com.gen3.recommenderagent.domain.session.Session.class));
     var result = service.process("session", "user", parsedReply("1"));
-    assertThat(result.getBookCount()).isEqualTo(action == Intent.CHANGE_COUNT ? 2 : 5);
-    assertThat(result.getSimilarBook().bookId()).isEqualTo("hunger");
+    assertThat(result.getIntent()).isEqualTo(Intent.UNKNOWN);
+    assertThat(result.getSimilarBook()).isNull();
+    assertThat(sessions.getSession("session", "user").getPendingQuestion()).isNull();
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -113,8 +114,8 @@ class SimilarBookFlowTest {
     "RESET_PREFERENCES,true",
     "UPDATE_PREFERENCES,true"
   })
-  void referenceSelectionReappliesCurrentPreferencesAndKeepsExplicitConstraints(
-      Intent action, boolean explicitAuthor) throws Exception {
+  void preferenceChangesDiscardTheUnfinishedReferenceSearch(Intent action, boolean explicitAuthor)
+      throws Exception {
     service.process("session", "user", request(Intent.HELP, null));
     var old = new com.gen3.recommenderagent.domain.session.SessionPreferences();
     var oldFilter = new ExactCriteria();
@@ -161,21 +162,11 @@ class SimilarBookFlowTest {
             mapper.writeValueAsString(sessions.getSession("session", "user")),
             com.gen3.recommenderagent.domain.session.Session.class));
     var result = service.process("session", "user", parsedReply("1"));
-    assertThat(result.getMustInclude().getDuration()).isEqualTo("under 5 hours");
-    assertThat(result.getMustInclude().getAuthors())
-        .isEqualTo(
-            explicitAuthor
-                ? List.of("Explicit Writer")
-                : action == Intent.UPDATE_PREFERENCES ? List.of("New Writer") : null);
-    assertThat(result.getMustInclude().getLanguage())
-        .isEqualTo(action == Intent.UPDATE_PREFERENCES ? "French" : null);
-    assertThat(result.getSearchCriteria().getMustInclude().getAuthors())
-        .isEqualTo(explicitAuthor ? List.of("Explicit Writer") : null);
-    if (action == Intent.RESET_PREFERENCES) {
-      assertThat(result.getPositiveSemanticQuery()).isNull();
-    } else {
-      assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("horror");
-    }
+    assertThat(result.getIntent()).isEqualTo(Intent.UNKNOWN);
+    assertThat(result.getSimilarBook()).isNull();
+    assertThat(sessions.getSession("session", "user").getPendingQuestion()).isNull();
+    assertThat(sessions.getSession("session", "user").getPreferences() == null)
+        .isEqualTo(action == Intent.RESET_PREFERENCES);
   }
 
   @Test
@@ -214,7 +205,7 @@ class SimilarBookFlowTest {
     when(titles.findBooksByTitle(anyString(), any(), anyInt()))
         .thenReturn(
             List.of(new AudiobookTitle("hunger", "Another Book", List.of("Another Author"))));
-    var named = request(Intent.UNKNOWN, null);
+    var named = request(Intent.RECOMMENDATION, "Another Book");
     named.setRawText("Another Book");
     named.setExplicitSearch(false);
     var resumed = service.process("session", "user", named);
@@ -471,7 +462,7 @@ class SimilarBookFlowTest {
     }
     when(titles.findBooksByTitle(anyString(), any(), anyInt()))
         .thenReturn(List.of(new AudiobookTitle("other", "Another Title", List.of("Writer"))));
-    var reply = request(Intent.UNKNOWN, null);
+    var reply = request(Intent.RECOMMENDATION, "Another Title");
     reply.setRawText("Another Title");
     reply.setExplicitSearch(false);
     var result = service.process("session", "user", reply);

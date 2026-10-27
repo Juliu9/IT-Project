@@ -63,18 +63,123 @@ public class CommandParser {
                 "^(?:remove (.+) from (?:my |the )?(?:session )?preferences|i no longer like (.+))$")
             .matcher(command);
     if (removal.matches()) {
+      return preferenceRemoval(removal);
+    }
+    var negativeSearch = negativeSearch(command);
+    if (negativeSearch != null) {
+      return negativeSearch;
+    }
+    var publicationYearCommand = publicationYearCommand(command);
+    if (publicationYearCommand != null) {
+      return publicationYearCommand;
+    }
+    var longerRefinement = longerRefinement(command);
+    if (longerRefinement != null) {
+      return longerRefinement;
+    }
+    var explanation = explanation(command);
+    if (explanation != null) {
+      return explanation;
+    }
+    var personalisedRecommendation = personalisedRecommendation(command);
+    if (personalisedRecommendation != null) {
+      return personalisedRecommendation;
+    }
+    var recencyRefinement = recencyRefinement(command);
+    if (recencyRefinement != null) {
+      return recencyRefinement;
+    }
+    var searchFieldRemoval = searchFieldRemoval(command);
+    if (searchFieldRemoval != null) {
+      return searchFieldRemoval;
+    }
+    if (isContextualReply(rawText)) {
       var parsed = new ParsedRequest();
-      parsed.setIntent(Intent.UPDATE_PREFERENCES);
-      String term =
-          (removal.group(1) == null ? removal.group(2) : removal.group(1))
-              .replaceFirst("^(?:the )?(?:author|narrator|genre|topic|keyword) ", "");
-      if (term.contains(" and ")) {
-        return null;
-      }
-      parsed.setPreferenceRemovalTerms(java.util.List.of(term));
-      parsed.setPositivePreferenceRemovalOnly(removal.group(2) != null);
+      parsed.setIntent(Intent.UNKNOWN);
       return parsed;
     }
+    var changedCount = changedCount(command);
+    if (changedCount != null) {
+      return changedCount;
+    }
+    var shorterRefinement = shorterRefinement(command);
+    if (shorterRefinement != null) {
+      return shorterRefinement;
+    }
+    var countedMore = countedMore(command);
+    if (countedMore != null) {
+      return countedMore;
+    }
+    Intent intent = keywordIntent(command);
+    if (intent == null) {
+      return null;
+    }
+    var parsed = new ParsedRequest();
+    parsed.setIntent(intent);
+    return parsed;
+  }
+
+  private ParsedRequest longerRefinement(String command) {
+    if (java.util.Set.of(
+            "make them longer",
+            "make it longer",
+            "longer ones",
+            "longer books",
+            "longer audiobooks")
+        .contains(command)) {
+      var parsed = new ParsedRequest();
+      parsed.setIntent(Intent.REFINE);
+      parsed.setLonger(true);
+      parsed.setExplicitSearch(true);
+      return parsed;
+    }
+    return null;
+  }
+
+  private ParsedRequest personalisedRecommendation(String command) {
+    if (java.util.Set.of(
+            "give me some books",
+            "give me some audiobooks",
+            "recommend some books",
+            "recommend some audiobooks")
+        .contains(command)) {
+      var parsed = new ParsedRequest();
+      parsed.setIntent(Intent.RECOMMENDATION);
+      parsed.setPersonalised(true);
+      parsed.setExplicitSearch(true);
+      return parsed;
+    }
+    return null;
+  }
+
+  private ParsedRequest recencyRefinement(String command) {
+    if (ConversationText.isRecencyRefinement(command)) {
+      var parsed = new ParsedRequest();
+      parsed.setIntent(Intent.REFINE);
+      parsed.setExplicitSearch(true);
+      var criteria = new ExactCriteria();
+      criteria.setPublicationYear("more recent");
+      parsed.setMustInclude(criteria);
+      return parsed;
+    }
+    return null;
+  }
+
+  private ParsedRequest preferenceRemoval(java.util.regex.Matcher removal) {
+    var parsed = new ParsedRequest();
+    parsed.setIntent(Intent.UPDATE_PREFERENCES);
+    String term =
+        (removal.group(1) == null ? removal.group(2) : removal.group(1))
+            .replaceFirst("^(?:the )?(?:author|narrator|genre|topic|keyword) ", "");
+    if (term.contains(" and ")) {
+      return null;
+    }
+    parsed.setPreferenceRemovalTerms(java.util.List.of(term));
+    parsed.setPositivePreferenceRemovalOnly(removal.group(2) != null);
+    return parsed;
+  }
+
+  private ParsedRequest negativeSearch(String command) {
     var negative =
         Pattern.compile("^(?:the same but )?less (violent|dark|scary|romantic)$").matcher(command);
     var without =
@@ -94,6 +199,10 @@ public class CommandParser {
       parsed.setExplicitSearch(true);
       return parsed;
     }
+    return null;
+  }
+
+  private ParsedRequest publicationYearCommand(String command) {
     var approximateYear = APPROXIMATE_YEAR_REQUEST.matcher(command);
     if (approximateYear.matches()) {
       var parsed = new ParsedRequest();
@@ -113,44 +222,10 @@ public class CommandParser {
       parsed.setMustInclude(criteria);
       return parsed;
     }
-    if (java.util.Set.of(
-            "make them longer",
-            "make it longer",
-            "longer ones",
-            "longer books",
-            "longer audiobooks")
-        .contains(command)) {
-      var parsed = new ParsedRequest();
-      parsed.setIntent(Intent.REFINE);
-      parsed.setLonger(true);
-      parsed.setExplicitSearch(true);
-      return parsed;
-    }
-    var explanation = explanation(command);
-    if (explanation != null) {
-      return explanation;
-    }
-    if (java.util.Set.of(
-            "give me some books",
-            "give me some audiobooks",
-            "recommend some books",
-            "recommend some audiobooks")
-        .contains(command)) {
-      var parsed = new ParsedRequest();
-      parsed.setIntent(Intent.RECOMMENDATION);
-      parsed.setPersonalised(true);
-      parsed.setExplicitSearch(true);
-      return parsed;
-    }
-    if (ConversationText.isRecencyRefinement(command)) {
-      var parsed = new ParsedRequest();
-      parsed.setIntent(Intent.REFINE);
-      parsed.setExplicitSearch(true);
-      var criteria = new ExactCriteria();
-      criteria.setPublicationYear("more recent");
-      parsed.setMustInclude(criteria);
-      return parsed;
-    }
+    return null;
+  }
+
+  private ParsedRequest searchFieldRemoval(String command) {
     String cleared =
         switch (command) {
           case "any author",
@@ -171,18 +246,21 @@ public class CommandParser {
       parsed.setReplaceSearchFields(java.util.List.of(cleared));
       return parsed;
     }
-    if (ConversationText.replacementReferenceTitle(rawText) != null
+    return null;
+  }
+
+  private boolean isContextualReply(String rawText) {
+    return ConversationText.replacementReferenceTitle(rawText) != null
         || ConversationText.relativeSelectionReply(rawText, 2) != null
         || ConversationText.isChoiceRejection(rawText)
         || ConversationText.isWholePageReply(rawText)
         || ConversationText.isAffirmativeReply(rawText)
         || selectionReply(rawText.strip()) != null
         || com.gen3.recommenderagent.domain.conversation.ConversationText.isPreferenceDecline(
-            rawText)) {
-      var parsed = new ParsedRequest();
-      parsed.setIntent(Intent.UNKNOWN);
-      return parsed;
-    }
+            rawText);
+  }
+
+  private ParsedRequest changedCount(String command) {
     var changedCount = CHANGE_COUNT.matcher(command);
     if (changedCount.matches()) {
       var parsed = new ParsedRequest();
@@ -192,16 +270,10 @@ public class CommandParser {
               changedCount.group(1) == null ? changedCount.group(2) : changedCount.group(1)));
       return parsed;
     }
-    if (command.startsWith("explain ")) {
-      Integer rank =
-          selectionReply(command.substring(8).replaceFirst(" (?:more|in more detail)$", ""));
-      if (rank != null) {
-        var parsed = new ParsedRequest();
-        parsed.setIntent(Intent.EXPLAIN_RECOMMENDATION);
-        parsed.setReferenceRank(BigInteger.valueOf(rank));
-        return parsed;
-      }
-    }
+    return null;
+  }
+
+  private ParsedRequest shorterRefinement(String command) {
     if (java.util.Set.of(
             "make them shorter",
             "make it shorter",
@@ -218,6 +290,10 @@ public class CommandParser {
       parsed.setExplicitSearch(true);
       return parsed;
     }
+    return null;
+  }
+
+  private ParsedRequest countedMore(String command) {
     var countedMore = COUNTED_MORE.matcher(command);
     if (countedMore.matches()) {
       var parsed = new ParsedRequest();
@@ -226,95 +302,92 @@ public class CommandParser {
       parsed.setBookCount(count == null ? BigInteger.ONE : countValue(count));
       return parsed;
     }
-    Intent intent =
-        switch (command) {
-          case "help",
-              "show help",
-              "what can you do",
-              "which operations do you support",
-              "what operations do you support",
-              "what else can you do",
-              "what do you do",
-              "how do i use this",
-              "how does this work",
-              "what can i ask" ->
-              Intent.HELP;
-          case "more",
-              "some more",
-              "more recommendations",
-              "more books",
-              "more audiobooks",
-              "show me more",
-              "give me more",
-              "can i have more",
-              "can i have some more",
-              "could i have more",
-              "could i have some more",
-              "next",
-              "next batch",
-              "next page" ->
-              Intent.MORE_RESULTS;
-          case "repeat",
-              "repeat that",
-              "say that again",
-              "say it again",
-              "repeat yourself",
-              "repeat your last response",
-              "repeat the last response",
-              "repeat your last answer" ->
-              Intent.REPEAT;
-          case "repeat the books",
-              "repeat the recommendations",
-              "repeat recommendations",
-              "repeat the audiobooks",
-              "repeat those books",
-              "repeat those recommendations",
-              "show those recommendations again",
-              "show me the recommendations again",
-              "show those books again",
-              "show me the same books again",
-              "show me the same audiobook list you gave me earlier" ->
-              Intent.REPEAT_RECOMMENDATIONS;
-          case "explain",
-              "explain the recommendations",
-              "explain these recommendations",
-              "why these books",
-              "why these recommendations",
-              "why those recommendations",
-              "why did i get these recommendations",
-              "why did i get these books",
-              "why did you recommend these books",
-              "why did you recommend these audiobooks",
-              "why did you recommend these",
-              "why were these recommended",
-              "why were these audiobooks recommended",
-              "explain all the recommendations",
-              "explain these books",
-              "why were these books recommended" ->
-              Intent.EXPLAIN_RECOMMENDATION;
-          case "reset",
-              "reset preferences",
-              "reset my preferences",
-              "reset session preferences",
-              "clear preferences",
-              "clear my preferences",
-              "reset my tastes",
-              "reset preferences and count" ->
-              Intent.RESET_PREFERENCES;
-          case "clear",
-              "clear history",
-              "clear my history",
-              "clear recommendation history",
-              "clear my recommendation history" ->
-              Intent.CLEAR_HISTORY;
-          default -> null;
-        };
-    if (intent == null) {
-      return null;
-    }
-    var parsed = new ParsedRequest();
-    parsed.setIntent(intent);
-    return parsed;
+    return null;
+  }
+
+  private Intent keywordIntent(String command) {
+    return switch (command) {
+      case "help",
+          "show help",
+          "what can you do",
+          "which operations do you support",
+          "what operations do you support",
+          "what else can you do",
+          "what do you do",
+          "how do i use this",
+          "how does this work",
+          "what can i ask" ->
+          Intent.HELP;
+      case "more",
+          "some more",
+          "more recommendations",
+          "more books",
+          "more audiobooks",
+          "show me more",
+          "give me more",
+          "can i have more",
+          "can i have some more",
+          "could i have more",
+          "could i have some more",
+          "next",
+          "next batch",
+          "next page" ->
+          Intent.MORE_RESULTS;
+      case "repeat",
+          "repeat that",
+          "say that again",
+          "say it again",
+          "repeat yourself",
+          "repeat your last response",
+          "repeat the last response",
+          "repeat your last answer" ->
+          Intent.REPEAT;
+      case "repeat the books",
+          "repeat the recommendations",
+          "repeat recommendations",
+          "repeat the audiobooks",
+          "repeat those books",
+          "repeat those recommendations",
+          "show those recommendations again",
+          "show me the recommendations again",
+          "show those books again",
+          "show me the same books again",
+          "show me the same audiobook list you gave me earlier" ->
+          Intent.REPEAT_RECOMMENDATIONS;
+      case "explain",
+          "explain the recommendations",
+          "explain these recommendations",
+          "why these books",
+          "why these recommendations",
+          "why those recommendations",
+          "why did i get these recommendations",
+          "why did i get these books",
+          "why did you recommend these books",
+          "why did you recommend these audiobooks",
+          "why did you recommend these",
+          "why were these recommended",
+          "why were these audiobooks recommended",
+          "explain all the recommendations",
+          "explain these books",
+          "why were these books recommended" ->
+          Intent.EXPLAIN_RECOMMENDATION;
+      case "reset",
+          "reset preferences",
+          "reset my preferences",
+          "reset session preferences",
+          "clear preferences",
+          "clear my preferences",
+          "reset my tastes",
+          "reset preferences and count" ->
+          Intent.RESET_PREFERENCES;
+      case "clear",
+          "clear history",
+          "clear my history",
+          "clear recommendation history",
+          "clear my recommendation history" ->
+          Intent.CLEAR_HISTORY;
+      default -> null;
+    };
   }
 
   private ParsedRequest explanation(String command) {

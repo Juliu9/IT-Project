@@ -126,7 +126,7 @@ class ApprovedInputFlowTest {
   }
 
   @Test
-  void pendingRefinementReappliesCurrentPreferencesAndReadsTheLegacyCacheField() {
+  void resetAbandonsPendingRefinementAcrossReload() {
     var old = new SessionPreferences();
     var author = new ExactCriteria();
     author.setAuthors(List.of("Old Writer"));
@@ -148,8 +148,9 @@ class ApprovedInputFlowTest {
                 .replace("pendingRefinementRequest", "pendingRecencyRequest"),
             Session.class);
     var result = process("2000");
-    assertThat(result.getMustInclude().getAuthors()).isNull();
-    assertThat(result.getMustInclude().getDuration()).isEqualTo("under 2 hours");
+    assertThat(session.getPendingQuestion()).isNull();
+    assertThat(result.getIntent()).isEqualTo(Intent.UNKNOWN);
+    assertThat(result.getRecommendations()).isEmpty();
   }
 
   @Test
@@ -169,7 +170,7 @@ class ApprovedInputFlowTest {
   }
 
   @Test
-  void startingYearReplyPreservesTheEntirePendingRefinementThroughSettingsAndReload() {
+  void startingYearReplyPreservesTheEntirePendingRefinementThroughHelpAndReload() {
     year = null;
     search();
     var refine = request(Intent.REFINE, "more recent and under two hours by Suzanne Collins");
@@ -181,14 +182,13 @@ class ApprovedInputFlowTest {
     assertThat(engine.process(session, refine).getDecision())
         .isEqualTo(ConversationDecision.RECENCY_YEAR_CLARIFICATION);
     process("help");
-    process("3 per page");
     reload();
     var result = process("2000");
     assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
     assertThat(result.getMustInclude().getDuration()).isEqualTo("under 2 hours");
     assertThat(result.getMustInclude().getAuthors()).containsExactly("Suzanne Collins");
     assertThat(result.getMustInclude().getPublicationYear()).isEqualTo("from 2000");
-    assertThat(result.getBookCount()).isEqualTo(3);
+    assertThat(result.getBookCount()).isEqualTo(5);
   }
 
   @ParameterizedTest
@@ -342,7 +342,7 @@ class ApprovedInputFlowTest {
   }
 
   @Test
-  void unresolvedSubsetRetainsOtherSelectionsAcrossHelpCountAndReload() {
+  void unresolvedSubsetRetainsOtherSelectionsAcrossHelpAndReload() {
     search();
     var question = selection(List.of("Book", "99"), List.of("Book 5"));
     assertThat(question.getDecision())
@@ -351,8 +351,6 @@ class ApprovedInputFlowTest {
         .contains("identify Book");
     var help = process("help");
     assertThat(responses.generate(help.getRecommendations(), help)).contains("identify Book");
-    var count = process("3 per page");
-    assertThat(responses.generate(count.getRecommendations(), count)).contains("identify Book");
     reload();
     var nextQuestion = process("2");
     assertThat(nextQuestion.getDecision())
@@ -444,7 +442,7 @@ class ApprovedInputFlowTest {
   }
 
   @Test
-  void correctingAnInvalidCountSettingRepeatsTheInterruptedReferenceQuestion() throws Exception {
+  void correctingAnInvalidCountSettingDoesNotRestoreReferenceSelection() throws Exception {
     when(titles.findBooksByTitle(anyString(), any(), anyInt()))
         .thenReturn(
             List.of(
@@ -462,8 +460,10 @@ class ApprovedInputFlowTest {
     var count = process("3");
     assertThat(session.getBookCount()).isEqualTo(3);
     assertThat(responses.generate(count.getRecommendations(), count))
-        .contains("3 recommendations", "Which book");
-    assertThat(process("2").getSimilarBook().bookId()).isEqualTo("b");
+        .contains("3 recommendations")
+        .doesNotContain("Which book");
+    assertThat(process("2").getIntent()).isEqualTo(Intent.UNKNOWN);
+    assertThat(session.getPendingQuestion()).isNull();
   }
 
   private void referenceChoices() throws Exception {
@@ -595,9 +595,8 @@ class ApprovedInputFlowTest {
     org.mockito.Mockito.clearInvocations(workflow);
     process("help");
     process("repeat");
-    process("3 per page");
     reload();
-    assertThat(session.getPendingQuestion()).isEqualTo(ConversationDecision.SEARCH_CHANGE_OFFER);
+    assertThat(session.getPendingDecision()).isEqualTo(ConversationDecision.SEARCH_CHANGE_OFFER);
     var declined = process(reply);
     assertThat(declined.getDecision()).isEqualTo(ConversationDecision.SEARCH_DECLINED);
     assertThat(responses.generate(declined.getRecommendations(), declined))
@@ -652,7 +651,6 @@ class ApprovedInputFlowTest {
       assertThat(responses.generate(help.getRecommendations(), help))
           .contains("Would you like to try a different author, genre, or filter?");
       process("repeat");
-      process("3 per page");
       reload();
     }
     var before = session.getRequests().getLast();
@@ -676,7 +674,7 @@ class ApprovedInputFlowTest {
 
   @ParameterizedTest
   @ValueSource(strings = {"explain", "repeat the recommendations"})
-  void pendingPersonalisationDoesNotHideTheDisplayedPage(String action) {
+  void newPageActionsAbandonPersonalisationButKeepTheDisplayedPage(String action) {
     var displayed = search();
     var personalised = request(Intent.RECOMMENDATION, "personalised for me");
     personalised.setPersonalised(true);
@@ -691,7 +689,7 @@ class ApprovedInputFlowTest {
       assertThat(chosen.getRecommendations())
           .extracting(Recommendation::getRank)
           .containsExactly(2);
-      assertThat(session.isAwaitingPersonalisedPreferences()).isTrue();
+      assertThat(session.isAwaitingPersonalisedPreferences()).isFalse();
     }
     var result = process(action);
     assertThat(result.getRecommendations())
@@ -699,14 +697,14 @@ class ApprovedInputFlowTest {
         .containsExactlyElementsOf(
             displayed.getRecommendations().stream().map(Recommendation::getBookId).toList());
     assertThat(responses.generate(result.getRecommendations(), result))
-        .endsWith("To continue your personalised request, what genres do you like?");
-    assertThat(session.isAwaitingPersonalisedPreferences()).isTrue();
+        .doesNotContain("To continue your personalised request");
+    assertThat(session.isAwaitingPersonalisedPreferences()).isFalse();
     var answer = request(Intent.RECOMMENDATION, "horror");
     var query = new SemanticQuery();
     query.setGenres(List.of("horror"));
     answer.setPositiveSemanticQuery(query);
     var resumed = engine.process(session, answer);
-    assertThat(resumed.isPersonalised()).isTrue();
+    assertThat(resumed.isPersonalised()).isFalse();
     assertThat(resumed.getPositiveSemanticQuery().getGenres()).containsExactly("horror");
     assertThat(session.isAwaitingPersonalisedPreferences()).isFalse();
   }

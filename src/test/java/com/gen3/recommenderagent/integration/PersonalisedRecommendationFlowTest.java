@@ -389,7 +389,11 @@ class PersonalisedRecommendationFlowTest {
     session.getPreferences().setPositiveSemanticQuery(earlier);
     ConversationDraft pending = personalisedRequest();
     pending.setPreferenceClarificationRequired(true);
-    session.getRequests().add(ConversationTurn.fromDraft(pending));
+    session.setPendingDecision(
+        com.gen3.recommenderagent.domain.session.ConversationDecision.PREFERENCE_CLARIFICATION);
+    ((com.gen3.recommenderagent.domain.session.PendingQuestion.Preference)
+            session.getPendingQuestion())
+        .setRequest(ConversationTurn.fromDraft(pending));
     sessions.updateSession(session);
     ConversationDraft answer = new ConversationDraft();
     answer.setIntent(Intent.REFINE);

@@ -205,14 +205,13 @@ package "recommenderagent" as recommenderagent {
         + List<String> authors()
       }
       class "Session" as C50 {
-        - PendingSimilarBook pendingSimilarBook
+        - PendingQuestion pendingQuestion
         - String sessionId
         - String userId
         - Instant createdAt
         - Instant updatedAt
         - Instant expiresAt
         - long version
-        - boolean awaitingPreferenceUpdate
         - Integer bookCount
         - List<String> shownBooks
         - List<ConversationTurn> requests
@@ -223,7 +222,6 @@ package "recommenderagent" as recommenderagent {
         + PendingSimilarBook getPendingSimilarBook()
         + void setPendingSimilarBook(PendingSimilarBook)
         + boolean isAwaitingPreferenceUpdate()
-        + void setAwaitingPreferenceUpdate(boolean)
         + ConversationTurn getLastRequest()
         + void setLastRequest(ConversationTurn)
         + ConversationDecision getLastDecision()
@@ -253,6 +251,21 @@ package "recommenderagent" as recommenderagent {
         + void setPendingRecommendations(List<Recommendation>)
         + void addRecommendationIds(List<String>)
         + void clearHistory()
+      }
+      abstract class "PendingQuestion" as PendingQuestion {
+        - ConversationDecision decision
+      }
+      abstract class "PendingQuestion.SearchRequest" as QuestionSearchRequest {
+        - ConversationTurn request
+      }
+      class "PendingQuestion.Search" as SearchQuestion
+      class "PendingQuestion.Preference" as PreferenceQuestion
+      class "PendingQuestion.SimilarBook" as SimilarBookQuestion
+      class "PendingQuestion.Count" as CountQuestion {
+        - SessionRequest request
+      }
+      class "PendingQuestion.Explanation" as ExplanationQuestion {
+        - ExplanationSelection selection
       }
       class "PendingSimilarBook" as C54 {
         - ConversationTurn request
@@ -1239,6 +1252,14 @@ C39 <|.. C97
 package "catalogue" as catalogue <<external>> {
 }
 recommenderagent ..> catalogue : uses
+
+C50 *-- PendingQuestion : active question
+PendingQuestion <|-- QuestionSearchRequest
+QuestionSearchRequest <|-- SearchQuestion
+QuestionSearchRequest <|-- PreferenceQuestion
+QuestionSearchRequest <|-- SimilarBookQuestion
+PendingQuestion <|-- CountQuestion
+PendingQuestion <|-- ExplanationQuestion
 
 ' Sources: README.md and docs/architecture.md
 note right of recommenderagent

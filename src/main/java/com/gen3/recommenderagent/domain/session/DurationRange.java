@@ -23,6 +23,12 @@ public record DurationRange(Integer minimum, Integer maximum) {
 
   public static String normalize(String text) {
     String value = text.strip().toLowerCase(Locale.ROOT).replaceAll("(?U)\\s+", " ");
+    value = normalizeNumberWords(value);
+    value = normalizeQuantities(value);
+    return normalizeFractions(value);
+  }
+
+  private static String normalizeNumberWords(String value) {
     var words =
         java.util.List.of(
             "zero",
@@ -65,6 +71,10 @@ public record DurationRange(Integer minimum, Integer maximum) {
     for (int number = 0; number < words.size(); number++) {
       value = value.replaceAll("\\b" + words.get(number) + "\\b", Integer.toString(number));
     }
+    return value;
+  }
+
+  private static String normalizeQuantities(String value) {
     value = value.replaceAll("\\b(?:a|an) (hundred|thousand)\\b", "1 $1");
     value =
         Pattern.compile("([0-9]+) hundred(?: (?:and )?([0-9]+))?\\b")
@@ -92,6 +102,10 @@ public record DurationRange(Integer minimum, Integer maximum) {
                         .toPlainString());
     value = value.replaceAll("\\b(?:a )?couple of (hours?|minutes?)\\b", "2 $1");
     value = value.replaceAll("\\b([0-9]+) (hours?|hrs?|h) ([0-9]+)$", "$1 $2 $3 minutes");
+    return value;
+  }
+
+  private static String normalizeFractions(String value) {
     value =
         Pattern.compile("([0-9]+) and (?:a )?(half|quarter)\\b")
             .matcher(value)

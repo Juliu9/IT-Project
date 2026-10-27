@@ -38,7 +38,7 @@ class ResponseGeneratorTest {
   @org.junit.jupiter.params.provider.EnumSource(
       value = Intent.class,
       names = {"RECOMMENDATION", "EXPLAIN_RECOMMENDATION", "REPEAT_RECOMMENDATIONS"})
-  void finalBudgetKeepsAllBooksAndThePreferenceReminderWithoutChangingMetadata(Intent intent) {
+  void finalBudgetKeepsAllBooksWithoutRestoringAbandonedPreferenceReminders(Intent intent) {
     var request = new ConversationDraft();
     request.setIntent(intent);
     if (intent != Intent.RECOMMENDATION) {
@@ -68,7 +68,7 @@ class ResponseGeneratorTest {
       assertTrue(result.contains("Number " + rank + ", Title " + rank));
     }
     if (intent != Intent.RECOMMENDATION) {
-      assertTrue(result.endsWith("what genres do you like?"));
+      assertFalse(result.contains("To continue your personalised request"));
     }
     assertEquals(originalTitle, books.getFirst().getTitle());
   }

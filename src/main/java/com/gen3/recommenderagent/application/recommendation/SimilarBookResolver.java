@@ -72,46 +72,50 @@ public class SimilarBookResolver {
     }
     try {
       var matches = titles.findBooksByTitle(title, request.getSimilarToAuthor(), MAX_CHOICES + 1);
-      boolean truncated = matches.size() > MAX_CHOICES;
-      String author = PersonNameNormalizer.comparisonKey(request.getSimilarToAuthor());
-      if (!author.isBlank()) {
-        matches =
-            matches.stream()
-                .filter(
-                    book ->
-                        book.authors().stream()
-                            .anyMatch(
-                                value -> PersonNameNormalizer.comparisonKey(value).equals(author)))
-                .toList();
-      }
-      var exact =
+      resolveTitleMatches(session, request, title, matches);
+    } catch (IOException exception) {
+      throw new CandidateRetrievalException("catalogue title lookup", exception);
+    }
+  }
+
+  private void resolveTitleMatches(
+      Session session, ConversationDraft request, String title, List<AudiobookTitle> matches) {
+    boolean truncated = matches.size() > MAX_CHOICES;
+    String author = PersonNameNormalizer.comparisonKey(request.getSimilarToAuthor());
+    if (!author.isBlank()) {
+      matches =
           matches.stream()
               .filter(
                   book ->
-                      AudiobookTitle.normalize(book.title())
-                          .equals(AudiobookTitle.normalize(title)))
+                      book.authors().stream()
+                          .anyMatch(
+                              value -> PersonNameNormalizer.comparisonKey(value).equals(author)))
               .toList();
-      if (!truncated && exact.size() == 1) {
-        loadVector(session, request, exact.getFirst());
-        if (request.getDecision() == ConversationDecision.SIMILAR_BOOK_UNAVAILABLE) {
-          request.setSearchClarificationRequired(true);
-        } else {
-          session.setPendingSimilarBook(null);
-        }
-      } else if (matches.isEmpty()) {
-        clarify(session, request, ConversationDecision.SIMILAR_BOOK_NOT_FOUND, List.of());
+    }
+    var exact =
+        matches.stream()
+            .filter(
+                book ->
+                    AudiobookTitle.normalize(book.title()).equals(AudiobookTitle.normalize(title)))
+            .toList();
+    if (!truncated && exact.size() == 1) {
+      loadVector(session, request, exact.getFirst());
+      if (request.getDecision() == ConversationDecision.SIMILAR_BOOK_UNAVAILABLE) {
+        request.setSearchClarificationRequired(true);
       } else {
-        clarify(
-            session,
-            request,
-            ConversationDecision.SIMILAR_BOOK_SELECTION,
-            java.util.stream.Stream.concat(exact.stream(), matches.stream())
-                .distinct()
-                .limit(MAX_CHOICES)
-                .toList());
+        session.setPendingSimilarBook(null);
       }
-    } catch (IOException exception) {
-      throw new CandidateRetrievalException("catalogue title lookup", exception);
+    } else if (matches.isEmpty()) {
+      clarify(session, request, ConversationDecision.SIMILAR_BOOK_NOT_FOUND, List.of());
+    } else {
+      clarify(
+          session,
+          request,
+          ConversationDecision.SIMILAR_BOOK_SELECTION,
+          java.util.stream.Stream.concat(exact.stream(), matches.stream())
+              .distinct()
+              .limit(MAX_CHOICES)
+              .toList());
     }
   }
 

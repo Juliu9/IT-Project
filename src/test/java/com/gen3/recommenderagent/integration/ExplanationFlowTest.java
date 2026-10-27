@@ -153,7 +153,7 @@ class ExplanationFlowTest {
     assertThat(result.getRecommendations()).hasSize(5);
     assertThat(result.getReferenceRank()).isNull();
     assertThat(result.getReferenceTitle()).isNull();
-    assertThat(sessions.getSession("session", "user").getPendingQuestion()).isNull();
+    assertThat(sessions.getSession("session", "user").getPendingDecision()).isNull();
     verifyNoInteractions(workflow);
   }
 
@@ -187,7 +187,7 @@ class ExplanationFlowTest {
     var result = service.process("session", "user", parser.parse(reply));
     assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
     assertThat(result.getRecommendations()).extracting(Recommendation::getRank).containsExactly(2);
-    assertThat(sessions.getSession("session", "user").getPendingQuestion()).isNull();
+    assertThat(sessions.getSession("session", "user").getPendingDecision()).isNull();
     verifyNoInteractions(client);
     verify(workflow).recommend(any(), any());
   }
@@ -196,7 +196,7 @@ class ExplanationFlowTest {
   @org.junit.jupiter.params.provider.EnumSource(
       value = Intent.class,
       names = {"CHANGE_COUNT", "UPDATE_PREFERENCES", "RESET_PREFERENCES"})
-  void settingsChangesPreservePendingBookSelection(Intent action) {
+  void settingsChangesAbandonPendingBookSelection(Intent action) {
     search();
     explain(6, null);
     var request = new ConversationDraft();
@@ -215,9 +215,9 @@ class ExplanationFlowTest {
     var selection = new ConversationDraft();
     selection.setIntent(Intent.UNKNOWN);
     selection.setRawText("2");
-    assertThat(service.process("session", "user", selection).getRecommendations())
-        .extracting(Recommendation::getRank)
-        .containsExactly(2);
+    var result = service.process("session", "user", selection);
+    assertThat(result.getIntent()).isEqualTo(Intent.UNKNOWN);
+    assertThat(result.getRecommendations()).isEmpty();
   }
 
   @ParameterizedTest
@@ -243,7 +243,7 @@ class ExplanationFlowTest {
       request.setPositiveSemanticQuery(query);
     }
     service.process("session", "user", request);
-    assertThat(sessions.getSession("session", "user").getPendingQuestion()).isNull();
+    assertThat(sessions.getSession("session", "user").getPendingDecision()).isNull();
     var selection = new ConversationDraft();
     selection.setIntent(Intent.UNKNOWN);
     selection.setRawText("2");
@@ -672,22 +672,21 @@ class ExplanationFlowTest {
   }
 
   @Test
-  void explanationPreservesPendingPreferenceQuestion() {
+  void explanationAbandonsPendingPreferenceQuestion() {
     search();
     var pending = new ConversationDraft();
     pending.setIntent(Intent.RECOMMENDATION);
     pending.setPreferenceClarificationRequired(true);
-    sessions.getSession("session", "user").getRequests().add(ConversationTurn.fromDraft(pending));
+    var session = sessions.getSession("session", "user");
+    session.setPendingDecision(ConversationDecision.PREFERENCE_CLARIFICATION);
+    ((com.gen3.recommenderagent.domain.session.PendingQuestion.Preference)
+            session.getPendingQuestion())
+        .setRequest(ConversationTurn.fromDraft(pending));
+    sessions.updateSession(session);
     var explain = explain(4, null);
     assertThat(explain.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
     assertThat(explain.getRecommendations()).extracting(Recommendation::getRank).containsExactly(4);
-    assertThat(
-            sessions
-                .getSession("session", "user")
-                .getRequests()
-                .getLast()
-                .isPreferenceClarificationRequired())
-        .isTrue();
+    assertThat(sessions.getSession("session", "user").getPendingQuestion()).isNull();
   }
 
   @Test

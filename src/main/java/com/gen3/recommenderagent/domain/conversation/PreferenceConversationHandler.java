@@ -53,7 +53,6 @@ public final class PreferenceConversationHandler implements ConversationHandler 
   public void finish(Session session, ConversationDraft request, SessionRequest original) {
     boolean clarification =
         request.getDecision() == ConversationDecision.PREFERENCE_UPDATE_CLARIFICATION;
-    session.setAwaitingPreferenceUpdate(clarification);
     if (!clarification) {
       session.setPreferences(request.getPreferenceUpdates().copy());
     }

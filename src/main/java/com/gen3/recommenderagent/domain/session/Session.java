@@ -5,74 +5,105 @@ import static com.gen3.recommenderagent.domain.RecommendationPolicy.MAX_SHOWN_BO
 import static com.gen3.recommenderagent.domain.RecommendationPolicy.RECOMMENDATION_BATCH_SIZE;
 import static com.gen3.recommenderagent.domain.RecommendationPolicy.clampOrDefault;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
 public class Session {
 
-  // Outstanding questions survive HELP and settings changes independently of REPEAT's snapshot.
-  private ConversationDecision pendingQuestion;
+  // Only the active question owns unfinished context; abandoned questions cannot resume.
+  private PendingQuestion pendingQuestion;
 
-  public ConversationDecision getPendingQuestion() {
+  public PendingQuestion getPendingQuestion() {
     return pendingQuestion;
   }
 
-  public void setPendingQuestion(ConversationDecision value) {
+  public void setPendingQuestion(PendingQuestion value) {
     pendingQuestion = value;
   }
 
-  private ConversationDecision suspendedQuestion;
-
-  public ConversationDecision getSuspendedQuestion() {
-    return suspendedQuestion;
+  @JsonIgnore
+  public ConversationDecision getPendingDecision() {
+    return pendingQuestion == null ? null : pendingQuestion.getDecision();
   }
 
-  public void setSuspendedQuestion(ConversationDecision value) {
-    suspendedQuestion = value;
+  public void setPendingDecision(ConversationDecision value) {
+    if (value == null) {
+      pendingQuestion = null;
+    } else if (pendingQuestion == null || !pendingQuestion.accepts(value)) {
+      pendingQuestion = PendingQuestion.create(value);
+    } else {
+      pendingQuestion.setDecision(value);
+    }
   }
 
-  // The proposed refinement must survive HELP, count changes and cache reloads.
-  @com.fasterxml.jackson.annotation.JsonAlias("pendingRecencyRequest")
-  private ConversationTurn pendingRefinementRequest;
-
+  @JsonIgnore
   public ConversationTurn getPendingRefinementRequest() {
-    return pendingRefinementRequest;
+    return pendingQuestion instanceof PendingQuestion.Search question
+        ? question.getRequest()
+        : null;
   }
 
   public void setPendingRefinementRequest(ConversationTurn value) {
-    pendingRefinementRequest = value;
+    if (value != null) {
+      if (!(pendingQuestion instanceof PendingQuestion.Search)) {
+        pendingQuestion = new PendingQuestion.Search();
+      }
+      ((PendingQuestion.Search) pendingQuestion).setRequest(value);
+    } else if (pendingQuestion instanceof PendingQuestion.Search question) {
+      question.setRequest(null);
+    }
   }
 
-  private PendingSimilarBook pendingSimilarBook;
-
+  @JsonIgnore
   public PendingSimilarBook getPendingSimilarBook() {
-    return pendingSimilarBook;
+    return pendingQuestion instanceof PendingQuestion.SimilarBook question
+        ? new PendingSimilarBook(question.getRequest(), question.getDecision())
+        : null;
   }
 
   public void setPendingSimilarBook(PendingSimilarBook value) {
-    pendingSimilarBook = value;
+    if (value != null) {
+      var question = new PendingQuestion.SimilarBook();
+      question.setDecision(value.decision());
+      question.setRequest(value.request());
+      pendingQuestion = question;
+    } else if (pendingQuestion instanceof PendingQuestion.SimilarBook) {
+      pendingQuestion = null;
+    }
   }
 
-  // Count recovery retains incoming instructions; explanation recovery retains unresolved
-  // selectors.
-  private SessionRequest pendingCountRequest;
-  private ExplanationSelection pendingExplanation;
-
+  @JsonIgnore
   public SessionRequest getPendingCountRequest() {
-    return pendingCountRequest;
+    return pendingQuestion instanceof PendingQuestion.Count question ? question.getRequest() : null;
   }
 
   public void setPendingCountRequest(SessionRequest value) {
-    pendingCountRequest = value;
+    if (value != null) {
+      var question = new PendingQuestion.Count();
+      question.setRequest(value);
+      pendingQuestion = question;
+    } else if (pendingQuestion instanceof PendingQuestion.Count question) {
+      question.setRequest(null);
+    }
   }
 
+  @JsonIgnore
   public ExplanationSelection getPendingExplanation() {
-    return pendingExplanation;
+    return pendingQuestion instanceof PendingQuestion.Explanation question
+        ? question.getSelection()
+        : null;
   }
 
   public void setPendingExplanation(ExplanationSelection value) {
-    pendingExplanation = value;
+    if (value != null) {
+      var question = new PendingQuestion.Explanation();
+      question.setSelection(value);
+      pendingQuestion = question;
+    } else if (pendingQuestion instanceof PendingQuestion.Explanation question) {
+      question.setSelection(null);
+    }
   }
 
   private String sessionId;
@@ -82,14 +113,10 @@ public class Session {
   private Instant updatedAt;
   private Instant expiresAt;
   private long version;
-  private boolean awaitingPreferenceUpdate;
 
+  @JsonIgnore
   public boolean isAwaitingPreferenceUpdate() {
-    return awaitingPreferenceUpdate;
-  }
-
-  public void setAwaitingPreferenceUpdate(boolean value) {
-    awaitingPreferenceUpdate = value;
+    return getPendingDecision() == ConversationDecision.PREFERENCE_UPDATE_CLARIFICATION;
   }
 
   private Integer bookCount = MAX_BOOK_COUNT;
@@ -120,9 +147,16 @@ public class Session {
   // effect.
   private List<Recommendation> pendingRecommendations = new ArrayList<>();
 
+  @JsonIgnore
   public boolean isAwaitingPersonalisedPreferences() {
-    return requests != null
-        && requests.stream().anyMatch(ConversationTurn::isPreferenceClarificationRequired);
+    return getPendingDecision() == ConversationDecision.PREFERENCE_CLARIFICATION;
+  }
+
+  @JsonIgnore
+  public ConversationTurn getPendingPreferenceRequest() {
+    return pendingQuestion instanceof PendingQuestion.Preference question
+        ? question.getRequest()
+        : null;
   }
 
   public Session() {}
@@ -196,7 +230,18 @@ public class Session {
   }
 
   public void setRequests(List<ConversationTurn> requests) {
-    this.requests = requests;
+    if (requests == null) {
+      this.requests = new ArrayList<>();
+      return;
+    }
+    this.requests =
+        new ArrayList<>(
+            requests.stream()
+                .filter(
+                    turn ->
+                        !turn.isPreferenceClarificationRequired()
+                            && !turn.isSearchClarificationRequired())
+                .toList());
   }
 
   public SessionPreferences getPreferences() {
@@ -215,14 +260,7 @@ public class Session {
   }
 
   public void clearPreferenceQuestions() {
-    awaitingPreferenceUpdate = false;
-    requests.removeIf(ConversationTurn::isPreferenceClarificationRequired);
-    if (suspendedQuestion == ConversationDecision.PREFERENCE_CLARIFICATION
-        || suspendedQuestion == ConversationDecision.PREFERENCE_UPDATE_CLARIFICATION) {
-      suspendedQuestion = null;
-    }
-    if (pendingQuestion == ConversationDecision.PREFERENCE_CLARIFICATION
-        || pendingQuestion == ConversationDecision.PREFERENCE_UPDATE_CLARIFICATION) {
+    if (pendingQuestion instanceof PendingQuestion.Preference) {
       pendingQuestion = null;
     }
   }
@@ -257,13 +295,7 @@ public class Session {
   }
 
   public void clearHistory() {
-    pendingCountRequest = null;
-    pendingExplanation = null;
-    pendingSimilarBook = null;
-    pendingRefinementRequest = null;
     pendingQuestion = null;
-    suspendedQuestion = null;
-    this.awaitingPreferenceUpdate = false;
     this.lastRequest = null;
     this.lastDecision = null;
     this.pendingRecommendations.clear();

@@ -99,7 +99,7 @@ Pending title clarification is separate from the displayed page; Cancel/Clear hi
 explanation or count question takes priority over older title choices. Title matching shares one
 normaliser for case, punctuation and catalogue `$b` markers across reference and explanation flows.
 Resuming a reference selection restores explicit search criteria and reapplies current preferences;
-preference resets cannot revive inherited filters. Count changes and resets also update pending searches.
+preference resets abandon unfinished searches rather than reviving inherited filters.
 “None of these” asks for another reference title while retaining the search constraints.
 “None of those, try The Hobbit” immediately looks up the replacement title with those constraints. Reference author
 lookup and author replies use the same conservative person-name equivalence as exact filters.
@@ -109,28 +109,31 @@ field remain readable.
 
 ### Outstanding questions
 
-`Session.pendingQuestion` tracks an unanswered question independently of the latest response used
-by REPEAT. HELP preserves it and repeats the question after the help text; REPEAT leaves it alone.
-Count changes preserve book-selection and genre questions, including when a missing count needs its
-own clarification: `Session.suspendedQuestion` restores the original question after the count answer.
+`Session.pendingQuestion` holds one typed question and its unfinished action's context. Question
+subclasses cover search/duration/year clarifications, counts, preferences, explanations and similar-book
+selection. There is no suspended question or automatic resumption stack.
+
+HELP preserves the question and adds a reminder; REPEAT preserves its existing replay behaviour.
+UNKNOWN keeps the question and says “I didn't quite catch that. Just to clarify, …” followed by the
+current question and any choices. Contextual answers such as “horror”, “the second one” or “under three
+hours” resolve the current question before ordinary intent dispatch.
+
+Any other explicit action abandons the previous question and unfinished request. Preference edits,
+count changes, resets, explanations and More cannot later revive old selections. The new action may
+ask its own question. Completed searches, displayed books, saved preferences and cached results remain
+available unless the action explicitly clears them.
+
 Zero, negative and fractional recommendation counts ask for a whole number from one to five before
-retrieval. `Session.pendingCountRequest` retains the original action and criteria across HELP/cache
-reloads. Correcting a search/More count resumes that action with a temporary count; only explicit
-count settings change the saved default. Settings corrections repeat the interrupted question.
-Positive whole counts above five retain the existing cap and notice.
+retrieval. The count question owns the original action and criteria across HELP/cache reloads.
+Correcting a search/More count resumes that action with a temporary count; only explicit count settings
+change the saved default. Counts above five retain the existing cap and notice.
 With no previous search, “2 more” asks for criteria and retains two through HELP/cache reloads.
 “Yes” after a no-match or exhausted-results offer asks what to change without retrieving again;
-the prior explicit criteria remain available until the user supplies changes or starts a new search.
-Preference updates preserve unrelated questions. Both direct semantic updates and answers to an update
-question can supply the missing genres and resume the waiting personalised search.
-New recommendations/refinements replace the pending selection; MORE and REPEAT_RECOMMENDATIONS clear
-selection questions when showing a page. While genres are still required, MORE (including counted
-variants) repeats the genre question without embedding, retrieving, consuming cached books, or
-saving inherited criteria as preferences. EXPLAIN and REPEAT_RECOMMENDATIONS still use the latest
-completed page, including an empty result, and remind users of the pending genre question. They do
-not discard the unfinished personalised search; a later taste reply resumes it. CANCEL/CLEAR_HISTORY clear the question; RESET_PREFERENCES
-clears preference questions while preserving unrelated book selections. Abandoning a genre question
-discards its unfinished search; any earlier completed search and cached batch remain available.
+the previous explicit criteria remain available until the user answers or starts another action.
+
+Redis saves question subclasses with explicit type names. Only the current cache format is supported;
+there is no legacy conversion or history-based recovery. Clear outdated development sessions or use
+a new session ID after changing the cache schema.
 
 `ConversationText` owns courtesy normalization and ordinal parsing, shared by CommandParser and
 ClarificationResolver. The resolver owns session decisions; Session owns preference merging and
@@ -142,9 +145,8 @@ an explanation. Titles and search criteria still use their original text.
 
 “Make them longer” sets a minimum one minute beyond the longest displayed duration. If that
 conflicts with an existing maximum, ask before extending the range. Refusal keeps the old search.
-Missing durations ask for a limit. `Session.pendingRefinementRequest` retains all explicit criteria
-for both duration and year questions; replies reapply current session preferences. Older cached
-`pendingRecencyRequest` values remain readable under this generalized field.
+Missing durations ask for a limit. The active search question retains explicit criteria for duration
+and year replies; replies reapply current session preferences.
 
 "Make them shorter" is a `REFINE` command, not a saved-preference edit. It skips AI, preserves the
 active search's content and other constraints, and uses `shorter=true` without inventing a numeric
@@ -174,8 +176,8 @@ and Help preserve it; preference-update behaviour is specified below. The sessio
 pending recommendations and clarification state, while preserving preferences and result count.
 
 Outstanding clarification questions and search-change offers are saved in session state, independently
-of the latest response. HELP, REPEAT, count changes and cache reloads preserve the outstanding
-question. A new search or cancellation abandons the applicable pending action. After no matches,
+of the latest response. HELP, REPEAT, UNKNOWN and cache reloads preserve the outstanding
+question. Other explicit actions abandon the unfinished action. After no matches,
 no more results or an empty explanation page, "yes" opens a search-change question and "no" declines
 without removing preferences or history, including after those interruptions.
 
@@ -215,12 +217,10 @@ dislike. “Avoid romance” supplies both positive removal and negative additio
 name only the affected fields in `replacePreferenceFields`, for example `positiveSemanticQuery.genres`;
 replacement without a new value clears that field. Other preferences remain unchanged.
 
-An empty update asks what to change and sets `Session.awaitingPreferenceUpdate`. A short taste reply
-completes the update without retrieving books. Explicit search commands (`explicitSearch=true`) start
-normal recommendation work instead; cancel and clear-history end the pending update. Numeric
-answers to a newer book-selection or count question take priority over an older preference question.
+An empty update creates a preference question. A short taste reply completes the update without
+retrieving books. A new explicit action discards that question; there is no older question to restore.
 
-`RESET_PREFERENCES` clears saved session preferences and pending preference questions, and resets
+`RESET_PREFERENCES` clears saved session preferences and the current question, and resets
 the result count to 5. It preserves stored user vectors, shown-book history, the displayed page,
 and the remaining cached batch. MORE uses the reset count; REPEAT_RECOMMENDATIONS retains the old
 page. A cache refill for MORE continues with that search's original criteria and stored-vector
@@ -253,9 +253,8 @@ as “before 2000” replaces the unfinished recency request. Any previous upper
 force for a supplied starting year. If the start exceeds that bound, ask before extending the period:
 “yes” replaces the old period with the proposed range, retaining any explicitly supplied end year;
 “no” keeps the original search, and a different range replaces the
-proposal. The confirmation survives HELP, count changes and cache reloads. Resuming uses the saved
-explicit criteria and reapplies current preferences, so preference updates or resets do not revive
-old inherited filters. Explicit request constraints remain in force.
+proposal. The confirmation survives HELP, REPEAT, UNKNOWN and cache reloads. An answer uses its saved
+explicit criteria; preference updates, resets and count changes abandon the confirmation.
 When the average would not advance the existing lower bound, advance it by one year instead. If
 that exceeds the period's end, return a fixed exhaustion message without consuming the page or queue;
 MORE and REPEAT_RECOMMENDATIONS remain available, while REPEAT repeats the exhaustion message.
@@ -541,8 +540,8 @@ Bare title replies to a pending explanation question match the displayed page ev
 labels them RECOMMENDATION or REFINE. Explicit search commands still start a new search.
 
 The resolved explanation copies saved criteria and selects from the page inside the session update.
-It does not retrieve, embed, rank, consume the pending batch, add shown IDs, replace history, or clear
-pending preference clarification. No search yields a fixed onboarding message; an empty latest page
+It does not retrieve, embed, rank, consume the pending batch, add shown IDs or replace completed search
+history. As an explicit action it abandons any unrelated pending question. No search yields a fixed onboarding message; an empty latest page
 yields a distinct fixed message, even if an older page had results. The session represents committed
 recommendations, not confirmation that a client displayed or spoke them.
 

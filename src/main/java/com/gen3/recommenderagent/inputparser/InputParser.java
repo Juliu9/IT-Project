@@ -72,16 +72,7 @@ public class InputParser {
     String mode = "VALIDATION";
     String outcome = "FAILURE";
     try {
-      if (rawText == null || rawText.isBlank()) {
-        throw new InvalidRequestException("I didn't catch that. What would you like to listen to?");
-      }
-
-      if (rawText.length() > InputParser.MAX_REQUEST_CHARACTERS) {
-        throw new InvalidRequestException(
-            "Please keep your request to "
-                + InputParser.MAX_REQUEST_CHARACTERS
-                + " characters or fewer.");
-      }
+      validateText(rawText);
 
       var countInput = CountInput.check(rawText);
       ParsedRequest parsed = commandParser.parse(rawText);
@@ -93,88 +84,8 @@ public class InputParser {
         parsed = aiParser.parse(countInput.modelText());
       }
 
-      // A number retained as a stated subject is not also a quantity error.
-      if (!countInput.invalid() && CountInput.describesZero(rawText, parsed)) {
-        parsed.setInvalidBookCount(false);
-        if (parsed.getBookCount() != null && parsed.getBookCount().signum() <= 0) {
-          parsed.setBookCount(null);
-        }
-      }
-
-      boolean invalidCount =
-          parsed.getIntent() != com.gen3.recommenderagent.domain.Intent.EXPLAIN_RECOMMENDATION
-              && (countInput.invalid()
-                  || parsed.isInvalidBookCount()
-                  || (parsed.getBookCount() != null && parsed.getBookCount().signum() <= 0));
-      if (invalidCount && countInput.invalid()) {
-        parsed.setIntent(
-            parsed.getIntent() == com.gen3.recommenderagent.domain.Intent.MORE_RESULTS
-                ? com.gen3.recommenderagent.domain.Intent.MORE_RESULTS
-                : CountInput.setting(rawText) || countInput.modelText().equals("1")
-                    ? com.gen3.recommenderagent.domain.Intent.CHANGE_COUNT
-                    : CountInput.more(rawText)
-                        ? com.gen3.recommenderagent.domain.Intent.MORE_RESULTS
-                        : com.gen3.recommenderagent.domain.Intent.RECOMMENDATION);
-      }
-      SessionRequest request = new SessionRequest();
-      request.setIntent(parsed.getIntent());
-      request.setShorter(parsed.isShorter());
-      request.setLonger(parsed.isLonger());
-      request.setExplanationSelection(parsed.getExplanationSelection());
-      request.setPreferenceRemovalTerms(parsed.getPreferenceRemovalTerms());
-      request.setPositivePreferenceRemovalOnly(parsed.isPositivePreferenceRemovalOnly());
-      request.setSimilarToTitle(parsed.getSimilarToTitle());
-      request.setSimilarToAuthor(parsed.getSimilarToAuthor());
-      request.setSimilarToClarificationRequired(parsed.isSimilarToClarificationRequired());
-      request.setPreferenceUpdates(parsed.getPreferenceUpdates());
-      request.setPreferenceRemovals(parsed.getPreferenceRemovals());
-      request.setReplacePreferenceFields(parsed.getReplacePreferenceFields());
-      request.setExplicitSearch(parsed.isExplicitSearch());
-      if (parsed.getIntent() == com.gen3.recommenderagent.domain.Intent.RECOMMENDATION
-          || parsed.getIntent() == com.gen3.recommenderagent.domain.Intent.REFINE) {
-        new com.gen3.recommenderagent.domain.session.SessionPreferences()
-            .updated(null, null, parsed.getReplaceSearchFields());
-        request.setReplaceSearchFields(parsed.getReplaceSearchFields());
-        String command =
-            com.gen3.recommenderagent.domain.conversation.ConversationText.normalizeCommand(
-                rawText);
-        if (command.matches("^(?:also|add|additionally)\\b.*")
-            && !command.matches(".*\\b(?:instead|replace|rather than|switch)\\b.*")) {
-          // Keep field removals while protecting supplied additions from model replacement flags.
-          var search = parsed;
-          request.setReplaceSearchFields(
-              parsed.getReplaceSearchFields().stream()
-                  .filter(path -> !hasSearchValue(search, path))
-                  .toList());
-        }
-      }
-      request.setAddAuthors(parsed.isAddAuthors());
-      request.setAddNarrators(parsed.isAddNarrators());
-      request.setReferenceRank(boundedInteger(parsed.getReferenceRank()));
-      request.setReferenceTitle(parsed.getReferenceTitle());
-      request.setPersonalised(parsed.isPersonalised());
-      request.setPositiveSemanticQuery(parsed.getPositiveSemanticQuery());
-      request.setNegativeSemanticQuery(parsed.getNegativeSemanticQuery());
-      request.setMustInclude(parsed.getMustInclude());
-      request.setMustNotInclude(parsed.getMustNotInclude());
-      String command =
-          com.gen3.recommenderagent.domain.conversation.ConversationText.normalizeCommand(rawText);
-      if (command.matches(
-              "^(?:i want |give me |recommend |show me )?(?:a |an |some |[0-9]+ )?(?:books?|audiobooks?) (?:by|narrated by) .+")
-          && !command.matches(
-              ".*\\b(?:for me|personalised|personalized|my preferences|my reading|my favourites|my favorites|my history|i would like|i'd like)\\b.*")) {
-        request.setPersonalised(false);
-      }
-      ConversationRules.normalizeInput(request);
-      request.setInvalidBookCount(invalidCount);
-      request.setBookCount(
-          invalidCount
-                  || parsed.getIntent()
-                      == com.gen3.recommenderagent.domain.Intent.EXPLAIN_RECOMMENDATION
-              ? null
-              : boundedInteger(parsed.getBookCount()));
-      request.setRequestId(createUuidV7().toString());
-      request.setRawText(rawText);
+      boolean invalidCount = normalizeCount(rawText, countInput, parsed);
+      SessionRequest request = toRequest(rawText, parsed, invalidCount);
 
       outcome = "SUCCESS";
       return request;
@@ -184,6 +95,118 @@ public class InputParser {
           mode,
           outcome,
           TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
+    }
+  }
+
+  private void validateText(String rawText) {
+    if (rawText == null || rawText.isBlank()) {
+      throw new InvalidRequestException("I didn't catch that. What would you like to listen to?");
+    }
+
+    if (rawText.length() > InputParser.MAX_REQUEST_CHARACTERS) {
+      throw new InvalidRequestException(
+          "Please keep your request to "
+              + InputParser.MAX_REQUEST_CHARACTERS
+              + " characters or fewer.");
+    }
+  }
+
+  private boolean normalizeCount(
+      String rawText, CountInput.Check countInput, ParsedRequest parsed) {
+    // A number retained as a stated subject is not also a quantity error.
+    if (!countInput.invalid() && CountInput.describesZero(rawText, parsed)) {
+      parsed.setInvalidBookCount(false);
+      if (parsed.getBookCount() != null && parsed.getBookCount().signum() <= 0) {
+        parsed.setBookCount(null);
+      }
+    }
+
+    boolean invalidCount =
+        parsed.getIntent() != com.gen3.recommenderagent.domain.Intent.EXPLAIN_RECOMMENDATION
+            && (countInput.invalid()
+                || parsed.isInvalidBookCount()
+                || (parsed.getBookCount() != null && parsed.getBookCount().signum() <= 0));
+    if (invalidCount && countInput.invalid()) {
+      parsed.setIntent(
+          parsed.getIntent() == com.gen3.recommenderagent.domain.Intent.MORE_RESULTS
+              ? com.gen3.recommenderagent.domain.Intent.MORE_RESULTS
+              : CountInput.setting(rawText) || countInput.modelText().equals("1")
+                  ? com.gen3.recommenderagent.domain.Intent.CHANGE_COUNT
+                  : CountInput.more(rawText)
+                      ? com.gen3.recommenderagent.domain.Intent.MORE_RESULTS
+                      : com.gen3.recommenderagent.domain.Intent.RECOMMENDATION);
+    }
+    return invalidCount;
+  }
+
+  private SessionRequest toRequest(String rawText, ParsedRequest parsed, boolean invalidCount) {
+    SessionRequest request = new SessionRequest();
+    request.setIntent(parsed.getIntent());
+    request.setShorter(parsed.isShorter());
+    request.setLonger(parsed.isLonger());
+    request.setExplanationSelection(parsed.getExplanationSelection());
+    request.setPreferenceRemovalTerms(parsed.getPreferenceRemovalTerms());
+    request.setPositivePreferenceRemovalOnly(parsed.isPositivePreferenceRemovalOnly());
+    request.setSimilarToTitle(parsed.getSimilarToTitle());
+    request.setSimilarToAuthor(parsed.getSimilarToAuthor());
+    request.setSimilarToClarificationRequired(parsed.isSimilarToClarificationRequired());
+    request.setPreferenceUpdates(parsed.getPreferenceUpdates());
+    request.setPreferenceRemovals(parsed.getPreferenceRemovals());
+    request.setReplacePreferenceFields(parsed.getReplacePreferenceFields());
+    request.setExplicitSearch(parsed.isExplicitSearch());
+    applySearchReplacements(rawText, parsed, request);
+    request.setAddAuthors(parsed.isAddAuthors());
+    request.setAddNarrators(parsed.isAddNarrators());
+    request.setReferenceRank(boundedInteger(parsed.getReferenceRank()));
+    request.setReferenceTitle(parsed.getReferenceTitle());
+    request.setPersonalised(parsed.isPersonalised());
+    request.setPositiveSemanticQuery(parsed.getPositiveSemanticQuery());
+    request.setNegativeSemanticQuery(parsed.getNegativeSemanticQuery());
+    request.setMustInclude(parsed.getMustInclude());
+    request.setMustNotInclude(parsed.getMustNotInclude());
+    applyPersonalisation(rawText, request);
+    ConversationRules.normalizeInput(request);
+    request.setInvalidBookCount(invalidCount);
+    request.setBookCount(
+        invalidCount
+                || parsed.getIntent()
+                    == com.gen3.recommenderagent.domain.Intent.EXPLAIN_RECOMMENDATION
+            ? null
+            : boundedInteger(parsed.getBookCount()));
+    request.setRequestId(createUuidV7().toString());
+    request.setRawText(rawText);
+    return request;
+  }
+
+  private void applySearchReplacements(
+      String rawText, ParsedRequest parsed, SessionRequest request) {
+    if (parsed.getIntent() == com.gen3.recommenderagent.domain.Intent.RECOMMENDATION
+        || parsed.getIntent() == com.gen3.recommenderagent.domain.Intent.REFINE) {
+      new com.gen3.recommenderagent.domain.session.SessionPreferences()
+          .updated(null, null, parsed.getReplaceSearchFields());
+      request.setReplaceSearchFields(parsed.getReplaceSearchFields());
+      String command =
+          com.gen3.recommenderagent.domain.conversation.ConversationText.normalizeCommand(rawText);
+      if (command.matches("^(?:also|add|additionally)\\b.*")
+          && !command.matches(".*\\b(?:instead|replace|rather than|switch)\\b.*")) {
+        // Keep field removals while protecting supplied additions from model replacement flags.
+        var search = parsed;
+        request.setReplaceSearchFields(
+            parsed.getReplaceSearchFields().stream()
+                .filter(path -> !hasSearchValue(search, path))
+                .toList());
+      }
+    }
+  }
+
+  private void applyPersonalisation(String rawText, SessionRequest request) {
+    String command =
+        com.gen3.recommenderagent.domain.conversation.ConversationText.normalizeCommand(rawText);
+    if (command.matches(
+            "^(?:i want |give me |recommend |show me )?(?:a |an |some |[0-9]+ )?(?:books?|audiobooks?) (?:by|narrated by) .+")
+        && !command.matches(
+            ".*\\b(?:for me|personalised|personalized|my preferences|my reading|my favourites|my favorites|my history|i would like|i'd like)\\b.*")) {
+      request.setPersonalised(false);
     }
   }
 

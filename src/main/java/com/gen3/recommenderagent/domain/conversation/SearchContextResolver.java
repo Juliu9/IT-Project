@@ -23,15 +23,6 @@ public final class SearchContextResolver implements ConversationHandler {
   }
 
   public ConversationDraft resolve(Session session, ConversationDraft effective) {
-    if (session != null
-        && session.isAwaitingPersonalisedPreferences()
-        && effective.getIntent() == Intent.MORE_RESULTS) {
-      effective.setPreferenceClarificationRequired(true);
-      effective.setSearchClarificationRequired(true);
-      effective.setDecision(
-          com.gen3.recommenderagent.domain.session.ConversationDecision.PREFERENCE_CLARIFICATION);
-      return effective;
-    }
     if (effective.getIntent() == Intent.RECOMMENDATION && !hasSearchCriteria(effective)) {
       effective.setPersonalised(true);
     }
@@ -72,7 +63,8 @@ public final class SearchContextResolver implements ConversationHandler {
         effective.setPreferenceAnswer(
             ConversationRules.hasQuery(effective.getPositiveSemanticQuery())
                 || ConversationRules.hasQuery(effective.getNegativeSemanticQuery()));
-        var pending = latestSearch(session);
+        var pendingTurn = session.getPendingPreferenceRequest();
+        var pending = pendingTurn == null ? null : pendingTurn.toDraft();
         if (pending != null) {
           merge(pending, effective);
           if (effective.getBookCount() == null) {
@@ -205,7 +197,6 @@ public final class SearchContextResolver implements ConversationHandler {
       taste.setNegativeSemanticQuery(original.getNegativeSemanticQuery());
       session.setPreferences(session.updatedPreferences(taste, null, List.of()));
     }
-    session.setAwaitingPreferenceUpdate(false);
     request.setNoMoreRecommendations(
         request.getIntent() == Intent.MORE_RESULTS && request.getRecommendations().isEmpty());
     session.addRecommendationIds(bookIds(request.getRecommendations()));
