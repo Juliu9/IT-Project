@@ -21,7 +21,6 @@ public class SessionTransitionService {
   private final IntentResolver intentResolver;
   private final SessionContextProjector contextProjector;
 
-  @org.springframework.beans.factory.annotation.Autowired
   public SessionTransitionService(
       SessionRepository sessions,
       ConversationEngine conversation,
@@ -33,31 +32,13 @@ public class SessionTransitionService {
     this.contextProjector = contextProjector;
   }
 
-  /** Compatibility constructor used by existing focused tests. */
-  public SessionTransitionService(SessionRepository sessions, ConversationEngine conversation) {
-    this(sessions, conversation, null, null);
-  }
-
   public SessionContext parserContext(String sessionId, String userId) {
     Session snapshot = sessions.snapshot(sessionId, userId);
-    return contextProjector == null ? SessionContext.EMPTY : contextProjector.project(snapshot);
+    return contextProjector.project(snapshot);
   }
 
   public ConversationTurn process(String sessionId, String userId, SessionRequest request) {
     return sessions.update(sessionId, userId, session -> conversation.process(session, request));
-  }
-
-  public <T> T process(
-      String sessionId,
-      String userId,
-      SessionRequest request,
-      Function<ConversationTurn, T> afterCommit) {
-    return sessions.update(
-        sessionId,
-        userId,
-        session ->
-            RequestTelemetry.measure("recommendMs", () -> conversation.process(session, request)),
-        afterCommit);
   }
 
   public <T> T process(
@@ -70,9 +51,6 @@ public class SessionTransitionService {
         sessionId,
         userId,
         session -> {
-          if (intentResolver == null) {
-            throw new IllegalStateException("User intents require an IntentResolver");
-          }
           SessionRequest request = intentResolver.resolve(session, rawText, intent);
           return RequestTelemetry.measure(
               "recommendMs", () -> conversation.process(session, request));

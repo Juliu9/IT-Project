@@ -16,6 +16,8 @@ For setup and commands, start with the [README](../README.md).
 2. `SessionTransitionService` locks and loads the session. `IntentResolver` converts the stated
    intent into a `SessionRequest`, then `ConversationEngine` applies session rules, validates
    criteria, and requests a page only when needed.
+   Both API endpoints pass raw text and `UserIntent` through this boundary; there is no gateway fallback
+   that parses directly to an executable request. Gateway tests mock this same production signature.
 3. `AudiobookRecommendationWorkflow` prepares query vectors; `AudiobookRetrievalPlanner` builds the
    mandatory exact filters and retrieval mode. `CandidateRetrievalService` queries the selected adapter.
 4. `RankingService` combines available retrieval relevance, stored-user preference similarity, and

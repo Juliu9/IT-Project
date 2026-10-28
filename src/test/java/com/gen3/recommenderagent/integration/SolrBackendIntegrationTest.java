@@ -156,13 +156,18 @@ class SolrBackendIntegrationTest {
     var service = ConversationTestSupport.transitions(sessions, workflow);
     var responses = new ConversationResponseGenerator(new AiResponseGenerator(null));
     var parser = org.mockito.Mockito.mock(com.gen3.recommenderagent.inputparser.InputParser.class);
-    org.mockito.Mockito.when(parser.parse(org.mockito.ArgumentMatchers.anyString()))
+    org.mockito.Mockito.when(
+            parser.parseUserIntent(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers
+                    .<java.util.function.Supplier<
+                            com.gen3.recommenderagent.inputparser.SessionContext>>
+                        any()))
         .thenAnswer(
             invocation -> {
               String raw = invocation.getArgument(0);
-              var request = new ConversationDraft();
-              request.setRawText(raw);
-              request.setBookCount(2);
+              var request = new com.gen3.recommenderagent.inputparser.UserIntent();
+              request.setBookCount(java.math.BigInteger.valueOf(2));
               request.setIntent(
                   raw.equals("2 more")
                       ? ConversationAction.MORE_RESULTS

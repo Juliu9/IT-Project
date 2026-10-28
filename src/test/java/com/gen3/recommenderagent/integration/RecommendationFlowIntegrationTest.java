@@ -13,7 +13,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.gen3.catalogue.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.api.RequestGateway;
 import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
@@ -21,6 +20,7 @@ import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.inputparser.InputParser;
+import com.gen3.recommenderagent.inputparser.UserIntent;
 import com.gen3.recommenderagent.ranker.RankingService;
 import com.gen3.recommenderagent.ranker.scorer.CompositeScorer;
 import com.gen3.recommenderagent.ranker.scorer.RankingScoringProperties;
@@ -139,10 +139,15 @@ class RecommendationFlowIntegrationTest {
 
   private MockMvc recommendationEndpoint(
       String rawText,
-      ConversationDraft parsedRequest,
+      UserIntent parsedRequest,
       RecommendationFlowTestSupport.InMemorySessionRepository sessionRepository) {
     InputParser inputParser = mock(InputParser.class);
-    when(inputParser.parse(rawText)).thenReturn(parsedRequest);
+    when(inputParser.parseUserIntent(
+            org.mockito.ArgumentMatchers.eq(rawText),
+            org.mockito.ArgumentMatchers
+                .<java.util.function.Supplier<com.gen3.recommenderagent.inputparser.SessionContext>>
+                    any()))
+        .thenReturn(parsedRequest);
 
     SolrAudiobookRepository repository =
         new SolrAudiobookRepository(solrClient, SolrContainerTestSupport.COLLECTION);
@@ -188,15 +193,14 @@ class RecommendationFlowIntegrationTest {
         new RankingScoringProperties.UniversalRuleWeights(0.7, 0.3));
   }
 
-  private ConversationDraft parsedRequest(String rawText) {
+  private UserIntent parsedRequest(String rawText) {
     SemanticQuery semanticQuery = new SemanticQuery();
     semanticQuery.setGenres(List.of("science fiction"));
 
-    ConversationDraft request = new ConversationDraft();
-    request.setRawText(rawText);
+    UserIntent request = new UserIntent();
     request.setIntent(ConversationAction.RECOMMENDATION);
     request.setPositiveSemanticQuery(semanticQuery);
-    request.setBookCount(3);
+    request.setBookCount(java.math.BigInteger.valueOf(3));
     return request;
   }
 }

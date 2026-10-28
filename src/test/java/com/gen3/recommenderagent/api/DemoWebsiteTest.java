@@ -167,7 +167,13 @@ class DemoWebsiteTest {
     @Bean
     InputParser parser() {
       var parser = mock(InputParser.class);
-      when(parser.parse("blank")).thenThrow(new InvalidRequestException("fallback"));
+      when(parser.parseUserIntent(
+              org.mockito.ArgumentMatchers.eq("blank"),
+              org.mockito.ArgumentMatchers
+                  .<java.util.function.Supplier<
+                          com.gen3.recommenderagent.inputparser.SessionContext>>
+                      any()))
+          .thenThrow(new InvalidRequestException("fallback"));
       return parser;
     }
 

@@ -107,11 +107,7 @@ public class RequestGateway {
             return new Generated(response, result);
           };
       Generated generated =
-          parsedIntent == null
-              ? sessionTransitionService.process(
-                  sessionId, userId, inputParser.parse(rawText), generate)
-              : sessionTransitionService.process(
-                  sessionId, userId, rawText, parsedIntent, generate);
+          sessionTransitionService.process(sessionId, userId, rawText, parsedIntent, generate);
       T payload = formatResponse.apply(generated.text(), generated.turn());
       if (telemetry != null) {
         telemetry.complete(generated.turn());
