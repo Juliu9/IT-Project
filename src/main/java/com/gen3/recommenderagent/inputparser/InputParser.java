@@ -227,7 +227,7 @@ public class InputParser {
       request.setReplaceSearchFields(parsed.getReplaceSearchFields());
       String command =
           com.gen3.recommenderagent.inputparser.ConversationText.normalizeCommand(rawText);
-      if (command.matches("^(?:also|add|additionally)\\b.*")
+      if (command.matches("^(?:also|add|additionally|(?:make (?:it|them) )?more)\\b.*")
           && !command.matches(".*\\b(?:instead|replace|rather than|switch)\\b.*")) {
         // Keep field removals while protecting supplied additions from model replacement flags.
         var search = parsed;

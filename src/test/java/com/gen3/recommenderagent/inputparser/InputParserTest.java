@@ -188,7 +188,11 @@ class InputParserTest {
       strings = {
         "Also include mystery in that search",
         "Please add mystery",
-        "Additionally include mystery"
+        "Additionally include mystery",
+        "Make it more horror",
+        "Make it more romance",
+        "Make them more romantic",
+        "More mystery please"
       })
   void explicitAdditionsIgnoreErroneousModelReplacementFlags(String text) {
     var ai = mock(AiParser.class);
@@ -371,8 +375,13 @@ class InputParserTest {
             .getReplaceSearchFields());
   }
 
-  @Test
-  void compoundAdditionKeepsTheRemovalButCannotReplaceTheAddedGenre() {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "Also include mystery and remove the time limit",
+        "Make it more mystery and remove the time limit"
+      })
+  void compoundAdditionKeepsTheRemovalButCannotReplaceTheAddedGenre(String text) {
     var ai = mock(AiParser.class);
     var parsed = new UserIntent();
     parsed.setIntent(ConversationAction.REFINE);
@@ -381,9 +390,7 @@ class InputParserTest {
     query.setGenres(List.of("mystery"));
     parsed.setPositiveSemanticQuery(query);
     when(ai.parse(anyString())).thenReturn(parsed);
-    var result =
-        new InputParser(new CommandParser(), ai)
-            .parse("Also include mystery and remove the time limit");
+    var result = new InputParser(new CommandParser(), ai).parse(text);
     assertEquals(List.of("mustInclude.duration"), result.getReplaceSearchFields());
     assertEquals(List.of("mystery"), result.getPositiveSemanticQuery().getGenres());
   }

@@ -427,6 +427,63 @@ class RefinementFlowTest {
         .containsExactlyElementsOf(replace ? List.of("horror") : List.of("fantasy", "horror"));
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"", " instead", " replace the genres"})
+  void parsedMoreRefinementsAccumulateUnlessReplacementIsExplicit(String replacement) {
+    var include = new ExactCriteria();
+    include.setDuration("under 10 hours");
+    search(include, null);
+    var initial = request(ConversationAction.RECOMMENDATION);
+    var positive = new SemanticQuery();
+    positive.setGenres(List.of("mystery"));
+    initial.setPositiveSemanticQuery(positive);
+    var negative = new SemanticQuery();
+    negative.setKeywords(List.of("dark"));
+    initial.setNegativeSemanticQuery(negative);
+    initial.setMustInclude(include);
+    process(initial);
+    var ai = mock(com.gen3.recommenderagent.inputparser.AiParser.class);
+    var parser =
+        new com.gen3.recommenderagent.inputparser.InputParser(
+            new com.gen3.recommenderagent.inputparser.CommandParser(), ai);
+    var expected = new java.util.ArrayList<>(List.of("mystery"));
+    for (String genre : List.of("horror", "romance")) {
+      var json = new ObjectMapper();
+      sessions.updateSession(
+          json.readValue(
+              json.writeValueAsString(sessions.getSession("session", "user")), Session.class));
+      var intent = new com.gen3.recommenderagent.inputparser.UserIntent();
+      intent.setIntent(ConversationAction.REFINE);
+      var query = new SemanticQuery();
+      query.setGenres(List.of(genre));
+      intent.setPositiveSemanticQuery(query);
+      // Reproduce the captured model instruction, including its erroneous replacement flag.
+      intent.setReplaceSearchFields(List.of("positiveSemanticQuery.genres"));
+      when(ai.parse(org.mockito.ArgumentMatchers.anyString())).thenReturn(intent);
+      String text = "make it more " + genre + replacement;
+      var result =
+          service.process(
+              "session",
+              "user",
+              text,
+              parser.parseUserIntent(text),
+              java.util.function.Function.identity());
+      if (!replacement.isEmpty()) {
+        expected.clear();
+      }
+      expected.add(genre);
+      assertThat(result.getIntent()).isEqualTo(ConversationAction.REFINE);
+      assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactlyElementsOf(expected);
+      assertThat(result.getSearchCriteria().getPositiveSemanticQuery().getGenres())
+          .containsExactlyElementsOf(expected);
+      assertThat(result.getMustInclude().getDuration()).isEqualTo("under 10 hours");
+      assertThat(result.getNegativeSemanticQuery().getKeywords()).containsExactly("dark");
+      assertThat(result.getReplaceSearchFields())
+          .containsExactlyElementsOf(
+              replacement.isEmpty() ? List.of() : List.of("positiveSemanticQuery.genres"));
+    }
+  }
+
   @Test
   void clearingAnAuthorPersistsAcrossReloadMoreAndRefineWithoutChangingPreferences() {
     var include = new ExactCriteria();

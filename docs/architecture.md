@@ -288,7 +288,10 @@ still answer a pending preference question and save that taste for the session.
 
 Search edits use `replaceSearchFields`, an allowlisted list of criteria paths, reusing the preference
 field validation. “Make it horror instead” replaces `positiveSemanticQuery.genres`; “also mystery”
-adds to the existing genres. A listed field with no value clears it: “any author is fine now” clears
+adds to the existing genres. “Make it more horror” followed by “make it more romance” adds both
+genres to the existing positive semantic criteria. “More” does not assign a numerical weight.
+Explicit “instead” or “replace” wording replaces the named field instead of adding to it.
+A listed field with no value clears it: “any author is fine now” clears
 `mustInclude.authors`, while “remove the time limit” clears `mustInclude.duration`. Omitted fields
 still inherit previous values. These edits leave saved preferences unchanged. Override paths persist
 with the search through cache reloads, MORE and later refinements, preventing saved preferences from

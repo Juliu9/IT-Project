@@ -98,7 +98,11 @@ class LiveInputParserTest {
   @ParameterizedTest
   @CsvSource({
     "Make it horror instead,horror,true",
-    "Also include mystery in that search,mystery,false"
+    "Also include mystery in that search,mystery,false",
+    "Make it more horror,horror,false",
+    "Make it more romance,romance,false",
+    "Make it more romance instead,romance,true",
+    "Replace the genres with romance,romance,true"
   })
   void distinguishesReplacingAndAddingSearchGenres(String text, String genre, boolean replace) {
     var result = parser.parse(text);

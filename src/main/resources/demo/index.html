@@ -88,6 +88,7 @@
         <p id="identity-note" class="identity-note">Use the same IDs for follow-ups. Change the session ID to test a new conversation. IDs must use standard ASCII characters and cannot be blank.</p>
         <div class="label"><label for="query">Your request</label><span>Natural language</span></div>
         <textarea maxlength="10000" id="query" placeholder="e.g. I want a short mystery audiobook with a female narrator. Nothing too dark."></textarea>
+        <p class="identity-note">Enter to submit. Shift+Enter for a new line.</p>
         <div class="actions">
           <div class="examples">
             <button class="example" type="button" data-example="Recommend fantasy audiobooks with a strong female protagonist.">Fantasy</button>
@@ -296,7 +297,10 @@
       details.style.display = "none";
       submit.addEventListener("click", requestRecommendation);
       query.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) requestRecommendation();
+        if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+          event.preventDefault();
+          if (!event.repeat) requestRecommendation();
+        }
       });
     </script>
   </body>
