@@ -7,6 +7,6 @@ import java.util.List;
 /** Provides paginated catalogue access without exposing vector-storage operations. */
 public interface AudiobookCatalogueRepository {
 
-  /** Loads a deterministic catalogue page for indexing or migration. */
-  List<AudiobookRecord> findAllBooks(int offset, int limit) throws IOException;
+  /** Loads records after the last processed ID (null starts the scan) for indexing or migration. */
+  List<AudiobookRecord> findAllBooks(String afterId, int limit) throws IOException;
 }

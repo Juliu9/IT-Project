@@ -37,6 +37,13 @@
       .result { border: 1px solid var(--line); background: white; }
       .error { border: 1px solid #fecaca; background: #fef2f2; color: #b91c1c; }
       .loading { color: var(--muted); text-align: center; }
+      .recommendations { display: none; margin-top: 24px; }
+      .recommendation-list { display: grid; gap: 12px; }
+      .recommendation h3 { margin: 0 0 12px; font-size: 16px; }
+      .recommendation p { white-space: pre-wrap; line-height: 1.6; }
+      .recommendation dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 16px; font-size: 13px; }
+      .recommendation dt { color: var(--muted); }
+      .recommendation dd { margin: 0; overflow-wrap: anywhere; }
       .metrics { display: none; margin-top: 28px; }
       .metrics-title { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
       .metrics-title h2 { margin: 0; font-size: 17px; }
@@ -114,6 +121,13 @@
           </div>
           <div class="metadata-label">Session Request</div>
           <pre id="session-request"></pre>
+          <details id="recommendations" class="recommendations">
+            <summary>Recommendation details</summary>
+            <div class="details-content">
+              <p id="catalogue-error" role="status"></p>
+              <div id="recommendation-list" class="recommendation-list"></div>
+            </div>
+          </details>
         </div>
       </details>
       <footer>Recommendation Agent · Local demonstration environment</footer>
@@ -134,6 +148,8 @@
       const loading = document.getElementById("loading");
       const error = document.getElementById("error");
       const result = document.getElementById("result");
+      const recommendations = document.getElementById("recommendations");
+      const recommendationList = document.getElementById("recommendation-list");
       const metrics = document.getElementById("metrics");
       const details = document.getElementById("details");
 
@@ -154,6 +170,8 @@
         const text = query.value.trim();
         error.style.display = "none";
         result.style.display = "none";
+        recommendations.style.display = "none";
+        recommendationList.replaceChildren();
         metrics.style.display = "none";
         details.style.display = "none";
         submit.disabled = true;
@@ -169,19 +187,20 @@
           });
           if (!response.ok) {
             const message = await response.text();
-            throw new Error(message || `The server returned ${response.status}.`);
+            throw new Error(message || `I couldn't complete that request just now (status ${response.status}). Please try again.`);
           }
           const payload = await response.json();
           result.textContent = payload.response;
           result.style.display = "block";
+          displayRecommendations(payload.sessionRequest?.recommendations, payload.catalogueBooks, payload.catalogueError);
           displayMetrics(payload.metrics);
           displayRequest(payload.sessionRequest);
           document.getElementById("request-user-id").textContent = requestUserId;
           document.getElementById("request-session-id").textContent = requestSessionId;
         } catch (exception) {
           error.textContent = exception instanceof TypeError
-            ? "Unable to connect to the Recommendation Agent. Make sure the server is running on port 8080."
-            : `Request failed: ${exception.message}`;
+            ? "I couldn't reach the recommendation service. Please check that it's running on port 8080 and try again."
+            : exception.message;
           error.style.display = "block";
         } finally {
           loading.style.display = "none";
@@ -189,6 +208,54 @@
           userId.disabled = false;
           sessionId.disabled = false;
           submit.textContent = "Get recommendations";
+        }
+      }
+
+      function displayRecommendations(books, catalogueBooks, catalogueError) {
+        const metadata = new Map((catalogueBooks ?? []).map((book) => [book.id, book]));
+        const notice = document.getElementById("catalogue-error");
+        notice.textContent = catalogueError ?? "";
+        notice.hidden = !catalogueError;
+        recommendationList.replaceChildren();
+        recommendations.style.display = books?.length ? "block" : "none";
+        recommendations.open = false;
+        for (const book of books ?? []) {
+          const payload = metadata.get(book.bookId);
+          const card = document.createElement("article");
+          card.className = "card recommendation";
+          const title = document.createElement("h3");
+          title.textContent = `${book.rank ?? "—"}. ${book.title ?? "Untitled audiobook"}`;
+          card.append(title);
+          const fields = document.createElement("dl");
+          const values = [
+            ["Book ID", book.bookId],
+            ["Catalogue title", payload?.title],
+            ["Authors", payload?.authors?.join(", ") || null],
+            ["Narrators", payload?.narrators?.join(", ") || null],
+            ["Language", payload?.language],
+            ["Publication year", payload?.publicationYear],
+            ["Source", payload?.source],
+            ["Score", book.score],
+            ["Runtime", (payload?.durationMinutes ?? book.durationMinutes) == null ? null : `${payload?.durationMinutes ?? book.durationMinutes} minutes`],
+            ["Reading preferences used", book.readingPreferencesUsed == null ? null : book.readingPreferencesUsed ? "Yes" : "No"]
+          ];
+          for (const [label, value] of values) {
+            const term = document.createElement("dt");
+            const detail = document.createElement("dd");
+            term.textContent = label;
+            detail.textContent = value ?? "Unavailable";
+            fields.append(term, detail);
+          }
+          card.append(fields);
+          const description = document.createElement("p");
+          description.textContent = payload?.shortDescription || book.shortDescription || "Short description unavailable.";
+          card.append(description);
+          if (payload?.description) {
+            const fullDescription = document.createElement("p");
+            fullDescription.textContent = `Description: ${payload.description}`;
+            card.append(fullDescription);
+          }
+          recommendationList.append(card);
         }
       }
 

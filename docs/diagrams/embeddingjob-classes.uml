@@ -1,0 +1,94 @@
+@startuml
+!pragma layout smetana
+title embeddingjob
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "embeddingjob" as embeddingjob {
+  package "store" {
+    interface "AudiobookEmbeddingStore" as C2 {
+      ~ Page embeddingPage(String,int)
+      ~ void updateEmbeddings(List<Update>)
+    }
+    class "AudiobookEmbeddingStore$Page" as C3 {
+      - List<StoredAudiobook> books
+      - String nextCursor
+      + String nextCursor()
+      + List<StoredAudiobook> books()
+    }
+    class "AudiobookEmbeddingStore$Update" as C4 {
+      - String storageReference
+      - AudiobookEmbedding embedding
+      + String storageReference()
+      + AudiobookEmbedding embedding()
+    }
+    class "QdrantEmbeddingStore" as C6 {
+      - QdrantClient client
+      - QdrantPointMapper mapper
+      - String collection
+      - int vectorDimension
+      - boolean checked
+      + Page embeddingPage(String,int)
+      + void updateEmbeddings(List<Update>)
+      - void requireCollection()
+      - void validateDimension(float[])
+      - io.qdrant.client.grpc.Common.PointId pointId(String)
+      - T await(Future<T>,String)
+    }
+    class "SolrEmbeddingStore" as C7 {
+      - SolrAudiobookRepository repository
+      + Page embeddingPage(String,int)
+      + void updateEmbeddings(List<Update>)
+    }
+  }
+  class "CatalogueEmbeddingJob" as C0 {
+    - {static} Logger LOGGER
+    - AudiobookEmbeddingStore store
+    - AudiobookEmbeddingIndexer indexer
+    - int pageSize
+    - int maximumRecords
+    + void run()
+  }
+  class "EmbeddingIndexApplication" as C1 {
+    + {static} void main(String[])
+    ~ {static} BeanFactoryPostProcessor validateJob(Environment)
+    ~ ApplicationRunner embeddingJob(AudiobookEmbeddingStore,EmbeddingModel,int,int)
+  }
+  class "AudiobookEmbeddingIndexer" as C5 {
+    - EmbeddingModel model
+    + String buildAudiobookText(AudiobookRecord)
+    + List<AudiobookEmbedding> embedAudiobooks(List<AudiobookRecord>)
+    - String part(String,String)
+    - boolean hasText(String)
+    - String part(String,List<String>)
+  }
+}
+
+package "catalogue" as catalogue <<external>> {
+}
+
+C2 +.. C3
+C2 +.. C4
+C2 <|.. C6
+C2 <|.. C7
+C0 --> C2
+C0 --> C5
+C4 ..> catalogue : uses
+C7 ..> catalogue : uses
+
+' Source: docs/maintenance.md
+note right of embeddingjob
+  Separate opt-in catalogue embedding job.
+
+  Regenerates dense vectors for existing books.
+  Qdrant also receives sparse keyword vectors.
+  Metadata and short descriptions are preserved.
+
+  Uses the selected Solr or Qdrant database.
+  No Redis is required.
+
+  Reruns regenerate vectors from the beginning
+  and incur embedding charges again.
+end note
+@enduml

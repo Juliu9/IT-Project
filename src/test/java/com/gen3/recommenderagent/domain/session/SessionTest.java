@@ -1,6 +1,6 @@
 package com.gen3.recommenderagent.domain.session;
 
-import static com.gen3.recommenderagent.domain.RecommendationPolicy.MAX_BOOK_COUNT;
+import static com.gen3.recommenderagent.domain.recommendation.RecommendationPolicy.MAX_BOOK_COUNT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.List;
@@ -32,20 +32,23 @@ class SessionTest {
   void storesOnlyUniqueShownBookIds() {
     Session session = new Session();
 
-    session.addRecommendationIds(List.of("book-1", "book-2"));
-    session.addRecommendationIds(List.of("book-2", "book-3"));
+    session.getActiveSearch().addShownBookIds(List.of("book-1", "book-2"));
+    session.getActiveSearch().addShownBookIds(List.of("book-2", "book-3"));
 
-    assertEquals(List.of("book-1", "book-2", "book-3"), session.getShownBooks());
+    assertEquals(
+        List.of("book-1", "book-2", "book-3"), session.getActiveSearch().getShownBookIds());
   }
 
   @Test
   void evictsTheOldestShownBookWhenTheHistoryCapIsReached() {
     Session session = new Session();
 
-    session.addRecommendationIds(IntStream.rangeClosed(1, 501).mapToObj(i -> "book-" + i).toList());
+    session
+        .getActiveSearch()
+        .addShownBookIds(IntStream.rangeClosed(1, 501).mapToObj(i -> "book-" + i).toList());
 
-    assertEquals(500, session.getShownBooks().size());
-    assertEquals("book-2", session.getShownBooks().getFirst());
-    assertEquals("book-501", session.getShownBooks().getLast());
+    assertEquals(500, session.getActiveSearch().getShownBookIds().size());
+    assertEquals("book-2", session.getActiveSearch().getShownBookIds().getFirst());
+    assertEquals("book-501", session.getActiveSearch().getShownBookIds().getLast());
   }
 }

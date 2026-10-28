@@ -1,7 +1,7 @@
 package com.gen3.recommenderagent.application.recommendation;
 
-import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import java.util.List;
 

@@ -14,14 +14,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendationWorkflow;
-import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.ExactCriteria;
-import com.gen3.recommenderagent.domain.session.Recommendation;
-import com.gen3.recommenderagent.domain.session.SemanticQuery;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
+import com.gen3.recommenderagent.domain.search.ExactCriteria;
+import com.gen3.recommenderagent.domain.search.SemanticQuery;
+import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectors;
 import com.gen3.recommenderagent.ranker.Ranker;
@@ -59,47 +61,49 @@ class RecommendationBatchFlowTest {
   void shortMorePagesAreAllowedAndRepeatKeepsTheLatestEmptyOutcome() {
     when(ranker.rank(anyList(), anyInt(), any(RankingContext.class)))
         .thenReturn(batch(1, 7), List.of());
-    assertIds(process(request(Intent.RECOMMENDATION)), 1, 5);
-    ConversationTurn shortPage = process(request(Intent.MORE_RESULTS));
+    assertIds(process(request(ConversationAction.RECOMMENDATION)), 1, 5);
+    ConversationTurn shortPage = process(request(ConversationAction.MORE_RESULTS));
     assertIds(shortPage, 6, 2);
     assertThat(shortPage.isNoMoreRecommendations()).isFalse();
-    assertIds(process(request(Intent.REPEAT)), 6, 2);
-    ConversationTurn exhausted = process(request(Intent.MORE_RESULTS));
+    assertIds(process(request(ConversationAction.REPEAT)), 6, 2);
+    ConversationTurn exhausted = process(request(ConversationAction.MORE_RESULTS));
     assertThat(exhausted.getRecommendations()).isEmpty();
     assertThat(exhausted.isNoMoreRecommendations()).isTrue();
-    process(request(Intent.HELP));
+    process(request(ConversationAction.HELP));
     for (int i = 0; i < 2; i++) {
-      ConversationTurn repeat = process(request(Intent.REPEAT));
+      ConversationTurn repeat = process(request(ConversationAction.REPEAT));
       assertThat(repeat.getRecommendations()).isEmpty();
       assertThat(repeat.isNoMoreRecommendations()).isFalse();
-      assertThat(repeat.getDecision())
-          .isEqualTo(com.gen3.recommenderagent.domain.session.ConversationDecision.HELP);
+      assertThat(repeat.getDecision()).isEqualTo(ConversationDecision.HELP);
     }
     verify(ranker, times(3)).rank(anyList(), eq(20), any(RankingContext.class));
   }
 
   @Test
   void moreRequiresAPreviousSearchEvenAfterOtherSessionActions() {
-    assertThat(process(request(Intent.MORE_RESULTS)).isSearchClarificationRequired()).isTrue();
-    process(request(Intent.HELP));
-    ConversationDraft preferences = request(Intent.UPDATE_PREFERENCES);
+    assertThat(process(request(ConversationAction.MORE_RESULTS)).isSearchClarificationRequired())
+        .isTrue();
+    process(request(ConversationAction.HELP));
+    ConversationDraft preferences = request(ConversationAction.UPDATE_PREFERENCES);
     SemanticQuery tastes = new SemanticQuery();
     tastes.setGenres(List.of("romance"));
-    var updates = new com.gen3.recommenderagent.domain.session.SessionPreferences();
+    var updates = new SessionPreferences();
     updates.setPositiveSemanticQuery(tastes);
     preferences.setPreferenceUpdates(updates);
     process(preferences);
-    assertThat(process(request(Intent.MORE_RESULTS)).isSearchClarificationRequired()).isTrue();
+    assertThat(process(request(ConversationAction.MORE_RESULTS)).isSearchClarificationRequired())
+        .isTrue();
     org.mockito.Mockito.verifyNoInteractions(ranker, retriever, vectors, users);
-    process(request(Intent.RECOMMENDATION));
-    process(request(Intent.CLEAR_HISTORY));
-    assertThat(process(request(Intent.MORE_RESULTS)).isSearchClarificationRequired()).isTrue();
+    process(request(ConversationAction.RECOMMENDATION));
+    process(request(ConversationAction.CLEAR_HISTORY));
+    assertThat(process(request(ConversationAction.MORE_RESULTS)).isSearchClarificationRequired())
+        .isTrue();
     verify(ranker).rank(anyList(), eq(20), any(RankingContext.class));
   }
 
   @Test
   void moreAndRepeatRestoreDetailedSearchContextWithoutHeavyWork() {
-    ConversationDraft search = request(Intent.RECOMMENDATION);
+    ConversationDraft search = request(ConversationAction.RECOMMENDATION);
     search.getPositiveSemanticQuery().setTopics(List.of("expeditions"));
     SemanticQuery avoid = new SemanticQuery();
     avoid.setKeywords(List.of("violence"));
@@ -108,8 +112,8 @@ class RecommendationBatchFlowTest {
     include.setLanguage("English");
     search.setMustInclude(include);
     process(search);
-    ConversationTurn more = process(request(Intent.MORE_RESULTS));
-    ConversationTurn repeat = process(request(Intent.REPEAT));
+    ConversationTurn more = process(request(ConversationAction.MORE_RESULTS));
+    ConversationTurn repeat = process(request(ConversationAction.REPEAT));
     for (ConversationTurn result : List.of(more, repeat)) {
       assertThat(result.getPositiveSemanticQuery().getTopics()).containsExactly("expeditions");
       assertThat(result.getNegativeSemanticQuery().getKeywords()).containsExactly("violence");
@@ -122,35 +126,36 @@ class RecommendationBatchFlowTest {
   @Test
   void anEmptyPreviousSearchStillAllowsMore() {
     when(ranker.rank(anyList(), anyInt(), any(RankingContext.class))).thenReturn(List.of());
-    process(request(Intent.RECOMMENDATION));
-    assertThat(process(request(Intent.MORE_RESULTS)).isSearchClarificationRequired()).isFalse();
+    process(request(ConversationAction.RECOMMENDATION));
+    assertThat(process(request(ConversationAction.MORE_RESULTS)).isSearchClarificationRequired())
+        .isFalse();
     verify(ranker, times(2)).rank(anyList(), eq(20), any(RankingContext.class));
   }
 
   @Test
   void repeatReturnsTheLatestRequestWithoutConsumingOrInvalidatingTheBatch() {
-    assertIds(process(request(Intent.RECOMMENDATION)), 1, 5);
-    assertIds(process(request(Intent.REPEAT)), 1, 5);
-    process(request(Intent.HELP));
+    assertIds(process(request(ConversationAction.RECOMMENDATION)), 1, 5);
+    assertIds(process(request(ConversationAction.REPEAT)), 1, 5);
+    process(request(ConversationAction.HELP));
     for (int i = 0; i < 2; i++) {
-      ConversationTurn repeat = process(request(Intent.REPEAT));
+      ConversationTurn repeat = process(request(ConversationAction.REPEAT));
       assertThat(repeat.getRecommendations()).isEmpty();
-      assertThat(repeat.getDecision())
-          .isEqualTo(com.gen3.recommenderagent.domain.session.ConversationDecision.HELP);
+      assertThat(repeat.getDecision()).isEqualTo(ConversationDecision.HELP);
     }
-    assertThat(sessions.getSession("session", "user").getShownBooks()).hasSize(5);
-    assertIds(process(request(Intent.MORE_RESULTS)), 6, 5);
-    assertIds(process(request(Intent.REPEAT)), 6, 5);
+    assertThat(sessions.getSession("session", "user").getActiveSearch().getShownBookIds())
+        .hasSize(5);
+    assertIds(process(request(ConversationAction.MORE_RESULTS)), 6, 5);
+    assertIds(process(request(ConversationAction.REPEAT)), 6, 5);
     verify(ranker).rank(anyList(), eq(20), any(RankingContext.class));
     verify(vectors).create(any());
   }
 
   @Test
   void repeatWithoutHistoryOrAfterClearingReturnsNoRecommendations() {
-    assertThat(process(request(Intent.REPEAT)).getRecommendations()).isEmpty();
-    process(request(Intent.RECOMMENDATION));
-    process(request(Intent.CLEAR_HISTORY));
-    assertThat(process(request(Intent.REPEAT)).getRecommendations()).isEmpty();
+    assertThat(process(request(ConversationAction.REPEAT)).getRecommendations()).isEmpty();
+    process(request(ConversationAction.RECOMMENDATION));
+    process(request(ConversationAction.CLEAR_HISTORY));
+    assertThat(process(request(ConversationAction.REPEAT)).getRecommendations()).isEmpty();
     verify(ranker).rank(anyList(), eq(20), any(RankingContext.class));
   }
 
@@ -159,18 +164,21 @@ class RecommendationBatchFlowTest {
       throws Exception {
     for (int page = 0; page < 4; page++) {
       ConversationTurn result =
-          process(request(page == 0 ? Intent.RECOMMENDATION : Intent.MORE_RESULTS));
+          process(
+              request(
+                  page == 0 ? ConversationAction.RECOMMENDATION : ConversationAction.MORE_RESULTS));
       assertIds(result, page * 5 + 1, 5);
       assertThat(result.getRecommendations())
           .extracting(Recommendation::getRank)
           .containsExactly(1, 2, 3, 4, 5);
-      assertThat(sessions.getSession("session", "user").getShownBooks()).hasSize((page + 1) * 5);
+      assertThat(sessions.getSession("session", "user").getActiveSearch().getShownBookIds())
+          .hasSize((page + 1) * 5);
     }
     verify(users).findEmbeddingByUserId("user");
     verify(vectors).create(any());
     verify(retriever).getCandidates(any(), any(), eq(50), eq(Set.of()));
     verify(ranker).rank(anyList(), eq(20), any(RankingContext.class));
-    assertIds(process(request(Intent.MORE_RESULTS)), 21, 5);
+    assertIds(process(request(ConversationAction.MORE_RESULTS)), 21, 5);
     verify(retriever)
         .getCandidates(
             any(),
@@ -184,17 +192,17 @@ class RecommendationBatchFlowTest {
 
   @Test
   void changingCountKeepsTheBatchAndPartialPagesRefillWithoutRepeatingTheTail() {
-    assertIds(process(request(Intent.RECOMMENDATION)), 1, 5);
-    ConversationDraft count = request(Intent.CHANGE_COUNT);
+    assertIds(process(request(ConversationAction.RECOMMENDATION)), 1, 5);
+    ConversationDraft count = request(ConversationAction.CHANGE_COUNT);
     count.setBookCount(3);
     process(count);
-    assertIds(process(request(Intent.MORE_RESULTS)), 6, 3);
-    assertIds(process(request(Intent.MORE_RESULTS)), 9, 3);
-    assertIds(process(request(Intent.MORE_RESULTS)), 12, 3);
-    assertIds(process(request(Intent.MORE_RESULTS)), 15, 3);
+    assertIds(process(request(ConversationAction.MORE_RESULTS)), 6, 3);
+    assertIds(process(request(ConversationAction.MORE_RESULTS)), 9, 3);
+    assertIds(process(request(ConversationAction.MORE_RESULTS)), 12, 3);
+    assertIds(process(request(ConversationAction.MORE_RESULTS)), 15, 3);
     count.setBookCount(5);
     process(count);
-    assertIds(process(request(Intent.MORE_RESULTS)), 18, 5);
+    assertIds(process(request(ConversationAction.MORE_RESULTS)), 18, 5);
     verify(ranker, times(2)).rank(anyList(), eq(20), any(RankingContext.class));
     verify(retriever)
         .getCandidates(
@@ -209,23 +217,31 @@ class RecommendationBatchFlowTest {
 
   @ParameterizedTest
   @EnumSource(
-      value = Intent.class,
+      value = ConversationAction.class,
       names = {"RECOMMENDATION", "REFINE", "CLEAR_HISTORY"})
-  void changedSearchStateDiscardsThePreviousBatch(Intent intent) {
-    process(request(Intent.RECOMMENDATION));
+  void changedSearchStateDiscardsThePreviousBatch(ConversationAction intent) {
+    process(request(ConversationAction.RECOMMENDATION));
     process(request(intent));
     ConversationTurn next =
         process(
-            request(intent == Intent.CLEAR_HISTORY ? Intent.RECOMMENDATION : Intent.MORE_RESULTS));
+            request(
+                intent == ConversationAction.CLEAR_HISTORY
+                    ? ConversationAction.RECOMMENDATION
+                    : ConversationAction.MORE_RESULTS));
     // Searches consume a fresh first page immediately; preference/history actions do not.
-    assertIds(next, intent == Intent.RECOMMENDATION || intent == Intent.REFINE ? 26 : 21, 5);
+    assertIds(
+        next,
+        intent == ConversationAction.RECOMMENDATION || intent == ConversationAction.REFINE
+            ? 26
+            : 21,
+        5);
     verify(ranker, times(2)).rank(anyList(), eq(20), any(RankingContext.class));
   }
 
   @Test
   void moreWithEmptyParserCriteriaKeepsTheBatch() {
-    process(request(Intent.RECOMMENDATION));
-    ConversationDraft more = request(Intent.MORE_RESULTS);
+    process(request(ConversationAction.RECOMMENDATION));
+    ConversationDraft more = request(ConversationAction.MORE_RESULTS);
     SemanticQuery empty = new SemanticQuery();
     empty.setGenres(java.util.Arrays.asList(null, "", "  "));
     more.setPositiveSemanticQuery(empty);
@@ -245,8 +261,8 @@ class RecommendationBatchFlowTest {
 
   @Test
   void moreWithNewExactFiltersRetrievesAFreshBatch() {
-    process(request(Intent.RECOMMENDATION));
-    ConversationDraft more = request(Intent.MORE_RESULTS);
+    process(request(ConversationAction.RECOMMENDATION));
+    ConversationDraft more = request(ConversationAction.MORE_RESULTS);
     ExactCriteria include = new ExactCriteria();
     include.setLanguage("French");
     more.setMustInclude(include);
@@ -259,19 +275,20 @@ class RecommendationBatchFlowTest {
     when(ranker.rank(anyList(), anyInt(), any(RankingContext.class)))
         .thenReturn(batch(1, 7))
         .thenThrow(new IllegalStateException("catalogue unavailable"));
-    process(request(Intent.RECOMMENDATION));
-    assertThatThrownBy(() -> process(request(Intent.MORE_RESULTS)))
+    process(request(ConversationAction.RECOMMENDATION));
+    assertThatThrownBy(() -> process(request(ConversationAction.MORE_RESULTS)))
         .hasMessage("catalogue unavailable");
-    assertThat(sessions.getSession("session", "user").getShownBooks()).hasSize(5);
+    assertThat(sessions.getSession("session", "user").getActiveSearch().getShownBookIds())
+        .hasSize(5);
     doReturn(batch(8, 20)).when(ranker).rank(anyList(), anyInt(), any(RankingContext.class));
-    assertIds(process(request(Intent.MORE_RESULTS)), 6, 5);
+    assertIds(process(request(ConversationAction.MORE_RESULTS)), 6, 5);
   }
 
   @Test
   void helpKeepsTheBatchAndOversizedPageRequestsStillReturnAtMostFive() {
-    process(request(Intent.RECOMMENDATION));
-    process(request(Intent.HELP));
-    ConversationDraft more = request(Intent.MORE_RESULTS);
+    process(request(ConversationAction.RECOMMENDATION));
+    process(request(ConversationAction.HELP));
+    ConversationDraft more = request(ConversationAction.MORE_RESULTS);
     more.setBookCount(100);
     assertIds(process(more), 6, 5);
     verify(ranker).rank(anyList(), eq(20), any(RankingContext.class));
@@ -279,7 +296,7 @@ class RecommendationBatchFlowTest {
 
   @ParameterizedTest
   @EnumSource(
-      value = Intent.class,
+      value = ConversationAction.class,
       names = {
         "MORE_RESULTS",
         "REPEAT",
@@ -288,8 +305,8 @@ class RecommendationBatchFlowTest {
         "HELP",
         "UNKNOWN"
       })
-  void unexpectedSemanticFieldsDoNotDestroyTheCachedSearch(Intent intent) {
-    process(request(Intent.RECOMMENDATION));
+  void unexpectedSemanticFieldsDoNotDestroyTheCachedSearch(ConversationAction intent) {
+    process(request(ConversationAction.RECOMMENDATION));
     var control = request(intent);
     var query = new SemanticQuery();
     query.setGenres(List.of("horror"));
@@ -297,8 +314,8 @@ class RecommendationBatchFlowTest {
     control.setNegativeSemanticQuery(query);
     control.setPersonalised(true);
     process(control);
-    var more = process(request(Intent.MORE_RESULTS));
-    assertIds(more, intent == Intent.MORE_RESULTS ? 11 : 6, 5);
+    var more = process(request(ConversationAction.MORE_RESULTS));
+    assertIds(more, intent == ConversationAction.MORE_RESULTS ? 11 : 6, 5);
     assertThat(more.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
     verify(ranker).rank(anyList(), eq(20), any(RankingContext.class));
   }
@@ -307,10 +324,10 @@ class RecommendationBatchFlowTest {
     return service.process("session", "user", request);
   }
 
-  private ConversationDraft request(Intent intent) {
+  private ConversationDraft request(ConversationAction intent) {
     ConversationDraft request = new ConversationDraft();
     request.setIntent(intent);
-    if (intent == Intent.RECOMMENDATION) {
+    if (intent == ConversationAction.RECOMMENDATION) {
       SemanticQuery query = new SemanticQuery();
       query.setGenres(List.of("fantasy"));
       request.setPositiveSemanticQuery(query);

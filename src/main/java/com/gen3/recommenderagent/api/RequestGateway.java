@@ -1,9 +1,10 @@
 package com.gen3.recommenderagent.api;
 
 import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.application.conversation.SessionRequest;
+import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.inputparser.InputParser;
+import com.gen3.recommenderagent.inputparser.UserIntent;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.gen3.recommenderagent.response.ResponseGenerator;
 import java.util.function.BiFunction;
@@ -90,21 +91,27 @@ public class RequestGateway {
     SessionRequest currentRequest = null;
     boolean completed = false;
     try {
-      currentRequest = RequestTelemetry.measure("parseMs", () -> inputParser.parse(rawText));
-      SessionRequest parsedRequest = currentRequest;
+      UserIntent parsedIntent =
+          RequestTelemetry.measure(
+              "parseMs",
+              () ->
+                  inputParser.parseUserIntent(
+                      rawText, () -> sessionTransitionService.parserContext(sessionId, userId)));
       record Generated(String text, ConversationTurn turn) {}
+      java.util.function.Function<ConversationTurn, Generated> generate =
+          result -> {
+            String response =
+                RequestTelemetry.measure(
+                    "responseMs",
+                    () -> responseGenerator.generate(result.getRecommendations(), result));
+            return new Generated(response, result);
+          };
       Generated generated =
-          sessionTransitionService.process(
-              sessionId,
-              userId,
-              parsedRequest,
-              result -> {
-                String response =
-                    RequestTelemetry.measure(
-                        "responseMs",
-                        () -> responseGenerator.generate(result.getRecommendations(), result));
-                return new Generated(response, result);
-              });
+          parsedIntent == null
+              ? sessionTransitionService.process(
+                  sessionId, userId, inputParser.parse(rawText), generate)
+              : sessionTransitionService.process(
+                  sessionId, userId, rawText, parsedIntent, generate);
       T payload = formatResponse.apply(generated.text(), generated.turn());
       if (telemetry != null) {
         telemetry.complete(generated.turn());

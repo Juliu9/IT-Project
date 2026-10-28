@@ -1,5 +1,8 @@
 package com.gen3.recommenderagent.domain.session;
 
+import com.gen3.catalogue.model.PersonNameNormalizer;
+import com.gen3.recommenderagent.domain.search.ExactCriteria;
+import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -46,24 +49,36 @@ public class SessionPreferences {
     this.mustNotInclude = mustNotInclude;
   }
 
-  public static SessionPreferences fromRequest(SessionRequest request) {
-    var preferences = new SessionPreferences();
-    preferences.setPositiveSemanticQuery(request.getPositiveSemanticQuery());
-    preferences.setNegativeSemanticQuery(request.getNegativeSemanticQuery());
-    preferences.setMustInclude(request.getMustInclude());
-    preferences.setMustNotInclude(request.getMustNotInclude());
-    return preferences.copy();
-  }
-
-  public SessionRequest asRequest() {
-    var copy = copy();
-    var request = new SessionRequest();
-    request.setIntent(com.gen3.recommenderagent.domain.Intent.RECOMMENDATION);
-    request.setPositiveSemanticQuery(copy.positiveSemanticQuery);
-    request.setNegativeSemanticQuery(copy.negativeSemanticQuery);
-    request.setMustInclude(copy.mustInclude);
-    request.setMustNotInclude(copy.mustNotInclude);
-    return request;
+  /**
+   * Removes a named saved value wherever it is stored, using the existing field-specific equality.
+   */
+  public SessionPreferences withoutTerms(List<String> values, boolean positiveOnly) {
+    var result = copy();
+    for (String value : values) {
+      var terms = List.of(value);
+      var query = new SemanticQuery();
+      query.setAuthors(terms);
+      query.setNarrators(terms);
+      query.setGenres(terms);
+      query.setTopics(terms);
+      query.setKeywords(terms);
+      var exact = new ExactCriteria();
+      exact.setAuthors(terms);
+      exact.setNarrators(terms);
+      exact.setLanguage(value);
+      exact.setSource(value);
+      exact.setDuration(value);
+      exact.setPublicationYear(value);
+      var removals = new SessionPreferences();
+      removals.setPositiveSemanticQuery(query);
+      removals.setMustInclude(exact);
+      if (!positiveOnly) {
+        removals.setNegativeSemanticQuery(query);
+        removals.setMustNotInclude(exact);
+      }
+      result = result.updated(null, removals, List.of());
+    }
+    return result;
   }
 
   public SessionPreferences copy() {
@@ -74,20 +89,7 @@ public class SessionPreferences {
   public SessionPreferences updated(
       SessionPreferences additions, SessionPreferences removals, List<String> replacementFields) {
     var replace = replacementFields == null ? List.<String>of() : replacementFields;
-    for (String path : replace) {
-      String[] parts = path == null ? new String[0] : path.split("\\.");
-      if (parts.length != 2
-          || !(switch (parts[0]) {
-            case "positiveSemanticQuery", "negativeSemanticQuery" ->
-                List.of("genres", "topics", "keywords", "authors", "narrators").contains(parts[1]);
-            case "mustInclude", "mustNotInclude" ->
-                List.of("authors", "narrators", "language", "source", "duration", "publicationYear")
-                    .contains(parts[1]);
-            default -> false;
-          })) {
-        throw new InvalidRequestException("Please specify which preference you want to replace.");
-      }
-    }
+    validateReplacementFields(replace);
     var result = new SessionPreferences();
     result.positiveSemanticQuery =
         query(
@@ -103,84 +105,84 @@ public class SessionPreferences {
             get(removals, SessionPreferences::getNegativeSemanticQuery),
             "negativeSemanticQuery",
             replace);
-    var mustIncludeAdds = get(additions, SessionPreferences::getMustInclude);
-    var mustIncludeRemoves = get(removals, SessionPreferences::getMustInclude);
-    result.mustInclude = new ExactCriteria();
-    result.mustInclude.setAuthors(
-        terms(
-            get(mustInclude, ExactCriteria::getAuthors),
-            get(mustIncludeAdds, ExactCriteria::getAuthors),
-            get(mustIncludeRemoves, ExactCriteria::getAuthors),
-            replace.contains("mustInclude.authors")));
-    result.mustInclude.setNarrators(
-        terms(
-            get(mustInclude, ExactCriteria::getNarrators),
-            get(mustIncludeAdds, ExactCriteria::getNarrators),
-            get(mustIncludeRemoves, ExactCriteria::getNarrators),
-            replace.contains("mustInclude.narrators")));
-    result.mustInclude.setLanguage(
+    result.mustInclude =
+        updatedCriteria(
+            mustInclude,
+            get(additions, SessionPreferences::getMustInclude),
+            get(removals, SessionPreferences::getMustInclude),
+            "mustInclude",
+            replace);
+    result.mustNotInclude =
+        updatedCriteria(
+            mustNotInclude,
+            get(additions, SessionPreferences::getMustNotInclude),
+            get(removals, SessionPreferences::getMustNotInclude),
+            "mustNotInclude",
+            replace);
+    return result;
+  }
+
+  private static void validateReplacementFields(List<String> replace) {
+    for (String path : replace) {
+      String[] parts = path == null ? new String[0] : path.split("\\.");
+      if (parts.length != 2
+          || !(switch (parts[0]) {
+            case "positiveSemanticQuery", "negativeSemanticQuery" ->
+                List.of("genres", "topics", "keywords", "authors", "narrators").contains(parts[1]);
+            case "mustInclude", "mustNotInclude" ->
+                List.of("authors", "narrators", "language", "source", "duration", "publicationYear")
+                    .contains(parts[1]);
+            default -> false;
+          })) {
+        throw new InvalidRequestException(
+            "Which preference would you like to change? You can name a genre, author, or narrator.");
+      }
+    }
+  }
+
+  private static ExactCriteria updatedCriteria(
+      ExactCriteria base,
+      ExactCriteria additions,
+      ExactCriteria removals,
+      String prefix,
+      List<String> replace) {
+    var result = new ExactCriteria();
+    result.setAuthors(
+        personTerms(
+            get(base, ExactCriteria::getAuthors),
+            get(additions, ExactCriteria::getAuthors),
+            get(removals, ExactCriteria::getAuthors),
+            replace.contains(prefix + ".authors")));
+    result.setNarrators(
+        personTerms(
+            get(base, ExactCriteria::getNarrators),
+            get(additions, ExactCriteria::getNarrators),
+            get(removals, ExactCriteria::getNarrators),
+            replace.contains(prefix + ".narrators")));
+    result.setLanguage(
         scalar(
-            get(mustInclude, ExactCriteria::getLanguage),
-            get(mustIncludeAdds, ExactCriteria::getLanguage),
-            get(mustIncludeRemoves, ExactCriteria::getLanguage),
-            replace.contains("mustInclude.language")));
-    result.mustInclude.setDuration(
+            get(base, ExactCriteria::getLanguage),
+            get(additions, ExactCriteria::getLanguage),
+            get(removals, ExactCriteria::getLanguage),
+            replace.contains(prefix + ".language")));
+    result.setDuration(
         scalar(
-            get(mustInclude, ExactCriteria::getDuration),
-            get(mustIncludeAdds, ExactCriteria::getDuration),
-            get(mustIncludeRemoves, ExactCriteria::getDuration),
-            replace.contains("mustInclude.duration")));
-    result.mustInclude.setPublicationYear(
+            get(base, ExactCriteria::getDuration),
+            get(additions, ExactCriteria::getDuration),
+            get(removals, ExactCriteria::getDuration),
+            replace.contains(prefix + ".duration")));
+    result.setPublicationYear(
         scalar(
-            get(mustInclude, ExactCriteria::getPublicationYear),
-            get(mustIncludeAdds, ExactCriteria::getPublicationYear),
-            get(mustIncludeRemoves, ExactCriteria::getPublicationYear),
-            replace.contains("mustInclude.publicationYear")));
-    result.mustInclude.setSource(
+            get(base, ExactCriteria::getPublicationYear),
+            get(additions, ExactCriteria::getPublicationYear),
+            get(removals, ExactCriteria::getPublicationYear),
+            replace.contains(prefix + ".publicationYear")));
+    result.setSource(
         scalar(
-            get(mustInclude, ExactCriteria::getSource),
-            get(mustIncludeAdds, ExactCriteria::getSource),
-            get(mustIncludeRemoves, ExactCriteria::getSource),
-            replace.contains("mustInclude.source")));
-    var mustNotIncludeAdds = get(additions, SessionPreferences::getMustNotInclude);
-    var mustNotIncludeRemoves = get(removals, SessionPreferences::getMustNotInclude);
-    result.mustNotInclude = new ExactCriteria();
-    result.mustNotInclude.setAuthors(
-        terms(
-            get(mustNotInclude, ExactCriteria::getAuthors),
-            get(mustNotIncludeAdds, ExactCriteria::getAuthors),
-            get(mustNotIncludeRemoves, ExactCriteria::getAuthors),
-            replace.contains("mustNotInclude.authors")));
-    result.mustNotInclude.setNarrators(
-        terms(
-            get(mustNotInclude, ExactCriteria::getNarrators),
-            get(mustNotIncludeAdds, ExactCriteria::getNarrators),
-            get(mustNotIncludeRemoves, ExactCriteria::getNarrators),
-            replace.contains("mustNotInclude.narrators")));
-    result.mustNotInclude.setLanguage(
-        scalar(
-            get(mustNotInclude, ExactCriteria::getLanguage),
-            get(mustNotIncludeAdds, ExactCriteria::getLanguage),
-            get(mustNotIncludeRemoves, ExactCriteria::getLanguage),
-            replace.contains("mustNotInclude.language")));
-    result.mustNotInclude.setDuration(
-        scalar(
-            get(mustNotInclude, ExactCriteria::getDuration),
-            get(mustNotIncludeAdds, ExactCriteria::getDuration),
-            get(mustNotIncludeRemoves, ExactCriteria::getDuration),
-            replace.contains("mustNotInclude.duration")));
-    result.mustNotInclude.setPublicationYear(
-        scalar(
-            get(mustNotInclude, ExactCriteria::getPublicationYear),
-            get(mustNotIncludeAdds, ExactCriteria::getPublicationYear),
-            get(mustNotIncludeRemoves, ExactCriteria::getPublicationYear),
-            replace.contains("mustNotInclude.publicationYear")));
-    result.mustNotInclude.setSource(
-        scalar(
-            get(mustNotInclude, ExactCriteria::getSource),
-            get(mustNotIncludeAdds, ExactCriteria::getSource),
-            get(mustNotIncludeRemoves, ExactCriteria::getSource),
-            replace.contains("mustNotInclude.source")));
+            get(base, ExactCriteria::getSource),
+            get(additions, ExactCriteria::getSource),
+            get(removals, ExactCriteria::getSource),
+            replace.contains(prefix + ".source")));
     return result;
   }
 
@@ -204,12 +206,7 @@ public class SessionPreferences {
   }
 
   private static boolean hasQuery(SemanticQuery query) {
-    return query != null
-        && (hasTerms(query.getGenres())
-            || hasTerms(query.getTopics())
-            || hasTerms(query.getKeywords())
-            || hasTerms(query.getAuthors())
-            || hasTerms(query.getNarrators()));
+    return query != null && query.hasValues();
   }
 
   private static boolean hasTerms(List<String> terms) {
@@ -249,18 +246,36 @@ public class SessionPreferences {
             get(removals, SemanticQuery::getKeywords),
             replace.contains(prefix + ".keywords")));
     result.setAuthors(
-        terms(
+        personTerms(
             get(base, SemanticQuery::getAuthors),
             get(additions, SemanticQuery::getAuthors),
             get(removals, SemanticQuery::getAuthors),
             replace.contains(prefix + ".authors")));
     result.setNarrators(
-        terms(
+        personTerms(
             get(base, SemanticQuery::getNarrators),
             get(additions, SemanticQuery::getNarrators),
             get(removals, SemanticQuery::getNarrators),
             replace.contains(prefix + ".narrators")));
     return result;
+  }
+
+  private static List<String> personTerms(
+      List<String> base, List<String> additions, List<String> removals, boolean replace) {
+    var result = terms(base, additions, null, replace);
+    if (result == null || removals == null) {
+      return result;
+    }
+    var removed =
+        removals.stream()
+            .filter(java.util.Objects::nonNull)
+            .map(PersonNameNormalizer::comparisonKey)
+            .collect(java.util.stream.Collectors.toSet());
+    var remaining =
+        result.stream()
+            .filter(value -> !removed.contains(PersonNameNormalizer.comparisonKey(value)))
+            .toList();
+    return remaining.isEmpty() ? null : remaining;
   }
 
   private static List<String> terms(

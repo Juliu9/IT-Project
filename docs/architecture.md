@@ -7,16 +7,18 @@ For setup and commands, start with the [README](../README.md).
 
 ## Request pipeline
 
-1. `RequestGateway` accepts text plus user/session IDs. `InputParser` returns a structured
-   `SessionRequest` through exact-command matching or model extraction.
-2. `SessionTransitionService` loads the session under its lock. `ConversationEngine` resolves the
-   action through `ConversationDispatcher`, validates criteria, and requests a page only when needed.
+1. `RequestGateway` accepts text plus user/session IDs. `InputParser` returns a `UserIntent` through
+   exact-command matching or model extraction. Exact commands never load session context; only the AI
+   path receives the bounded parser context.
+2. `SessionTransitionService` locks and loads the session. `IntentResolver` converts the stated
+   intent into a `SessionRequest`, then `ConversationEngine` applies session rules, validates
+   criteria, and requests a page only when needed.
 3. `AudiobookRecommendationWorkflow` prepares query vectors; `AudiobookRetrievalPlanner` builds the
    mandatory exact filters and retrieval mode. `CandidateRetrievalService` queries the selected adapter.
 4. `RankingService` combines available retrieval relevance, stored-user preference similarity, and
    universal rules such as recency/duration plausibility. Weights belong in
    [configuration](configuration.md#ranking-rules).
-5. The session commits the completed turn, queue and shown IDs together. Response generation then
+5. The session commits the completed outcome and active-search state together. Response generation then
    uses fixed wording or a separate chat client; the response model never selects the books.
 
 Catalogue embedding, summary generation, migration and CSV imports run in separate maintenance
@@ -29,8 +31,11 @@ See the [request sequence diagram](diagrams/recommendation-flow.svg) for executi
 | --- | --- | --- |
 | Conversation policy | Rules governing how a request uses earlier criteria, preferences, recommendations, and history. | Intent routing or response wording |
 | Conversation decision | Resolved conversational action, such as presenting recommendations, asking for clarification, or acknowledging an action. | Response text, intent, or “conversation outcome” |
+| User intent | The parser's statement of what the user meant, before session rules interpret references or pending questions. | A final action or a persisted request |
+| Session request | The executable request created from a user intent while the session is locked. | Parser output |
 | Search context | Retained criteria and personalisation choice for the latest recommendation search. | The entire conversation or saved preferences |
-| Pending recommendations | Ranked books from the current search that have not yet been shown. | Shown books or the last page |
+| Active search | The current completed search, its bounded shown IDs, and its pending recommendation queue. | A conversation-wide history |
+| Last outcome | The most recent completed turn and decision, used by repeat. | The active search |
 
 ## Session guarantees and replacement
 
@@ -61,6 +66,106 @@ Do not mix the two locking versions.
 
 ## Search and retrieval rules
 
+### Books similar to a reference
+
+"Books similar to The Hunger Games" remains `RECOMMENDATION`. The parser extracts `similarToTitle`
+and an optional `similarToAuthor`; this author identifies the reference and does not restrict the
+recommended authors. Extra tastes remain semantic criteria, and exact constraints remain filters.
+Explicit requests for a whole series or multiple references prompt for one individual book.
+A single named title goes to catalogue lookup even when it is also the name of a series.
+
+`SimilarBookResolver` uses the configured `AudiobookTitleLookup` adapter before replacing the active
+search. A unique exact title match (ignoring case/punctuation) selects the reference. Its author can
+narrow editions; otherwise the user chooses from at most five title/author matches using a number,
+ordinal, title or unique author. “The last one” selects the final reference choice; “the former”
+and “the latter” select the first and last choices respectively. Partial title matches always need confirmation.
+Adapters scan matching title pages while retaining bounded choices, returning exact titles when
+present before falling back to partial titles. A truncated exact-match set never automatically
+selects a reference. No match asks which aspects the user
+liked; a taste reply keeps the original exact constraints and starts a normal semantic search.
+
+The selected book must have a usable existing dense vector. Missing vectors produce a fixed response
+and warning, asking for another title while preserving the search constraints, old search and cached
+page. A bare replacement title resumes that search; “yes” first asks which title. No catalogue vectors
+are generated or written at request time. Storage failures follow the normal retrieval-error contract. Title and vector lookup
+are shared ports implemented by both Solr and Qdrant, without database types in conversation policy.
+
+The reference vector is combined with additional positive/negative semantic vectors using the normal
+vector math. The reference ID and shown IDs are excluded before candidate selection. Saved exact
+preferences still apply; saved semantic tastes/user vectors participate only with explicit
+personalisation. Retrieval uses dense similarity with the exact filters, followed by normal ranking.
+
+The session saves the original reference vector and effective query vector. Full cached More pages
+skip retrieval; a refill reuses the effective vector without title lookup or query embedding. Refine
+keeps the reference and rebuilds from its original vector, avoiding repeated blending. A new standalone
+search replaces the reference. Explain and Repeat retain the resolved reference as search evidence.
+Pending title clarification is separate from the displayed page; Cancel/Clear history remove it.
+`ClarificationResolver` routes replies to the current question before catalogue access, so a later
+explanation or count question takes priority over older title choices. Title matching shares one
+normaliser for case, punctuation and catalogue `$b` markers across reference and explanation flows.
+Resuming a reference selection restores explicit search criteria and reapplies current preferences;
+preference resets abandon unfinished searches rather than reviving inherited filters.
+“None of these” asks for another reference title while retaining the search constraints.
+“None of those, try The Hobbit” immediately looks up the replacement title with those constraints. Reference author
+lookup and author replies use the same conservative person-name equivalence as exact filters.
+
+Pending choices are stored once in their request snapshot; older snapshots with a duplicate choices
+field remain readable.
+
+### Outstanding questions
+
+`Session.pendingQuestion` holds one typed question and its unfinished action's context. Question
+subclasses cover search/duration/year clarifications, counts, preferences, explanations and similar-book
+selection. There is no suspended question or automatic resumption stack.
+
+HELP preserves the question and adds a reminder; REPEAT preserves its existing replay behaviour.
+UNKNOWN keeps the question and says “I didn't quite catch that. Just to clarify, …” followed by the
+current question and any choices. Contextual answers such as “horror”, “the second one” or “under three
+hours” resolve the current question before ordinary intent dispatch.
+
+Any other explicit action abandons the previous question and unfinished request. Preference edits,
+count changes, resets, explanations and More cannot later revive old selections. The new action may
+ask its own question. Completed searches, displayed books, saved preferences and cached results remain
+available unless the action explicitly clears them.
+
+Zero, negative and fractional recommendation counts ask for a whole number from one to five before
+retrieval. The count question owns the original action and criteria across HELP/cache reloads.
+Correcting a search/More count resumes that action with a temporary count; only explicit count settings
+change the saved default. Counts above five retain the existing cap and notice.
+With no previous search, “2 more” asks for criteria and retains two through HELP/cache reloads.
+“Yes” after a no-match or exhausted-results offer asks what to change without retrieving again;
+the previous explicit criteria remain available until the user answers or starts another action.
+
+Redis saves question subclasses with explicit type names. Only the current cache format is supported;
+there is no legacy conversion or history-based recovery. Clear outdated development sessions or use
+a new session ID after changing the cache schema.
+
+`ConversationText` owns courtesy normalization and ordinal parsing, shared by CommandParser and
+ClarificationResolver. The resolver owns session decisions; Session owns preference merging and
+preference-question cleanup. For example, "please, the second
+one" selects rank 2 after a question, while "could you explain number two, please" explicitly requests
+an explanation. Titles and search criteria still use their original text.
+
+### Runtime comparisons
+
+“Make them longer” sets a minimum one minute beyond the longest displayed duration. If that
+conflicts with an existing maximum, ask before extending the range. Refusal keeps the old search.
+Missing durations ask for a limit. The active search question retains explicit criteria for duration
+and year replies; replies reapply current session preferences.
+
+"Make them shorter" is a `REFINE` command, not a saved-preference edit. It skips AI, preserves the
+active search's content and other constraints, and uses `shorter=true` without inventing a numeric
+limit. With no previous search (including cleared/expired/new sessions), it asks what content the
+user wants and performs no retrieval, even when saved preferences exist.
+
+Recommendations retain their catalogue `durationMinutes` through ranking, paging and session storage.
+When every displayed duration is known and greater than one minute, a shorter refinement sets the
+new duration filter strictly below the shortest displayed book. The resolved limit is retained for
+More; session preferences are unchanged. If durations are missing, the page is empty, or the shortest
+book is already one minute, it asks for a duration limit and preserves the old page/batch. A numeric
+limit reply refines that search. Older session snapshots without durations remain readable and use
+this clarification path. Explicit duration requests still use their stated bounds.
+
 ### Context and cached results
 
 Retrieval excludes recently shown IDs before selecting up to 50 candidates. Ranking removes
@@ -75,6 +180,17 @@ and Help preserve it; preference-update behaviour is specified below. The sessio
 500 shown IDs, so older books can eventually reappear. Clear history removes searches, shown IDs,
 pending recommendations and clarification state, while preserving preferences and result count.
 
+Outstanding clarification questions and search-change offers are saved in session state, independently
+of the latest response. HELP, REPEAT, UNKNOWN and cache reloads preserve the outstanding
+question. Other explicit actions abandon the unfinished action. After no matches,
+no more results or an empty explanation page, "yes" opens a search-change question and "no" declines
+without removing preferences or history, including after those interruptions.
+
+Duration replies share parsing with exact filters: "a couple of hours", "a hundred minutes",
+"two thousand minutes" and "2 hours 30" retain the pending search and shorter/longer direction.
+AI parsing also recognises these forms in complete requests. Vague limits such as "a few hours"
+remain clarification cases.
+
 A zero-match search still supplies context for `MORE_RESULTS`; clearing history removes it.
 `MORE_RESULTS` restores saved search criteria. `REPEAT` replays the latest resolved request,
 including explanations, help, clarifications, and empty results, without retrieving or applying
@@ -85,15 +201,18 @@ history, shown IDs and the pending queue untouched, while updating the latest re
 "repeat that" afterward repeats that page. No page yields a fixed message; an empty latest MORE
 repeats exhaustion rather than falling back to an older page. Clearing history removes the page.
 
-The session stores one bounded `lastRequest` snapshot and its `lastDecision`, separately from
-search/preference history. Raw input and final response text are not stored. A repeated explanation
-uses the original selected books and criteria; AI wording may vary. Old sessions without these
-fields fall back to their latest retained request. Clearing history removes the old snapshot, then
-retains only the clear-history acknowledgement for replay.
+A pending explanation-target question accepts “all of them” as the whole displayed page, including
+after HELP or a cache reload. Outside that question, the reply remains context-dependent.
 
-Pending recommendations are catalogue snapshots. Edits and removals affect new batches; cached
-items are not rechecked on each page. Sessions without a pending queue refill normally. The queue
-needs no Redis-specific keys or additional storage-adapter operations.
+`Session.lastOutcome` stores one completed turn and decision for REPEAT. `Session.activeSearch`
+stores the one search that can be refined, paged, or used as displayed-page context, together with
+bounded shown IDs and pending recommendation snapshots. Raw input and final response text are not
+stored. A repeated explanation uses the original selected books and criteria; AI wording may vary.
+Clearing history removes the active search and replaces the repeat outcome with its acknowledgement.
+
+Pending recommendations are catalogue snapshots inside `ActiveSearch`. Edits and removals affect
+new batches; cached items are not rechecked on each page. The queue needs no Redis-specific keys or
+additional storage-adapter operations.
 
 ### Session preference updates and search snapshots
 
@@ -103,10 +222,18 @@ dislike. “Avoid romance” supplies both positive removal and negative additio
 name only the affected fields in `replacePreferenceFields`, for example `positiveSemanticQuery.genres`;
 replacement without a new value clears that field. Other preferences remain unchanged.
 
-An empty update asks what to change and sets `Session.awaitingPreferenceUpdate`. A short taste reply
-completes the update without retrieving books. Explicit search commands (`explicitSearch=true`) start
-normal recommendation work instead; cancel and clear-history end the pending update. Numeric
-answers to a newer book-selection or count question take priority over an older preference question.
+An empty update creates a preference question. A short taste reply completes the update without
+retrieving books. A new explicit action discards that question; there is no older question to restore.
+
+`RESET_PREFERENCES` clears saved session preferences and the current question, and resets
+the result count to 5. It preserves stored user vectors, shown-book history, the displayed page,
+and the remaining cached batch. MORE uses the reset count; REPEAT_RECOMMENDATIONS retains the old
+page. A cache refill for MORE continues with that search's original criteria and stored-vector
+snapshot even after preferences are reset; it does not apply the new-search personalisation gate.
+Replies to a personalised taste question (for example "horror") are saved in SessionPreferences
+when the pending search resumes, so later personalised requests reuse them. Only the reply's semantic
+preferences are saved; the original search's author, duration and other one-off constraints remain
+search-specific. Exact preferences are saved through explicit preference updates.
 
 Successful updates change only session preferences and the replay acknowledgement. They preserve the
 latest displayed page, shown IDs, search history and pending batch. Both repeat modes remain usable.
@@ -122,12 +249,46 @@ the first refill. New searches record the full snapshot metadata; no database mi
 ### Refinements and exact-filter corrections
 
 Self-contained criteria, such as “fantasy under five hours”, route to `RECOMMENDATION`.
+“More recent” (including “I want books from more recent times”) is a `REFINE` that keeps
+search content and sets an inclusive lower publication-year bound to the floored average of the
+latest displayed page's known years. Unknown years are ignored; when every year is missing, it asks
+for a starting year without consuming the previous search or queued books. A supplied starting year
+resumes that search. A different refinement abandons the year question; an upper-bound reply such
+as “before 2000” replaces the unfinished recency request. Any previous upper year bound remains in
+force for a supplied starting year. If the start exceeds that bound, ask before extending the period:
+“yes” replaces the old period with the proposed range, retaining any explicitly supplied end year;
+“no” keeps the original search, and a different range replaces the
+proposal. The confirmation survives HELP, REPEAT, UNKNOWN and cache reloads. An answer uses its saved
+explicit criteria; preference updates, resets and count changes abandon the confirmation.
+When the average would not advance the existing lower bound, advance it by one year instead. If
+that exceeds the period's end, return a fixed exhaustion message without consuming the page or queue;
+MORE and REPEAT_RECOMMENDATIONS remain available, while REPEAT repeats the exhaustion message.
+“Older ones” mirrors the recency comparison with an upper bound one year below the floored average
+of known displayed years. Keep the existing lower bound when compatible; otherwise ask before
+extending the period. If all years are missing, ask for an ending year and retain the full refinement.
+
+Explicit periods stay literal:
+“1950 to the 2000s” means 1950–2009. A standalone decade, including “from the 2000s”,
+means 2000–2009. Publication years must be within 1–9999; exclusive bounds outside that range
+ask for a valid range before retrieval. Ordinary “recent books” still means the last five years.
+Without an active search, a comparative refinement asks what kind of audiobook the user wants.
 A context-dependent `REFINE` without a previous search asks for criteria without embedding or
 retrieval; stored user preferences alone are not a previous search. A self-contained request can
 still answer a pending preference question and save that taste for the session.
 
+Search edits use `replaceSearchFields`, an allowlisted list of criteria paths, reusing the preference
+field validation. “Make it horror instead” replaces `positiveSemanticQuery.genres`; “also mystery”
+adds to the existing genres. A listed field with no value clears it: “any author is fine now” clears
+`mustInclude.authors`, while “remove the time limit” clears `mustInclude.duration`. Omitted fields
+still inherit previous values. These edits leave saved preferences unchanged. Override paths persist
+with the search through cache reloads, MORE and later refinements, preventing saved preferences from
+reintroducing a cleared filter or replaced genre. A new recommendation request starts fresh.
+
 New exact author/narrator lists replace the previous list by default. Explicit “also”/“add” wording
-sets the parser's `addAuthors`/`addNarrators` flags and extends that list instead. Unrelated filters
+sets the parser's `addAuthors`/`addNarrators` flags and extends that list instead.
+For leading “also”/“add” instructions, supplied values remain additions even when another field is
+removed in the same message; empty replacement fields still clear their filters. Explicit
+“instead”/“replace” wording retains replacement behavior. Unrelated filters
 and semantic criteria remain inherited for refinements.
 
 Before queue invalidation or recommendation work, the planner checks exact include/exclude
@@ -138,9 +299,29 @@ allowing A or B while excluding A remains valid. A range conflicts only when its
 the entire required interval. Semantic combinations, such as romantic horror, are not conflicts.
 This checks logical impossibility, not whether the current catalogue happens to contain matches.
 
+Author/narrator filters share `PersonNameNormalizer` in the catalogue model. Each database adapter
+adds conservative OR variants at query time: `Suzanne Collins` also tries `Collins, Suzanne`, and
+an explicit `García Márquez, Gabriel` also tries `Gabriel García Márquez`. Two-word forward names and dotted-initial prefixes with a single-word surname
+(e.g. `J. K. Rowling` → `Rowling, J. K.`) are reversed; other longer forward names, suffix-bearing
+names, and uncertain comma formats are not guessed. Include/exclude conflict checks use the same name-order comparison. Original request
+and preference values remain unchanged, so MORE/REFINE reuse those names and regenerate variants.
+Removing saved author/narrator preferences uses this same equivalence, including semantic preferences.
+“Remove X from my preferences” removes matching saved values across positive and negative fields.
+“I no longer like X” removes positive values only; it does not invent a dislike or alter the current batch.
+This uses no dictionary, catalogue scan, AI call, new index, or migration. Generated alternatives
+also tolerate a terminal catalogue period and compact/spaced dotted initials (`J.K.` / `J. K.`).
+Separated single-letter initials (`J K`) match those dotted forms in both name orders; compact
+undotted words (`JK`) are not assumed to be initials. This works for authors and narrators,
+without expanding initials into full names or removing suffix punctuation. These alternatives
+are not verified catalogue identities; typo matching, full-name aliases, arbitrary stored casing,
+and complete discovery of longer-name variants remain outside this limited approach.
+
 ### Semantic criteria and personalisation
 
-Author-only and narrator-only semantic criteria select semantic retrieval. Exact names in
+Author-only and narrator-only semantic criteria select semantic retrieval. “A book by Suzanne
+Collins” sets `mustInclude.authors`; “books similar to Suzanne Collins style” sets
+`positiveSemanticQuery.authors`, without an author filter or a similar-book title lookup. Narrator
+requirements versus narrator-style similarity follow the same distinction. Exact names in
 `mustInclude` and `mustNotInclude` use separate `ExactCriteria` instances and remain mandatory
 database filters.
 
@@ -153,7 +334,11 @@ For personalised retrieval with stored taste:
 If either positive source is absent, the other contributes at full strength. Exact filters are
 never relaxed to fill the result count.
 
-Without stored user vectors, personalised retrieval requires positive or negative semantic taste.
+A first personalised request without stored user vectors or saved session preferences asks
+"What genres do you like?", even if that request includes semantic criteria or exact constraints.
+It does not embed or retrieve candidates until the user answers. The answer supplies taste and
+resumes the retained search. With saved preferences, positive or negative semantic taste is
+still required when no user vectors exist.
 Exact constraints remain mandatory filters and are never embedded as a substitute for taste. Short
 answers to the taste question merge with the pending search and retain its count; explicit searches
 abandon it. Corrections and contradictions use the existing exact-filter policy before retrieval.
@@ -163,13 +348,16 @@ abandon it. Corrections and contradictions use the existing exact-filter policy 
 | Filter | Accepted expressions | Boundaries |
 | --- | --- | --- |
 | Duration | Hours/minutes, decimals, `1h 30m`, `between 2 and 3 hours` | `under`/`over` are strict; `at most`/`at least` inclusive; bare duration exact |
-| Publication year | Four-digit year, comparisons, inclusive ranges, `recent`, `past year`, `last N years` | `after`/`before` are strict; bare year exact; relative windows include both boundary years |
+| Publication year | Four-digit year, comparisons, inclusive ranges, `around YYYY`, `period YYYY`, `recent`, `past year`, `last N years` | `after`/`before` are strict; bare year exact; relative windows include both boundary years |
 
 The parser preserves relative publication phrases rather than guessing a calendar year. Retrieval
 resolves them against the current UTC year: `recent`/`recently` means the last five years; `past year`
 means one year; `last 4 years` and `last four years` mean four. Both include and exclude filters use
 these rules. In 2026 these become 2021–2026, 2025–2026, and 2022–2026 respectively, excluding future
 years. Zero, fractional, negative, and unrepresentably large windows return `400`.
+
+Approximate phrases such as “around 2000” and “the period 2000” mean an inclusive ±5-year
+range: 1995–2005. Bounds stay within calendar years 0–9999; a bare “2000” remains exact.
 
 Catalogue metadata contains years only, so these are inclusive year ranges, not exact rolling
 month/day cutoffs. Cached pages remain snapshots of the search that produced them.
@@ -185,12 +373,13 @@ The recommendation server is under `com.gen3.recommenderagent`:
 | --- | --- |
 | `api` | HTTP requests and error responses |
 | `application` | Session transaction boundary and shared chat-client wiring |
-| `application.conversation` | Conversation engine and handler composition |
+| `application.conversation` | Intent resolution, executable request/draft state, conversation engine and request/preference mapping |
+| `application.conversation.workflow` | Dispatch, handlers, clarification, criteria merging, history and conversation rules |
 | `application.recommendation` | Recommendation workflow and cached-page management |
-| `domain` | Intents and recommendation limits |
-| `domain.conversation` | Intent dispatch, handlers, clarification, criteria merging and history policy |
-| `domain.session` | Input, working-draft, search-context, completed-turn and session models |
-| `inputparser` / `response` | Structured request parsing and response wording |
+| `domain.conversation` | Conversation actions, decisions, completed turns and explanation selectors |
+| `domain.session` | Session aggregate, pending question, active search and last outcome |
+| `domain.search` / `domain.recommendation` | Search criteria/value objects and recommendation limits/results |
+| `inputparser` / `response` | Structured request parsing, raw-text/duration interpretation, and response wording |
 | `embedding` | QueryEmbeddingService, positive/negative query vectors |
 | `retrieval` / `retrieval.plan` | Candidate search execution, retrieval plans and filter parsing |
 | `ranker` / `ranker.scorer` | Candidate ranking and scoring rules |
@@ -235,24 +424,26 @@ generation remains in `embeddingjob`; the query embedding module only embeds liv
 | `ConversationHistory` | Retained searches, metadata and replay snapshots |
 | `ConversationResponseGenerator` / `AiResponseGenerator` | Fixed wording and AI narration after the session commits |
 
-The parser returns `SessionRequest`, which contains incoming intent, criteria and edit instructions.
-Provider responses and token usage stay inside the parser. A `ConversationDraft` holds working state
-inside the session transition. `SearchContext` groups explicit and effective criteria with frozen
-reading-preference evidence. Completion creates a `ConversationTurn` for response generation and
-session history; parser-only edit instructions are not persisted in that turn.
+`UserIntent` is the parser's small, untrusted statement of user meaning. Provider responses and
+token usage stay inside the parser. `IntentResolver` converts it to a `SessionRequest` while the
+session is locked; conversation policy then resolves pending questions, page references and search
+availability. A `ConversationDraft` holds working state inside that transition. `SearchContext`
+groups explicit and effective criteria with frozen reading-preference evidence. Completion creates a
+`ConversationTurn` for response generation and session state; parser-only edit instructions are not
+persisted in that turn. `LastOutcome` carries the completed turn and decision consumed by replay and
+response generation.
 
-Redis retains the existing flat search-field names. Old snapshots with parser-only fields remain
-readable; those fields are ignored. Decisions remain outside serialized turns, in
-`Session.lastDecision`, so existing replay snapshots continue to work without flushing sessions.
-The response generator consumes the resolved decision; direct callers without one use the shared
-`ConversationRules` classifier.
+Development sessions use only the current `Session` schema: `pendingQuestion`, `activeSearch`, and
+`lastOutcome`. Reset Redis or use a new session ID when this schema changes.
 
 ### Input parsing
 
 `InputParser` validates input, tries `CommandParser`, and falls back to `AiParser` when no exact
-command matches. It converts either result into a session request and logs the total parsing time.
-`AiParser` owns the model prompt, output schema, and provider calls. Exact commands skip the model
-but still use the normal session/conversation pipeline. The switch in
+command matches. Both paths produce `UserIntent`; conversion to `SessionRequest` happens later,
+inside the locked session transition. `AiParser` owns the model prompt, output schema, and provider
+calls. The AI path receives only bounded reference context (the current pending question, latest
+action and up to five displayed titles). Exact commands skip both the model and context load but
+still use the normal session/conversation pipeline. The switch in
 [`CommandParser`](../src/main/java/com/gen3/recommenderagent/inputparser/CommandParser.java)
 is the authoritative alias list. It covers Help, More (including “next”), both repeat actions,
 page explanations, clear history and cancellation.
@@ -260,8 +451,12 @@ page explanations, clear history and cancellation.
 Matching ignores case, extra whitespace, curly apostrophe differences, and boundary punctuation.
 It removes supported polite wording such as “please”/“kindly”, opening greetings or “sorry”/“excuse me”,
 and trailing “cheers”/“ta”/“many thanks”. The original input is preserved. Explicit numeric More commands such as “2 more”, “show me 2 more”
-and “2 more audiobooks” preserve their count without calling AI. Negations, book selectors and
-extra criteria still go through the model; “2 more but shorter” and “more British authors” are not
+and “2 more audiobooks” preserve their count without calling AI. Settings commands such as
+“only three at a time”, “3 per page”, “change count to three books”, and “4 books at a time” use
+CHANGE_COUNT, including while a preference
+question is pending; they do not edit saved tastes. Bare selections such as “1”,
+“one” and “the second audiobook” also skip AI as UNKNOWN; pending session context resolves their
+meaning. Without a pending question they stay UNKNOWN. Negations and extra criteria still go through the model; “2 more but shorter” and “more British authors” are not
 reduced to a plain More command.
 
 The parser schema and response vocabulary remain explicit contracts rather than dynamically
@@ -286,13 +481,21 @@ Simple actions share `SessionActionHandler`; a new intent does not require a new
 A pending result-count question also accepts short answers such as “3” and “three”. The resolved
 count updates the session without consuming the pending recommendation queue. An explicit count
 on `MORE_RESULTS`, such as “2 more”, applies to that page without changing the saved default.
+“More, make it three at a time” also uses a temporary count: each message executes one intent.
+Use a separate CHANGE_COUNT request to save a new default.
 
 `CANCEL` acknowledges cancellation and clears pending preference clarification without clearing
 search history, preferences, or queued books. “Never mind” and “cancel” also end count and book-selection
-questions. Unrecognized replies no longer become personalised searches merely because a taste
+questions. While a preference question is pending, clear declines such as “no”, “not now”,
+“keep my preferences”, “nothing”, or “no changes” cancel it without changing saved preferences or
+count. Declining a genre question abandons that unfinished search while preserving earlier results
+and cached books. “Not now” and “leave it” use the CANCEL fast path alongside explicit cancellation commands.
+Bare “no” declines any pending question; preference-specific declines remain contextual and skip AI.
+Unrecognized replies no longer become personalised searches merely because a taste
 question is pending.
 
-Generic recommendation requests without criteria, such as “Recommend an audiobook”, use the
+Generic recommendation requests without criteria, such as “Recommend an audiobook” or “give me
+some books”, use the
 personalised path. Existing users can use stored taste vectors; users without usable preferences
 are asked what they like before candidate retrieval. Explicit criteria still work without requiring
 personalisation.
@@ -300,7 +503,7 @@ personalisation.
 ## Semantic information and control intents
 
 Supported intents are `RECOMMENDATION`, `REFINE`, `MORE_RESULTS`, `REPEAT`, `REPEAT_RECOMMENDATIONS`, `CHANGE_COUNT`,
-`EXPLAIN_RECOMMENDATION`, `UPDATE_PREFERENCES`, `CLEAR_HISTORY`, `HELP`, `CANCEL`, and `UNKNOWN`.
+`EXPLAIN_RECOMMENDATION`, `UPDATE_PREFERENCES`, `RESET_PREFERENCES`, `CLEAR_HISTORY`, `HELP`, `CANCEL`, and `UNKNOWN`.
 
 Only `RECOMMENDATION` and `REFINE` accept newly parsed positive/negative semantic queries or the
 personalised flag. Other intents discard these fields. `MORE_RESULTS`, `REPEAT_RECOMMENDATIONS`, and
@@ -308,6 +511,10 @@ personalised flag. Other intents discard these fields. `MORE_RESULTS`, `REPEAT_R
 `UPDATE_PREFERENCES` carries semantic and exact changes through separate `SessionPreferences` values;
 its search-semantic fields remain empty. Standalone criteria route to `RECOMMENDATION`; context can
 resolve them as an answer to a pending preference question.
+
+A personalised search with zero matches reports that the combined current search and saved
+preferences found no matches. It does not blame a particular filter, echo only the latest message,
+change preferences, or retry with relaxed constraints.
 
 ## Explaining recommendations
 
@@ -318,19 +525,31 @@ ignores case/punctuation and uses exact matches before unique partial matches. M
 out-of-range or conflicting references produce a ranked-title clarification. A bare ordinal is not
 an explanation request on its own. While a book-selection clarification is pending, a numeric
 reply such as “1”, “1.”, “first”, or “the first one” selects that rank from the retained page;
-invalid numbers ask again. An otherwise unrecognized reply can also identify a displayed title. Other actions
-such as help or a new search end this context. “Why the fourth book?” also resolves independently.
+a numeric title such as “1984” matches its displayed book when it is not a valid rank.
+“The last one” and “the latter” select the final displayed book; “the former” selects the first.
+These relative positions also work in complete questions such as “Why the last book?”. Other invalid numbers ask again. An otherwise unrecognized reply can also identify a displayed title. HELP preserves this context; a new search replaces it. “Why the fourth book?” also resolves independently.
+“Explain two more” and “explain book two more” both select book 2 for more detail, never two additional
+books. Single-book explanations retain the original displayed rank.
+`explanationSelection` carries literal include/exclude lists of ranks, relative positions or titles.
+Empty includes mean the whole page. Multiple titles and “all except” selections use the same exact/
+unique-partial matching; exclusions win, duplicates disappear, and displayed order/ranks remain intact.
+An invalid or ambiguous selector asks for clarification while retaining other selections and exclusions.
+Each bare reply resolves the next unresolved item. An explicit new explanation replaces that subset;
+MORE/new searches clear it. Empty subsets ask which books to explain without calling AI. The existing
+150-word total explanation limit also applies to subsets.
+
 Model-provided ranks and counts accept large integers before conversion to bounded internal values:
 oversized ranks clarify rather than overflow, and result counts retain the existing one-to-five cap.
-Fractional numeric fields and structured responses exceeding JSON limits return a friendly `400`
-validation message rather than truncating a position or returning a server error.
+Malformed model numeric fields and structured responses exceeding JSON limits return a friendly `400`
+validation message. Invalid user recommendation counts use the count-clarification flow instead of
+rounding or interpreting zero as replay.
 
 Bare title replies to a pending explanation question match the displayed page even when the parser
 labels them RECOMMENDATION or REFINE. Explicit search commands still start a new search.
 
 The resolved explanation copies saved criteria and selects from the page inside the session update.
-It does not retrieve, embed, rank, consume the pending batch, add shown IDs, replace history, or clear
-pending preference clarification. No search yields a fixed onboarding message; an empty latest page
+It does not retrieve, embed, rank, consume the pending batch, add shown IDs or replace completed search
+history. As an explicit action it abandons any unrelated pending question. No search yields a fixed onboarding message; an empty latest page
 yields a distinct fixed message, even if an older page had results. The session represents committed
 recommendations, not confirmation that a client displayed or spoke them.
 

@@ -1,7 +1,7 @@
 package com.gen3.recommenderagent.ranker;
 
 import com.gen3.catalogue.model.AudiobookCandidate;
-import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.ranker.scorer.CompositeScorer;
 import com.gen3.recommenderagent.ranker.scorer.ScoreResult;
 import java.util.ArrayList;
@@ -40,15 +40,34 @@ public class RankingService implements Ranker {
     }
 
     int limit = Math.max(1, requestedLimit);
+    List<AudiobookCandidate> eligible = eligibleCandidates(candidates, effective);
+    RankingContext scoringContext = scoringContext(eligible, effective);
+    List<ScoredCandidate> scoredCandidates = new ArrayList<>();
+    for (AudiobookCandidate candidate : eligible) {
+      scoredCandidates.add(
+          new ScoredCandidate(candidate, compositeScorer.score(candidate, scoringContext)));
+    }
+
+    scoredCandidates.sort(
+        Comparator.comparingDouble(
+                (ScoredCandidate item) -> item.score().available() ? item.score().value() : 0.0)
+            .reversed());
+    return toRecommendations(scoredCandidates, limit);
+  }
+
+  private List<AudiobookCandidate> eligibleCandidates(
+      List<AudiobookCandidate> candidates, RankingContext context) {
     Set<String> seenBookIds = new HashSet<>();
-    List<AudiobookCandidate> eligible =
-        candidates.stream()
-            .filter(candidate -> candidate != null && candidate.audiobook() != null)
-            .filter(candidate -> candidate.audiobook().id() != null)
-            .filter(candidate -> !candidate.audiobook().id().isBlank())
-            .filter(candidate -> !effective.excludedBookIds().contains(candidate.audiobook().id()))
-            .filter(candidate -> seenBookIds.add(candidate.audiobook().id()))
-            .toList();
+    return candidates.stream()
+        .filter(candidate -> candidate != null && candidate.audiobook() != null)
+        .filter(candidate -> candidate.audiobook().id() != null)
+        .filter(candidate -> !candidate.audiobook().id().isBlank())
+        .filter(candidate -> !context.excludedBookIds().contains(candidate.audiobook().id()))
+        .filter(candidate -> seenBookIds.add(candidate.audiobook().id()))
+        .toList();
+  }
+
+  private RankingContext scoringContext(List<AudiobookCandidate> eligible, RankingContext context) {
     List<Double> retrievalScores =
         eligible.stream()
             .map(AudiobookCandidate::score)
@@ -63,18 +82,11 @@ public class RankingService implements Ranker {
         retrievalScores.isEmpty()
             ? null
             : retrievalScores.stream().mapToDouble(Double::doubleValue).max().orElseThrow();
-    RankingContext scoringContext =
-        effective.withRetrievalScoreRange(minimumRetrievalScore, maximumRetrievalScore);
-    List<ScoredCandidate> scoredCandidates = new ArrayList<>();
-    for (AudiobookCandidate candidate : eligible) {
-      scoredCandidates.add(
-          new ScoredCandidate(candidate, compositeScorer.score(candidate, scoringContext)));
-    }
+    return context.withRetrievalScoreRange(minimumRetrievalScore, maximumRetrievalScore);
+  }
 
-    scoredCandidates.sort(
-        Comparator.comparingDouble(
-                (ScoredCandidate item) -> item.score().available() ? item.score().value() : 0.0)
-            .reversed());
+  private List<Recommendation> toRecommendations(
+      List<ScoredCandidate> scoredCandidates, int limit) {
     boolean hasScoredCandidate =
         scoredCandidates.stream().anyMatch(item -> item.score().available());
     List<Recommendation> recommendations =
@@ -97,6 +109,8 @@ public class RankingService implements Ranker {
               score,
               candidate.audiobook().title(),
               candidate.audiobook().shortDescription());
+      recommendation.setDurationMinutes(candidate.audiobook().durationMinutes());
+      recommendation.setPublicationYear(candidate.audiobook().publicationYear());
       recommendation.setReadingPreferencesUsed(item.score().readingPreferencesUsed());
       recommendations.add(recommendation);
     }

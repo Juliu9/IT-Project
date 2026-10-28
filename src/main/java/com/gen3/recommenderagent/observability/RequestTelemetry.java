@@ -1,8 +1,8 @@
 package com.gen3.recommenderagent.observability;
 
-import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.application.conversation.SessionRequest;
+import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -122,7 +122,7 @@ public class RequestTelemetry {
       Map<String, Object> retrieval) {}
 
   public void complete(ConversationTurn request) {
-    finish(request == null ? null : request.toDraft(), "SUCCESS");
+    finish(request == null ? null : ConversationDraft.fromTurn(request), "SUCCESS");
   }
 
   public void fail(SessionRequest request) {

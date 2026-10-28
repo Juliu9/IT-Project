@@ -58,9 +58,9 @@ public class SolrShortDescriptionStore implements AudiobookEnrichmentStore {
   public List<StoredAudiobook> findRecordsWithoutShortDescription(int maximumRecords)
       throws IOException {
     List<StoredAudiobook> missing = new ArrayList<>();
-    int offset = 0;
+    String afterId = null;
     while (missing.size() < maximumRecords) {
-      var page = catalogue.findAllBooks(offset, 500);
+      var page = catalogue.findAllBooks(afterId, 500);
       for (var book : page) {
         var stored = new StoredAudiobook(book, book.id());
         if ((book.shortDescription() == null || book.shortDescription().isBlank())
@@ -71,7 +71,9 @@ public class SolrShortDescriptionStore implements AudiobookEnrichmentStore {
           }
         }
       }
-      offset += page.size();
+      if (!page.isEmpty()) {
+        afterId = page.getLast().id();
+      }
       if (page.size() < 500) {
         break;
       }

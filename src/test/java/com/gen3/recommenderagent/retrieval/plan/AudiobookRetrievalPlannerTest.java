@@ -3,15 +3,43 @@ package com.gen3.recommenderagent.retrieval.plan;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gen3.catalogue.model.AudiobookFilterConditions;
-import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.ExactCriteria;
-import com.gen3.recommenderagent.domain.session.SemanticQuery;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.domain.search.ExactCriteria;
+import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 /** Verifies conversion of a mixed user request into searchable text and exact filters. */
 class AudiobookRetrievalPlannerTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "around 2000,1995,2005",
+    "1950 to 2000s,1950,2009",
+    "between 1950 and 2000s,1950,2009",
+    "from 1950s to 2000s,1950,2009",
+    "2000s,2000,2009",
+    "the period 2000,1995,2005",
+    "period 2000,1995,2005",
+    "from the period 2000,1995,2005",
+    "around 0001,1,6",
+    "around 9999,9994,9999",
+    "2000,2000,2000",
+    "from 2000,2000,"
+  })
+  void approximateYearsUseInclusiveFiveYearBoundsWithoutChangingExactYears(
+      String text, int minimum, Integer maximum) {
+    var request = new ConversationDraft();
+    var exact = new ExactCriteria();
+    exact.setPublicationYear(text);
+    request.setMustInclude(exact);
+    request.setMustNotInclude(exact);
+    var filters = new AudiobookRetrievalPlanner().plan(50, request, Set.of()).filters();
+    for (var conditions : List.of(filters.mustInclude(), filters.mustNotInclude())) {
+      assertThat(conditions.minimumPublicationYear()).isEqualTo(minimum);
+      assertThat(conditions.maximumPublicationYear()).isEqualTo(maximum);
+    }
+  }
 
   /** Keeps fantasy and desert as lexical terms while making narrator and duration exact filters. */
   @Test

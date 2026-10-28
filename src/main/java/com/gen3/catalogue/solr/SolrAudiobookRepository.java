@@ -5,6 +5,7 @@ import com.gen3.catalogue.model.AudiobookEmbedding;
 import com.gen3.catalogue.model.AudiobookFilterConditions;
 import com.gen3.catalogue.model.AudiobookFilters;
 import com.gen3.catalogue.model.AudiobookRecord;
+import com.gen3.catalogue.model.PersonNameNormalizer;
 import com.gen3.catalogue.model.StoredAudiobook;
 import com.gen3.catalogue.port.AudiobookCandidateSearch;
 import com.gen3.catalogue.port.AudiobookCatalogueRepository;
@@ -38,8 +39,24 @@ import org.springframework.stereotype.Repository;
 @ConditionalOnExpression(
     "'${audiobook.database:qdrant}' == 'solr' or '${audiobook.qdrant.migration.enabled:false}' == 'true'")
 public class SolrAudiobookRepository
-    implements AudiobookCatalogueRepository, AudiobookCandidateSearch, AudiobookVectorRepository {
+    implements com.gen3.catalogue.port.AudiobookDetailsLookup,
+        AudiobookCatalogueRepository,
+        AudiobookCandidateSearch,
+        AudiobookVectorRepository,
+        com.gen3.catalogue.port.AudiobookTitleLookup {
 
+  private static final String[] CATALOGUE_FIELDS = {
+    "id",
+    "source",
+    "title",
+    "authors",
+    "description",
+    "narrators",
+    "language",
+    "durationMinutes",
+    "publicationYear",
+    "short_description"
+  };
   private static final double KEYWORD_WEIGHT = 0.4;
   private static final double VECTOR_WEIGHT = 0.6;
 
@@ -80,19 +97,9 @@ public class SolrAudiobookRepository
     solrQuery.set("qf", "all");
     solrQuery.set("uf", "all");
     solrQuery.setRows(limit);
-    solrQuery.setFields(
-        "id",
-        "source",
-        "title",
-        "authors",
-        "description",
-        "narrators",
-        "language",
-        "durationMinutes",
-        "publicationYear",
-        "short_description",
-        "score",
-        vectorField);
+    solrQuery.setFields(CATALOGUE_FIELDS);
+    solrQuery.addField("score");
+    solrQuery.addField(vectorField);
     addFilters(solrQuery, filters);
 
     return solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
@@ -113,8 +120,10 @@ public class SolrAudiobookRepository
     if (conditions == null || !conditions.hasConditions()) {
       return;
     }
-    addAnyValueFilter(query, "authors", conditions.authors(), excluded);
-    addAnyValueFilter(query, "narrators", conditions.narrators(), excluded);
+    addAnyValueFilter(
+        query, "authors", PersonNameNormalizer.variants(conditions.authors()), excluded);
+    addAnyValueFilter(
+        query, "narrators", PersonNameNormalizer.variants(conditions.narrators()), excluded);
     addExactFilter(query, "language", conditions.language(), excluded);
     addExactFilter(query, "source", conditions.source(), excluded);
     addRangeFilter(
@@ -172,6 +181,43 @@ public class SolrAudiobookRepository
   }
 
   /** Runs lexical and vector retrieval while preserving the blended Solr score. */
+  @Override
+  public List<com.gen3.catalogue.model.AudiobookTitle> findBooksByTitle(
+      String title, String author, int limit) throws IOException {
+    if (title == null || title.isBlank() || limit <= 0) {
+      return List.of();
+    }
+    var query = new SolrQuery("title:\"" + ClientUtils.escapeQueryChars(title.strip()) + "\"");
+    if (author != null && !author.isBlank()) {
+      addAnyValueFilter(query, "authors", PersonNameNormalizer.variants(List.of(author)), false);
+    }
+    query.setRows(100);
+    query.setFields("id", "title", "authors");
+    query.setSort("id", SolrQuery.ORDER.asc);
+    var matches = new com.gen3.catalogue.model.AudiobookTitleMatches(title, author, limit);
+    String afterId = null;
+    try {
+      while (true) {
+        var pageQuery = query.getCopy();
+        setAfterId(pageQuery, afterId);
+        var page = solrClient.query(collection, pageQuery, SolrRequest.METHOD.POST).getResults();
+        for (var document : page) {
+          matches.add(
+              new com.gen3.catalogue.model.AudiobookTitle(
+                  field(document, "id"),
+                  field(document, "title"),
+                  stringList(document.getFieldValue("authors"))));
+        }
+        if (matches.full() || page.size() < 100) {
+          return matches.results();
+        }
+        afterId = field(page.getLast(), "id");
+      }
+    } catch (SolrServerException | SolrException exception) {
+      throw new IOException("Solr title lookup failed", exception);
+    }
+  }
+
   @Override
   public List<AudiobookCandidate> searchHybrid(
       float[] queryVector, String query, AudiobookFilters filters, int limit) throws IOException {
@@ -243,16 +289,30 @@ public class SolrAudiobookRepository
     }
   }
 
+  @Override
+  public List<AudiobookRecord> findBooksByIds(List<String> bookIds) throws IOException {
+    if (bookIds.isEmpty()) {
+      return List.of();
+    }
+    var query = new SolrQuery();
+    query.setFields(CATALOGUE_FIELDS);
+    try {
+      return solrClient.getById(collection, bookIds, query).stream().map(this::toRecord).toList();
+    } catch (SolrServerException | SolrException exception) {
+      throw new IOException("Could not load audiobook details from Solr", exception);
+    }
+  }
+
   /** Reads the complete catalogue in deterministic pages for the startup importer. */
   @Override
-  public List<AudiobookRecord> findAllBooks(int offset, int limit) throws IOException {
-    return cataloguePage(offset, limit, false).stream().map(this::toRecord).toList();
+  public List<AudiobookRecord> findAllBooks(String afterId, int limit) throws IOException {
+    return cataloguePage(afterId, limit, false).stream().map(this::toRecord).toList();
   }
 
   /** Retains each record's source version across the model call. */
-  public List<StoredAudiobook> findEmbeddingRecords(int offset, int limit) throws IOException {
+  public List<StoredAudiobook> findEmbeddingRecords(String afterId, int limit) throws IOException {
     var records = new ArrayList<StoredAudiobook>();
-    for (var document : cataloguePage(offset, limit, false)) {
+    for (var document : cataloguePage(afterId, limit, false)) {
       Object version = document.getFieldValue("_version_");
       if (!(version instanceof Number number) || number.longValue() <= 1) {
         throw new IOException("Solr must return an exact _version_ for embedding maintenance");
@@ -263,9 +323,9 @@ public class SolrAudiobookRepository
   }
 
   /** Reads existing catalogue values and vectors without generating or normalizing anything. */
-  public List<AudiobookEmbedding> findStoredBooks(int offset, int limit) throws IOException {
+  public List<AudiobookEmbedding> findStoredBooks(String afterId, int limit) throws IOException {
     List<AudiobookEmbedding> records = new ArrayList<>();
-    for (SolrDocument document : cataloguePage(offset, limit, true)) {
+    for (SolrDocument document : cataloguePage(afterId, limit, true)) {
       Object stored = document.getFieldValue(vectorField);
       float[] vector = null;
       if (stored instanceof float[] values) {
@@ -289,24 +349,20 @@ public class SolrAudiobookRepository
     return records;
   }
 
-  private SolrDocumentList cataloguePage(int offset, int limit, boolean includeVectors)
+  private void setAfterId(SolrQuery query, String afterId) {
+    if (afterId != null) {
+      query.addFilterQuery("id:{\"" + ClientUtils.escapeQueryChars(afterId) + "\" TO *]");
+    }
+  }
+
+  private SolrDocumentList cataloguePage(String afterId, int limit, boolean includeVectors)
       throws IOException {
     SolrQuery solrQuery = new SolrQuery("*:* ".trim());
-    solrQuery.setStart(Math.max(offset, 0));
+    setAfterId(solrQuery, afterId);
     solrQuery.setRows(Math.max(limit, 1));
     solrQuery.setSort("id", SolrQuery.ORDER.asc);
-    solrQuery.setFields(
-        "id",
-        "source",
-        "title",
-        "authors",
-        "description",
-        "narrators",
-        "language",
-        "durationMinutes",
-        "publicationYear",
-        "short_description",
-        "_version_");
+    solrQuery.setFields(CATALOGUE_FIELDS);
+    solrQuery.addField("_version_");
     if (includeVectors) {
       solrQuery.addField(vectorField);
     }
@@ -324,19 +380,9 @@ public class SolrAudiobookRepository
     solrQuery.setQuery(
         "{!knn f=" + vectorField + " topK=" + limit + "}" + vectorLiteral(queryVector));
     solrQuery.setRows(limit);
-    solrQuery.setFields(
-        "id",
-        "source",
-        "title",
-        "authors",
-        "description",
-        "narrators",
-        "language",
-        "durationMinutes",
-        "publicationYear",
-        "short_description",
-        "score",
-        vectorField);
+    solrQuery.setFields(CATALOGUE_FIELDS);
+    solrQuery.addField("score");
+    solrQuery.addField(vectorField);
     addFilters(solrQuery, filters);
     return solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
   }

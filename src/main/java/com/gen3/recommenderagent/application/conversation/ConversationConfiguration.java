@@ -1,12 +1,12 @@
 package com.gen3.recommenderagent.application.conversation;
 
-import com.gen3.recommenderagent.domain.conversation.ConversationDispatcher;
-import com.gen3.recommenderagent.domain.conversation.ConversationHandler;
-import com.gen3.recommenderagent.domain.conversation.ExplanationConversationHandler;
-import com.gen3.recommenderagent.domain.conversation.PreferenceConversationHandler;
-import com.gen3.recommenderagent.domain.conversation.ReplayConversationHandler;
-import com.gen3.recommenderagent.domain.conversation.SearchContextResolver;
-import com.gen3.recommenderagent.domain.conversation.SessionActionHandler;
+import com.gen3.recommenderagent.application.conversation.workflow.ConversationDispatcher;
+import com.gen3.recommenderagent.application.conversation.workflow.ConversationHandler;
+import com.gen3.recommenderagent.application.conversation.workflow.ExplanationConversationHandler;
+import com.gen3.recommenderagent.application.conversation.workflow.PreferenceConversationHandler;
+import com.gen3.recommenderagent.application.conversation.workflow.ReplayConversationHandler;
+import com.gen3.recommenderagent.application.conversation.workflow.SearchContextResolver;
+import com.gen3.recommenderagent.application.conversation.workflow.SessionActionHandler;
 import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

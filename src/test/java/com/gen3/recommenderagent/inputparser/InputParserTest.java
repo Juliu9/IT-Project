@@ -10,10 +10,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.ExactCriteria;
-import com.gen3.recommenderagent.domain.session.SemanticQuery;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.application.conversation.SessionRequest;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.search.ExactCriteria;
+import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -23,6 +23,447 @@ import org.springframework.ai.chat.model.ChatResponse;
 import tools.jackson.databind.ObjectMapper;
 
 class InputParserTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "Recommend zero gravity audiobooks",
+        "Recommend zero waste books",
+        "zero tolerance books"
+      })
+  void descriptiveZeroPhrasesReachAiWithoutBeingRewritten(String text) {
+    var ai = mock(AiParser.class);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    parsed.setInvalidBookCount(true);
+    parsed.setBookCount(java.math.BigInteger.ZERO);
+    var query = new SemanticQuery();
+    String subject =
+        text.substring(text.toLowerCase(java.util.Locale.ROOT).indexOf("zero"))
+            .replaceFirst(" (?:audiobooks|books)$", "");
+    query.setKeywords(List.of(subject));
+    parsed.setPositiveSemanticQuery(query);
+    when(ai.parse(text)).thenReturn(parsed);
+    var result = new InputParser(new CommandParser(), ai).parse(text);
+    assertEquals(false, result.isInvalidBookCount());
+    assertEquals(List.of(subject), result.getPositiveSemanticQuery().getKeywords());
+    assertEquals(null, result.getBookCount());
+    org.mockito.Mockito.verify(ai).parse(text);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "Recommend zero  gravity audiobooks",
+        "Recommend zero\tgravity audiobooks",
+        "Recommend zero\ngravity audiobooks",
+        "Recommend zero\u00a0gravity audiobooks",
+        "Recommend zero-gravity audiobooks",
+        "Recommend zero\u2010gravity audiobooks",
+        "Recommend zero\u2011gravity audiobooks",
+        "Recommend zero\u2013gravity audiobooks"
+      })
+  void zeroSubjectChecksIgnoreWhitespaceDifferences(String text) {
+    var ai = mock(AiParser.class);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    parsed.setInvalidBookCount(true);
+    var query = new SemanticQuery();
+    query.setKeywords(List.of("zero gravity"));
+    parsed.setPositiveSemanticQuery(query);
+    when(ai.parse(text)).thenReturn(parsed);
+    var result = new InputParser(new CommandParser(), ai).parse(text);
+    assertEquals(false, result.isInvalidBookCount());
+    assertEquals(text, result.getRawText());
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"explain .5", "explain 2.5", "why book .5"})
+  void fractionalExplanationPositionsCannotBecomeWholeRanks(String text) {
+    var ai = mock(AiParser.class);
+    var result = new InputParser(new CommandParser(), ai).parse(text);
+    assertEquals(ConversationAction.EXPLAIN_RECOMMENDATION, result.getIntent());
+    assertEquals(0, result.getReferenceRank());
+    verifyNoInteractions(ai);
+  }
+
+  @Test
+  void zeroTopicComparisonDoesNotSuppressAnExplicitInvalidQuantityOrChangePeople() {
+    var ai = mock(AiParser.class);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    var query = new SemanticQuery();
+    query.setKeywords(List.of("zero gravity"));
+    parsed.setPositiveSemanticQuery(query);
+    var exact = new com.gen3.recommenderagent.domain.search.ExactCriteria();
+    exact.setAuthors(List.of("Anne-Marie Smith"));
+    parsed.setMustInclude(exact);
+    when(ai.parse(anyString())).thenReturn(parsed);
+    var result =
+        new InputParser(new CommandParser(), ai)
+            .parse("Recommend 0 books about zero-gravity by Anne-Marie Smith");
+    assertEquals(true, result.isInvalidBookCount());
+    assertEquals(List.of("Anne-Marie Smith"), result.getMustInclude().getAuthors());
+  }
+
+  @Test
+  void ambiguousWordCountsCanStillBeRejectedByAiWithoutLosingCriteria() {
+    var ai = mock(AiParser.class);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    parsed.setInvalidBookCount(true);
+    var query = new SemanticQuery();
+    query.setGenres(List.of("mystery"));
+    parsed.setPositiveSemanticQuery(query);
+    when(ai.parse("Give me zero mystery books")).thenReturn(parsed);
+    var result = new InputParser(new CommandParser(), ai).parse("Give me zero mystery books");
+    assertEquals(true, result.isInvalidBookCount());
+    assertEquals(List.of("mystery"), result.getPositiveSemanticQuery().getGenres());
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"give me some books", "Give me some audiobooks please", "recommend some books"})
+  void genericBookRequestsUsePersonalisedRecommendationsWithoutAi(String text) {
+    var ai = mock(AiParser.class);
+    var result = new InputParser(new CommandParser(), ai).parse(text);
+    assertEquals(ConversationAction.RECOMMENDATION, result.getIntent());
+    assertEquals(true, result.isPersonalised());
+    assertEquals(true, result.isExplicitSearch());
+    assertEquals(null, result.getMustInclude());
+    assertEquals(null, result.getPositiveSemanticQuery());
+    verifyNoInteractions(ai);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "any author is fine now,mustInclude.authors",
+    "any narrator,mustInclude.narrators",
+    "remove the time limit,mustInclude.duration",
+    "any publication year,mustInclude.publicationYear"
+  })
+  void clearingOneSearchFilterUsesTheFastPath(String text, String field) {
+    var ai = mock(AiParser.class);
+    var result = new InputParser(new CommandParser(), ai).parse(text);
+    assertEquals(ConversationAction.REFINE, result.getIntent());
+    assertEquals(List.of(field), result.getReplaceSearchFields());
+    verifyNoInteractions(ai);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "Also include mystery in that search",
+        "Please add mystery",
+        "Additionally include mystery"
+      })
+  void explicitAdditionsIgnoreErroneousModelReplacementFlags(String text) {
+    var ai = mock(AiParser.class);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.REFINE);
+    parsed.setReplaceSearchFields(List.of("positiveSemanticQuery.genres"));
+    var query = new SemanticQuery();
+    query.setGenres(List.of("mystery"));
+    parsed.setPositiveSemanticQuery(query);
+    when(ai.parse(anyString())).thenReturn(parsed);
+    var result = new InputParser(new CommandParser(), ai).parse(text);
+    assertEquals(List.of(), result.getReplaceSearchFields());
+    assertEquals(List.of("mystery"), result.getPositiveSemanticQuery().getGenres());
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource(
+      delimiter = '|',
+      value = {
+        "I want two and a half mystery books|I want some mystery books",
+        "Give me 0 mystery books|Give me some mystery books",
+        "Give me minus two mystery books|Give me some mystery books",
+        "Give me 2.5 mystery books|Give me some mystery books"
+      })
+  void invalidRecommendationCountsDoNotInventANumericCountForAi(String text, String modelText) {
+    var ai = mock(AiParser.class);
+    var countOnly = new UserIntent();
+    countOnly.setIntent(ConversationAction.CHANGE_COUNT);
+    when(ai.parse(anyString())).thenReturn(countOnly);
+    var recommendation = new UserIntent();
+    recommendation.setIntent(ConversationAction.RECOMMENDATION);
+    var query = new SemanticQuery();
+    query.setGenres(List.of("mystery"));
+    recommendation.setPositiveSemanticQuery(query);
+    when(ai.parse(modelText)).thenReturn(recommendation);
+    var result = new InputParser(new CommandParser(), ai).parse(text);
+    assertEquals(true, result.isInvalidBookCount());
+    assertEquals(null, result.getBookCount());
+    assertNotNull(result.getPositiveSemanticQuery());
+    assertEquals(List.of("mystery"), result.getPositiveSemanticQuery().getGenres());
+    org.mockito.Mockito.verify(ai).parse(modelText);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource(
+      delimiter = '|',
+      value = {
+        "0 more|1 more",
+        "zero books|some books",
+        "set count to zero|set count to 1",
+        "2.5|1",
+        "more and make it zero at a time|more and make it 1 at a time"
+      })
+  void invalidControlCountsKeepARecognisableNumericCommand(String text, String modelText) {
+    var check = CountInput.check(text);
+    assertEquals(true, check.invalid());
+    assertEquals(modelText, check.modelText());
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "books from around 2000", "books from the period 2000",
+        "Recommend audiobooks from around 2000",
+            "Please give me some books from the period 2000, thanks!"
+      })
+  void completeApproximateYearRequestsUseRecommendationsWithoutAi(String text) {
+    var ai = mock(AiParser.class);
+    var wrongIntent = new UserIntent();
+    wrongIntent.setIntent(ConversationAction.REFINE);
+    when(ai.parse(anyString())).thenReturn(wrongIntent);
+    var result = new InputParser(new CommandParser(), ai).parse(text);
+    assertEquals(ConversationAction.RECOMMENDATION, result.getIntent());
+    assertEquals(true, result.isExplicitSearch());
+    assertEquals(false, result.isPersonalised());
+    var bounds =
+        new com.gen3.recommenderagent.retrieval.plan.ExactFilterPolicy()
+            .filters(result, java.util.Set.of())
+            .mustInclude();
+    assertEquals(1995, bounds.minimumPublicationYear());
+    assertEquals(2005, bounds.maximumPublicationYear());
+    assertEquals(null, result.getPositiveSemanticQuery());
+    verifyNoInteractions(ai);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "books from around 2000 under two hours",
+        "three books from around 2000",
+        "a book from around 2000",
+        "change the year to around 2000",
+        "books from around 2000 by Suzanne Collins"
+      })
+  void approximateYearFastPathDoesNotSwallowOtherCriteriaOrContext(String text) {
+    assertEquals(null, new CommandParser().parse(text));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "{\"positiveSemanticQuery\":{\"genres\":[\"fantasy\"]}}",
+        "{\"intent\":null,\"positiveSemanticQuery\":{\"genres\":[\"fantasy\"]}}"
+      })
+  void missingOrNullModelIntentsBecomeUnknown(String json) {
+    var ai = mock(AiParser.class);
+    var parsed = new ObjectMapper().readValue(json, UserIntent.class);
+    when(ai.parse(anyString())).thenReturn(parsed);
+    var result = new InputParser(new CommandParser(), ai).parse("an unrecognised request");
+    assertEquals(ConversationAction.UNKNOWN, result.getIntent());
+    assertEquals(null, result.getPositiveSemanticQuery());
+  }
+
+  @Test
+  void invalidCountIntentCorrectionHappensBeforeSemanticFieldsCanBeCleared() {
+    var ai = mock(AiParser.class);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.CHANGE_COUNT);
+    parsed.setBookCount(java.math.BigInteger.ONE);
+    var genre = new SemanticQuery();
+    genre.setGenres(List.of("mystery"));
+    parsed.setPositiveSemanticQuery(genre);
+    when(ai.parse(anyString())).thenReturn(parsed);
+    var result =
+        new InputParser(new CommandParser(), ai).parse("I want two and a half mystery books");
+    assertEquals(ConversationAction.RECOMMENDATION, result.getIntent());
+    assertEquals(true, result.isInvalidBookCount());
+    assertEquals(List.of("mystery"), result.getPositiveSemanticQuery().getGenres());
+  }
+
+  @Test
+  void plainAuthorRequestsCannotAccidentallyRequirePersonalisationButKeepNameCasing() {
+    var ai = mock(AiParser.class);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    parsed.setPersonalised(true);
+    var exact = new com.gen3.recommenderagent.domain.search.ExactCriteria();
+    exact.setAuthors(List.of("Suzanne Collins"));
+    parsed.setMustInclude(exact);
+    when(ai.parse(anyString())).thenReturn(parsed);
+    var parser = new InputParser(new CommandParser(), ai);
+    var result = parser.parse("I want a book by Suzanne Collins");
+    assertEquals(false, result.isPersonalised());
+    assertEquals(List.of("Suzanne Collins"), result.getMustInclude().getAuthors());
+    assertEquals(
+        true,
+        parser
+            .parse("I want a book by Suzanne Collins for me based on my preferences")
+            .isPersonalised());
+  }
+
+  @Test
+  void modelRecencyCriteriaNormalizeBeforeLeavingTheParser() {
+    var ai = mock(AiParser.class);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    var exact = new com.gen3.recommenderagent.domain.search.ExactCriteria();
+    exact.setPublicationYear("more recent");
+    parsed.setMustInclude(exact);
+    when(ai.parse(anyString())).thenReturn(parsed);
+    var result =
+        new InputParser(new CommandParser(), ai)
+            .parse("I want the same kinds of books but from more recent times");
+    assertEquals(ConversationAction.REFINE, result.getIntent());
+    assertEquals("more recent", result.getMustInclude().getPublicationYear());
+    assertEquals(true, result.isExplicitSearch());
+  }
+
+  @Test
+  void anAdditionCanAlsoExplicitlyReplaceAnotherField() {
+    var ai = mock(AiParser.class);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.REFINE);
+    parsed.setReplaceSearchFields(List.of("mustInclude.duration"));
+    when(ai.parse(anyString())).thenReturn(parsed);
+    assertEquals(
+        List.of("mustInclude.duration"),
+        new InputParser(new CommandParser(), ai)
+            .parse("also remove the time limit")
+            .getReplaceSearchFields());
+  }
+
+  @Test
+  void compoundAdditionKeepsTheRemovalButCannotReplaceTheAddedGenre() {
+    var ai = mock(AiParser.class);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.REFINE);
+    parsed.setReplaceSearchFields(List.of("positiveSemanticQuery.genres", "mustInclude.duration"));
+    var query = new SemanticQuery();
+    query.setGenres(List.of("mystery"));
+    parsed.setPositiveSemanticQuery(query);
+    when(ai.parse(anyString())).thenReturn(parsed);
+    var result =
+        new InputParser(new CommandParser(), ai)
+            .parse("Also include mystery and remove the time limit");
+    assertEquals(List.of("mustInclude.duration"), result.getReplaceSearchFields());
+    assertEquals(List.of("mystery"), result.getPositiveSemanticQuery().getGenres());
+  }
+
+  @Test
+  void modelSearchReplacementsAreCopiedAndInvalidPathsAreRejected() {
+    var ai = mock(AiParser.class);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.REFINE);
+    parsed.setReplaceSearchFields(List.of("positiveSemanticQuery.genres"));
+    var query = new SemanticQuery();
+    query.setGenres(List.of("horror"));
+    parsed.setPositiveSemanticQuery(query);
+    when(ai.parse(anyString())).thenReturn(parsed);
+    assertEquals(
+        List.of("positiveSemanticQuery.genres"),
+        new InputParser(new CommandParser(), ai)
+            .parse("make it horror instead")
+            .getReplaceSearchFields());
+    parsed.setReplaceSearchFields(List.of("requestId"));
+    assertThrows(
+        InvalidRequestException.class,
+        () -> new InputParser(new CommandParser(), ai).parse("remove that filter"));
+  }
+
+  @Test
+  void moreRecentIsARefinementComparedWithTheDisplayedPageWithoutAi() {
+    var ai = mock(AiParser.class);
+    var result = new InputParser(new CommandParser(), ai).parse("more recent");
+    assertEquals(ConversationAction.REFINE, result.getIntent());
+    assertEquals("more recent", result.getMustInclude().getPublicationYear());
+    assertEquals(null, result.getPositiveSemanticQuery());
+    assertEquals(false, result.isPersonalised());
+    verifyNoInteractions(ai);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"no", "keep my preferences", "nothing", "No, thanks!"})
+  void preferenceDeclinesSkipAiButNeedContextToCancel(String text) {
+    var ai = mock(AiParser.class);
+    var parsed = new InputParser(new CommandParser(), ai).parse(text);
+    assertEquals(ConversationAction.UNKNOWN, parsed.getIntent());
+    verifyNoInteractions(ai);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"yes", "yes please", "yeah", "sure", "go ahead", "okay"})
+  void confirmationsSkipAiAndLetTheSessionResolveTheirMeaning(String text) {
+    var ai = mock(AiParser.class);
+    assertEquals(
+        ConversationAction.UNKNOWN,
+        new InputParser(new CommandParser(), ai).parse(text).getIntent());
+    verifyNoInteractions(ai);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "change count to 3 at a time,3",
+    "4 books at a time,4",
+    "three audiobooks at a time,3",
+    "set the count to two,2",
+    "give me four recommendations at a time,4",
+    "only three at a time,3",
+    "3 per page,3",
+    "change count to three books,3",
+    "only 2 audiobooks per page,2"
+  })
+  void explicitCountCommandsDoNotBecomePreferenceUpdates(String text, int count) {
+    var parsed = new CommandParser().parse(text);
+    assertNotNull(parsed);
+    assertEquals(ConversationAction.CHANGE_COUNT, parsed.getIntent());
+    assertEquals(count, parsed.getBookCount().intValue());
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "explain two more",
+        "explain book two more",
+        "explain the second book in more detail",
+        "Could you explain number 2 more please?",
+        "explain 999999999999999999999 more"
+      })
+  void explanationMoreSelectsOneOriginalRankWithoutAi(String text) {
+    var parsed = new CommandParser().parse(text);
+    assertNotNull(parsed);
+    assertEquals(ConversationAction.EXPLAIN_RECOMMENDATION, parsed.getIntent());
+    assertEquals(
+        text.contains("999") ? Integer.MAX_VALUE : 2, parsed.getReferenceRank().intValue());
+    assertEquals(null, parsed.getBookCount());
+  }
+
+  @Test
+  void referenceTitleAndAuthorAreSeparateFromExplanationAndResultFilters() {
+    var result =
+        parseModelJson(
+            "books similar to The Hunger Games by Suzanne Collins under ten hours",
+            """
+        {"intent":"RECOMMENDATION","similarToTitle":"The Hunger Games","similarToAuthor":"Suzanne Collins",
+         "mustInclude":{"duration":"under 10 hours"}}
+        """);
+    assertEquals("The Hunger Games", result.getSimilarToTitle());
+    assertEquals(true, result.isExplicitSearch());
+    assertEquals("Suzanne Collins", result.getSimilarToAuthor());
+    assertEquals("under 10 hours", result.getMustInclude().getDuration());
+    assertEquals(null, result.getReferenceTitle());
+    assertEquals(null, result.getPositiveSemanticQuery());
+    assertEquals(null, result.getMustInclude().getAuthors());
+    assertEquals(false, result.isPersonalised());
+  }
+
   @Test
   void parserSchemaRequiresOnlyIntentIncludingInsideNestedCriteria() {
     var schema = new ObjectMapper().readTree(AiParser.REQUEST_CONVERTER.getJsonSchema());
@@ -31,14 +472,18 @@ class InputParserTest {
     org.assertj.core.api.Assertions.assertThat(schema.findValues("required")).hasSize(1);
     assertEquals("boolean", schema.path("properties").path("explicitSearch").path("type").asText());
     assertEquals(false, schema.path("additionalProperties").asBoolean());
+    org.assertj.core.api.Assertions.assertThat(
+            schema.path("properties").path("positiveSemanticQuery").path("description").asText())
+        .contains("every stated positive taste", "exact filters");
   }
 
   @Test
   void sparseExplanationOutputUsesExistingDefaultsWithoutInventingCountOrCriteria() {
     var request =
         parseModelJson(
-            "why the second book", "{\"intent\":\"EXPLAIN_RECOMMENDATION\",\"referenceRank\":2}");
-    assertEquals(Intent.EXPLAIN_RECOMMENDATION, request.getIntent());
+            "Tell me the reason for position two",
+            "{\"intent\":\"EXPLAIN_RECOMMENDATION\",\"referenceRank\":2}");
+    assertEquals(ConversationAction.EXPLAIN_RECOMMENDATION, request.getIntent());
     assertEquals(2, request.getReferenceRank());
     assertEquals(null, request.getBookCount());
     assertEquals(null, request.getPositiveSemanticQuery());
@@ -71,7 +516,7 @@ class InputParserTest {
   void sparseRemovalAndClearingEditsDoNotNeedEmptyAdditionObjects() {
     var removal =
         parseModelJson(
-            "I no longer like romance",
+            "Amend my tastes to stop liking romance",
             """
         {"intent":"UPDATE_PREFERENCES",
          "preferenceRemovals":{"positiveSemanticQuery":{"genres":["romance"]}}}
@@ -98,7 +543,7 @@ class InputParserTest {
             .call()
             .responseEntity(AiParser.REQUEST_CONVERTER))
         .thenReturn(
-            new ResponseEntity<ChatResponse, ParsedRequest>(
+            new ResponseEntity<ChatResponse, UserIntent>(
                 null, AiParser.REQUEST_CONVERTER.convert(json)));
     var request =
         new InputParser(
@@ -132,14 +577,14 @@ class InputParserTest {
             .user("avoid romance and any language is fine")
             .call()
             .responseEntity(AiParser.REQUEST_CONVERTER))
-        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+        .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     var result =
         new InputParser(
                 new CommandParser(),
                 new AiParser(
                     client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse("avoid romance and any language is fine");
-    assertEquals(Intent.UPDATE_PREFERENCES, result.getIntent());
+    assertEquals(ConversationAction.UPDATE_PREFERENCES, result.getIntent());
     assertEquals(null, result.getPositiveSemanticQuery());
     assertEquals(null, result.getNegativeSemanticQuery());
     assertEquals(
@@ -151,8 +596,8 @@ class InputParserTest {
 
   @Test
   void mapsExplicitAdditionsAndRoutesStandaloneCriteriaToRecommendation() {
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.RECOMMENDATION);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.RECOMMENDATION);
     parsed.setAddAuthors(true);
     parsed.setAddNarrators(false);
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
@@ -162,14 +607,14 @@ class InputParserTest {
             .user("fantasy under five hours")
             .call()
             .responseEntity(AiParser.REQUEST_CONVERTER))
-        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+        .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     var result =
         new InputParser(
                 new CommandParser(),
                 new AiParser(
                     client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse("fantasy under five hours");
-    assertEquals(Intent.RECOMMENDATION, result.getIntent());
+    assertEquals(ConversationAction.RECOMMENDATION, result.getIntent());
     org.junit.jupiter.api.Assertions.assertTrue(result.isAddAuthors());
     org.junit.jupiter.api.Assertions.assertFalse(result.isAddNarrators());
     org.mockito.Mockito.verify(client.prompt())
@@ -185,6 +630,8 @@ class InputParserTest {
     "help,HELP",
     "show help,HELP",
     "what can you do,HELP",
+    "which operations do you support,HELP",
+    "what operations do you support,HELP",
     "what else can you do,HELP",
     "what do you do,HELP",
     "how do i use this,HELP",
@@ -221,6 +668,8 @@ class InputParserTest {
     "show those recommendations again,REPEAT_RECOMMENDATIONS",
     "show me the recommendations again,REPEAT_RECOMMENDATIONS",
     "show those books again,REPEAT_RECOMMENDATIONS",
+    "show me the same books again,REPEAT_RECOMMENDATIONS",
+    "show me the same audiobook list you gave me earlier,REPEAT_RECOMMENDATIONS",
     "explain,EXPLAIN_RECOMMENDATION",
     "explain the recommendations,EXPLAIN_RECOMMENDATION",
     "explain these recommendations,EXPLAIN_RECOMMENDATION",
@@ -237,6 +686,17 @@ class InputParserTest {
     "explain all the recommendations,EXPLAIN_RECOMMENDATION",
     "explain these books,EXPLAIN_RECOMMENDATION",
     "why were these books recommended,EXPLAIN_RECOMMENDATION",
+    "reset,RESET_PREFERENCES",
+    "Reset please,RESET_PREFERENCES",
+    "reset preferences,RESET_PREFERENCES",
+    "reset my preferences,RESET_PREFERENCES",
+    "reset session preferences,RESET_PREFERENCES",
+    "clear preferences,RESET_PREFERENCES",
+    "clear my preferences,RESET_PREFERENCES",
+    "reset my tastes,RESET_PREFERENCES",
+    "reset preferences and count,RESET_PREFERENCES",
+    "clear,CLEAR_HISTORY",
+    "Clear please,CLEAR_HISTORY",
     "clear history,CLEAR_HISTORY",
     "clear my history,CLEAR_HISTORY",
     "clear recommendation history,CLEAR_HISTORY",
@@ -251,7 +711,7 @@ class InputParserTest {
     "forget it,CANCEL",
     "more please,MORE_RESULTS"
   })
-  void exactCommandsSkipAiAndPreserveRequestMetadata(String text, Intent intent) {
+  void exactCommandsSkipAiAndPreserveRequestMetadata(String text, ConversationAction intent) {
     var client = mock(ChatClient.class);
     var parser =
         new InputParser(
@@ -285,23 +745,32 @@ class InputParserTest {
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {
         "help me find fantasy books",
+        "give me some books by Suzanne Collins",
+        "more recent than 2000",
+        "do not reset",
+        "clear and recommend fantasy",
+        "only three at a time by Jane Austen",
+        "not now but add horror to my preferences",
+        "no horror",
+        "4 books at a time by Jane Austen",
+        "do not change count to 3 at a time",
         "more, but shorter books",
         "2 more but shorter",
         "2 more by Jane Austen",
+        "another five but shorter",
+        "another book by Jane Austen",
+        "not another one",
+        "another five fantasy books",
         "repeat the second explanation",
         "repeat books by X",
         "cancelled flight books",
         "clear history and recommend fantasy",
-        "2",
-        "the second audiobook",
         "help/more",
         "please do not clear history",
         "could you repeat the recommendations but exclude romance please",
         "no more please",
-        "please explain the second book",
         "hello please help me find fantasy books thanks",
         "no more, thanks",
-        "two more please, ta",
         "more British authors, cheers",
         "don’t clear history, thanks",
         "don‘t repeat the recommendations, cheers",
@@ -310,13 +779,12 @@ class InputParserTest {
         "would you mind recommending fantasy audiobooks",
         "repeat your last response but shorter",
         "repeat those recommendations except the first",
-        "explain the second recommendation",
         "clear my history of horror preferences",
         "cancel that and recommend romance"
       })
   void requestsOutsideExactWhitelistStillUseAi(String text) {
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.UNKNOWN);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.UNKNOWN);
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(client
             .prompt()
@@ -324,16 +792,71 @@ class InputParserTest {
             .user(text)
             .call()
             .responseEntity(AiParser.REQUEST_CONVERTER))
-        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+        .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     var result =
         new InputParser(
                 new CommandParser(),
                 new AiParser(
                     client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse(text);
-    assertEquals(Intent.UNKNOWN, result.getIntent());
+    assertEquals(ConversationAction.UNKNOWN, result.getIntent());
     org.mockito.Mockito.verify(client.prompt().system(anyString()).user(text).call())
         .responseEntity(AiParser.REQUEST_CONVERTER);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "1",
+        "one",
+        "2",
+        "the second audiobook",
+        "the first one",
+        "999999999999999999999th"
+      })
+  void bareSelectionsSkipAiAndLeaveMeaningToPendingSessionContext(String text) {
+    var client = mock(ChatClient.class);
+    var result =
+        new InputParser(
+                new CommandParser(),
+                new AiParser(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
+            .parse(text);
+    assertEquals(ConversationAction.UNKNOWN, result.getIntent());
+    assertEquals(text, result.getRawText());
+    assertEquals(null, result.getBookCount());
+    assertEquals(null, result.getReferenceRank());
+    assertEquals(null, result.getSimilarToTitle());
+    assertEquals(false, result.isExplicitSearch());
+    verifyNoInteractions(client);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "make them shorter",
+        "make those audiobooks shorter",
+        "Can you make the previous books shorter",
+        "make it shorter",
+        "shorter ones",
+        "something shorter",
+        "Please make them shorter, thanks!"
+      })
+  void shorterFollowUpsAreRefinementsWithoutInventedGenreOrDuration(String text) {
+    var client = mock(ChatClient.class);
+    var result =
+        new InputParser(
+                new CommandParser(),
+                new AiParser(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
+            .parse(text);
+    assertEquals(ConversationAction.REFINE, result.getIntent());
+    assertEquals(true, result.isShorter());
+    assertEquals(true, result.isExplicitSearch());
+    assertEquals(null, result.getPositiveSemanticQuery());
+    assertEquals(null, result.getMustInclude());
+    assertEquals(null, result.getPreferenceUpdates());
+    verifyNoInteractions(client);
   }
 
   @Test
@@ -345,18 +868,19 @@ class InputParserTest {
             new AiParser(
                 client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
     assertEquals(
-        Intent.REPEAT_RECOMMENDATIONS,
+        ConversationAction.REPEAT_RECOMMENDATIONS,
         parser.parse("repeat please the recommendations").getIntent());
-    assertEquals(Intent.REPEAT, parser.parse("could you just repeat that, thanks").getIntent());
+    assertEquals(
+        ConversationAction.REPEAT, parser.parse("could you just repeat that, thanks").getIntent());
     verifyNoInteractions(client);
   }
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
-      strings = {"the second one’s reason", "the second one's reason", "why the second book"})
+      strings = {"the second one’s reason", "the second one's reason"})
   void ordinalExplanationGuidanceSeparatesRankFromCount(String text) {
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.EXPLAIN_RECOMMENDATION);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.EXPLAIN_RECOMMENDATION);
     parsed.setReferenceRank(java.math.BigInteger.valueOf(2));
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(client
@@ -365,14 +889,14 @@ class InputParserTest {
             .user(text)
             .call()
             .responseEntity(AiParser.REQUEST_CONVERTER))
-        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+        .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     var result =
         new InputParser(
                 new CommandParser(),
                 new AiParser(
                     client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse(text);
-    assertEquals(Intent.EXPLAIN_RECOMMENDATION, result.getIntent());
+    assertEquals(ConversationAction.EXPLAIN_RECOMMENDATION, result.getIntent());
     assertEquals(2, result.getReferenceRank());
     assertEquals(null, result.getBookCount());
     org.mockito.Mockito.verify(client.prompt())
@@ -385,8 +909,8 @@ class InputParserTest {
 
   @Test
   void mapsExplanationSelectorsWithoutTreatingRankAsBookCount() {
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.EXPLAIN_RECOMMENDATION);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.EXPLAIN_RECOMMENDATION);
     parsed.setReferenceRank(java.math.BigInteger.valueOf(6));
     parsed.setReferenceTitle("Harry Potter");
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
@@ -396,14 +920,14 @@ class InputParserTest {
             .user("why")
             .call()
             .responseEntity(AiParser.REQUEST_CONVERTER))
-        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+        .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     var result =
         new InputParser(
                 new CommandParser(),
                 new AiParser(
                     client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse("why");
-    assertEquals(Intent.EXPLAIN_RECOMMENDATION, result.getIntent());
+    assertEquals(ConversationAction.EXPLAIN_RECOMMENDATION, result.getIntent());
     assertEquals(6, result.getReferenceRank());
     assertEquals("Harry Potter", result.getReferenceTitle());
     assertEquals(null, result.getBookCount());
@@ -421,14 +945,14 @@ class InputParserTest {
                 + number
                 + "}");
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
-    String raw = "explain the " + number + "th one more";
+    String raw = "why was the " + number + "th book recommended";
     when(client
             .prompt()
             .system(anyString())
             .user(raw)
             .call()
             .responseEntity(AiParser.REQUEST_CONVERTER))
-        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+        .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     var result =
         new InputParser(
                 new CommandParser(),
@@ -437,7 +961,7 @@ class InputParserTest {
             .parse(raw);
     assertEquals(
         number.startsWith("-") ? Integer.MIN_VALUE : Integer.MAX_VALUE, result.getReferenceRank());
-    assertEquals(result.getReferenceRank(), result.getBookCount());
+    assertEquals(null, result.getBookCount());
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -487,7 +1011,7 @@ class InputParserTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.EnumSource(
-      value = Intent.class,
+      value = ConversationAction.class,
       names = {
         "MORE_RESULTS",
         "REPEAT",
@@ -495,13 +1019,14 @@ class InputParserTest {
         "EXPLAIN_RECOMMENDATION",
         "CHANGE_COUNT",
         "UPDATE_PREFERENCES",
+        "RESET_PREFERENCES",
         "CLEAR_HISTORY",
         "HELP",
         "CANCEL",
         "UNKNOWN"
       })
-  void stripsUnexpectedSemanticInformationFromControlIntents(Intent intent) {
-    var parsed = new ParsedRequest();
+  void stripsUnexpectedSemanticInformationFromControlIntents(ConversationAction intent) {
+    var parsed = new UserIntent();
     parsed.setIntent(intent);
     var query = new SemanticQuery();
     query.setGenres(List.of("horror"));
@@ -515,7 +1040,7 @@ class InputParserTest {
             .user("control")
             .call()
             .responseEntity(AiParser.REQUEST_CONVERTER))
-        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+        .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     var builder = mock(ChatClient.Builder.class);
     when(builder.build()).thenReturn(client);
     var result = new InputParser(new CommandParser(), new AiParser(builder)).parse("control");
@@ -529,8 +1054,8 @@ class InputParserTest {
       org.springframework.boot.test.system.OutputCaptureExtension.class)
   void recordsProviderUsageWhileReturningOnlyTheRequest(
       org.springframework.boot.test.system.CapturedOutput output) {
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.HELP);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.HELP);
     var response = mock(ChatResponse.class, RETURNS_DEEP_STUBS);
     when(response.getMetadata().getModel()).thenReturn("parser-model");
     when(response.getMetadata().getUsage().getPromptTokens()).thenReturn(12);
@@ -551,7 +1076,7 @@ class InputParserTest {
     var result =
         new InputParser(new CommandParser(), new AiParser(client, observer))
             .parse("Could you explain how this service works?");
-    assertEquals(Intent.HELP, result.getIntent());
+    assertEquals(ConversationAction.HELP, result.getIntent());
     org.assertj.core.api.Assertions.assertThat(output.getOut())
         .contains(
             "parser.completed mode=AI outcome=SUCCESS durationMs=",
@@ -567,6 +1092,7 @@ class InputParserTest {
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {
         "2 more",
+        "two more please, ta",
         "2 more books",
         "2 more recommendations",
         "show me 2 more",
@@ -581,11 +1107,48 @@ class InputParserTest {
                 new AiParser(
                     client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse(text);
-    assertEquals(Intent.MORE_RESULTS, result.getIntent());
+    assertEquals(ConversationAction.MORE_RESULTS, result.getIntent());
     assertEquals(2, result.getBookCount());
     assertEquals(null, result.getReferenceRank());
     assertEquals(null, result.getPositiveSemanticQuery());
     assertEquals(text, result.getRawText());
+    verifyNoInteractions(client);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "another,1",
+    "another 1,1",
+    "another one,1",
+    "another five,5",
+    "another book,1",
+    "another audiobook,1",
+    "another recommendation,1",
+    "another 5 books,5",
+    "another two audiobooks,2",
+    "another ten recommendations,10",
+    "Give me another five,5",
+    "Show me another 3 books,3",
+    "Can I have another one?,1",
+    "Could I have another five please?,5",
+    "Could you please give me another five? Thanks!,5",
+    "I'd like another book,1",
+    "I would like another five,5",
+    "Recommend another one,1",
+    "another 999999999999999999999999,2147483647"
+  })
+  void anotherCommandsPreserveCountWithoutAi(String text, int count) {
+    var client = mock(ChatClient.class);
+    var result =
+        new InputParser(
+                new CommandParser(),
+                new AiParser(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
+            .parse(text);
+    assertEquals(ConversationAction.MORE_RESULTS, result.getIntent());
+    assertEquals(count, result.getBookCount());
+    assertEquals(null, result.getReferenceRank());
+    assertEquals(null, result.getPositiveSemanticQuery());
     verifyNoInteractions(client);
   }
 
@@ -598,8 +1161,8 @@ class InputParserTest {
   })
   void preservesRelativePublicationWindowsForDeterministicFiltering(
       String raw, String window, int years) {
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.RECOMMENDATION);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.RECOMMENDATION);
     var include = new ExactCriteria();
     include.setPublicationYear(window);
     parsed.setMustInclude(include);
@@ -635,8 +1198,8 @@ class InputParserTest {
   @Test
   void mapsPersonalisedRequestWithoutInventingSearchCriteria() {
     String rawText = "Give me books I would like";
-    ParsedRequest parsed = new ParsedRequest();
-    parsed.setIntent(Intent.RECOMMENDATION);
+    UserIntent parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.RECOMMENDATION);
     parsed.setPersonalised(true);
     ChatClient client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(client
@@ -645,7 +1208,7 @@ class InputParserTest {
             .user(rawText)
             .call()
             .responseEntity(AiParser.REQUEST_CONVERTER))
-        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+        .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     ChatClient.Builder builder = mock(ChatClient.Builder.class);
     when(builder.build()).thenReturn(client);
 
@@ -664,10 +1227,10 @@ class InputParserTest {
     SemanticQuery semanticQuery = new SemanticQuery();
     semanticQuery.setGenres(List.of("science fiction"));
 
-    ParsedRequest parsedRequest = new ParsedRequest();
+    UserIntent parsedRequest = new UserIntent();
     SemanticQuery negativeSemanticQuery = new SemanticQuery();
     negativeSemanticQuery.setKeywords(List.of("romance"));
-    parsedRequest.setIntent(Intent.RECOMMENDATION);
+    parsedRequest.setIntent(ConversationAction.RECOMMENDATION);
     parsedRequest.setPositiveSemanticQuery(semanticQuery);
     parsedRequest.setNegativeSemanticQuery(negativeSemanticQuery);
     ExactCriteria mustInclude = new ExactCriteria();
@@ -686,7 +1249,7 @@ class InputParserTest {
             .user(rawText)
             .call()
             .responseEntity(AiParser.REQUEST_CONVERTER))
-        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsedRequest));
+        .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsedRequest));
 
     ChatClient.Builder builder = mock(ChatClient.Builder.class);
     when(builder.build()).thenReturn(chatClient);
@@ -696,7 +1259,7 @@ class InputParserTest {
 
     assertNotNull(result);
     assertEquals(rawText, result.getRawText());
-    assertEquals(Intent.RECOMMENDATION, result.getIntent());
+    assertEquals(ConversationAction.RECOMMENDATION, result.getIntent());
     assertSame(semanticQuery, result.getPositiveSemanticQuery());
     assertSame(negativeSemanticQuery, result.getNegativeSemanticQuery());
     assertSame(mustInclude, result.getMustInclude());
@@ -787,7 +1350,7 @@ class InputParserTest {
             .user(rawText)
             .call()
             .responseEntity(AiParser.REQUEST_CONVERTER))
-        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, null));
+        .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, null));
 
     ChatClient.Builder builder = mock(ChatClient.Builder.class);
     when(builder.build()).thenReturn(chatClient);
@@ -797,7 +1360,7 @@ class InputParserTest {
             IllegalStateException.class,
             () -> new InputParser(new CommandParser(), new AiParser(builder)).parse(rawText));
 
-    assertEquals("AI did not return a ParsedRequest", exception.getMessage());
+    assertEquals("AI did not return a UserIntent", exception.getMessage());
     org.assertj.core.api.Assertions.assertThat(output.getOut())
         .containsPattern("parser.completed mode=AI outcome=FAILURE durationMs=[0-9]+");
   }
@@ -818,42 +1381,5 @@ class InputParserTest {
     assertEquals("French", request.getMustNotInclude().getLanguage());
     assertEquals("before 2000", request.getMustNotInclude().getPublicationYear());
     assertEquals("Legacy", request.getMustNotInclude().getSource());
-  }
-
-  @Test
-  void sharedExactCriteriaRetainsBothParserSchemaPropertiesAndLegacySessionJson() {
-    var mapper = new ObjectMapper();
-    var schema = mapper.readTree(AiParser.REQUEST_CONVERTER.getJsonSchema());
-    for (String name : List.of("mustInclude", "mustNotInclude")) {
-      var criteria = schema.path("properties").path(name);
-      if (criteria.has("$ref")) {
-        criteria = schema.at(criteria.path("$ref").asText().substring(1));
-      }
-      org.assertj.core.api.Assertions.assertThat(criteria.path("properties").propertyNames())
-          .containsExactlyInAnyOrder(
-              "authors", "narrators", "language", "duration", "publicationYear", "source");
-    }
-    var session =
-        mapper.readValue(
-            """
-        {"requests":[{"intent":"RECOMMENDATION",
-          "mustInclude":{"authors":["Author"],"language":"English","duration":"under 5 hours","publicationYear":"recent","source":"catalogue"},
-          "mustNotInclude":{"narrators":["Narrator"],"language":"French"}}]}
-        """,
-            com.gen3.recommenderagent.domain.session.Session.class);
-    var turn = session.getRequests().getFirst();
-    org.assertj.core.api.Assertions.assertThat(turn.getMustInclude().getAuthors())
-        .containsExactly("Author");
-    org.assertj.core.api.Assertions.assertThat(turn.getMustNotInclude().getNarrators())
-        .containsExactly("Narrator");
-    turn.getMustInclude().setLanguage("German");
-    org.assertj.core.api.Assertions.assertThat(turn.getMustNotInclude().getLanguage())
-        .isEqualTo("French");
-    var json = mapper.readTree(mapper.writeValueAsString(session)).path("requests").get(0);
-    org.assertj.core.api.Assertions.assertThat(json.path("mustInclude").path("language").asText())
-        .isEqualTo("German");
-    org.assertj.core.api.Assertions.assertThat(
-            json.path("mustNotInclude").path("narrators").get(0).asText())
-        .isEqualTo("Narrator");
   }
 }

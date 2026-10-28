@@ -55,6 +55,256 @@ class SolrAudiobookRepositoryTest {
   }
 
   @Test
+  void nameOrderVariantsMatchAndExcludeExactStringFields() throws Exception {
+    String collection = "person-order-test";
+    org.assertj.core.api.Assertions.assertThat(
+            SOLR.execInContainer("solr", "create", "-c", collection).getExitCode())
+        .isZero();
+    for (String field : java.util.List.of("authors", "narrators", "source", "all")) {
+      new org.apache.solr.client.solrj.request.schema.SchemaRequest.AddField(
+              java.util.Map.of(
+                  "name",
+                  field,
+                  "type",
+                  "string",
+                  "stored",
+                  true,
+                  "indexed",
+                  true,
+                  "multiValued",
+                  field.equals("authors") || field.equals("narrators")))
+          .process(solrClient, collection);
+    }
+    for (String id : java.util.List.of("forward", "comma", "period", "other")) {
+      var document = new org.apache.solr.common.SolrInputDocument();
+      document.setField("id", id);
+      document.setField("source", "name-test");
+      document.setField(
+          "authors",
+          java.util.List.of(
+              switch (id) {
+                case "forward" -> "Suzanne Collins";
+                case "comma" -> "Collins, Suzanne";
+                case "period" -> "Collins, Suzanne.";
+                default -> "Another Author";
+              }));
+      document.setField(
+          "narrators", java.util.List.of(id.equals("comma") ? "Fry, Stephen" : "Stephen Fry"));
+      solrClient.add(collection, document);
+    }
+    for (var entry :
+        java.util.Map.of(
+                "initials-forward",
+                "J. K. Rowling",
+                "initials-comma",
+                "Rowling, J. K.",
+                "initials-compact",
+                "Rowling, J.K.",
+                "initials-separated",
+                "J K Rowling")
+            .entrySet()) {
+      var document = new org.apache.solr.common.SolrInputDocument();
+      document.setField("id", entry.getKey());
+      document.setField("source", "initials-test");
+      document.setField("authors", java.util.List.of(entry.getValue()));
+      document.setField("narrators", java.util.List.of(entry.getValue()));
+      solrClient.add(collection, document);
+    }
+    solrClient.commit(collection);
+    var repository = new SolrAudiobookRepository(solrClient, collection);
+    var names =
+        new com.gen3.catalogue.model.AudiobookFilterConditions(
+            java.util.List.of("Suzanne Collins"),
+            java.util.List.of("Stephen Fry"),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    var empty = com.gen3.catalogue.model.AudiobookFilterConditions.empty();
+    var initials =
+        new com.gen3.catalogue.model.AudiobookFilterConditions(
+            java.util.List.of("J. K. Rowling"),
+            java.util.List.of("J. K. Rowling"),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    org.assertj.core.api.Assertions.assertThat(
+            repository.searchByFilters(
+                new com.gen3.catalogue.model.AudiobookFilters(initials, empty, java.util.List.of()),
+                10))
+        .extracting(book -> book.audiobook().id())
+        .containsExactlyInAnyOrder(
+            "initials-forward", "initials-comma", "initials-compact", "initials-separated");
+    var excludeInitials =
+        new com.gen3.catalogue.model.AudiobookFilterConditions(
+            java.util.List.of(),
+            java.util.List.of("Rowling, J. K."),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    org.assertj.core.api.Assertions.assertThat(
+            repository.searchByFilters(
+                new com.gen3.catalogue.model.AudiobookFilters(
+                    initials, excludeInitials, java.util.List.of()),
+                10))
+        .isEmpty();
+    org.assertj.core.api.Assertions.assertThat(
+            repository.searchByFilters(
+                new com.gen3.catalogue.model.AudiobookFilters(names, empty, java.util.List.of()),
+                10))
+        .extracting(book -> book.audiobook().id())
+        .containsExactlyInAnyOrder("forward", "comma", "period");
+    var all =
+        new com.gen3.catalogue.model.AudiobookFilterConditions(
+            java.util.List.of(), java.util.List.of(), null, "name-test", null, null, null, null);
+    var excludedAuthor =
+        new com.gen3.catalogue.model.AudiobookFilterConditions(
+            java.util.List.of("Collins, Suzanne"),
+            java.util.List.of(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    org.assertj.core.api.Assertions.assertThat(
+            repository.searchByFilters(
+                new com.gen3.catalogue.model.AudiobookFilters(
+                    all, excludedAuthor, java.util.List.of()),
+                10))
+        .extracting(book -> book.audiobook().id())
+        .containsExactly("other");
+    var excludedNarrator =
+        new com.gen3.catalogue.model.AudiobookFilterConditions(
+            java.util.List.of(),
+            java.util.List.of("Fry, Stephen"),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    org.assertj.core.api.Assertions.assertThat(
+            repository.searchByFilters(
+                new com.gen3.catalogue.model.AudiobookFilters(
+                    all, excludedNarrator, java.util.List.of()),
+                10))
+        .isEmpty();
+  }
+
+  @Test
+  void metadataLookupReturnsOnlyRequestedCatalogueRecords() throws Exception {
+    var repository = new SolrAudiobookRepository(solrClient, SolrContainerTestSupport.COLLECTION);
+    var books = repository.findBooksByIds(java.util.List.of("book-404", "missing-id"));
+    org.assertj.core.api.Assertions.assertThat(books).hasSize(1);
+    org.assertj.core.api.Assertions.assertThat(books.getFirst().id()).isEqualTo("book-404");
+    org.assertj.core.api.Assertions.assertThat(books.getFirst().title()).isEqualTo("The Hobbit");
+    org.assertj.core.api.Assertions.assertThat(books.getFirst().authors())
+        .containsExactly("J. R. R. Tolkien");
+    org.assertj.core.api.Assertions.assertThat(repository.findBooksByIds(java.util.List.of()))
+        .isEmpty();
+  }
+
+  @Test
+  void exactTitlesBeyondTheFirstPageRemainDiscoverableAndAmbiguous() throws Exception {
+    String collection = SolrContainerTestSupport.COLLECTION;
+    var documents = new java.util.ArrayList<org.apache.solr.common.SolrInputDocument>();
+    for (int i = 0; i < 102; i++) {
+      var doc = new org.apache.solr.common.SolrInputDocument();
+      doc.setField("id", String.format("boundary-%03d", i));
+      doc.setField("title", i < 100 ? "Boundary Reference companion " + i : "Boundary Reference");
+      documents.add(doc);
+    }
+    try {
+      solrClient.add(collection, documents);
+      solrClient.commit(collection);
+      var result =
+          new SolrAudiobookRepository(solrClient, collection)
+              .findBooksByTitle("Boundary Reference", null, 6);
+      org.assertj.core.api.Assertions.assertThat(result)
+          .extracting(com.gen3.catalogue.model.AudiobookTitle::bookId)
+          .containsExactly("boundary-100", "boundary-101");
+    } finally {
+      solrClient.deleteById(
+          collection, documents.stream().map(doc -> doc.getFieldValue("id").toString()).toList());
+      solrClient.commit(collection);
+    }
+  }
+
+  @Test
+  void maintenancePagesDoNotShiftWhenEarlierRecordsAreInsertedOrDeleted() throws Exception {
+    String collection = SolrContainerTestSupport.COLLECTION;
+    var repository = new SolrAudiobookRepository(solrClient, collection);
+    var before = repository.findAllBooks(null, 1000);
+    org.assertj.core.api.Assertions.assertThat(before.size()).isGreaterThan(2);
+    var firstPage = repository.findAllBooks(null, 2);
+    String deletedId = firstPage.getFirst().id();
+    String lastId = firstPage.getLast().id();
+    var deleted = solrClient.getById(collection, deletedId);
+    var inserted = new org.apache.solr.common.SolrInputDocument();
+    inserted.setField("id", "000-before-maintenance-cursor");
+    inserted.setField("title", "Inserted earlier");
+    try {
+      solrClient.deleteById(collection, deletedId);
+      solrClient.add(collection, inserted);
+      solrClient.commit(collection);
+      org.assertj.core.api.Assertions.assertThat(repository.findAllBooks(lastId, 1000))
+          .extracting(com.gen3.catalogue.model.AudiobookRecord::id)
+          .containsExactlyElementsOf(
+              before.subList(2, before.size()).stream()
+                  .map(com.gen3.catalogue.model.AudiobookRecord::id)
+                  .toList());
+    } finally {
+      solrClient.deleteById(collection, "000-before-maintenance-cursor");
+      var restored = new org.apache.solr.common.SolrInputDocument();
+      deleted.forEach(
+          (key, value) -> {
+            if (!key.equals("_version_")) {
+              restored.setField(key, value);
+            }
+          });
+      solrClient.add(collection, restored);
+      solrClient.commit(collection);
+    }
+  }
+
+  @Test
+  void titleLookupUsesOnlyTitleAndReturnsEditionMetadata() throws Exception {
+    var document = new org.apache.solr.common.SolrInputDocument();
+    document.setField("id", "title-lookup");
+    document.setField("title", "The Hunger Games");
+    document.setField("authors", java.util.List.of("Collins, Suzanne."));
+    solrClient.add(SolrContainerTestSupport.COLLECTION, document);
+    solrClient.commit(SolrContainerTestSupport.COLLECTION);
+    var repository = new SolrAudiobookRepository(solrClient, SolrContainerTestSupport.COLLECTION);
+    var results = repository.findBooksByTitle("the hunger games", null, 6);
+    org.assertj.core.api.Assertions.assertThat(results)
+        .extracting(com.gen3.catalogue.model.AudiobookTitle::bookId)
+        .containsExactly("title-lookup");
+    org.assertj.core.api.Assertions.assertThat(
+            repository.findBooksByTitle("the hunger games", "suzanne collins", 6))
+        .hasSize(1);
+    org.assertj.core.api.Assertions.assertThat(
+            repository.findBooksByTitle("the hunger games", "other author", 6))
+        .isEmpty();
+    org.assertj.core.api.Assertions.assertThat(results.getFirst().authors())
+        .containsExactly("Collins, Suzanne.");
+    org.assertj.core.api.Assertions.assertThat(
+            repository.findBooksByTitle("Suzanne Collins", null, 6))
+        .isEmpty();
+    org.assertj.core.api.Assertions.assertThat(repository.findBooksByTitle("\" OR *:*", null, 6))
+        .isEmpty();
+  }
+
+  @Test
   void embeddingMaintenanceJobWritesVectorsWhilePreservingSummariesAndCustomFields()
       throws Exception {
     String collection = SolrContainerTestSupport.COLLECTION;
@@ -86,7 +336,8 @@ class SolrAudiobookRepositoryTest {
     float[] expected = new float[1536];
     expected[0] = 0.6f;
     expected[1] = 0.8f;
-    org.assertj.core.api.Assertions.assertThat(repository.findStoredBooks(0, 1).getFirst().vector())
+    org.assertj.core.api.Assertions.assertThat(
+            repository.findStoredBooks(null, 1).getFirst().vector())
         .containsExactly(expected);
     org.mockito.Mockito.verify(model).embed(org.mockito.ArgumentMatchers.anyList());
   }
@@ -101,6 +352,16 @@ class SolrAudiobookRepositoryTest {
     original.addField("title", "Original");
     original.addField("description", "Old description");
     solrClient.add(collection, original);
+    for (var entry :
+        java.util.Map.of("initials-forward", "J. K. Rowling", "initials-comma", "Rowling, J. K.")
+            .entrySet()) {
+      var document = new org.apache.solr.common.SolrInputDocument();
+      document.setField("id", entry.getKey());
+      document.setField("source", "initials-test");
+      document.setField("authors", java.util.List.of(entry.getValue()));
+      document.setField("narrators", java.util.List.of(entry.getValue()));
+      solrClient.add(collection, document);
+    }
     solrClient.commit(collection);
     var repository = new SolrAudiobookRepository(solrClient, collection);
     var store = new com.gen3.embeddingjob.store.SolrEmbeddingStore(repository);

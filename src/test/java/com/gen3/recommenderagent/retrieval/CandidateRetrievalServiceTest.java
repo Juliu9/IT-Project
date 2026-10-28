@@ -12,9 +12,9 @@ import com.gen3.catalogue.model.AudiobookFilterConditions;
 import com.gen3.catalogue.model.AudiobookFilters;
 import com.gen3.catalogue.model.AudiobookRecord;
 import com.gen3.catalogue.port.AudiobookCandidateSearch;
-import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.ExactCriteria;
-import com.gen3.recommenderagent.domain.session.SemanticQuery;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.domain.search.ExactCriteria;
+import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectors;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
@@ -28,6 +28,28 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 class CandidateRetrievalServiceTest {
+
+  @Test
+  void shorterRuntimeFilterIsAppliedWithTheOriginalScienceFictionQuery() throws Exception {
+    var search = mock(AudiobookCandidateSearch.class);
+    var embeddings = mock(QueryEmbeddingService.class);
+    var request = requestWithTopic("science fiction");
+    var include = new ExactCriteria();
+    include.setDuration("under 600 minutes");
+    request.setMustInclude(include);
+    float[] vector = {1, 0};
+    var vectors = new SemanticQueryVectors(List.of(vector), List.of());
+    when(embeddings.combineSemanticQueries(vectors)).thenReturn(vector);
+    service("test", search, embeddings).getCandidates(request, vectors, 5, Set.of());
+    var filters = org.mockito.ArgumentCaptor.forClass(AudiobookFilters.class);
+    verify(search)
+        .searchHybrid(
+            org.mockito.ArgumentMatchers.eq(vector),
+            org.mockito.ArgumentMatchers.eq("science fiction"),
+            filters.capture(),
+            org.mockito.ArgumentMatchers.eq(5));
+    assertThat(filters.getValue().mustInclude().maximumDurationMinutes()).isEqualTo(599);
+  }
 
   @Test
   void routesSemanticAndFilterContentToTheSelectedAdapter() throws Exception {

@@ -6,9 +6,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.ConversationTurn;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -66,7 +66,7 @@ class RequestTelemetryTest {
   void logsTheCompleteRequestSummary() {
     ConversationDraft request = new ConversationDraft();
     request.setRequestId("request-1");
-    request.setIntent(Intent.RECOMMENDATION);
+    request.setIntent(ConversationAction.RECOMMENDATION);
 
     telemetry.start();
     RequestTelemetry.measure("parseMs", () -> request);
@@ -74,7 +74,7 @@ class RequestTelemetryTest {
     RequestTelemetry.retrieval("HYBRID", 50);
     RequestTelemetry.ai(
         "generate_response", 2, new AiOperationObserver.AiUsage("model", 10, 5, 15, true));
-    telemetry.complete(ConversationTurn.fromDraft(request));
+    telemetry.complete(ConversationDraft.toTurn(request));
 
     assertThat(lastMessage())
         .contains("\"event\":\"recommendation.completed\"")

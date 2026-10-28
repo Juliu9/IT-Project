@@ -23,6 +23,41 @@ class QdrantShownBookExclusionTest {
       new GenericContainer<>("qdrant/qdrant:v1.19.1").withExposedPorts(6334);
 
   @Test
+  void titleLookupFindsCaseInsensitiveMatchesWithoutChangingExistingPayloads() throws Exception {
+    try (var client =
+        new QdrantClient(
+            QdrantGrpcClient.newBuilder(server.getHost(), server.getMappedPort(6334), false)
+                .build())) {
+      var encoder = new Bm25SparseTextEncoder();
+      var repository =
+          new QdrantAudiobookRepository(
+              client, new QdrantPointMapper(encoder), encoder, "title-lookup", 2);
+      repository.importStoredBooks(
+          List.of(
+              new AudiobookEmbedding(
+                  new AudiobookRecord(
+                      "hunger", "s", "The Hunger Games", List.of("Suzanne Collins"), "Description"),
+                  new float[] {1, 0}),
+              new AudiobookEmbedding(
+                  new AudiobookRecord(
+                      "guide",
+                      "s",
+                      "The Hunger Games Companion",
+                      List.of("Other Author"),
+                      "Description"),
+                  new float[] {0, 1})));
+      var results = repository.findBooksByTitle("the hunger games", null, 6);
+      assertThat(results)
+          .extracting(com.gen3.catalogue.model.AudiobookTitle::bookId)
+          .containsExactly("hunger");
+      assertThat(repository.findBooksByTitle("doesnotexist", null, 6)).isEmpty();
+      assertThat(repository.findBooksByTitle("the hunger games", "suzanne collins", 6))
+          .extracting(com.gen3.catalogue.model.AudiobookTitle::bookId)
+          .containsExactly("hunger");
+    }
+  }
+
+  @Test
   void emptyPreferenceReplacementRemovesBothOldNamedVectors() throws Exception {
     try (var client =
         new QdrantClient(

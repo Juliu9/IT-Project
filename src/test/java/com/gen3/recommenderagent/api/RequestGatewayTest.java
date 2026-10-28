@@ -10,8 +10,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.ConversationTurn;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.inputparser.AiParser;
 import com.gen3.recommenderagent.inputparser.CommandParser;
 import com.gen3.recommenderagent.inputparser.InputParser;
@@ -46,13 +47,17 @@ class RequestGatewayTest {
             new AiParser(
                 client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
     var completed = new ConversationTurn();
-    completed.setIntent(com.gen3.recommenderagent.domain.Intent.HELP);
+    completed.setIntent(ConversationAction.HELP);
     when(sessionTransitionService.process(
-            org.mockito.ArgumentMatchers.eq("session"), org.mockito.ArgumentMatchers.eq("user"),
-            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+            org.mockito.ArgumentMatchers.eq("session"),
+            org.mockito.ArgumentMatchers.eq("user"),
+            org.mockito.ArgumentMatchers.eq("help"),
+            org.mockito.ArgumentMatchers.any(
+                com.gen3.recommenderagent.inputparser.UserIntent.class),
+            org.mockito.ArgumentMatchers.any()))
         .thenAnswer(
             call ->
-                ((java.util.function.Function<ConversationTurn, Object>) call.getArgument(3))
+                ((java.util.function.Function<ConversationTurn, Object>) call.getArgument(4))
                     .apply(completed));
     when(responseGenerator.generate(null, completed)).thenReturn("Supported operations.");
     var gateway =
@@ -80,7 +85,7 @@ class RequestGatewayTest {
   @Test
   void standardApiDoesNotBuildOrCollectDemoMetrics() throws Exception {
     var parsed = new ConversationDraft();
-    var completed = ConversationTurn.fromDraft(parsed);
+    var completed = ConversationDraft.toTurn(parsed);
     when(inputParser.parse("more")).thenReturn(parsed);
     when(sessionTransitionService.process(
             org.mockito.ArgumentMatchers.eq("session"),
@@ -89,14 +94,13 @@ class RequestGatewayTest {
             org.mockito.ArgumentMatchers.any()))
         .thenAnswer(
             call ->
-                ((java.util.function.Function<
-                            com.gen3.recommenderagent.domain.session.ConversationTurn, Object>)
-                        call.getArgument(3))
+                ((java.util.function.Function<ConversationTurn, Object>) call.getArgument(3))
                     .apply(completed));
     when(responseGenerator.generate(null, completed)).thenReturn("No more recommendations.");
     var gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
-    MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
+    var catalogue = org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class);
+    MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway, catalogue))
         .build()
         .perform(
             post("/api/v1/recommendations")
@@ -107,6 +111,7 @@ class RequestGatewayTest {
         .andExpect(status().isOk())
         .andExpect(content().contentTypeCompatibleWith("text/plain"))
         .andExpect(content().string("No more recommendations."));
+    org.mockito.Mockito.verifyNoInteractions(catalogue);
     var order =
         org.mockito.Mockito.inOrder(
             inputParser, sessionTransitionService, responseGenerator, telemetry);
@@ -130,7 +135,7 @@ class RequestGatewayTest {
     ConversationTurn resolved = new ConversationTurn();
     resolved.setRequestId("request-1");
     resolved.setPersonalised(true);
-    resolved.setIntent(com.gen3.recommenderagent.domain.Intent.MORE_RESULTS);
+    resolved.setIntent(ConversationAction.MORE_RESULTS);
     when(inputParser.parse("more"))
         .thenAnswer(
             invocation -> {
@@ -148,16 +153,18 @@ class RequestGatewayTest {
             org.mockito.ArgumentMatchers.any()))
         .thenAnswer(
             call ->
-                ((java.util.function.Function<
-                            com.gen3.recommenderagent.domain.session.ConversationTurn, Object>)
-                        call.getArgument(3))
+                ((java.util.function.Function<ConversationTurn, Object>) call.getArgument(3))
                     .apply(RequestTelemetry.measure("recommendMs", () -> resolved)));
     when(responseGenerator.generate(null, resolved)).thenReturn("No more recommendations.");
     var realTelemetry = new RequestTelemetry(new tools.jackson.databind.ObjectMapper());
     var gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, realTelemetry);
 
-    MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
+    MockMvcBuilders.standaloneSetup(
+            gateway,
+            new DemoWebsite(
+                gateway,
+                org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
         .build()
         .perform(
             post("/api/v1/recommendations/demo")
@@ -186,7 +193,11 @@ class RequestGatewayTest {
                     "$.metrics.operations.parse.promptTokens")
                 .value(10));
 
-    MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
+    MockMvcBuilders.standaloneSetup(
+            gateway,
+            new DemoWebsite(
+                gateway,
+                org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
         .build()
         .perform(
             post("/api/v1/recommendations")
@@ -295,7 +306,11 @@ class RequestGatewayTest {
     RequestGateway gateway =
         new RequestGateway(realParser, sessionTransitionService, responseGenerator, telemetry);
     MockMvc mockMvc =
-        MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
+        MockMvcBuilders.standaloneSetup(
+                gateway,
+                new DemoWebsite(
+                    gateway,
+                    org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
             .setControllerAdvice(new RequestExceptionHandler())
             .build();
 
@@ -329,7 +344,11 @@ class RequestGatewayTest {
     RequestGateway gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
     MockMvc mockMvc =
-        MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
+        MockMvcBuilders.standaloneSetup(
+                gateway,
+                new DemoWebsite(
+                    gateway,
+                    org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
             .setControllerAdvice(new RequestExceptionHandler())
             .build();
 
@@ -361,7 +380,11 @@ class RequestGatewayTest {
     RequestGateway gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
 
-    MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
+    MockMvcBuilders.standaloneSetup(
+            gateway,
+            new DemoWebsite(
+                gateway,
+                org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
         .setControllerAdvice(new RequestExceptionHandler())
         .build()
         .perform(
@@ -390,7 +413,11 @@ class RequestGatewayTest {
     RequestGateway gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
 
-    MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway))
+    MockMvcBuilders.standaloneSetup(
+            gateway,
+            new DemoWebsite(
+                gateway,
+                org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
         .setControllerAdvice(new RequestExceptionHandler())
         .build()
         .perform(

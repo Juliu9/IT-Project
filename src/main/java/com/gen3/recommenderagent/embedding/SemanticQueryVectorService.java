@@ -1,6 +1,6 @@
 package com.gen3.recommenderagent.embedding;
 
-import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.application.conversation.SessionRequest;
 import java.util.Arrays;
 import java.util.List;
 import org.springframework.stereotype.Service;

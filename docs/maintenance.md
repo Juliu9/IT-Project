@@ -5,6 +5,9 @@
 These are separate, non-web processes. **Normal server startup rejects enabled maintenance flags.**
 Run one job at a time against a stable catalogue, with one writer. Configure credentials and
 connections in the shell or IDE. AI generation incurs provider charges.
+Solr scans continue after the last processed ID, so earlier insertions/deletions do not shift later
+pages. This is not a frozen snapshot: records inserted behind that ID require another run. Keep the
+catalogue stable when a job must cover one exact dataset.
 Migration and preference import need no AI credentials. Their launchers, and the summary launcher,
 disable unused Spring AI models; the summary provider handles its own transport and credentials.
 

@@ -1,10 +1,10 @@
 package com.gen3.recommenderagent.application.recommendation;
 
-import static com.gen3.recommenderagent.domain.RecommendationPolicy.clampOrDefault;
-import static com.gen3.recommenderagent.domain.session.Recommendation.bookIds;
+import static com.gen3.recommenderagent.domain.recommendation.Recommendation.bookIds;
+import static com.gen3.recommenderagent.domain.recommendation.RecommendationPolicy.clampOrDefault;
 
-import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import java.util.ArrayList;
@@ -28,8 +28,10 @@ public class RecommendationPager {
     List<Recommendation> page = takePending(session, limit);
     if (page.size() < limit) {
       // Exclude the cached tail too when refilling; all changes commit together or not at all.
-      session.addRecommendationIds(bookIds(page));
-      session.setPendingRecommendations(recommendationWorkflow.recommend(request, session));
+      session.getActiveSearch().addShownBookIds(bookIds(page));
+      session
+          .getActiveSearch()
+          .setPendingRecommendations(recommendationWorkflow.recommend(request, session));
       page.addAll(takePending(session, limit - page.size()));
     } else {
       RequestTelemetry.retrieval("SESSION_CACHE", page.size());
@@ -45,6 +47,8 @@ public class RecommendationPager {
                       item.getScore(),
                       item.getTitle(),
                       item.getShortDescription());
+              displayed.setDurationMinutes(item.getDurationMinutes());
+              displayed.setPublicationYear(item.getPublicationYear());
               displayed.setReadingPreferencesUsed(item.isReadingPreferencesUsed());
               return displayed;
             })
@@ -54,8 +58,11 @@ public class RecommendationPager {
   private List<Recommendation> takePending(Session session, int limit) {
     List<Recommendation> page = new ArrayList<>();
     Set<String> seen =
-        new HashSet<>(session.getShownBooks() == null ? List.of() : session.getShownBooks());
-    List<Recommendation> pending = session.getPendingRecommendations();
+        new HashSet<>(
+            session.getActiveSearch().getShownBookIds() == null
+                ? List.of()
+                : session.getActiveSearch().getShownBookIds());
+    List<Recommendation> pending = session.getActiveSearch().getPendingRecommendations();
     while (!pending.isEmpty() && page.size() < limit) {
       Recommendation item = pending.removeFirst();
       if (item != null

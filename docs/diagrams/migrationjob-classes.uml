@@ -1,0 +1,42 @@
+@startuml
+!pragma layout smetana
+title migrationjob
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "migrationjob" as migrationjob {
+  class "MigrationApplication" as C0 {
+    + {static} void main(String[])
+    ~ {static} BeanFactoryPostProcessor validateJob(Environment)
+  }
+  class "SolrToQdrantMigrator" as C1 {
+    - {static} Logger LOGGER
+    - SolrAudiobookRepository source
+    - QdrantAudiobookRepository destination
+    - int batchSize
+    - int maximumRecords
+    + void run(ApplicationArguments)
+  }
+}
+
+package "catalogue" as catalogue <<external>> {
+}
+
+C1 ..> catalogue : uses
+
+' Source: docs/maintenance.md
+note right of migrationjob
+  Separate opt-in Solr-to-Qdrant migration.
+
+  Copies supported metadata, short descriptions
+  and existing dense vectors.
+  Existing destination books are skipped.
+
+  Does not call AI, normalize vectors
+  or generate sparse keyword vectors.
+
+  Books without source vectors remain
+  without vectors after migration.
+end note
+@enduml

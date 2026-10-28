@@ -39,7 +39,10 @@ import org.springframework.stereotype.Repository;
 @Primary
 @Repository
 public class QdrantAudiobookRepository
-    implements AudiobookCandidateSearch, AudiobookVectorRepository {
+    implements com.gen3.catalogue.port.AudiobookDetailsLookup,
+        AudiobookCandidateSearch,
+        AudiobookVectorRepository,
+        com.gen3.catalogue.port.AudiobookTitleLookup {
 
   private final QdrantClient client;
   private final QdrantPointMapper mapper;
@@ -61,6 +64,63 @@ public class QdrantAudiobookRepository
     this.sparseEncoder = sparseEncoder;
     this.collection = collection;
     this.vectorDimension = vectorDimension;
+  }
+
+  @Override
+  public List<com.gen3.catalogue.model.AudiobookRecord> findBooksByIds(List<String> bookIds)
+      throws IOException {
+    if (bookIds.isEmpty()) {
+      return List.of();
+    }
+    requireCollection();
+    return findRecordsByBookIds(bookIds, false).values().stream().map(mapper::toRecord).toList();
+  }
+
+  @Override
+  public List<com.gen3.catalogue.model.AudiobookTitle> findBooksByTitle(
+      String title, String author, int limit) throws IOException {
+    if (title == null || title.isBlank() || limit <= 0) {
+      return List.of();
+    }
+    requireCollection();
+    var filter =
+        Filter.newBuilder()
+            .addMust(
+                io.qdrant.client.ConditionFactory.matchText(
+                    QdrantAudiobookSchema.TITLE, title.strip()));
+    if (author != null && !author.isBlank()) {
+      var names = Filter.newBuilder();
+      for (String name : com.gen3.catalogue.model.PersonNameNormalizer.variants(List.of(author))) {
+        names.addShould(
+            io.qdrant.client.ConditionFactory.matchText(QdrantAudiobookSchema.AUTHORS, name));
+      }
+      filter.addMust(io.qdrant.client.grpc.Common.Condition.newBuilder().setFilter(names));
+    }
+    var matches = new com.gen3.catalogue.model.AudiobookTitleMatches(title, author, limit);
+    var request =
+        io.qdrant.client.grpc.Points.ScrollPoints.newBuilder()
+            .setCollectionName(collection)
+            .setFilter(filter)
+            .setLimit(100)
+            .setWithPayload(
+                io.qdrant.client.WithPayloadSelectorFactory.include(
+                    List.of(
+                        QdrantAudiobookSchema.BOOK_ID,
+                        QdrantAudiobookSchema.TITLE,
+                        QdrantAudiobookSchema.AUTHORS)))
+            .setWithVectors(io.qdrant.client.WithVectorsSelectorFactory.enable(false));
+    while (true) {
+      var page = await(client.scrollAsync(request.build()), "look up Qdrant book title");
+      for (var point : page.getResultList()) {
+        var book = mapper.toRecord(point);
+        matches.add(
+            new com.gen3.catalogue.model.AudiobookTitle(book.id(), book.title(), book.authors()));
+      }
+      if (matches.full() || !page.hasNextPageOffset()) {
+        return matches.results();
+      }
+      request.setOffset(page.getNextPageOffset());
+    }
   }
 
   /** Searches the named dense vector while applying structured payload filters. */

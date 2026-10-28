@@ -47,6 +47,158 @@ import org.mockito.ArgumentCaptor;
 /** Covers Qdrant repository behavior that does not require a running database. */
 class QdrantAudiobookRepositoryTest {
 
+  @Test
+  void referenceLookupFindsExactTitlesBeyondTheFirstPageAndKeepsDuplicateEditions()
+      throws Exception {
+    var client = mock(QdrantClient.class);
+    var encoder = new Bm25SparseTextEncoder();
+    when(client.collectionExistsAsync("books")).thenReturn(Futures.immediateFuture(true));
+    var first =
+        ScrollResponse.newBuilder().setNextPageOffset(io.qdrant.client.PointIdFactory.id(100L));
+    for (int i = 0; i < 100; i++) {
+      first.addResult(
+          RetrievedPoint.newBuilder()
+              .putPayload("bookId", io.qdrant.client.ValueFactory.value("partial-" + i))
+              .putPayload(
+                  "title",
+                  io.qdrant.client.ValueFactory.value("Boundary Reference companion " + i)));
+    }
+    var last = ScrollResponse.newBuilder();
+    for (String id : List.of("exact-one", "exact-two")) {
+      last.addResult(
+          RetrievedPoint.newBuilder()
+              .putPayload("bookId", io.qdrant.client.ValueFactory.value(id))
+              .putPayload("title", io.qdrant.client.ValueFactory.value("Boundary Reference")));
+    }
+    when(client.scrollAsync(any(ScrollPoints.class)))
+        .thenReturn(Futures.immediateFuture(first.build()), Futures.immediateFuture(last.build()));
+    var result =
+        new QdrantAudiobookRepository(client, new QdrantPointMapper(encoder), encoder, "books", 2)
+            .findBooksByTitle("Boundary Reference", null, 6);
+    assertThat(result)
+        .extracting(com.gen3.catalogue.model.AudiobookTitle::bookId)
+        .containsExactly("exact-one", "exact-two");
+    var captured = ArgumentCaptor.forClass(ScrollPoints.class);
+    verify(client, times(2)).scrollAsync(captured.capture());
+    assertThat(captured.getAllValues().get(1).getOffset())
+        .isEqualTo(io.qdrant.client.PointIdFactory.id(100L));
+  }
+
+  @Test
+  void referenceLookupTriesAuthorFormattingVariantsWithoutRequestingVectors() throws Exception {
+    var client = mock(QdrantClient.class);
+    var encoder = new Bm25SparseTextEncoder();
+    when(client.collectionExistsAsync("books")).thenReturn(Futures.immediateFuture(true));
+    when(client.scrollAsync(any(ScrollPoints.class)))
+        .thenReturn(Futures.immediateFuture(ScrollResponse.newBuilder().build()));
+    new QdrantAudiobookRepository(client, new QdrantPointMapper(encoder), encoder, "books", 2)
+        .findBooksByTitle("The Hunger Games", "Suzanne Collins", 6);
+    var captured = ArgumentCaptor.forClass(ScrollPoints.class);
+    verify(client).scrollAsync(captured.capture());
+    var author = captured.getValue().getFilter().getMust(1).getFilter();
+    assertThat(author.getShouldList())
+        .containsExactly(
+            io.qdrant.client.ConditionFactory.matchText("authors", "Suzanne Collins"),
+            io.qdrant.client.ConditionFactory.matchText("authors", "Collins, Suzanne"),
+            io.qdrant.client.ConditionFactory.matchText("authors", "Suzanne Collins."),
+            io.qdrant.client.ConditionFactory.matchText("authors", "Collins, Suzanne."));
+    assertThat(captured.getValue().getLimit()).isEqualTo(100);
+    assertThat(captured.getValue().getWithVectors().getEnable()).isFalse();
+  }
+
+  @Test
+  void dottedInitialsMatchBothAuthorAndNarratorOrders() {
+    var names =
+        new AudiobookFilterConditions(
+            List.of("J. K. Rowling"), List.of("J. K. Rowling"), null, null, null, null, null, null);
+    var actual = QdrantAudiobookSchema.filter(new AudiobookFilters(names, names, List.of()));
+    var expectedNames =
+        List.of(
+            "J. K. Rowling",
+            "Rowling, J. K.",
+            "J.K. Rowling",
+            "Rowling, J.K.",
+            "J K Rowling",
+            "Rowling, J K",
+            "J. K. Rowling.",
+            "J.K. Rowling.",
+            "J K Rowling.",
+            "Rowling, J K.");
+    var author = io.qdrant.client.ConditionFactory.matchKeywords("authors", expectedNames);
+    var narrator = io.qdrant.client.ConditionFactory.matchKeywords("narrators", expectedNames);
+    assertThat(actual)
+        .isEqualTo(
+            io.qdrant.client.grpc.Common.Filter.newBuilder()
+                .addMust(author)
+                .addMust(narrator)
+                .addMustNot(author)
+                .addMustNot(narrator)
+                .build());
+  }
+
+  @Test
+  void personFiltersIncludeAndExcludeBothNameOrders() {
+    var conditions =
+        new AudiobookFilterConditions(
+            List.of("Suzanne Collins"),
+            List.of("Fry, Stephen"),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    var actual =
+        QdrantAudiobookSchema.filter(new AudiobookFilters(conditions, conditions, List.of()));
+    var authors =
+        io.qdrant.client.ConditionFactory.matchKeywords(
+            "authors",
+            List.of(
+                "Suzanne Collins", "Collins, Suzanne", "Suzanne Collins.", "Collins, Suzanne."));
+    var narrators =
+        io.qdrant.client.ConditionFactory.matchKeywords(
+            "narrators", List.of("Fry, Stephen", "Stephen Fry", "Fry, Stephen.", "Stephen Fry."));
+    assertThat(actual)
+        .isEqualTo(
+            io.qdrant.client.grpc.Common.Filter.newBuilder()
+                .addMust(authors)
+                .addMust(narrators)
+                .addMustNot(authors)
+                .addMustNot(narrators)
+                .build());
+    assertThat(conditions.authors()).containsExactly("Suzanne Collins");
+  }
+
+  @Test
+  void metadataLookupUsesPayloadBookIdsAndDoesNotRequestVectors() throws Exception {
+    var client = mock(QdrantClient.class);
+    var encoder = new Bm25SparseTextEncoder();
+    when(client.collectionExistsAsync("books")).thenReturn(Futures.immediateFuture(true));
+    var point =
+        RetrievedPoint.newBuilder()
+            .setId(io.qdrant.client.PointIdFactory.id(42))
+            .putPayload("bookId", io.qdrant.client.ValueFactory.value("catalogue-id"))
+            .putPayload("title", io.qdrant.client.ValueFactory.value("Title"))
+            .putPayload(
+                "authors",
+                io.qdrant.client.ValueFactory.list(
+                    java.util.List.of(io.qdrant.client.ValueFactory.value("Author"))))
+            .build();
+    when(client.scrollAsync(any(ScrollPoints.class)))
+        .thenReturn(Futures.immediateFuture(ScrollResponse.newBuilder().addResult(point).build()));
+    var repository =
+        new QdrantAudiobookRepository(client, new QdrantPointMapper(encoder), encoder, "books", 2);
+    var result = repository.findBooksByIds(List.of("catalogue-id"));
+    assertThat(result).hasSize(1);
+    assertThat(result.getFirst().id()).isEqualTo("catalogue-id");
+    assertThat(result.getFirst().authors()).containsExactly("Author");
+    var request = ArgumentCaptor.forClass(ScrollPoints.class);
+    verify(client).scrollAsync(request.capture());
+    assertThat(request.getValue().getFilter().toString()).contains("bookId", "catalogue-id");
+    assertThat(request.getValue().getWithVectors())
+        .isEqualTo(io.qdrant.client.WithVectorsSelectorFactory.enable(false));
+  }
+
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {"semantic", "keyword", "hybrid", "filtered"})

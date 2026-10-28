@@ -1,0 +1,92 @@
+@startuml
+!pragma layout smetana
+title userpreferencejob
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "userpreferencejob" as userpreferencejob {
+  package "model" {
+    class "UserFavourite" as C2 {
+      - String userId
+      - String bookId
+      + String userId()
+      + String bookId()
+    }
+    class "UserHistory" as C8 {
+      - String userId
+      - String bookId
+      - Instant lastInteractionTime
+      + Instant lastInteractionTime()
+      + String userId()
+      + String bookId()
+    }
+  }
+  class "UserPreferenceAggregatorService" as C0 {
+    - AudiobookVectorRepository audiobookVectorRepository
+    - UserPreferenceVectorRepository userPreferenceVectorRepository
+    - int maximumUsers
+    - int maximumBookIds
+    + void aggregateAndSave(List<UserFavourite>,List<UserHistory>)
+    - void aggregateGroup(List<String>,Set<String>,Map<String,List<UserFavourite>>,Map<String,List<UserHistory>>,Instant)
+    - Set<String> bookIds(List<UserFavourite>,List<UserHistory>)
+    - void addVector(List<float[]>,float[])
+  }
+  class "UserFavouriteCsvReader" as C1 {
+    + List<UserFavourite> read(Path)
+  }
+  class "UserPreferenceApplication" as C3 {
+    + {static} void main(String[])
+    ~ {static} BeanFactoryPostProcessor validateJob(Environment)
+  }
+  class "UserHistoryCsvReader" as C4 {
+    - {static} DateTimeFormatter DATE_FORMATTER
+    + List<UserHistory> read(Path)
+  }
+  class "UserHistoryCsvReader$UserBook" as C5 {
+    - String userId
+    - String bookId
+    + String userId()
+    + String bookId()
+  }
+  class "UserPreferenceStartupImporter" as C6 {
+    - {static} Logger LOGGER
+    - UserFavouriteCsvReader favouriteCsvReader
+    - UserHistoryCsvReader historyCsvReader
+    - UserPreferenceAggregatorService aggregatorService
+    - String favouritesCsvPath
+    - String historyCsvPath
+    + void run(ApplicationArguments)
+  }
+  class "BookIdExtractor" as C7 {
+    + {static} String extractAndNormalize(String)
+  }
+}
+
+package "catalogue" as catalogue <<external>> {
+}
+package "recommenderagent" as recommenderagent <<external>> {
+}
+
+C4 +.. C5
+C0 ..> catalogue : uses
+C0 ..> recommenderagent : uses
+C6 --> C1
+C6 --> C4
+C6 --> C0
+
+' Source: docs/maintenance.md
+note right of userpreferencejob
+  Separate opt-in CSV import job.
+
+  Aggregates existing book vectors:
+  normalized favourites averages and
+  history with a 180-day weight half-life.
+
+  No embedding-model calls are made.
+  Work is grouped by complete users.
+
+  Reruns replace imported users' taste vectors;
+  users absent from the input remain unchanged.
+end note
+@enduml

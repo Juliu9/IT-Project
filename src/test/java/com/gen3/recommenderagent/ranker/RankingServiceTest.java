@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.gen3.catalogue.model.AudiobookCandidate;
 import com.gen3.catalogue.model.AudiobookRecord;
-import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.ranker.scorer.CompositeScorer;
 import com.gen3.recommenderagent.ranker.scorer.RetrievalRelevanceScorer;
 import com.gen3.recommenderagent.ranker.scorer.ScoreResult;
@@ -19,6 +19,25 @@ class RankingServiceTest {
   private final RankingService rankingService =
       new RankingService(
           new CompositeScorer(List.of(new WeightedScorer(new RetrievalRelevanceScorer(), 1.0))));
+
+  @Test
+  void retainsCatalogueMetadataForLaterRelativeRefinements() {
+    var record =
+        new AudiobookRecord(
+            "science",
+            "test",
+            "Science Fiction",
+            List.of(),
+            "Description",
+            List.of(),
+            "English",
+            180,
+            2024,
+            "Summary");
+    var result = rankingService.rank(List.of(new AudiobookCandidate(record, 1.0)), 1);
+    assertEquals(180, result.getFirst().getDurationMinutes());
+    assertEquals(2024, result.getFirst().getPublicationYear());
+  }
 
   @Test
   void replacementScorerSuppliesEvidenceWithoutRescoringSelectedBooks() {

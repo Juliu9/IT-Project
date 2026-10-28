@@ -8,11 +8,11 @@ import com.gen3.catalogue.model.AudiobookFilterConditions;
 import com.gen3.catalogue.model.AudiobookFilters;
 import com.gen3.catalogue.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.api.RequestGateway;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendationWorkflow;
-import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.ConversationDecision;
-import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.ranker.RankingService;
@@ -163,7 +163,10 @@ class SolrBackendIntegrationTest {
               var request = new ConversationDraft();
               request.setRawText(raw);
               request.setBookCount(2);
-              request.setIntent(raw.equals("2 more") ? Intent.MORE_RESULTS : Intent.RECOMMENDATION);
+              request.setIntent(
+                  raw.equals("2 more")
+                      ? ConversationAction.MORE_RESULTS
+                      : ConversationAction.RECOMMENDATION);
               return request;
             });
     var gateway = new RequestGateway(parser, service, responses);
@@ -178,27 +181,28 @@ class SolrBackendIntegrationTest {
                   .content(raw))
           .andExpect(
               org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk());
-      assertThat(sessions.getSession("session", user).getLastRequest().getRecommendations())
+      assertThat(sessions.getSession("session", user).getLastOutcome().turn().getRecommendations())
           .hasSize(2);
       if (!raw.equals("2 more")) {
         assertThat(
                 sessions
                     .getSession("session", user)
-                    .getLastRequest()
+                    .getLastOutcome()
+                    .turn()
                     .getRecommendations()
                     .getFirst()
                     .getBookId())
             .isEqualTo("book-404");
       }
     }
-    assertThat(sessions.getSession("session", user).getShownBooks()).hasSize(4);
+    assertThat(sessions.getSession("session", user).getActiveSearch().getShownBookIds()).hasSize(4);
     var explain = new ConversationDraft();
-    explain.setIntent(Intent.EXPLAIN_RECOMMENDATION);
+    explain.setIntent(ConversationAction.EXPLAIN_RECOMMENDATION);
     var explanation = service.process("session", user, explain);
     assertThat(explanation.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
     assertThat(explanation.getRecommendations()).hasSize(2);
     var fresh = new ConversationDraft();
-    fresh.setIntent(Intent.RECOMMENDATION);
+    fresh.setIntent(ConversationAction.RECOMMENDATION);
     assertThat(service.process("new-session", "new-user", fresh).getDecision())
         .isEqualTo(ConversationDecision.PREFERENCE_CLARIFICATION);
     verifyNoInteractions(model);

@@ -13,14 +13,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
-import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.ExactCriteria;
-import com.gen3.recommenderagent.domain.session.Recommendation;
-import com.gen3.recommenderagent.domain.session.SemanticQuery;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
+import com.gen3.recommenderagent.domain.search.ExactCriteria;
+import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import com.gen3.recommenderagent.storage.session.SessionBusyException;
@@ -278,7 +278,7 @@ class RedisSessionRepositoryTest {
 
     ConversationDraft request = new ConversationDraft();
 
-    session.setRequests(new java.util.ArrayList<>(List.of(ConversationTurn.fromDraft(request))));
+    session.getActiveSearch().setSearch(ConversationDraft.toTurn(request));
 
     write(session);
 
@@ -286,20 +286,18 @@ class RedisSessionRepositoryTest {
 
     assertNotNull(retrieved);
 
-    assertNotNull(retrieved.getRequests());
-
-    assertEquals(1, retrieved.getRequests().size());
+    assertNotNull(retrieved.getActiveSearch().getSearch());
   }
 
   @Test
   void shouldStoreShownBooksAsIdsOnly() {
     Session session = session("shown-book-ids-test");
-    session.addRecommendationIds(List.of("book-1", "book-2"));
+    session.getActiveSearch().addShownBookIds(List.of("book-1", "book-2"));
 
     write(session);
 
     Session retrieved = read("shown-book-ids-test", USER_ID);
-    assertEquals(List.of("book-1", "book-2"), retrieved.getShownBooks());
+    assertEquals(List.of("book-1", "book-2"), retrieved.getActiveSearch().getShownBookIds());
   }
 
   @Test
@@ -348,14 +346,14 @@ class RedisSessionRepositoryTest {
 
     request.setPositiveSemanticQuery(semanticQuery);
 
-    session.setRequests(new java.util.ArrayList<>(List.of(ConversationTurn.fromDraft(request))));
+    session.getActiveSearch().setSearch(ConversationDraft.toTurn(request));
 
     write(session);
 
     Session retrieved = read("semanticQuery-test", USER_ID);
 
     SemanticQuery retrievedSemanticQuery =
-        retrieved.getRequests().get(0).getPositiveSemanticQuery();
+        retrieved.getActiveSearch().getSearch().getPositiveSemanticQuery();
 
     assertNotNull(retrievedSemanticQuery);
 
@@ -384,13 +382,14 @@ class RedisSessionRepositoryTest {
 
     request.setNegativeSemanticQuery(negativeQuery);
 
-    session.setRequests(new java.util.ArrayList<>(List.of(ConversationTurn.fromDraft(request))));
+    session.getActiveSearch().setSearch(ConversationDraft.toTurn(request));
 
     write(session);
 
     Session retrieved = read("negative-query-test", USER_ID);
 
-    SemanticQuery retrievedQuery = retrieved.getRequests().get(0).getNegativeSemanticQuery();
+    SemanticQuery retrievedQuery =
+        retrieved.getActiveSearch().getSearch().getNegativeSemanticQuery();
 
     assertNotNull(retrievedQuery);
     assertEquals(List.of("romance"), retrievedQuery.getGenres());
@@ -421,13 +420,13 @@ class RedisSessionRepositoryTest {
     request.setMustInclude(mustInclude);
     request.setMustNotInclude(mustNotInclude);
 
-    session.setRequests(new java.util.ArrayList<>(List.of(ConversationTurn.fromDraft(request))));
+    session.getActiveSearch().setSearch(ConversationDraft.toTurn(request));
 
     write(session);
 
     Session retrieved = read("constraints-test", USER_ID);
 
-    ConversationTurn retrievedRequest = retrieved.getRequests().get(0);
+    ConversationTurn retrievedRequest = retrieved.getActiveSearch().getSearch();
     assertEquals(5, retrievedRequest.getBookCount());
     assertEquals("under 10 hours", retrievedRequest.getMustInclude().getDuration());
     assertEquals("English", retrievedRequest.getMustInclude().getLanguage());
@@ -456,14 +455,14 @@ class RedisSessionRepositoryTest {
 
     request.setRecommendations(recommendations);
 
-    session.setRequests(new java.util.ArrayList<>(List.of(ConversationTurn.fromDraft(request))));
+    session.getActiveSearch().setSearch(ConversationDraft.toTurn(request));
 
     write(session);
 
     Session retrieved = read("recommendations-test", USER_ID);
 
     List<Recommendation> retrievedRecommendations =
-        retrieved.getRequests().get(0).getRecommendations();
+        retrieved.getActiveSearch().getSearch().getRecommendations();
 
     assertNotNull(retrievedRecommendations);
 
@@ -489,13 +488,13 @@ class RedisSessionRepositoryTest {
 
     ConversationDraft request = new ConversationDraft();
 
-    session.setRequests(new java.util.ArrayList<>(List.of(ConversationTurn.fromDraft(request))));
+    session.getActiveSearch().setSearch(ConversationDraft.toTurn(request));
 
     write(session);
 
     Session retrieved = read("null-test", USER_ID);
 
-    ConversationTurn retrievedRequest = retrieved.getRequests().get(0);
+    ConversationTurn retrievedRequest = retrieved.getActiveSearch().getSearch();
 
     assertNull(retrievedRequest.getPositiveSemanticQuery());
     assertNull(retrievedRequest.getNegativeSemanticQuery());
@@ -523,15 +522,15 @@ class RedisSessionRepositoryTest {
 
     request.setPositiveSemanticQuery(semanticQuery);
 
-    session.setRequests(new java.util.ArrayList<>(List.of(ConversationTurn.fromDraft(request))));
+    session.getActiveSearch().setSearch(ConversationDraft.toTurn(request));
 
     // First write
     write(session);
 
     // Modify session
     session
-        .getRequests()
-        .get(0)
+        .getActiveSearch()
+        .getSearch()
         .getPositiveSemanticQuery()
         .setTopics(List.of("WWI", "Vietnam War"));
 
@@ -545,7 +544,7 @@ class RedisSessionRepositoryTest {
 
     assertEquals(
         List.of("WWI", "Vietnam War"),
-        retrieved.getRequests().get(0).getPositiveSemanticQuery().getTopics());
+        retrieved.getActiveSearch().getSearch().getPositiveSemanticQuery().getTopics());
   }
 
   @Test
@@ -803,14 +802,17 @@ class RedisSessionRepositoryTest {
         "legacy-batch",
         USER_ID,
         session -> {
-          assertTrue(session.getPendingRecommendations().isEmpty());
-          session.setPendingRecommendations(
-              IntStream.rangeClosed(1, 25)
-                  .mapToObj(i -> new Recommendation("legacy-" + i, i, 0.9, "Title " + i))
-                  .toList());
+          assertTrue(session.getActiveSearch().getPendingRecommendations().isEmpty());
+          session
+              .getActiveSearch()
+              .setPendingRecommendations(
+                  IntStream.rangeClosed(1, 25)
+                      .mapToObj(i -> new Recommendation("legacy-" + i, i, 0.9, "Title " + i))
+                      .toList());
           return null;
         });
-    assertEquals(20, read("legacy-batch", USER_ID).getPendingRecommendations().size());
+    assertEquals(
+        20, read("legacy-batch", USER_ID).getActiveSearch().getPendingRecommendations().size());
   }
 
   @Test
@@ -820,14 +822,17 @@ class RedisSessionRepositoryTest {
         USER_ID,
         session -> {
           ConversationDraft previous = new ConversationDraft();
-          previous.setIntent(Intent.RECOMMENDATION);
-          session.getRequests().add(ConversationTurn.fromDraft(previous));
-          session.setPendingRecommendations(
-              IntStream.rangeClosed(1, 20)
-                  .mapToObj(
-                      i ->
-                          new Recommendation("book-" + i, i, 0.9, "Title " + i, "A short summary."))
-                  .toList());
+          previous.setIntent(ConversationAction.RECOMMENDATION);
+          session.getActiveSearch().setSearch(ConversationDraft.toTurn(previous));
+          session
+              .getActiveSearch()
+              .setPendingRecommendations(
+                  IntStream.rangeClosed(1, 20)
+                      .mapToObj(
+                          i ->
+                              new Recommendation(
+                                  "book-" + i, i, 0.9, "Title " + i, "A short summary."))
+                      .toList());
           return null;
         });
     CountDownLatch consumed = new CountDownLatch(1);
@@ -857,7 +862,7 @@ class RedisSessionRepositoryTest {
     ExecutorService worker = Executors.newSingleThreadExecutor();
     try {
       ConversationDraft more = new ConversationDraft();
-      more.setIntent(Intent.MORE_RESULTS);
+      more.setIntent(ConversationAction.MORE_RESULTS);
       Future<ConversationTurn> firstPage =
           worker.submit(() -> first.process("cached-pages", USER_ID, more));
       assertTrue(consumed.await(5, TimeUnit.SECONDS));
@@ -869,16 +874,18 @@ class RedisSessionRepositoryTest {
               .map(Recommendation::getBookId)
               .toList());
       Session saved = read("cached-pages", USER_ID);
-      assertEquals(15, saved.getPendingRecommendations().size());
-      assertEquals("book-6", saved.getPendingRecommendations().getFirst().getBookId());
+      assertEquals(15, saved.getActiveSearch().getPendingRecommendations().size());
       assertEquals(
-          "A short summary.", saved.getPendingRecommendations().getFirst().getShortDescription());
+          "book-6", saved.getActiveSearch().getPendingRecommendations().getFirst().getBookId());
+      assertEquals(
+          "A short summary.",
+          saved.getActiveSearch().getPendingRecommendations().getFirst().getShortDescription());
       assertEquals(
           List.of("book-6", "book-7", "book-8", "book-9", "book-10"),
           second.process("cached-pages", USER_ID, more).getRecommendations().stream()
               .map(Recommendation::getBookId)
               .toList());
-      assertEquals(10, read("cached-pages", USER_ID).getShownBooks().size());
+      assertEquals(10, read("cached-pages", USER_ID).getActiveSearch().getShownBookIds().size());
       verifyNoInteractions(workflow);
     } finally {
       finish.countDown();

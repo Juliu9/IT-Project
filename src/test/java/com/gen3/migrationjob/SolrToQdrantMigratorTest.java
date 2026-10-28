@@ -26,8 +26,8 @@ class SolrToQdrantMigratorTest {
     var third =
         new AudiobookEmbedding(
             new AudiobookRecord("3", "source", "Three", List.of(), "Description"), null);
-    when(source.findStoredBooks(0, 2)).thenReturn(List.of(first, second));
-    when(source.findStoredBooks(2, 2)).thenReturn(List.of(third));
+    when(source.findStoredBooks(null, 2)).thenReturn(List.of(first, second));
+    when(source.findStoredBooks("2", 2)).thenReturn(List.of(third));
     new SolrToQdrantMigrator(source, destination, 2, 0).run(null);
     verify(destination).initialize();
     verify(destination).importStoredBooks(List.of(first, second));
@@ -41,9 +41,9 @@ class SolrToQdrantMigratorTest {
     var destination = mock(QdrantAudiobookRepository.class);
     var record =
         new AudiobookEmbedding(new AudiobookRecord("1", "s", "Title", List.of(), null), null);
-    when(source.findStoredBooks(0, 1)).thenReturn(List.of(record));
+    when(source.findStoredBooks(null, 1)).thenReturn(List.of(record));
     new SolrToQdrantMigrator(source, destination, 2, 1).run(null);
-    verify(source).findStoredBooks(0, 1);
+    verify(source).findStoredBooks(null, 1);
     verifyNoMoreInteractions(source);
   }
 }

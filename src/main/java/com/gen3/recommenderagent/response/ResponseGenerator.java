@@ -1,7 +1,7 @@
 package com.gen3.recommenderagent.response;
 
-import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import java.util.List;
 
 public interface ResponseGenerator {

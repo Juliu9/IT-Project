@@ -6,10 +6,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.recommendation.RecommendationPager;
 import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
-import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.ConversationDraft;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.retrieval.plan.ExactFilterPolicy;
@@ -39,7 +39,21 @@ class SessionStoreConfigurationTest {
               AudiobookRetrievalPlanner.class,
               ExactFilterPolicy.class,
               RecommendationPager.class)
-          .withBean(RecommendationWorkflow.class, () -> mock(RecommendationWorkflow.class));
+          .withBean(
+              com.gen3.recommenderagent.application.conversation.IntentResolver.class,
+              () ->
+                  new com.gen3.recommenderagent.application.conversation.IntentResolver(
+                      mock(com.gen3.recommenderagent.inputparser.InputParser.class)))
+          .withBean(
+              com.gen3.recommenderagent.application.conversation.SessionContextProjector.class,
+              com.gen3.recommenderagent.application.conversation.SessionContextProjector::new)
+          .withBean(RecommendationWorkflow.class, () -> mock(RecommendationWorkflow.class))
+          .withBean(
+              com.gen3.recommenderagent.application.recommendation.SimilarBookResolver.class,
+              () ->
+                  new com.gen3.recommenderagent.application.recommendation.SimilarBookResolver(
+                      mock(com.gen3.catalogue.port.AudiobookTitleLookup.class),
+                      mock(com.gen3.catalogue.port.AudiobookVectorRepository.class)));
 
   @TestConfiguration(proxyBeanMethods = false)
   @EnableAutoConfiguration
@@ -123,12 +137,12 @@ class SessionStoreConfigurationTest {
                   .doesNotHaveBean(RedisTemplate.class);
               assertThat(context.getBean(SessionRepository.class)).isSameAs(replacement);
               ConversationDraft request = new ConversationDraft();
-              request.setIntent(Intent.HELP);
+              request.setIntent(ConversationAction.HELP);
               var result =
                   context
                       .getBean(SessionTransitionService.class)
                       .process("session", "user", request);
-              assertThat(result.getIntent()).isEqualTo(Intent.HELP);
+              assertThat(result.getIntent()).isEqualTo(ConversationAction.HELP);
               assertThat(result.getRecommendations()).isEmpty();
             });
   }

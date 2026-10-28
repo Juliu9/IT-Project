@@ -1,15 +1,16 @@
 package com.gen3.recommenderagent.response;
 
-import static com.gen3.recommenderagent.domain.RecommendationPolicy.MAX_BOOK_COUNT;
+import static com.gen3.recommenderagent.domain.recommendation.RecommendationPolicy.MAX_BOOK_COUNT;
+import static com.gen3.recommenderagent.response.ResponseBudget.limitWords;
+import static com.gen3.recommenderagent.response.ResponseBudget.wordCount;
 
 import com.gen3.recommenderagent.ai.AiProviderCalls;
 import com.gen3.recommenderagent.ai.AiProviderException;
-import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.Recommendation;
-import com.gen3.recommenderagent.domain.session.SemanticQuery;
+import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
+import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -25,7 +26,7 @@ public class AiResponseGenerator {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(AiResponseGenerator.class);
 
-  private static final int MAX_EXPLANATION_WORDS = 150;
+  private static final int MAX_EXPLANATION_WORDS = ResponseBudget.MAX_WORDS;
   // Holds the AI
   private final ChatClient chatClient;
   private final AiOperationObserver aiOperationObserver;
@@ -86,8 +87,8 @@ public class AiResponseGenerator {
                             Use saved search criteria and short descriptions; the current question is not new search criteria.
                             Use at most 150 words TOTAL, including titles and ranks, even for a whole page.
                             Use complete conversational sentences addressed to "you", connecting each book to your request.
-                            Weave rank and title into the sentence: "For number 1, Title fits your request because..."
-                            Vary transitions, such as "Next, number 2..." and "Finally, number 5...". Keep the actual ranks.
+                            Use each supplied rank verbatim, even for one book: rank=2 means "For number 2, Title...".
+                            Never renumber selected books from 1. Vary transitions naturally.
                             Give one brief reason per book and end each sentence with a period. Avoid title-summary fragments.
                             No introduction, conclusion, headings, markdown, bullets, parentheses or repeated rank labels.
                             Use only plain words, numbers and ordinary sentence punctuation. Mention reading preferences
@@ -98,6 +99,7 @@ public class AiResponseGenerator {
                             Invent nothing, recommend no new books. Speak naturally without markdown.
                             """
                                       : """
+                            Use at most 150 words TOTAL, including titles and any limit notice.
                             Give a brief, friendly spoken audiobook response addressing the user's intent. Include every supplied
                             title and available short description; explain each fit by linking description details to the request
                             and supplied preferences. Use only supplied facts: invent no book details/preferences or unsupported
@@ -174,7 +176,7 @@ public class AiResponseGenerator {
     // Produces the final prompt string the AI sees
     return resolvedCriteria(currentRequest)
         + String.format(
-            "User request: %s. Intent: %s. Genres: %s. Recommendation count: %d. Limit notice: %s. Recommendations: %s.",
+            "User request: %s. ConversationAction: %s. Genres: %s. Recommendation count: %d. Limit notice: %s. Recommendations: %s.",
             requestSummary,
             intentSummary,
             genresSummary,
@@ -189,31 +191,40 @@ public class AiResponseGenerator {
     }
     var include = request.getMustInclude();
     var exclude = request.getMustNotInclude();
-    return String.format(
-        "Resolved search: personalised=%s. Desired: %s. Avoided: %s. Must include: %s. Must exclude: %s. ",
-        request.isPersonalised(),
-        semanticSummary(request.getPositiveSemanticQuery()),
-        semanticSummary(request.getNegativeSemanticQuery()),
-        include == null
-            ? "none"
-            : String.format(
-                "authors=%s, narrators=%s, language=%s, duration=%s, publicationYear=%s, source=%s",
-                include.getAuthors(),
-                include.getNarrators(),
-                include.getLanguage(),
-                include.getDuration(),
-                include.getPublicationYear(),
-                include.getSource()),
-        exclude == null
-            ? "none"
-            : String.format(
-                "authors=%s, narrators=%s, language=%s, duration=%s, publicationYear=%s, source=%s",
-                exclude.getAuthors(),
-                exclude.getNarrators(),
-                exclude.getLanguage(),
-                exclude.getDuration(),
-                exclude.getPublicationYear(),
-                exclude.getSource()));
+    String reference =
+        request.getSimilarBook() == null
+            ? ""
+            : "Reference book: "
+                + request.getSimilarBook().title()
+                + " by "
+                + String.join(", ", request.getSimilarBook().authors())
+                + ". Similarity uses its catalogue embedding; no reference plot details are supplied. ";
+    return reference
+        + String.format(
+            "Resolved search: personalised=%s. Desired: %s. Avoided: %s. Must include: %s. Must exclude: %s. ",
+            request.isPersonalised(),
+            semanticSummary(request.getPositiveSemanticQuery()),
+            semanticSummary(request.getNegativeSemanticQuery()),
+            include == null
+                ? "none"
+                : String.format(
+                    "authors=%s, narrators=%s, language=%s, duration=%s, publicationYear=%s, source=%s",
+                    include.getAuthors(),
+                    include.getNarrators(),
+                    include.getLanguage(),
+                    include.getDuration(),
+                    include.getPublicationYear(),
+                    include.getSource()),
+            exclude == null
+                ? "none"
+                : String.format(
+                    "authors=%s, narrators=%s, language=%s, duration=%s, publicationYear=%s, source=%s",
+                    exclude.getAuthors(),
+                    exclude.getNarrators(),
+                    exclude.getLanguage(),
+                    exclude.getDuration(),
+                    exclude.getPublicationYear(),
+                    exclude.getSource()));
   }
 
   private String semanticSummary(SemanticQuery query) {
@@ -251,14 +262,6 @@ public class AiResponseGenerator {
       List<Recommendation> recommendations, ConversationTurn currentRequest) {
     StringBuilder response = new StringBuilder();
     response.append("Here are a few recommendations");
-
-    if (currentRequest != null && currentRequest.getIntent() != null) {
-      String intentName = currentRequest.getIntent().name().toLowerCase().replace("_", " ");
-      // Skip saying "for your recommendation request" as it sounds redundant when spoken
-      if (!intentName.equals("recommendation")) {
-        response.append(" for your ").append(intentName).append(" request");
-      }
-    }
 
     if (currentRequest != null
         && currentRequest.getPositiveSemanticQuery() != null
@@ -314,31 +317,7 @@ public class AiResponseGenerator {
   }
 
   private String explanationFallback(List<Recommendation> books) {
-    List<Recommendation> page = getTopRecommendations(books);
-    int budget = MAX_EXPLANATION_WORDS / Math.max(1, page.size());
-    return page.stream()
-        .map(
-            book -> {
-              String prefix =
-                  "Number "
-                      + book.getRank()
-                      + ", "
-                      + limitWords(plainExplanation(book.getTitle()), 12)
-                      + ". "
-                      + (book.isReadingPreferencesUsed()
-                          ? "Your reading preferences were used. "
-                          : "");
-              String description = plainExplanation(book.getShortDescription());
-              String reason =
-                  description.isBlank()
-                      ? "There's not enough description information for a specific explanation."
-                      : "Its description says " + description;
-              return (prefix + limitWords(reason, budget - wordCount(prefix)))
-                      .replaceAll("[.,!?]+$", "")
-                  + ".";
-            })
-        .collect(Collectors.joining(" "))
-        .trim();
+    return boundedNarration(books, true, "", MAX_EXPLANATION_WORDS);
   }
 
   private String plainExplanation(String text) {
@@ -350,12 +329,52 @@ public class AiResponseGenerator {
             .trim();
   }
 
-  private int wordCount(String text) {
-    return text.isBlank() ? 0 : text.trim().split("\\s+").length;
+  String boundedFallback(
+      List<Recommendation> books,
+      ConversationTurn request,
+      boolean explanation,
+      String notice,
+      int maximumWords) {
+    if (!explanation) {
+      String original = notice + buildHumanReadableResponse(books, request);
+      if (wordCount(original) <= maximumWords) {
+        return original;
+      }
+    }
+    return boundedNarration(books, explanation, notice, maximumWords);
   }
 
-  private String limitWords(String text, int maximum) {
-    String[] words = text.trim().split("\\s+");
-    return String.join(" ", Arrays.copyOf(words, Math.max(0, Math.min(maximum, words.length))));
+  private String boundedNarration(
+      List<Recommendation> books, boolean explanation, String notice, int maximumWords) {
+    List<Recommendation> page = getTopRecommendations(books);
+    int budget = Math.max(0, maximumWords - wordCount(notice)) / Math.max(1, page.size());
+    return notice
+        + page.stream()
+            .map(
+                book -> {
+                  String preference =
+                      !book.isReadingPreferencesUsed()
+                          ? ""
+                          : budget > 60
+                              ? "I used your reading preferences to help choose this book. "
+                              : "I used your reading preferences. ";
+                  String title =
+                      ResponseBudget.label(
+                          plainExplanation(book.getTitle()),
+                          Math.max(1, budget - wordCount(preference) - 8));
+                  String prefix = "Number " + book.getRank() + ", " + title + ". " + preference;
+                  String description = plainExplanation(book.getShortDescription());
+                  if (description.isBlank()) {
+                    description =
+                        "I don't have enough detail in this book's description to explain the match.";
+                  } else if (explanation) {
+                    description = "Its description says " + description;
+                  }
+                  return (prefix + limitWords(description, budget - wordCount(prefix)))
+                          .strip()
+                          .replaceAll("[.,!?]+$", "")
+                      + ".";
+                })
+            .collect(Collectors.joining(" "));
   }
 }
