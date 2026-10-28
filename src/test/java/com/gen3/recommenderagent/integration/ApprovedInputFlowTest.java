@@ -30,11 +30,9 @@ import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import com.gen3.recommenderagent.inputparser.AiParser;
 import com.gen3.recommenderagent.inputparser.CommandParser;
 import com.gen3.recommenderagent.inputparser.InputParser;
-import com.gen3.recommenderagent.inputparser.UserIntent;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
 import com.gen3.recommenderagent.response.ConversationResponseGenerator;
 import com.gen3.recommenderagent.retrieval.plan.ExactFilterPolicy;
-import java.math.BigInteger;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.IntStream;
@@ -399,50 +397,6 @@ class ApprovedInputFlowTest {
     assertThat(process("2").getDecision()).isEqualTo(ConversationDecision.UNKNOWN);
   }
 
-  @ParameterizedTest
-  @ValueSource(
-      strings = {
-        "Give me zero mystery books",
-        "Give me minus two mystery books",
-        "I want two and a half mystery books",
-        "Give me 2.5 mystery books"
-      })
-  void invalidCountsDoNotRetrieveAndTheCorrectionResumesTheOriginalSearch(String text) {
-    var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.RECOMMENDATION);
-    parsed.setInvalidBookCount(true);
-    parsed.setBookCount(BigInteger.ONE);
-    var query = new SemanticQuery();
-    query.setGenres(List.of("mystery"));
-    parsed.setPositiveSemanticQuery(query);
-    when(ai.parse(anyString())).thenReturn(parsed);
-    search();
-    int calls = batch;
-    var question = process(text);
-    assertThat(question.getDecision()).isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
-    assertThat(batch).isEqualTo(calls);
-    assertThat(session.getActiveSearch().getPendingRecommendations()).hasSize(15);
-    assertThat(responses.generate(question.getRecommendations(), question))
-        .contains("whole number from one to five");
-    process("help");
-    reload();
-    var result = process("3");
-    assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("mystery");
-    assertThat(result.getRecommendations()).hasSize(3);
-    assertThat(session.getBookCount()).isEqualTo(5);
-  }
-
-  @Test
-  void invalidMoreResumesWithATemporaryCountAndInvalidCountRepliesCannotBeRounded() {
-    search();
-    assertThat(process("0 more").getDecision()).isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
-    assertThat(process("2.5").getDecision()).isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
-    var result = process("2");
-    assertThat(result.getIntent()).isEqualTo(ConversationAction.MORE_RESULTS);
-    assertThat(result.getRecommendations()).hasSize(2);
-    assertThat(session.getBookCount()).isEqualTo(5);
-  }
-
   @Test
   void correctingAnInvalidCountSettingDoesNotRestoreReferenceSelection() throws Exception {
     when(titles.findBooksByTitle(anyString(), any(), anyInt()))
@@ -459,7 +413,7 @@ class ApprovedInputFlowTest {
     invalid.setInvalidBookCount(true);
     engine.process(session, invalid);
     reload();
-    var count = process("3");
+    var count = process("set count to 3");
     assertThat(session.getBookCount()).isEqualTo(3);
     assertThat(responses.generate(count.getRecommendations(), count))
         .contains("3 recommendations")
@@ -542,30 +496,6 @@ class ApprovedInputFlowTest {
     process("change count to three books");
     assertThat(session.getBookCount()).isEqualTo(3);
     verifyNoInteractions(ai);
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = {"more", "repeat the recommendations"})
-  void switchingActionsDiscardsTheAbandonedCountRequest(String action) {
-    search();
-    var invalid = request(ConversationAction.RECOMMENDATION, "zero mystery books");
-    invalid.setInvalidBookCount(true);
-    invalid.setExplicitSearch(true);
-    var query = new SemanticQuery();
-    query.setGenres(List.of("mystery"));
-    invalid.setPositiveSemanticQuery(query);
-    assertThat(engine.process(session, invalid).getDecision())
-        .isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
-    process(action);
-    assertThat(session.getPendingCountRequest()).isNull();
-    assertThat(process("0 more").getDecision()).isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
-    process("help");
-    process("repeat");
-    reload();
-    var more = process("2");
-    assertThat(more.getIntent()).isEqualTo(ConversationAction.MORE_RESULTS);
-    assertThat(more.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
-    assertThat(more.getRecommendations()).hasSize(2);
   }
 
   @ParameterizedTest
@@ -710,15 +640,6 @@ class ApprovedInputFlowTest {
     assertThat(resumed.isPersonalised()).isFalse();
     assertThat(resumed.getPositiveSemanticQuery().getGenres()).containsExactly("horror");
     assertThat(session.isAwaitingPersonalisedPreferences()).isFalse();
-  }
-
-  @Test
-  void invalidCombinedMoreCountStillResumesWithATemporaryCount() {
-    search();
-    assertThat(process("more and make it zero at a time").getDecision())
-        .isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
-    assertThat(process("2").getRecommendations()).hasSize(2);
-    assertThat(session.getBookCount()).isEqualTo(5);
   }
 
   @ParameterizedTest

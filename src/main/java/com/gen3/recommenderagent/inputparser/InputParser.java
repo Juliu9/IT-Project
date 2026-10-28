@@ -166,7 +166,8 @@ public class InputParser {
     if (invalidCount && countInput.invalid()) {
       parsed.setIntent(
           parsed.getIntent() == ConversationAction.MORE_RESULTS
-              ? ConversationAction.MORE_RESULTS
+                  || parsed.getIntent() == ConversationAction.REFINE
+              ? parsed.getIntent()
               : CountInput.setting(rawText) || countInput.modelText().equals("1")
                   ? ConversationAction.CHANGE_COUNT
                   : CountInput.more(rawText)

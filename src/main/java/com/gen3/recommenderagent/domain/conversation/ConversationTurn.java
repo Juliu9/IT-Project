@@ -14,6 +14,16 @@ import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ConversationTurn {
+  private boolean invalidBookCount;
+
+  public boolean isInvalidBookCount() {
+    return invalidBookCount;
+  }
+
+  public void setInvalidBookCount(boolean value) {
+    invalidBookCount = value;
+  }
+
   private ConversationDecision pendingQuestion;
 
   public ConversationDecision getPendingQuestion() {

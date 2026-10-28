@@ -76,8 +76,8 @@ public final class ConversationRules {
                       ? ConversationDecision.NOTHING_TO_EXPLAIN
                       : ConversationDecision.EXPLANATION;
               case CHANGE_COUNT ->
-                  request.getBookCount() == null
-                      ? ConversationDecision.COUNT_CLARIFICATION
+                  request.isInvalidBookCount()
+                      ? ConversationDecision.COUNT_UNCHANGED
                       : ConversationDecision.COUNT_CHANGED;
               case UPDATE_PREFERENCES -> ConversationDecision.PREFERENCES_UPDATED;
               case RESET_PREFERENCES -> ConversationDecision.PREFERENCES_RESET;

@@ -157,7 +157,10 @@ public final class SearchContextResolver implements ConversationHandler {
   }
 
   private Integer resolveBookCount(ConversationDraft request, Session session) {
-    if (request != null && request.getBookCount() != null) {
+    if (request != null
+        && !request.isInvalidBookCount()
+        && request.getBookCount() != null
+        && request.getBookCount() > 0) {
       return request.getBookCount();
     }
     return session == null ? null : session.getBookCount();

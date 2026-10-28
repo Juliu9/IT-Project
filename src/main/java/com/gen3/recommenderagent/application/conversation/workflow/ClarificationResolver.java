@@ -28,6 +28,7 @@ public final class ClarificationResolver {
       return effective;
     }
     String reply = effective.getRawText() == null ? "" : effective.getRawText().strip();
+    resolveInvalidSelection(session, effective, reply);
     boolean contextual = isContextualReply(session, effective, reply);
     if (effective.getIntent() == ConversationAction.HELP
         || (effective.getIntent() == ConversationAction.REPEAT && !contextual)) {
@@ -37,11 +38,7 @@ public final class ClarificationResolver {
     if (resolved != null) {
       return resolved;
     }
-    if (isNewAction(effective)
-        && !contextual
-        && !effective.isInvalidBookCount()
-        && !(session.getPendingDecision() == ConversationDecision.COUNT_CLARIFICATION
-            && effective.getIntent() == ConversationAction.CHANGE_COUNT)) {
+    if (isNewAction(effective) && !contextual) {
       session.setPendingQuestion(null);
       return effective;
     }
@@ -50,10 +47,6 @@ public final class ClarificationResolver {
       return resolved;
     }
     resolved = resolveSearchChangeReply(session, effective, reply);
-    if (resolved != null) {
-      return resolved;
-    }
-    resolved = resolveCountReply(session, effective, input, reply);
     if (resolved != null) {
       return resolved;
     }
@@ -71,10 +64,6 @@ public final class ClarificationResolver {
     }
     Integer selection = resolveSelection(session, reply);
     resolved = resolveYearReply(session, effective, reply);
-    if (resolved != null) {
-      return resolved;
-    }
-    resolved = resolveCountSelection(session, effective, selection);
     if (resolved != null) {
       return resolved;
     }
@@ -210,8 +199,7 @@ public final class ClarificationResolver {
     return null;
   }
 
-  private ConversationDraft resolveCountReply(
-      Session session, ConversationDraft effective, SessionRequest input, String reply) {
+  private void resolveInvalidSelection(Session session, ConversationDraft effective, String reply) {
     if (effective.isInvalidBookCount()
         && (session.getPendingDecision() == ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
             || session.getPendingQuestion() instanceof PendingQuestion.SimilarBook)
@@ -220,58 +208,6 @@ public final class ClarificationResolver {
       effective.setIntent(ConversationAction.UNKNOWN);
       effective.setBookCount(null);
     }
-    if (session.getPendingDecision() == ConversationDecision.COUNT_CLARIFICATION
-        && session.getPendingCountRequest() != null) {
-      Integer count = ConversationText.selectionReply(reply);
-      if (count == null
-          && effective.getIntent() == ConversationAction.CHANGE_COUNT
-          && !effective.isInvalidBookCount()) {
-        count = effective.getBookCount();
-      }
-      if (count != null && count > 0) {
-        var pending = ConversationDraft.fromTurn(session.getPendingCountRequest());
-        pending.setBookCount(count);
-        pending.setInvalidBookCount(false);
-        pending.setRawText(input.getRawText());
-        pending.setRequestId(input.getRequestId());
-        pending.setCreatedAt(input.getCreatedAt());
-        session.setPendingCountRequest(null);
-        session.setPendingQuestion(null);
-        if (pending.isExplicitSearch()
-            && (pending.getIntent() == ConversationAction.RECOMMENDATION
-                || pending.getIntent() == ConversationAction.REFINE)) {
-          session.setPendingDecision(null);
-          session.setPendingQuestion(null);
-          session.setPendingExplanation(null);
-          session.clearPreferenceQuestions();
-        }
-        return pending;
-      }
-    }
-    if (session.getPendingDecision() == ConversationDecision.COUNT_CLARIFICATION
-        && (effective.getIntent() == ConversationAction.CHANGE_COUNT
-            || ConversationText.selectionReply(reply) != null)
-        && (effective.getBookCount() == null || effective.getBookCount() <= 0)
-        && (ConversationText.selectionReply(reply) == null
-            || ConversationText.selectionReply(reply) <= 0)) {
-      effective.setIntent(ConversationAction.CHANGE_COUNT);
-      effective.setBookCount(null);
-      effective.setDecision(ConversationDecision.COUNT_CLARIFICATION);
-      return effective;
-    }
-    if (effective.isInvalidBookCount()) {
-      if (session.getPendingCountRequest() == null
-          || (input.isExplicitSearch()
-              && (input.getIntent() == ConversationAction.RECOMMENDATION
-                  || input.getIntent() == ConversationAction.REFINE))) {
-        session.setPendingCountRequest(ConversationDraft.toTurn(copyOf(input)));
-      }
-      effective.setIntent(ConversationAction.CHANGE_COUNT);
-      effective.setBookCount(null);
-      effective.setDecision(ConversationDecision.COUNT_CLARIFICATION);
-      return effective;
-    }
-    return null;
   }
 
   private ConversationDraft resolvePreferenceReply(Session session, ConversationDraft effective) {
@@ -279,7 +215,6 @@ public final class ClarificationResolver {
         || (session.isAwaitingPreferenceUpdate()
             && !session.isAwaitingPersonalisedPreferences()
             && session.getPendingDecision() != ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
-            && session.getPendingDecision() != ConversationDecision.COUNT_CLARIFICATION
             && !isRefinementQuestion(session.getPendingDecision())
             && !effective.isExplicitSearch()
             && (effective.getIntent() == ConversationAction.RECOMMENDATION
@@ -437,21 +372,6 @@ public final class ClarificationResolver {
     return null;
   }
 
-  private ConversationDraft resolveCountSelection(
-      Session session, ConversationDraft effective, Integer selection) {
-    if (session.getPendingDecision() == ConversationDecision.COUNT_CLARIFICATION
-        && selection != null) {
-      effective.setIntent(ConversationAction.CHANGE_COUNT);
-      normalizeInput(effective);
-      effective.setBookCount(selection > 0 ? selection : null);
-      if (selection <= 0) {
-        effective.setDecision(ConversationDecision.COUNT_CLARIFICATION);
-      }
-      return effective;
-    }
-    return null;
-  }
-
   private ConversationDraft resolveExplanationTarget(
       Session session, ConversationDraft effective, String reply, Integer selection) {
     if (session.getPendingDecision() == ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
@@ -481,8 +401,7 @@ public final class ClarificationResolver {
         && ConversationText.isDurationOnlyReply(reply)) {
       return true;
     }
-    if (decision == ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
-        || decision == ConversationDecision.COUNT_CLARIFICATION) {
+    if (decision == ConversationDecision.EXPLANATION_TARGET_CLARIFICATION) {
       if (ConversationText.selectionReply(reply) != null
           || ConversationText.relativeSelectionReply(reply, 5) != null) {
         return true;
@@ -561,8 +480,7 @@ public final class ClarificationResolver {
       return false;
     }
     return switch (decision) {
-      case COUNT_CLARIFICATION,
-          EXPLANATION_TARGET_CLARIFICATION,
+      case EXPLANATION_TARGET_CLARIFICATION,
           PREFERENCE_CLARIFICATION,
           PREFERENCE_UPDATE_CLARIFICATION,
           SEARCH_CLARIFICATION,

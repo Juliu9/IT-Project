@@ -101,7 +101,7 @@ keeps the reference and rebuilds from its original vector, avoiding repeated ble
 search replaces the reference. Explain and Repeat retain the resolved reference as search evidence.
 Pending title clarification is separate from the displayed page; Cancel/Clear history remove it.
 `ClarificationResolver` routes replies to the current question before catalogue access, so a later
-explanation or count question takes priority over older title choices. Title matching shares one
+explanation question takes priority over older title choices. Count changes abandon those choices. Title matching shares one
 normaliser for case, punctuation and catalogue `$b` markers across reference and explanation flows.
 Resuming a reference selection restores explicit search criteria and reapplies current preferences;
 preference resets abandon unfinished searches rather than reviving inherited filters.
@@ -115,7 +115,7 @@ field remain readable.
 ### Outstanding questions
 
 `Session.pendingQuestion` holds one typed question and its unfinished action's context. Question
-subclasses cover search/duration/year clarifications, counts, preferences, explanations and similar-book
+subclasses cover search/duration/year clarifications, preferences, explanations and similar-book
 selection. There is no suspended question or automatic resumption stack.
 
 HELP preserves the question and adds a reminder; REPEAT preserves its existing replay behaviour.
@@ -128,10 +128,11 @@ count changes, resets, explanations and More cannot later revive old selections.
 ask its own question. Completed searches, displayed books, saved preferences and cached results remain
 available unless the action explicitly clears them.
 
-Zero, negative and fractional recommendation counts ask for a whole number from one to five before
-retrieval. The count question owns the original action and criteria across HELP/cache reloads.
-Correcting a search/More count resumes that action with a temporary count; only explicit count settings
-change the saved default. Counts above five retain the existing cap and notice.
+Zero, negative and fractional recommendation counts immediately use the saved session count,
+preserving the action and criteria. The response explains that counts must be whole numbers from
+one to five. Invalid count settings leave the saved count unchanged and acknowledge its current value.
+Only explicit valid count settings change the saved default; counts above five are capped at five
+with a limit notice. No count question or suspended count request is created.
 With no previous search, “2 more” asks for criteria and retains two through HELP/cache reloads.
 “Yes” after a no-match or exhausted-results offer asks what to change without retrieving again;
 the previous explicit criteria remain available until the user answers or starts another action.
@@ -478,14 +479,13 @@ retain their addition/removal/replacement fields.
 
 Simple actions share `SessionActionHandler`; a new intent does not require a new class by default.
 
-A pending result-count question also accepts short answers such as “3” and “three”. The resolved
-count updates the session without consuming the pending recommendation queue. An explicit count
+Count-setting commands update the session without consuming the pending recommendation queue. An explicit count
 on `MORE_RESULTS`, such as “2 more”, applies to that page without changing the saved default.
 “More, make it three at a time” also uses a temporary count: each message executes one intent.
 Use a separate CHANGE_COUNT request to save a new default.
 
 `CANCEL` acknowledges cancellation and clears pending preference clarification without clearing
-search history, preferences, or queued books. “Never mind” and “cancel” also end count and book-selection
+search history, preferences, or queued books. “Never mind” and “cancel” also end book-selection
 questions. While a preference question is pending, clear declines such as “no”, “not now”,
 “keep my preferences”, “nothing”, or “no changes” cancel it without changing saved preferences or
 count. Declining a genre question abandons that unfinished search while preserving earlier results
@@ -541,8 +541,8 @@ MORE/new searches clear it. Empty subsets ask which books to explain without cal
 Model-provided ranks and counts accept large integers before conversion to bounded internal values:
 oversized ranks clarify rather than overflow, and result counts retain the existing one-to-five cap.
 Malformed model numeric fields and structured responses exceeding JSON limits return a friendly `400`
-validation message. Invalid user recommendation counts use the count-clarification flow instead of
-rounding or interpreting zero as replay.
+validation message. Invalid user recommendation counts use the saved session count rather than
+rounding or interpreting zero as replay. Invalid settings preserve the saved default.
 
 Bare title replies to a pending explanation question match the displayed page even when the parser
 labels them RECOMMENDATION or REFINE. Explicit search commands still start a new search.

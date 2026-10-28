@@ -24,6 +24,7 @@ public class ConversationDraft extends SessionRequest {
     turn.setReferenceRank(draft.getReferenceRank());
     turn.setReferenceTitle(draft.getReferenceTitle());
     turn.setBookCount(draft.getBookCount());
+    turn.setInvalidBookCount(draft.isInvalidBookCount());
     turn.setDecision(draft.getDecision());
     turn.setPendingQuestion(draft.getPendingQuestion());
     turn.setPreferenceClarificationRequired(draft.isPreferenceClarificationRequired());
@@ -45,6 +46,7 @@ public class ConversationDraft extends SessionRequest {
     draft.setReferenceRank(turn.getReferenceRank());
     draft.setReferenceTitle(turn.getReferenceTitle());
     draft.setBookCount(turn.getBookCount());
+    draft.setInvalidBookCount(turn.isInvalidBookCount());
     draft.setDecision(turn.getDecision());
     draft.setPendingQuestion(turn.getPendingQuestion());
     draft.setPreferenceClarificationRequired(turn.isPreferenceClarificationRequired());

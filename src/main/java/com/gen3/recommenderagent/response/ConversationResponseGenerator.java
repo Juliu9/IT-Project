@@ -104,7 +104,7 @@ public class ConversationResponseGenerator implements ResponseGenerator {
           };
       RequestTelemetry.responseMode(noResults ? "NO_RESULTS" : "ACTION_RESPONSE");
       return switch (decision) {
-        case NO_MORE_RESULTS, NOTHING_TO_REPEAT, NO_RECOMMENDATIONS_TO_REPEAT -> fixedResponse;
+        case NOTHING_TO_REPEAT, NO_RECOMMENDATIONS_TO_REPEAT -> fixedResponse;
         default -> limitNotice + fixedResponse;
       };
     }
@@ -119,6 +119,16 @@ public class ConversationResponseGenerator implements ResponseGenerator {
   }
 
   private String limitNotice(ConversationTurn request) {
+    if (request != null && request.isInvalidBookCount()) {
+      return request.getDecision() == ConversationDecision.COUNT_UNCHANGED
+              || request.getIntent() == ConversationAction.CHANGE_COUNT
+          ? ""
+          : "Recommendation counts must be whole numbers between 1 and "
+              + MAX_BOOK_COUNT
+              + ". I'll use your saved count of "
+              + request.getBookCount()
+              + ". ";
+    }
     if (request == null
         || request.getBookCount() == null
         || request.getBookCount() <= MAX_BOOK_COUNT
@@ -173,8 +183,12 @@ public class ConversationResponseGenerator implements ResponseGenerator {
           olderRequest(currentRequest)
               ? "I don't have publication years for those books. What ending year would you like?"
               : "I don't have publication years for those books. What year would you like me to start from? For example, from 2000.";
-      case COUNT_CLARIFICATION ->
-          "How many books would you like? Please choose a whole number from one to five.";
+      case COUNT_UNCHANGED ->
+          "Recommendation counts must be whole numbers between 1 and "
+              + MAX_BOOK_COUNT
+              + ". Your setting is still "
+              + currentRequest.getBookCount()
+              + ".";
       case COUNT_CHANGED -> {
         int count = Math.clamp(currentRequest.getBookCount(), 1, MAX_BOOK_COUNT);
         yield "I'll show " + count + " recommendation" + (count == 1 ? "" : "s") + " at a time.";

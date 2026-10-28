@@ -366,7 +366,7 @@ class SimilarBookFlowTest {
         .isEqualTo(
             intent == ConversationAction.EXPLAIN_RECOMMENDATION
                 ? ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
-                : ConversationDecision.COUNT_CLARIFICATION);
+                : ConversationDecision.COUNT_UNCHANGED);
     when(vectors.findEmbeddingByBookId(anyString()))
         .thenThrow(new java.io.IOException("unrelated catalogue unavailable"));
     var reply = request(ConversationAction.UNKNOWN, null);
@@ -377,14 +377,14 @@ class SimilarBookFlowTest {
         .isEqualTo(
             intent == ConversationAction.EXPLAIN_RECOMMENDATION
                 ? ConversationDecision.EXPLANATION
-                : ConversationDecision.COUNT_CHANGED);
+                : ConversationDecision.UNKNOWN);
     assertThat(result.getSimilarBook()).isNull();
     if (intent == ConversationAction.EXPLAIN_RECOMMENDATION) {
       assertThat(result.getRecommendations())
           .extracting(Recommendation::getBookId)
           .containsExactly("book-1");
     } else {
-      assertThat(result.getBookCount()).isEqualTo(1);
+      assertThat(sessions.getSession("session", "user").getBookCount()).isEqualTo(5);
     }
     verifyNoInteractions(vectors);
   }
