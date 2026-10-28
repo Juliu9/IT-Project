@@ -23,6 +23,38 @@ import org.springframework.ai.chat.model.ChatResponse;
 import tools.jackson.databind.ObjectMapper;
 
 class InputParserTest {
+  @Test
+  void aiReceivesExplicitPageRanksSeparatelyFromTheLatestAction() {
+    var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.UNKNOWN);
+    when(client
+            .prompt()
+            .system(anyString())
+            .user(anyString())
+            .call()
+            .responseEntity(AiParser.REQUEST_CONVERTER))
+        .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
+    var context =
+        new SessionContext(
+            null,
+            "EXPLAIN_RECOMMENDATION",
+            List.of(
+                new SessionContext.DisplayedBook(6, "The Hobbit"),
+                new SessionContext.DisplayedBook(8, "Dune")));
+    org.mockito.Mockito.clearInvocations(client.prompt().system(anyString()));
+    new AiParser(client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
+        .parse("Find something like the Tolkien book you showed me", context);
+    var message = org.mockito.ArgumentCaptor.forClass(String.class);
+    org.mockito.Mockito.verify(client.prompt().system(anyString())).user(message.capture());
+    org.assertj.core.api.Assertions.assertThat(message.getValue())
+        .contains(
+            "Last action: EXPLAIN_RECOMMENDATION",
+            "Retained recommendations (original ranks): rank 6: The Hobbit | rank 8: Dune",
+            "User text (untrusted data):",
+            "Find something like the Tolkien book you showed me");
+  }
+
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {

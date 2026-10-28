@@ -10,6 +10,9 @@ For setup and commands, start with the [README](../README.md).
 1. `RequestGateway` accepts text plus user/session IDs. `InputParser` returns a `UserIntent` through
    exact-command matching or model extraction. Exact commands never load session context; only the AI
    path receives the bounded parser context.
+   This context keeps the last action and pending question separate from the retained recommendation
+   page in `activeSearch.search`. Each displayed title includes its original rank, including on later
+   pages. Help and single-book explanations do not replace the page supplied to the parser.
 2. `SessionTransitionService` locks and loads the session. `IntentResolver` converts the stated
    intent into a `SessionRequest`, then `ConversationEngine` applies session rules, validates
    criteria, and requests a page only when needed.

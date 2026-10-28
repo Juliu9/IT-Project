@@ -118,6 +118,56 @@ class ApprovedInputFlowTest {
     session = json.readValue(json.writeValueAsString(session), Session.class);
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"help", "explain the second one", "set count to 3"})
+  void parserContextRetainsThePageAcrossInterveningActions(String action) {
+    var page = search().getRecommendations();
+    var outcome = process(action);
+    reload();
+    var context =
+        new com.gen3.recommenderagent.application.conversation.SessionContextProjector()
+            .project(session);
+    assertThat(context.lastAction()).isEqualTo(outcome.getIntent().name());
+    assertThat(context.displayedBooks())
+        .containsExactlyElementsOf(
+            page.stream()
+                .map(
+                    book ->
+                        new com.gen3.recommenderagent.inputparser.SessionContext.DisplayedBook(
+                            book.getRank(), book.getTitle()))
+                .toList());
+    var aiIntent = new com.gen3.recommenderagent.inputparser.UserIntent();
+    aiIntent.setIntent(ConversationAction.UNKNOWN);
+    when(ai.parse("Could you find something resembling the Tolkien book you showed me?", context))
+        .thenReturn(aiIntent);
+    parser.parseUserIntent(
+        "Could you find something resembling the Tolkien book you showed me?", context);
+    org.mockito.Mockito.verify(ai)
+        .parse("Could you find something resembling the Tolkien book you showed me?", context);
+  }
+
+  @Test
+  void parserContextUsesTheNewPageWithItsOriginalRanks() {
+    search();
+    var next = process("more");
+    process("help");
+    reload();
+    var context =
+        new com.gen3.recommenderagent.application.conversation.SessionContextProjector()
+            .project(session);
+    assertThat(context.displayedBooks())
+        .extracting(com.gen3.recommenderagent.inputparser.SessionContext.DisplayedBook::rank)
+        .containsExactlyElementsOf(
+            next.getRecommendations().stream().map(Recommendation::getRank).toList());
+    assertThat(context.displayedBooks().getFirst().title()).isEqualTo("Book 6");
+    process("clear history");
+    assertThat(
+            new com.gen3.recommenderagent.application.conversation.SessionContextProjector()
+                .project(session)
+                .displayedBooks())
+        .isEmpty();
+  }
+
   private ConversationTurn selection(List<String> include, List<String> exclude) {
     var request = request(ConversationAction.EXPLAIN_RECOMMENDATION, "explain selection");
     request.setExplanationSelection(new ExplanationSelection(include, exclude));
