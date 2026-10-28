@@ -111,8 +111,6 @@ public class SessionRequest {
   private ConversationAction intent;
   private Integer referenceRank;
   private String referenceTitle;
-  private boolean addAuthors;
-  private boolean addNarrators;
   private SessionPreferences preferenceUpdates;
   private SessionPreferences preferenceRemovals;
   private List<String> replacePreferenceFields;
@@ -170,22 +168,6 @@ public class SessionRequest {
 
   public void setReferenceTitle(String value) {
     referenceTitle = value;
-  }
-
-  public boolean isAddAuthors() {
-    return addAuthors;
-  }
-
-  public void setAddAuthors(boolean value) {
-    addAuthors = value;
-  }
-
-  public boolean isAddNarrators() {
-    return addNarrators;
-  }
-
-  public void setAddNarrators(boolean value) {
-    addNarrators = value;
   }
 
   public SessionPreferences getPreferenceUpdates() {

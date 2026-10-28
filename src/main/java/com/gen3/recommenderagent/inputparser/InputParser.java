@@ -193,8 +193,6 @@ public class InputParser {
     request.setReplacePreferenceFields(parsed.getReplacePreferenceFields());
     request.setExplicitSearch(parsed.isExplicitSearch());
     applySearchReplacements(rawText, parsed, request);
-    request.setAddAuthors(parsed.isAddAuthors());
-    request.setAddNarrators(parsed.isAddNarrators());
     request.setReferenceRank(boundedInteger(parsed.getReferenceRank()));
     request.setReferenceTitle(parsed.getReferenceTitle());
     request.setPersonalised(parsed.isPersonalised());
@@ -202,6 +200,14 @@ public class InputParser {
     request.setNegativeSemanticQuery(parsed.getNegativeSemanticQuery());
     request.setMustInclude(parsed.getMustInclude());
     request.setMustNotInclude(parsed.getMustNotInclude());
+    // Validate stated people before normalization can discard unsupported control-intent fields.
+    com.gen3.recommenderagent.application.conversation.PreferenceRequestMapper.fromRequest(request);
+    if (request.getPreferenceUpdates() != null) {
+      request.getPreferenceUpdates().copy();
+    }
+    if (request.getPreferenceRemovals() != null) {
+      request.getPreferenceRemovals().copy();
+    }
     applyPersonalisation(rawText, request);
     ConversationRules.normalizeInput(request);
     request.setInvalidBookCount(invalidCount);

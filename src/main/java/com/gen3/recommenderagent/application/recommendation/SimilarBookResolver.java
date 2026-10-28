@@ -153,8 +153,7 @@ public class SimilarBookResolver {
     request.setDecision(decision);
     request.setSearchClarificationRequired(true);
     request.setSimilarBookChoices(choices);
-    var pendingRequest = ConversationDraft.toTurn(request);
-    pendingRequest.setRawText(null);
+    var pendingRequest = ConversationDraft.toStoredTurn(request);
     var pending = new PendingQuestion.SimilarBook();
     pending.setDecision(decision);
     pending.setRequest(pendingRequest);

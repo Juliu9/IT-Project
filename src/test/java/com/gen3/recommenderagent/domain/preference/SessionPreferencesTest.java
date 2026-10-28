@@ -96,16 +96,21 @@ class SessionPreferencesTest {
         "negativeSemanticQuery.narrators"
       })
   void removingPeopleUsesTheSameFormattingEquivalenceAsSearch(String path) {
-    var p = people(path, List.of("Collins, Suzanne.", "Other Writer"));
+    var p = people(path, List.of("Collins, Suzanne."));
     var updated = p.updated(null, people(path, List.of("Suzanne Collins")), List.of());
-    assertThat(peopleAt(updated, path)).containsExactly("Other Writer");
-    assertThat(peopleAt(p, path)).containsExactly("Collins, Suzanne.", "Other Writer");
+    assertThat(peopleAt(updated, path)).isNullOrEmpty();
+    assertThat(peopleAt(p, path)).containsExactly("Collins, Suzanne.");
     var initials = people(path, List.of("Rowling, J. K."));
     assertThat(
             peopleAt(initials.updated(null, people(path, List.of("J K Rowling")), List.of()), path))
         .isNullOrEmpty();
     assertThat(peopleAt(p.updated(null, people(path, List.of("S. Collins")), List.of()), path))
-        .containsExactly("Collins, Suzanne.", "Other Writer");
+        .containsExactly("Collins, Suzanne.");
+    assertThat(peopleAt(p.updated(people(path, List.of("Other Writer")), null, List.of()), path))
+        .containsExactly("Other Writer");
+    assertThatThrownBy(() -> people(path, List.of("Author A", "Author B")).copy())
+        .isInstanceOf(InvalidRequestException.class)
+        .hasMessageContaining("only one author and one narrator");
   }
 
   @Test

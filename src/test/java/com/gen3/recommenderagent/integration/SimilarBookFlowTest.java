@@ -87,6 +87,38 @@ class SimilarBookFlowTest {
     service.process("session", "user", request(ConversationAction.RECOMMENDATION, "hunger games"));
   }
 
+  @Test
+  void oneAuthorAndNarratorReplaceSavedChoicesAndSurviveReferenceSelection() throws Exception {
+    var session = new com.gen3.recommenderagent.domain.session.Session();
+    session.setSessionId("session");
+    session.setUserId("user");
+    var preferences = new com.gen3.recommenderagent.domain.session.SessionPreferences();
+    var saved = new com.gen3.recommenderagent.domain.search.ExactCriteria();
+    saved.setAuthors(List.of("Author A"));
+    saved.setNarrators(List.of("Narrator A"));
+    preferences.setMustInclude(saved);
+    session.setPreferences(preferences);
+    sessions.updateSession(session);
+    when(titles.findBooksByTitle(anyString(), any(), anyInt()))
+        .thenReturn(
+            List.of(
+                book, new AudiobookTitle("other", "The Hunger Games", List.of("Other Author"))));
+    var search = request(ConversationAction.RECOMMENDATION, "hunger games");
+    var include = new com.gen3.recommenderagent.domain.search.ExactCriteria();
+    include.setAuthors(List.of("Author B"));
+    include.setNarrators(List.of("Narrator B"));
+    search.setMustInclude(include);
+    var question = service.process("session", "user", search);
+    assertThat(question.getMustInclude().getAuthors()).containsExactly("Author B");
+    assertThat(question.getMustInclude().getNarrators()).containsExactly("Narrator B");
+    var result = service.process("session", "user", parsedReply("2"));
+    assertThat(result.getMustInclude().getAuthors()).containsExactly("Author B");
+    assertThat(result.getMustInclude().getNarrators()).containsExactly("Narrator B");
+    var savedPreferences = sessions.getSession("session", "user").getPreferences().getMustInclude();
+    assertThat(savedPreferences.getAuthors()).containsExactly("Author A");
+    assertThat(savedPreferences.getNarrators()).containsExactly("Narrator A");
+  }
+
   private com.gen3.recommenderagent.application.conversation.SessionRequest parsedReply(
       String text) {
     return new com.gen3.recommenderagent.inputparser.InputParser(

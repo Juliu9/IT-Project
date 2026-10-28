@@ -1,6 +1,7 @@
 package com.gen3.recommenderagent.inputparser;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -523,8 +524,6 @@ class InputParserTest {
     assertEquals(null, request.getPreferenceUpdates());
     assertEquals(false, request.isExplicitSearch());
     assertEquals(false, request.isPersonalised());
-    assertEquals(false, request.isAddAuthors());
-    assertEquals(false, request.isAddNarrators());
   }
 
   @Test
@@ -627,11 +626,9 @@ class InputParserTest {
   }
 
   @Test
-  void mapsExplicitAdditionsAndRoutesStandaloneCriteriaToRecommendation() {
+  void routesStandaloneCriteriaWithoutLegacyPeopleAdditionFlags() {
     var parsed = new UserIntent();
     parsed.setIntent(ConversationAction.RECOMMENDATION);
-    parsed.setAddAuthors(true);
-    parsed.setAddNarrators(false);
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(client
             .prompt()
@@ -647,14 +644,16 @@ class InputParserTest {
                     client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse("fantasy under five hours");
     assertEquals(ConversationAction.RECOMMENDATION, result.getIntent());
-    org.junit.jupiter.api.Assertions.assertTrue(result.isAddAuthors());
-    org.junit.jupiter.api.Assertions.assertFalse(result.isAddNarrators());
     org.mockito.Mockito.verify(client.prompt())
         .system(
             org.mockito.ArgumentMatchers.<String>argThat(
                 prompt ->
                     prompt.contains("self-contained criteria")
-                        && prompt.contains("addAuthors/addNarrators")));
+                        && prompt.contains(
+                            "Each author or narrator field supports at most one person")));
+    var schema = new ObjectMapper().readTree(AiParser.REQUEST_CONVERTER.getJsonSchema());
+    assertFalse(schema.path("properties").has("addAuthors"));
+    assertFalse(schema.path("properties").has("addNarrators"));
   }
 
   @org.junit.jupiter.params.ParameterizedTest

@@ -122,6 +122,9 @@ field remain readable.
 `Session.pendingQuestion` holds one typed question and its unfinished action's context. Question
 subclasses cover search/duration/year clarifications, preferences, explanations and similar-book
 selection. There is no suspended question or automatic resumption stack.
+Completed history and every pending request use structured snapshots without raw user messages.
+The current response still has access to its own raw input; stored criteria, references and choices
+remain available when answering a question after a session reload.
 
 HELP preserves the question and adds a reminder; REPEAT preserves its existing replay behaviour.
 UNKNOWN keeps the question and says “I didn't quite catch that. Just to clarify, …” followed by the
@@ -137,7 +140,8 @@ Zero, negative and fractional recommendation counts immediately use the saved se
 preserving the action and criteria. The response explains that counts must be whole numbers from
 one to five. Invalid count settings leave the saved count unchanged and acknowledge its current value.
 Only explicit valid count settings change the saved default; counts above five are capped at five
-with a limit notice. No count question or suspended count request is created.
+with a limit notice based on the resolved count, regardless of numeric or worded input. No count
+question or suspended count request is created.
 With no previous search, “2 more” asks for criteria and retains two through HELP/cache reloads.
 “Yes” after a no-match or exhausted-results offer asks what to change without retrieving again;
 the previous explicit criteria remain available until the user answers or starts another action.
@@ -290,9 +294,13 @@ still inherit previous values. These edits leave saved preferences unchanged. Ov
 with the search through cache reloads, MORE and later refinements, preventing saved preferences from
 reintroducing a cleared filter or replaced genre. A new recommendation request starts fresh.
 
-New exact author/narrator lists replace the previous list by default. Explicit “also”/“add” wording
-sets the parser's `addAuthors`/`addNarrators` flags and extends that list instead.
-For leading “also”/“add” instructions, supplied values remain additions even when another field is
+Each author/narrator field accepts at most one person, for exact filters, style criteria and saved
+preferences. A newly supplied name replaces the previous choice, including “also”/“add” wording.
+One author together with one narrator is supported. Multiple distinct names in the same field return
+`400` asking the user to choose one, before retrieval or session commit; names are never truncated.
+Equivalent catalogue spellings of the same person are deduplicated. Catalogue records retain their
+existing multivalued author/narrator fields, and genres/topics/keywords still support multiple values.
+For genres, topics and keywords in leading “also”/“add” instructions, supplied values remain additions even when another field is
 removed in the same message; empty replacement fields still clear their filters. Explicit
 “instead”/“replace” wording retains replacement behavior. Unrelated filters
 and semantic criteria remain inherited for refinements.
@@ -300,8 +308,7 @@ and semantic criteria remain inherited for refinements.
 Before queue invalidation or recommendation work, the planner checks exact include/exclude
 constraints. Explicit new requirements override conflicting inherited exclusions, and vice versa.
 Contradictions within the new message return `400` with a clarification question; the saved search,
-queue, shown IDs and session version remain unchanged. Author/narrator alternatives are OR-based:
-allowing A or B while excluding A remains valid. A range conflicts only when its exclusion covers
+queue, shown IDs and session version remain unchanged. A range conflicts only when its exclusion covers
 the entire required interval. Semantic combinations, such as romantic horror, are not conflicts.
 This checks logical impossibility, not whether the current catalogue happens to contain matches.
 

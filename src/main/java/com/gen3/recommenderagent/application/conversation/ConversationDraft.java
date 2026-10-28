@@ -12,6 +12,13 @@ import java.util.List;
 
 /** Private-to-conversation working state; never used as a persisted turn or response contract. */
 public class ConversationDraft extends SessionRequest {
+  /** Retains structured context without persisting the user's original message. */
+  public static ConversationTurn toStoredTurn(ConversationDraft draft) {
+    var turn = toTurn(draft);
+    turn.setRawText(null);
+    return turn;
+  }
+
   public static ConversationTurn toTurn(ConversationDraft draft) {
     var turn = new ConversationTurn();
     turn.setSearchContext(draft.getSearchContext().copy());

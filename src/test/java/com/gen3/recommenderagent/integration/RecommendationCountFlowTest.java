@@ -144,6 +144,35 @@ class RecommendationCountFlowTest {
     assertThat(session.getBookCount()).isEqualTo(2);
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({"thirty,30", "one hundred,100"})
+  void wordedOversizedCountsExplainTheCapForSearchesAndSettings(String words, int count) {
+    var intent = fantasy();
+    intent.setBookCount(BigInteger.valueOf(count));
+    when(ai.parse(anyString())).thenReturn(intent);
+    var search = engine.process(session, parser.parse("Give me " + words + " fantasy books"));
+    assertThat(search.getRecommendations()).hasSize(5);
+    assertThat(session.getBookCount()).isEqualTo(3);
+    assertThat(responses.generate(search.getRecommendations(), search))
+        .startsWith("I can give up to 5 recommendations at a time.");
+
+    intent = new UserIntent();
+    intent.setIntent(ConversationAction.CHANGE_COUNT);
+    intent.setBookCount(BigInteger.valueOf(count));
+    when(ai.parse(anyString())).thenReturn(intent);
+    var setting = engine.process(session, parser.parse("set count to " + words));
+    assertThat(session.getBookCount()).isEqualTo(5);
+    String acknowledgement = responses.generate(setting.getRecommendations(), setting);
+    assertThat(acknowledgement)
+        .isEqualTo(
+            "I can give up to 5 recommendations at a time. I'll show 5 recommendations at a time.");
+
+    var json = JsonMapper.builder().build();
+    session = json.readValue(json.writeValueAsString(session), Session.class);
+    var repeat = engine.process(session, parser.parse("repeat"));
+    assertThat(responses.generate(repeat.getRecommendations(), repeat)).isEqualTo(acknowledgement);
+  }
+
   @ParameterizedTest
   @ValueSource(strings = {"0 more", "-2 more", "2.5 more", "more and make it zero at a time"})
   void invalidMoreUsesSavedCountAndConsumesOnlyTheNextCachedPage(String text) {

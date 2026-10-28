@@ -41,8 +41,7 @@ public final class SearchContextResolver implements ConversationHandler {
             || !isRecommendationIntent(session.getActiveSearch().getSearch().getIntent()))) {
       effective.setBookCount(resolveBookCount(effective, session));
       effective.setSearchClarificationRequired(true);
-      session.setPendingRefinementRequest(
-          com.gen3.recommenderagent.application.conversation.ConversationDraft.toTurn(effective));
+      session.setPendingRefinementRequest(ConversationDraft.toStoredTurn(effective));
       return effective;
     }
     if (effective.getIntent() == ConversationAction.REFINE

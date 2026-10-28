@@ -170,7 +170,7 @@ public final class ClarificationResolver {
         && (session.getPendingDecision() == ConversationDecision.SEARCH_CHANGE_OFFER)) {
       var previous = ConversationHistory.latestDisplayedSearch(session);
       if (previous != null) {
-        session.setPendingRefinementRequest(ConversationDraft.toTurn(previous));
+        session.setPendingRefinementRequest(ConversationDraft.toStoredTurn(previous));
       }
       effective.setIntent(ConversationAction.RECOMMENDATION);
       normalizeInput(effective);
@@ -546,7 +546,7 @@ public final class ClarificationResolver {
       session.setPendingDecision(decision);
       if (session.getPendingQuestion()
           instanceof com.gen3.recommenderagent.domain.session.PendingQuestion.Preference question) {
-        question.setRequest(ConversationDraft.toTurn(request));
+        question.setRequest(ConversationDraft.toStoredTurn(request));
       }
     } else {
       session.setPendingQuestion(null);

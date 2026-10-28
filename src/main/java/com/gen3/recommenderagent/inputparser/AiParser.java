@@ -121,7 +121,8 @@ public class AiParser {
                         "Also include mystery in that search" -> intent=REFINE, positiveSemanticQuery.genres=["mystery"], OMIT replaceSearchFields: also/add/too are additions, not replacements.
                         "Any author is fine now" -> REFINE, replaceSearchFields=["mustInclude.authors"], no author value. Likewise remove a time/year/narrator filter using its field path. These change the current search, not saved preferences. Omitted fields keep prior criteria.
                         replaceSearchFields allows only positiveSemanticQuery/negativeSemanticQuery.{genres,topics,keywords,authors,narrators} or mustInclude/mustNotInclude.{authors,narrators,language,source,duration,publicationYear}.
-                        Preserve contradictions. Author/narrator lists replace by default; addAuthors/addNarrators=true only for explicit additions.
+                        Each author or narrator field supports at most one person. A new name replaces the previous choice, including "also"/"add" wording; there are no addition flags for people.
+                        If the user explicitly names several people for the same field, preserve all stated names in that field so the application can ask them to choose one. Never silently choose or discard a name. One author plus one narrator is supported; genres/topics/keywords may still contain multiple values. Preserve contradictions.
                         personalised=true only for explicit use of the user's preferences/favourites/history or generic requests without criteria. "I want" alone does not imply personalisation.
                         Author/narrator style similarity alone is personalised=false; "for me based on my preferences" makes it true. Never invent taste.
                         "Give me some books" -> RECOMMENDATION, personalised=true, explicitSearch=true; no invented criteria.

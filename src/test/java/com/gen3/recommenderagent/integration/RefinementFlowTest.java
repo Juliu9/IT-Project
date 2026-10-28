@@ -788,9 +788,8 @@ class RefinementFlowTest {
     verify(workflow).recommend(any(), any());
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void replacesOrAddsExactAuthorsAndNarrators(boolean add) {
+  @Test
+  void replacesExactAuthorsAndNarrators() {
     var previous = new ExactCriteria();
     previous.setAuthors(List.of("Author A"));
     previous.setNarrators(List.of("Narrator A"));
@@ -801,14 +800,9 @@ class RefinementFlowTest {
     include.setAuthors(List.of("Author B"));
     include.setNarrators(List.of("Narrator B"));
     refinement.setMustInclude(include);
-    refinement.setAddAuthors(add);
-    refinement.setAddNarrators(add);
     var result = process(refinement);
-    assertThat(result.getMustInclude().getAuthors())
-        .containsExactlyElementsOf(add ? List.of("Author A", "Author B") : List.of("Author B"));
-    assertThat(result.getMustInclude().getNarrators())
-        .containsExactlyElementsOf(
-            add ? List.of("Narrator A", "Narrator B") : List.of("Narrator B"));
+    assertThat(result.getMustInclude().getAuthors()).containsExactly("Author B");
+    assertThat(result.getMustInclude().getNarrators()).containsExactly("Narrator B");
     assertThat(result.getMustInclude().getLanguage()).isEqualTo("English");
     assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
   }
@@ -829,9 +823,9 @@ class RefinementFlowTest {
   }
 
   @Test
-  void explicitRequirementOverridesInheritedExclusionWithoutDroppingOtherAuthors() {
+  void explicitRequirementOverridesTheInheritedAuthorExclusion() {
     var exclude = new ExactCriteria();
-    exclude.setAuthors(List.of("Author A", "Author B"));
+    exclude.setAuthors(List.of("Author A"));
     search(null, exclude);
     var refinement = request(ConversationAction.REFINE);
     var include = new ExactCriteria();
@@ -839,7 +833,7 @@ class RefinementFlowTest {
     refinement.setMustInclude(include);
     var result = process(refinement);
     assertThat(result.getMustInclude().getAuthors()).containsExactly("Author A");
-    assertThat(result.getMustNotInclude().getAuthors()).containsExactly("Author B");
+    assertThat(result.getMustNotInclude().getAuthors()).isNullOrEmpty();
   }
 
   @Test
@@ -862,10 +856,10 @@ class RefinementFlowTest {
   }
 
   @Test
-  void partialAuthorExclusionAndSemanticMixturesRemainValid() {
+  void distinctAuthorExclusionAndSemanticMixturesRemainValid() {
     var request = request(ConversationAction.RECOMMENDATION);
     var include = new ExactCriteria();
-    include.setAuthors(List.of("A", "B"));
+    include.setAuthors(List.of("B"));
     var exclude = new ExactCriteria();
     exclude.setAuthors(List.of("A"));
     request.setMustInclude(include);

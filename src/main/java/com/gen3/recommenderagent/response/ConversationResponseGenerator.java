@@ -10,7 +10,6 @@ import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import java.util.List;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
@@ -19,11 +18,6 @@ import org.springframework.stereotype.Component;
 public class ConversationResponseGenerator implements ResponseGenerator {
   private static final String PROCESSING_FALLBACK =
       "I'm having a little trouble with that right now. Please try again in a moment.";
-  private static final Pattern EXPLICIT_OVERSIZED_COUNT =
-      Pattern.compile(
-          "\\b(?:[6-9]|[1-9]\\d+|six|seven|eight|nine|ten|eleven|twelve|dozen|"
-              + "thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\\b",
-          Pattern.CASE_INSENSITIVE);
 
   private final AiResponseGenerator ai;
 
@@ -131,9 +125,7 @@ public class ConversationResponseGenerator implements ResponseGenerator {
     }
     if (request == null
         || request.getBookCount() == null
-        || request.getBookCount() <= MAX_BOOK_COUNT
-        || request.getRawText() == null
-        || !EXPLICIT_OVERSIZED_COUNT.matcher(request.getRawText()).find()) {
+        || request.getBookCount() <= MAX_BOOK_COUNT) {
       return "";
     }
     return "I can give up to " + MAX_BOOK_COUNT + " recommendations at a time. ";

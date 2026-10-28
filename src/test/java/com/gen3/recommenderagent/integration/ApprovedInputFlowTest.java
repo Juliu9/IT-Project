@@ -119,6 +119,82 @@ class ApprovedInputFlowTest {
   }
 
   @ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = ConversationDecision.class,
+      names = {
+        "PREFERENCE_CLARIFICATION",
+        "PREFERENCE_UPDATE_CLARIFICATION",
+        "SEARCH_CLARIFICATION",
+        "SHORTER_DURATION_CLARIFICATION",
+        "LONGER_DURATION_CLARIFICATION",
+        "RECENCY_YEAR_CLARIFICATION",
+        "SIMILAR_BOOK_SELECTION"
+      })
+  void pendingRequestsDoNotStoreRawMessagesAcrossHelpAndReload(ConversationDecision decision)
+      throws Exception {
+    String raw = "private-original-message-marker";
+    var action =
+        switch (decision) {
+          case PREFERENCE_CLARIFICATION, SIMILAR_BOOK_SELECTION ->
+              ConversationAction.RECOMMENDATION;
+          case PREFERENCE_UPDATE_CLARIFICATION -> ConversationAction.UPDATE_PREFERENCES;
+          case SEARCH_CLARIFICATION -> ConversationAction.MORE_RESULTS;
+          default -> ConversationAction.REFINE;
+        };
+    var input = request(action, raw);
+    switch (decision) {
+      case SIMILAR_BOOK_SELECTION -> {
+        input.setSimilarToTitle("Potter");
+        when(titles.findBooksByTitle(anyString(), any(), anyInt()))
+            .thenReturn(
+                List.of(
+                    new AudiobookTitle("potter-1", "Potter One", List.of("Author")),
+                    new AudiobookTitle("potter-2", "Potter Two", List.of("Author"))));
+      }
+      case PREFERENCE_CLARIFICATION, PREFERENCE_UPDATE_CLARIFICATION, SEARCH_CLARIFICATION -> {}
+      default -> {
+        duration = null;
+        year = null;
+        search();
+        input.setExplicitSearch(true);
+        input.setShorter(decision == ConversationDecision.SHORTER_DURATION_CLARIFICATION);
+        input.setLonger(decision == ConversationDecision.LONGER_DURATION_CLARIFICATION);
+        if (decision == ConversationDecision.RECENCY_YEAR_CLARIFICATION) {
+          var include = new ExactCriteria();
+          include.setPublicationYear("more recent");
+          input.setMustInclude(include);
+        }
+      }
+    }
+    var result = engine.process(session, input);
+    assertThat(result.getDecision()).isEqualTo(decision);
+    assertThat(result.getRawText()).isEqualTo(raw);
+    assertThat(new ObjectMapper().writeValueAsString(session)).doesNotContain(raw);
+    reload();
+    var pending =
+        (com.gen3.recommenderagent.domain.session.PendingQuestion.SearchRequest)
+            session.getPendingQuestion();
+    assertThat(pending.getRequest().getRawText()).isNull();
+    assertThat(session.getPendingDecision()).isEqualTo(decision);
+    if (input.getIntent() == ConversationAction.REFINE) {
+      assertThat(pending.getRequest().getPositiveSemanticQuery().getGenres())
+          .containsExactly("fantasy");
+    }
+    if (decision == ConversationDecision.SIMILAR_BOOK_SELECTION) {
+      assertThat(pending.getRequest().getSimilarBookChoices()).hasSize(2);
+    }
+    process("help");
+    reload();
+    assertThat(session.getPendingDecision()).isEqualTo(decision);
+    assertThat(
+            ((com.gen3.recommenderagent.domain.session.PendingQuestion.SearchRequest)
+                    session.getPendingQuestion())
+                .getRequest()
+                .getRawText())
+        .isNull();
+  }
+
+  @ParameterizedTest
   @ValueSource(strings = {"help", "explain the second one", "set count to 3"})
   void parserContextRetainsThePageAcrossInterveningActions(String action) {
     var page = search().getRecommendations();
