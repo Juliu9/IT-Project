@@ -10,15 +10,15 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
-import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.ConversationDecision;
-import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.ExactCriteria;
-import com.gen3.recommenderagent.domain.session.Recommendation;
-import com.gen3.recommenderagent.domain.session.SemanticQuery;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
+import com.gen3.recommenderagent.domain.search.ExactCriteria;
+import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
@@ -35,7 +35,7 @@ class RefinementFlowTest {
   private final SessionTransitionService service =
       ConversationTestSupport.transitions(sessions, workflow);
 
-  private ConversationDraft request(Intent intent) {
+  private ConversationDraft request(ConversationAction intent) {
     var request = new ConversationDraft();
     request.setIntent(intent);
     return request;
@@ -51,7 +51,7 @@ class RefinementFlowTest {
             List.of(
                 new Recommendation("one", 1, 1.0, "One"),
                 new Recommendation("two", 2, 0.9, "Two")));
-    var request = request(Intent.RECOMMENDATION);
+    var request = request(ConversationAction.RECOMMENDATION);
     var query = new SemanticQuery();
     query.setGenres(List.of("fantasy"));
     request.setPositiveSemanticQuery(query);
@@ -62,11 +62,11 @@ class RefinementFlowTest {
     clearInvocations(workflow);
   }
 
-  private com.gen3.recommenderagent.domain.session.SessionRequest shorterCommand() {
+  private com.gen3.recommenderagent.application.conversation.SessionRequest shorterCommand() {
     return command("make them shorter");
   }
 
-  private com.gen3.recommenderagent.domain.session.SessionRequest command(String text) {
+  private com.gen3.recommenderagent.application.conversation.SessionRequest command(String text) {
     return new com.gen3.recommenderagent.inputparser.InputParser(
             new com.gen3.recommenderagent.inputparser.CommandParser(),
             new com.gen3.recommenderagent.inputparser.AiParser(
@@ -78,7 +78,7 @@ class RefinementFlowTest {
   @ParameterizedTest
   @ValueSource(strings = {"3", "change count to 3", "three books per page"})
   void validCountRepliesResumeThePendingSearch(String reply) {
-    var pending = request(Intent.RECOMMENDATION);
+    var pending = request(ConversationAction.RECOMMENDATION);
     pending.setExplicitSearch(true);
     pending.setInvalidBookCount(true);
     pending.setRawText("Recommend zero fantasy books");
@@ -90,7 +90,7 @@ class RefinementFlowTest {
     when(workflow.recommend(any(), any()))
         .thenReturn(List.of(new Recommendation("id", 1, 0.9, "Fantasy")));
     var result = service.process("session", "user", command(reply));
-    assertThat(result.getIntent()).isEqualTo(Intent.RECOMMENDATION);
+    assertThat(result.getIntent()).isEqualTo(ConversationAction.RECOMMENDATION);
     assertThat(result.getBookCount()).isEqualTo(3);
     assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
     assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
@@ -100,9 +100,10 @@ class RefinementFlowTest {
   @Test
   void newerInvalidSearchReplacesThePendingRequestWithoutConsumingTheDisplayedBatch() {
     search(null, null);
-    var before = sessions.getSession("session", "user").getPendingRecommendations();
+    var before =
+        sessions.getSession("session", "user").getActiveSearch().getPendingRecommendations();
     for (String genre : List.of("fantasy", "romance")) {
-      var pending = request(Intent.RECOMMENDATION);
+      var pending = request(ConversationAction.RECOMMENDATION);
       pending.setRawText("Recommend zero " + genre + " books");
       pending.setExplicitSearch(true);
       pending.setInvalidBookCount(true);
@@ -111,7 +112,8 @@ class RefinementFlowTest {
       pending.setPositiveSemanticQuery(query);
       assertThat(process(pending).getDecision())
           .isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
-      assertThat(sessions.getSession("session", "user").getPendingRecommendations())
+      assertThat(
+              sessions.getSession("session", "user").getActiveSearch().getPendingRecommendations())
           .hasSize(before.size());
     }
     var result = service.process("session", "user", command("3"));
@@ -132,7 +134,7 @@ class RefinementFlowTest {
                 })
             .toList();
     when(workflow.recommend(any(), any())).thenReturn(books, List.of());
-    var original = request(Intent.RECOMMENDATION);
+    var original = request(ConversationAction.RECOMMENDATION);
     var query = new SemanticQuery();
     query.setGenres(List.of("fantasy"));
     original.setPositiveSemanticQuery(query);
@@ -146,7 +148,7 @@ class RefinementFlowTest {
         mapper.readValue(
             mapper.writeValueAsString(sessions.getSession("session", "user")), Session.class));
     var result = service.process("session", "user", command("more recent"));
-    assertThat(result.getIntent()).isEqualTo(Intent.REFINE);
+    assertThat(result.getIntent()).isEqualTo(ConversationAction.REFINE);
     assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
     assertThat(result.getMustInclude().getAuthors()).containsExactly("Suzanne Collins");
     assertThat(result.getMustInclude().getPublicationYear()).isEqualTo("between 1982 and 2009");
@@ -163,7 +165,7 @@ class RefinementFlowTest {
     second.setPublicationYear(2005);
     var unknown = new Recommendation("unknown", 3, 1.0, "Unknown");
     when(workflow.recommend(any(), any())).thenReturn(List.of(dated, second, unknown), List.of());
-    var original = request(Intent.RECOMMENDATION);
+    var original = request(ConversationAction.RECOMMENDATION);
     var include = new ExactCriteria();
     include.setPublicationYear("1950 to 2000s");
     original.setMustInclude(include);
@@ -176,14 +178,17 @@ class RefinementFlowTest {
   void unknownDisplayedYearsAskForABoundaryWithoutConsumingHistoryOrCachedBooks() {
     search(null, null);
     var before = sessions.getSession("session", "user");
-    var pendingIds = Recommendation.bookIds(before.getPendingRecommendations());
+    var pendingIds = Recommendation.bookIds(before.getActiveSearch().getPendingRecommendations());
     var question = service.process("session", "user", command("more recent"));
     assertThat(question.getDecision()).isEqualTo(ConversationDecision.RECENCY_YEAR_CLARIFICATION);
     assertThat(sessions.getSession("session", "user").getPendingDecision())
         .isEqualTo(ConversationDecision.RECENCY_YEAR_CLARIFICATION);
     assertThat(
             Recommendation.bookIds(
-                sessions.getSession("session", "user").getPendingRecommendations()))
+                sessions
+                    .getSession("session", "user")
+                    .getActiveSearch()
+                    .getPendingRecommendations()))
         .isEqualTo(pendingIds);
     verifyNoInteractions(workflow);
     var mapper = new ObjectMapper();
@@ -191,7 +196,7 @@ class RefinementFlowTest {
         mapper.readValue(
             mapper.writeValueAsString(sessions.getSession("session", "user")), Session.class));
     var resumed = service.process("session", "user", command("2000"));
-    assertThat(resumed.getIntent()).isEqualTo(Intent.REFINE);
+    assertThat(resumed.getIntent()).isEqualTo(ConversationAction.REFINE);
     assertThat(resumed.getMustInclude().getPublicationYear()).isEqualTo("from 2000");
     assertThat(resumed.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
     assertThat(sessions.getSession("session", "user").getPendingDecision()).isNull();
@@ -207,7 +212,7 @@ class RefinementFlowTest {
   }
 
   private ConversationDraft yearReply(String expression) {
-    var reply = request(Intent.UNKNOWN);
+    var reply = request(ConversationAction.UNKNOWN);
     reply.setRawText(expression);
     var include = new ExactCriteria();
     include.setPublicationYear(expression);
@@ -218,7 +223,7 @@ class RefinementFlowTest {
   @Test
   void unrelatedRefinementAbandonsTheYearQuestion() {
     askForYearWithinPeriod();
-    var refine = request(Intent.REFINE);
+    var refine = request(ConversationAction.REFINE);
     var include = new ExactCriteria();
     include.setDuration("under 5 hours");
     refine.setMustInclude(include);
@@ -245,14 +250,18 @@ class RefinementFlowTest {
   void conflictingStartingYearRequiresConfirmationAndSurvivesHelpAndReload() {
     askForYearWithinPeriod();
     var pending =
-        Recommendation.bookIds(sessions.getSession("session", "user").getPendingRecommendations());
+        Recommendation.bookIds(
+            sessions.getSession("session", "user").getActiveSearch().getPendingRecommendations());
     var question = service.process("session", "user", command("2010"));
     assertThat(question.getDecision()).isEqualTo(ConversationDecision.RECENCY_RANGE_CONFIRMATION);
     assertThat(
             Recommendation.bookIds(
-                sessions.getSession("session", "user").getPendingRecommendations()))
+                sessions
+                    .getSession("session", "user")
+                    .getActiveSearch()
+                    .getPendingRecommendations()))
         .isEqualTo(pending);
-    process(request(Intent.HELP));
+    process(request(ConversationAction.HELP));
     var mapper = new ObjectMapper();
     sessions.updateSession(
         mapper.readValue(
@@ -272,16 +281,20 @@ class RefinementFlowTest {
   void decliningTheYearExtensionPreservesTheOriginalBatch(String answer) {
     askForYearWithinPeriod();
     var pending =
-        Recommendation.bookIds(sessions.getSession("session", "user").getPendingRecommendations());
+        Recommendation.bookIds(
+            sessions.getSession("session", "user").getActiveSearch().getPendingRecommendations());
     service.process("session", "user", command("2010"));
     var result = service.process("session", "user", command(answer));
     assertThat(result.getDecision()).isEqualTo(ConversationDecision.CANCELLED);
     assertThat(
             Recommendation.bookIds(
-                sessions.getSession("session", "user").getPendingRecommendations()))
+                sessions
+                    .getSession("session", "user")
+                    .getActiveSearch()
+                    .getPendingRecommendations()))
         .isEqualTo(pending);
     assertThat(sessions.getSession("session", "user").getPendingRefinementRequest()).isNull();
-    var repeated = process(request(Intent.REPEAT_RECOMMENDATIONS));
+    var repeated = process(request(ConversationAction.REPEAT_RECOMMENDATIONS));
     assertThat(repeated.getRecommendations())
         .extracting(Recommendation::getBookId)
         .containsExactly("one");
@@ -309,13 +322,13 @@ class RefinementFlowTest {
   void resettingPreferencesAbandonsThePendingConfirmation() {
     askForYearWithinPeriod();
     service.process("session", "user", command("2010"));
-    var count = request(Intent.CHANGE_COUNT);
+    var count = request(ConversationAction.CHANGE_COUNT);
     count.setBookCount(2);
     process(count);
-    process(request(Intent.RESET_PREFERENCES));
+    process(request(ConversationAction.RESET_PREFERENCES));
     assertThat(sessions.getSession("session", "user").getPendingQuestion()).isNull();
     var result = service.process("session", "user", command("yes"));
-    assertThat(result.getIntent()).isEqualTo(Intent.UNKNOWN);
+    assertThat(result.getIntent()).isEqualTo(ConversationAction.UNKNOWN);
     assertThat(sessions.getSession("session", "user").getBookCount()).isEqualTo(5);
     verifyNoInteractions(workflow);
   }
@@ -325,7 +338,7 @@ class RefinementFlowTest {
   void bareYearAnswersAcceptPunctuationAndCourtesy(String text) {
     askForYearWithinPeriod();
     var result = service.process("session", "user", command(text));
-    assertThat(result.getIntent()).isEqualTo(Intent.REFINE);
+    assertThat(result.getIntent()).isEqualTo(ConversationAction.REFINE);
     assertThat(result.getMustInclude().getPublicationYear()).isEqualTo("between 2000 and 2009");
     assertThat(result.isSearchClarificationRequired()).isFalse();
     verify(workflow).recommend(any(), any());
@@ -356,13 +369,13 @@ class RefinementFlowTest {
     askForYearWithinPeriod();
     service.process("session", "user", command("2010"));
     var fresh = yearReply("between 2020 and 2025");
-    fresh.setIntent(Intent.RECOMMENDATION);
+    fresh.setIntent(ConversationAction.RECOMMENDATION);
     fresh.setExplicitSearch(true);
     var query = new SemanticQuery();
     query.setGenres(List.of("horror"));
     fresh.setPositiveSemanticQuery(query);
     var result = process(fresh);
-    assertThat(result.getIntent()).isEqualTo(Intent.RECOMMENDATION);
+    assertThat(result.getIntent()).isEqualTo(ConversationAction.RECOMMENDATION);
     assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("horror");
     assertThat(result.getMustInclude().getPublicationYear()).isEqualTo("between 2020 and 2025");
     assertThat(sessions.getSession("session", "user").getPendingRefinementRequest()).isNull();
@@ -390,8 +403,8 @@ class RefinementFlowTest {
     "UPDATE_PREFERENCES,true,yes"
   })
   void preferenceEditsAbandonThePendingRecencyConfirmation(
-      Intent action, boolean explicitAuthor, String answer) {
-    var initial = request(Intent.RECOMMENDATION);
+      ConversationAction action, boolean explicitAuthor, String answer) {
+    var initial = request(ConversationAction.RECOMMENDATION);
     initial.setPersonalised(true);
     var include = new ExactCriteria();
     include.setPublicationYear("between 1950 and 2009");
@@ -408,14 +421,14 @@ class RefinementFlowTest {
     var genre = new SemanticQuery();
     genre.setGenres(List.of("fantasy"));
     preferences.setPositiveSemanticQuery(genre);
-    var save = request(Intent.UPDATE_PREFERENCES);
+    var save = request(ConversationAction.UPDATE_PREFERENCES);
     save.setPreferenceUpdates(preferences);
     process(save);
     process(initial);
     service.process("session", "user", command("more recent"));
     service.process("session", "user", command("2010"));
     var edit = request(action);
-    if (action == Intent.UPDATE_PREFERENCES) {
+    if (action == ConversationAction.UPDATE_PREFERENCES) {
       var updates = new SessionPreferences();
       var replacement = new ExactCriteria();
       replacement.setAuthors(List.of("New Writer"));
@@ -435,7 +448,7 @@ class RefinementFlowTest {
             : process(yearReply("between 2015 and 2020"));
     assertThat(sessions.getSession("session", "user").getPendingQuestion()).isNull();
     if (answer.equals("yes")) {
-      assertThat(result.getIntent()).isEqualTo(Intent.UNKNOWN);
+      assertThat(result.getIntent()).isEqualTo(ConversationAction.UNKNOWN);
       verifyNoInteractions(workflow);
     } else {
       assertThat(result.getMustInclude().getPublicationYear()).isEqualTo("between 2015 and 2020");
@@ -446,7 +459,7 @@ class RefinementFlowTest {
   @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
   void genreReplacementAndAdditionHaveDifferentSearchSemantics(boolean replace) {
     search(null, null);
-    var refine = request(Intent.REFINE);
+    var refine = request(ConversationAction.REFINE);
     var query = new SemanticQuery();
     query.setGenres(List.of("horror"));
     refine.setPositiveSemanticQuery(query);
@@ -473,7 +486,7 @@ class RefinementFlowTest {
     var session = sessions.getSession("session", "user");
     session.setPreferences(preferences);
     sessions.updateSession(session);
-    var count = request(Intent.CHANGE_COUNT);
+    var count = request(ConversationAction.CHANGE_COUNT);
     count.setBookCount(1);
     process(count);
     when(workflow.recommend(any(), any()))
@@ -494,23 +507,23 @@ class RefinementFlowTest {
         mapper.readValue(
             mapper.writeValueAsString(sessions.getSession("session", "user")), Session.class));
     clearInvocations(workflow);
-    var more = process(request(Intent.MORE_RESULTS));
+    var more = process(request(ConversationAction.MORE_RESULTS));
     assertThat(more.getMustInclude().getAuthors()).isNullOrEmpty();
     assertThat(more.getRecommendations())
         .extracting(Recommendation::getBookId)
         .containsExactly("four");
     verifyNoInteractions(workflow);
-    var next = request(Intent.REFINE);
+    var next = request(ConversationAction.REFINE);
     var shorter = new ExactCriteria();
     shorter.setDuration("under 3 hours");
     next.setMustInclude(shorter);
     assertThat(process(next).getMustInclude().getAuthors()).isNullOrEmpty();
-    var newAuthor = request(Intent.REFINE);
+    var newAuthor = request(ConversationAction.REFINE);
     var author = new ExactCriteria();
     author.setAuthors(List.of("New Writer"));
     newAuthor.setMustInclude(author);
     assertThat(process(newAuthor).getMustInclude().getAuthors()).containsExactly("New Writer");
-    var fresh = request(Intent.RECOMMENDATION);
+    var fresh = request(ConversationAction.RECOMMENDATION);
     var genre = new SemanticQuery();
     genre.setGenres(List.of("mystery"));
     fresh.setPositiveSemanticQuery(genre);
@@ -529,7 +542,7 @@ class RefinementFlowTest {
     var session = sessions.getSession("session", "user");
     session.setPreferences(prefs);
     sessions.updateSession(session);
-    var change = request(Intent.REFINE);
+    var change = request(ConversationAction.REFINE);
     var horror = new SemanticQuery();
     horror.setGenres(List.of("horror"));
     change.setPositiveSemanticQuery(horror);
@@ -537,7 +550,7 @@ class RefinementFlowTest {
     var replaced = process(change);
     assertThat(replaced.getPositiveSemanticQuery().getGenres()).containsExactly("horror");
     assertThat(replaced.getPositiveSemanticQuery().getNarrators()).containsExactly("Stephen Fry");
-    var also = request(Intent.REFINE);
+    var also = request(ConversationAction.REFINE);
     var mystery = new SemanticQuery();
     mystery.setGenres(List.of("mystery"));
     also.setPositiveSemanticQuery(mystery);
@@ -590,25 +603,28 @@ class RefinementFlowTest {
     search(include, null);
     var session = sessions.getSession("session", "user");
     session
-        .getRequests()
-        .getFirst()
+        .getActiveSearch()
+        .getSearch()
         .getRecommendations()
         .forEach(book -> book.setPublicationYear(2005));
     sessions.updateSession(session);
-    var pending = Recommendation.bookIds(session.getPendingRecommendations());
+    var pending = Recommendation.bookIds(session.getActiveSearch().getPendingRecommendations());
     var exhausted = service.process("session", "user", command("more recent"));
     assertThat(exhausted.getDecision()).isEqualTo(ConversationDecision.RECENCY_EXHAUSTED);
-    assertThat(process(request(Intent.REPEAT)).getDecision())
+    assertThat(process(request(ConversationAction.REPEAT)).getDecision())
         .isEqualTo(ConversationDecision.RECENCY_EXHAUSTED);
-    assertThat(process(request(Intent.REPEAT_RECOMMENDATIONS)).getRecommendations())
+    assertThat(process(request(ConversationAction.REPEAT_RECOMMENDATIONS)).getRecommendations())
         .extracting(Recommendation::getBookId)
         .containsExactly("one");
     assertThat(
             Recommendation.bookIds(
-                sessions.getSession("session", "user").getPendingRecommendations()))
+                sessions
+                    .getSession("session", "user")
+                    .getActiveSearch()
+                    .getPendingRecommendations()))
         .isEqualTo(pending);
     verifyNoInteractions(workflow);
-    var more = request(Intent.MORE_RESULTS);
+    var more = request(ConversationAction.MORE_RESULTS);
     more.setBookCount(1);
     assertThat(process(more).getRecommendations())
         .extracting(Recommendation::getBookId)
@@ -623,8 +639,8 @@ class RefinementFlowTest {
     search(include, null);
     var session = sessions.getSession("session", "user");
     session
-        .getRequests()
-        .getFirst()
+        .getActiveSearch()
+        .getSearch()
         .getRecommendations()
         .forEach(book -> book.setPublicationYear(2005));
     sessions.updateSession(session);
@@ -639,7 +655,7 @@ class RefinementFlowTest {
     if (!scenario.equals("fresh")) {
       search(null, null);
       if (scenario.equals("cleared")) {
-        process(request(Intent.CLEAR_HISTORY));
+        process(request(ConversationAction.CLEAR_HISTORY));
       }
       clearInvocations(workflow);
     }
@@ -648,7 +664,7 @@ class RefinementFlowTest {
             scenario.equals("new-session") ? "new-session" : "session",
             "user",
             command("more recent"));
-    assertThat(result.getIntent()).isEqualTo(Intent.REFINE);
+    assertThat(result.getIntent()).isEqualTo(ConversationAction.REFINE);
     assertThat(result.getDecision()).isEqualTo(ConversationDecision.SEARCH_CLARIFICATION);
     assertThat(result.getRecommendations()).isEmpty();
     verifyNoInteractions(workflow);
@@ -661,19 +677,16 @@ class RefinementFlowTest {
     var next = new Recommendation("next", 1, 1.0, "Short Science Fiction");
     next.setDurationMinutes(120);
     when(workflow.recommend(any(), any())).thenReturn(List.of(old), List.of(next));
-    var search = request(Intent.RECOMMENDATION);
+    var search = request(ConversationAction.RECOMMENDATION);
     var query = new SemanticQuery();
     query.setGenres(List.of("science fiction"));
     search.setPositiveSemanticQuery(query);
     process(search);
     var session = sessions.getSession("session", "user");
-    session.setPendingDecision(
-        com.gen3.recommenderagent.domain.session.ConversationDecision
-            .PREFERENCE_UPDATE_CLARIFICATION);
-    session.setLastDecision(ConversationDecision.PREFERENCE_UPDATE_CLARIFICATION);
+    session.setPendingDecision(ConversationDecision.PREFERENCE_UPDATE_CLARIFICATION);
     sessions.updateSession(session);
     var result = service.process("session", "user", shorterCommand());
-    assertThat(result.getIntent()).isEqualTo(Intent.REFINE);
+    assertThat(result.getIntent()).isEqualTo(ConversationAction.REFINE);
     assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
     assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("science fiction");
     assertThat(result.getMustInclude().getDuration()).isEqualTo("under 600 minutes");
@@ -689,13 +702,13 @@ class RefinementFlowTest {
     if (!scenario.equals("fresh")) {
       search(null, null);
       if (scenario.equals("cleared")) {
-        process(request(Intent.CLEAR_HISTORY));
+        process(request(ConversationAction.CLEAR_HISTORY));
       }
       clearInvocations(workflow);
     }
     String id = scenario.equals("new-session") ? "new-session" : "session";
     var result = service.process(id, "user", shorterCommand());
-    assertThat(result.getIntent()).isEqualTo(Intent.REFINE);
+    assertThat(result.getIntent()).isEqualTo(ConversationAction.REFINE);
     assertThat(result.getDecision()).isEqualTo(ConversationDecision.SEARCH_CLARIFICATION);
     assertThat(result.getPositiveSemanticQuery()).isNull();
     assertThat(result.getMustInclude()).isNull();
@@ -750,7 +763,7 @@ class RefinementFlowTest {
         mapper.readValue(
             mapper.writeValueAsString(sessions.getSession("session", "user")), Session.class);
     sessions.updateSession(session);
-    var reply = request(Intent.RECOMMENDATION);
+    var reply = request(ConversationAction.RECOMMENDATION);
     reply.setRawText(text);
     reply.setExplicitSearch(true);
     reply.setBookCount(5);
@@ -759,7 +772,7 @@ class RefinementFlowTest {
     reply.setPositiveSemanticQuery(invented);
     when(workflow.recommend(any(), any())).thenReturn(List.of());
     var refined = process(reply);
-    assertThat(refined.getIntent()).isEqualTo(Intent.REFINE);
+    assertThat(refined.getIntent()).isEqualTo(ConversationAction.REFINE);
     assertThat(refined.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
     assertThat(refined.getMustInclude().getDuration()).isEqualTo(duration);
     assertThat(refined.getDecision()).isEqualTo(ConversationDecision.NO_MATCHES);
@@ -781,7 +794,7 @@ class RefinementFlowTest {
     search(null, null);
     service.process("session", "user", shorterCommand());
     clearInvocations(workflow);
-    var reply = request(Intent.RECOMMENDATION);
+    var reply = request(ConversationAction.RECOMMENDATION);
     reply.setRawText(text);
     reply.setExplicitSearch(true);
     var limit = new ExactCriteria();
@@ -793,7 +806,7 @@ class RefinementFlowTest {
     assertThat(result.getRecommendations()).isEmpty();
     verifyNoInteractions(workflow);
     var valid = service.process("session", "user", command("2"));
-    assertThat(valid.getIntent()).isEqualTo(Intent.REFINE);
+    assertThat(valid.getIntent()).isEqualTo(ConversationAction.REFINE);
     assertThat(valid.getMustInclude().getDuration()).isEqualTo("at most 2 hours");
     assertThat(valid.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
     verify(workflow).recommend(any(), any());
@@ -803,19 +816,19 @@ class RefinementFlowTest {
   void oldRecommendationsWithoutDurationsAskForALimitAndKeepTheSearch() {
     search(null, null);
     var result = service.process("session", "user", shorterCommand());
-    assertThat(result.getIntent()).isEqualTo(Intent.REFINE);
+    assertThat(result.getIntent()).isEqualTo(ConversationAction.REFINE);
     assertThat(result.getDecision()).isEqualTo(ConversationDecision.SHORTER_DURATION_CLARIFICATION);
     assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
     assertThat(result.getMustInclude() == null || result.getMustInclude().getDuration() == null)
         .isTrue();
     verifyNoInteractions(workflow);
-    var reply = request(Intent.RECOMMENDATION);
+    var reply = request(ConversationAction.RECOMMENDATION);
     reply.setExplicitSearch(false);
     var limit = new ExactCriteria();
     limit.setDuration("under 2 hours");
     reply.setMustInclude(limit);
     var refined = process(reply);
-    assertThat(refined.getIntent()).isEqualTo(Intent.REFINE);
+    assertThat(refined.getIntent()).isEqualTo(ConversationAction.REFINE);
     assertThat(refined.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
     assertThat(refined.getMustInclude().getDuration()).isEqualTo("under 2 hours");
     verify(workflow).recommend(any(), any());
@@ -829,7 +842,7 @@ class RefinementFlowTest {
     previous.setNarrators(List.of("Narrator A"));
     previous.setLanguage("English");
     search(previous, null);
-    var refinement = request(Intent.REFINE);
+    var refinement = request(ConversationAction.REFINE);
     var include = new ExactCriteria();
     include.setAuthors(List.of("Author B"));
     include.setNarrators(List.of("Narrator B"));
@@ -851,7 +864,7 @@ class RefinementFlowTest {
     var include = new ExactCriteria();
     include.setLanguage("English");
     search(include, null);
-    var refinement = request(Intent.REFINE);
+    var refinement = request(ConversationAction.REFINE);
     var exclude = new ExactCriteria();
     exclude.setLanguage("English");
     refinement.setMustNotInclude(exclude);
@@ -866,7 +879,7 @@ class RefinementFlowTest {
     var exclude = new ExactCriteria();
     exclude.setAuthors(List.of("Author A", "Author B"));
     search(null, exclude);
-    var refinement = request(Intent.REFINE);
+    var refinement = request(ConversationAction.REFINE);
     var include = new ExactCriteria();
     include.setAuthors(List.of("Author A"));
     refinement.setMustInclude(include);
@@ -880,7 +893,7 @@ class RefinementFlowTest {
     search(null, null);
     var mapper = new ObjectMapper();
     String before = mapper.writeValueAsString(sessions.getSession("session", "user"));
-    var refinement = request(Intent.REFINE);
+    var refinement = request(ConversationAction.REFINE);
     var include = new ExactCriteria();
     include.setLanguage("English");
     var exclude = new ExactCriteria();
@@ -896,7 +909,7 @@ class RefinementFlowTest {
 
   @Test
   void partialAuthorExclusionAndSemanticMixturesRemainValid() {
-    var request = request(Intent.RECOMMENDATION);
+    var request = request(ConversationAction.RECOMMENDATION);
     var include = new ExactCriteria();
     include.setAuthors(List.of("A", "B"));
     var exclude = new ExactCriteria();
@@ -923,11 +936,11 @@ class RefinementFlowTest {
     preferences.setPositiveSemanticQuery(query);
     session.setPreferences(preferences);
     sessions.updateSession(session);
-    var request = request(Intent.REFINE);
+    var request = request(ConversationAction.REFINE);
     request.setRawText("make it shorter");
     assertThat(process(request).getDecision()).isEqualTo(ConversationDecision.SEARCH_CLARIFICATION);
     verifyNoInteractions(workflow);
-    assertThat(sessions.getSession("session", "user").getRequests()).isEmpty();
+    assertThat(sessions.getSession("session", "user").getActiveSearch().getSearch()).isNull();
   }
 
   @Test
@@ -942,35 +955,37 @@ class RefinementFlowTest {
     session.setPreferences(preferences);
     sessions.updateSession(session);
     search(null, null);
-    var correction = request(Intent.REFINE);
+    var correction = request(ConversationAction.REFINE);
     var exclude = new ExactCriteria();
     exclude.setLanguage("English");
     correction.setMustNotInclude(exclude);
     assertThat(process(correction).getMustInclude().getLanguage()).isNull();
-    var more = process(request(Intent.MORE_RESULTS));
+    var more = process(request(ConversationAction.MORE_RESULTS));
     assertThat(more.getMustInclude().getLanguage()).isNull();
     assertThat(more.getMustNotInclude().getLanguage()).isEqualTo("English");
   }
 
   @Test
-  void standaloneRecommendationCanAnswerThePreferenceQuestion() {
+  void standaloneRecommendationReplacesThePreferenceQuestion() {
     var session = new Session();
     session.setSessionId("session");
     session.setUserId("user");
-    var pending = request(Intent.RECOMMENDATION);
+    var pending = request(ConversationAction.RECOMMENDATION);
     pending.setPersonalised(true);
     pending.setPreferenceClarificationRequired(true);
     session.setPendingDecision(ConversationDecision.PREFERENCE_CLARIFICATION);
     ((com.gen3.recommenderagent.domain.session.PendingQuestion.Preference)
             session.getPendingQuestion())
-        .setRequest(ConversationTurn.fromDraft(pending));
+        .setRequest(ConversationDraft.toTurn(pending));
     sessions.updateSession(session);
-    var reply = request(Intent.RECOMMENDATION);
+    var reply = request(ConversationAction.RECOMMENDATION);
     var query = new SemanticQuery();
     query.setGenres(List.of("fantasy"));
     reply.setPositiveSemanticQuery(query);
     when(workflow.recommend(any(), any())).thenReturn(List.of());
-    assertThat(process(reply).getIntent()).isEqualTo(Intent.RECOMMENDATION);
+    assertThat(process(reply).getIntent()).isEqualTo(ConversationAction.RECOMMENDATION);
+    assertThat(sessions.getSession("session", "user").getPendingQuestion())
+        .isInstanceOf(com.gen3.recommenderagent.domain.session.PendingQuestion.Search.class);
     assertThat(
             sessions
                 .getSession("session", "user")
@@ -982,7 +997,7 @@ class RefinementFlowTest {
 
   @Test
   void standaloneCriteriaRouteToRecommendationInFreshSession() {
-    var request = request(Intent.REFINE);
+    var request = request(ConversationAction.REFINE);
     var query = new SemanticQuery();
     query.setGenres(List.of("fantasy"));
     request.setPositiveSemanticQuery(query);
@@ -991,7 +1006,7 @@ class RefinementFlowTest {
     request.setMustInclude(include);
     when(workflow.recommend(any(), any())).thenReturn(List.of());
     var result = process(request);
-    assertThat(result.getIntent()).isEqualTo(Intent.RECOMMENDATION);
+    assertThat(result.getIntent()).isEqualTo(ConversationAction.RECOMMENDATION);
     assertThat(result.isSearchClarificationRequired()).isFalse();
     verify(workflow).recommend(any(), any());
   }

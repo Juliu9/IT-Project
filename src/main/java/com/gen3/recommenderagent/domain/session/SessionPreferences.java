@@ -1,6 +1,8 @@
 package com.gen3.recommenderagent.domain.session;
 
 import com.gen3.catalogue.model.PersonNameNormalizer;
+import com.gen3.recommenderagent.domain.search.ExactCriteria;
+import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -45,26 +47,6 @@ public class SessionPreferences {
 
   public void setMustNotInclude(ExactCriteria mustNotInclude) {
     this.mustNotInclude = mustNotInclude;
-  }
-
-  public static SessionPreferences fromRequest(SessionRequest request) {
-    var preferences = new SessionPreferences();
-    preferences.setPositiveSemanticQuery(request.getPositiveSemanticQuery());
-    preferences.setNegativeSemanticQuery(request.getNegativeSemanticQuery());
-    preferences.setMustInclude(request.getMustInclude());
-    preferences.setMustNotInclude(request.getMustNotInclude());
-    return preferences.copy();
-  }
-
-  public SessionRequest asRequest() {
-    var copy = copy();
-    var request = new SessionRequest();
-    request.setIntent(com.gen3.recommenderagent.domain.Intent.RECOMMENDATION);
-    request.setPositiveSemanticQuery(copy.positiveSemanticQuery);
-    request.setNegativeSemanticQuery(copy.negativeSemanticQuery);
-    request.setMustInclude(copy.mustInclude);
-    request.setMustNotInclude(copy.mustNotInclude);
-    return request;
   }
 
   /**

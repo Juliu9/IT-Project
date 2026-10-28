@@ -3,15 +3,14 @@ package com.gen3.recommenderagent.retrieval.plan;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.conversation.ClarificationResolver;
-import com.gen3.recommenderagent.domain.conversation.SearchContextResolver;
-import com.gen3.recommenderagent.domain.conversation.SearchCriteriaMerger;
-import com.gen3.recommenderagent.domain.session.ConversationDecision;
-import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.ExactCriteria;
-import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.application.conversation.workflow.ClarificationResolver;
+import com.gen3.recommenderagent.application.conversation.workflow.SearchContextResolver;
+import com.gen3.recommenderagent.application.conversation.workflow.SearchCriteriaMerger;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
+import com.gen3.recommenderagent.domain.search.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import java.util.List;
@@ -35,13 +34,13 @@ class DurationBoundsTest {
     var session = new Session();
     session.setPendingDecision(ConversationDecision.SHORTER_DURATION_CLARIFICATION);
     var pending = new ConversationDraft();
-    pending.setIntent(Intent.REFINE);
+    pending.setIntent(ConversationAction.REFINE);
     var old = new ExactCriteria();
     old.setDuration("between 4 and 6 hours");
     pending.setMustInclude(old);
-    session.setPendingRefinementRequest(ConversationTurn.fromDraft(pending));
+    session.setPendingRefinementRequest(ConversationDraft.toTurn(pending));
     var answer = new ConversationDraft();
-    answer.setIntent(Intent.REFINE);
+    answer.setIntent(ConversationAction.REFINE);
     var updated = new ExactCriteria();
     updated.setDuration(duration);
     answer.setMustInclude(updated);
@@ -53,7 +52,7 @@ class DurationBoundsTest {
       var resolver = new ClarificationResolver();
       resolver.complete(session, answer);
       var yes = new ConversationDraft();
-      yes.setIntent(Intent.UNKNOWN);
+      yes.setIntent(ConversationAction.UNKNOWN);
       yes.setRawText("yes");
       answer = resolver.resolve(session, yes);
       policy.validateTransition(answer, yes, session);
@@ -68,7 +67,7 @@ class DurationBoundsTest {
   @CsvSource({"4,false", "5,true"})
   void shorterPreservesTheMinimumOrConfirmsExtendingTheRange(int minimumHours, boolean confirm) {
     var previous = new ConversationDraft();
-    previous.setIntent(Intent.RECOMMENDATION);
+    previous.setIntent(ConversationAction.RECOMMENDATION);
     var criteria = new ExactCriteria();
     criteria.setDuration("between " + minimumHours + " and 6 hours");
     previous.setMustInclude(criteria);
@@ -76,9 +75,9 @@ class DurationBoundsTest {
     book.setDurationMinutes(300);
     previous.setRecommendations(List.of(book));
     var session = new Session();
-    session.getRequests().add(ConversationTurn.fromDraft(previous));
+    session.getActiveSearch().setSearch(ConversationDraft.toTurn(previous));
     var incoming = new ConversationDraft();
-    incoming.setIntent(Intent.REFINE);
+    incoming.setIntent(ConversationAction.REFINE);
     incoming.setShorter(true);
     incoming.setRawText("make them shorter");
     var result =
@@ -91,7 +90,7 @@ class DurationBoundsTest {
       var clarification = new ClarificationResolver();
       clarification.complete(session, result);
       var answer = new ConversationDraft();
-      answer.setIntent(Intent.UNKNOWN);
+      answer.setIntent(ConversationAction.UNKNOWN);
       answer.setRawText("yes");
       result = clarification.resolve(session, answer);
       policy.validateTransition(result, answer, session);

@@ -1,13 +1,13 @@
 package com.gen3.recommenderagent.domain.session;
 
-import static com.gen3.recommenderagent.domain.RecommendationPolicy.MAX_BOOK_COUNT;
-import static com.gen3.recommenderagent.domain.RecommendationPolicy.MAX_SHOWN_BOOKS;
-import static com.gen3.recommenderagent.domain.RecommendationPolicy.RECOMMENDATION_BATCH_SIZE;
-import static com.gen3.recommenderagent.domain.RecommendationPolicy.clampOrDefault;
+import static com.gen3.recommenderagent.domain.recommendation.RecommendationPolicy.MAX_BOOK_COUNT;
+import static com.gen3.recommenderagent.domain.recommendation.RecommendationPolicy.clampOrDefault;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
+import com.gen3.recommenderagent.domain.conversation.ExplanationSelection;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 
 public class Session {
@@ -57,29 +57,11 @@ public class Session {
   }
 
   @JsonIgnore
-  public PendingSimilarBook getPendingSimilarBook() {
-    return pendingQuestion instanceof PendingQuestion.SimilarBook question
-        ? new PendingSimilarBook(question.getRequest(), question.getDecision())
-        : null;
-  }
-
-  public void setPendingSimilarBook(PendingSimilarBook value) {
-    if (value != null) {
-      var question = new PendingQuestion.SimilarBook();
-      question.setDecision(value.decision());
-      question.setRequest(value.request());
-      pendingQuestion = question;
-    } else if (pendingQuestion instanceof PendingQuestion.SimilarBook) {
-      pendingQuestion = null;
-    }
-  }
-
-  @JsonIgnore
-  public SessionRequest getPendingCountRequest() {
+  public ConversationTurn getPendingCountRequest() {
     return pendingQuestion instanceof PendingQuestion.Count question ? question.getRequest() : null;
   }
 
-  public void setPendingCountRequest(SessionRequest value) {
+  public void setPendingCountRequest(ConversationTurn value) {
     if (value != null) {
       var question = new PendingQuestion.Count();
       question.setRequest(value);
@@ -120,32 +102,25 @@ public class Session {
   }
 
   private Integer bookCount = MAX_BOOK_COUNT;
-  private List<String> shownBooks;
-  private List<ConversationTurn> requests = new ArrayList<>();
   private SessionPreferences preferences;
-  // REPEAT needs the latest resolved action, separately from reusable search/preference history.
-  private ConversationTurn lastRequest;
-  private ConversationDecision lastDecision;
+  private ActiveSearch activeSearch = new ActiveSearch();
+  private LastOutcome lastOutcome;
 
-  public ConversationTurn getLastRequest() {
-    return lastRequest;
+  public ActiveSearch getActiveSearch() {
+    return activeSearch;
   }
 
-  public void setLastRequest(ConversationTurn request) {
-    lastRequest = request;
+  public void setActiveSearch(ActiveSearch value) {
+    activeSearch = value == null ? new ActiveSearch() : value;
   }
 
-  public ConversationDecision getLastDecision() {
-    return lastDecision;
+  public LastOutcome getLastOutcome() {
+    return lastOutcome;
   }
 
-  public void setLastDecision(ConversationDecision decision) {
-    lastDecision = decision;
+  public void setLastOutcome(LastOutcome value) {
+    lastOutcome = value;
   }
-
-  // shortcut: cached details are snapshots; validate the catalogue if live removals must take
-  // effect.
-  private List<Recommendation> pendingRecommendations = new ArrayList<>();
 
   @JsonIgnore
   public boolean isAwaitingPersonalisedPreferences() {
@@ -160,14 +135,6 @@ public class Session {
   }
 
   public Session() {}
-
-  public List<String> getShownBooks() {
-    return shownBooks;
-  }
-
-  public void setShownBooks(List<String> shownBooks) {
-    this.shownBooks = shownBooks == null ? null : new ArrayList<>(shownBooks);
-  }
 
   public String getSessionId() {
     return sessionId;
@@ -225,25 +192,6 @@ public class Session {
     this.bookCount = clampOrDefault(bookCount);
   }
 
-  public List<ConversationTurn> getRequests() {
-    return requests;
-  }
-
-  public void setRequests(List<ConversationTurn> requests) {
-    if (requests == null) {
-      this.requests = new ArrayList<>();
-      return;
-    }
-    this.requests =
-        new ArrayList<>(
-            requests.stream()
-                .filter(
-                    turn ->
-                        !turn.isPreferenceClarificationRequired()
-                            && !turn.isSearchClarificationRequired())
-                .toList());
-  }
-
   public SessionPreferences getPreferences() {
     return preferences;
   }
@@ -265,44 +213,10 @@ public class Session {
     }
   }
 
-  public List<Recommendation> getPendingRecommendations() {
-    return pendingRecommendations;
-  }
-
-  public void setPendingRecommendations(List<Recommendation> recommendations) {
-    pendingRecommendations =
-        recommendations == null
-            ? new ArrayList<>()
-            : new ArrayList<>(recommendations.stream().limit(RECOMMENDATION_BATCH_SIZE).toList());
-  }
-
-  public void addRecommendationIds(List<String> bookIds) {
-    if (this.shownBooks == null) {
-      this.shownBooks = new ArrayList<>();
-    }
-    if (bookIds != null) {
-      bookIds.stream()
-          .filter(bookId -> bookId != null && !bookId.isBlank())
-          .filter(bookId -> !this.shownBooks.contains(bookId))
-          .forEach(
-              bookId -> {
-                if (this.shownBooks.size() == MAX_SHOWN_BOOKS) {
-                  this.shownBooks.removeFirst();
-                }
-                this.shownBooks.add(bookId);
-              });
-    }
-  }
-
   public void clearHistory() {
     pendingQuestion = null;
-    this.lastRequest = null;
-    this.lastDecision = null;
-    this.pendingRecommendations.clear();
-    this.requests.clear();
-    if (this.shownBooks != null) {
-      this.shownBooks.clear();
-    }
+    this.lastOutcome = null;
+    this.activeSearch = new ActiveSearch();
     this.updatedAt = Instant.now();
   }
 }

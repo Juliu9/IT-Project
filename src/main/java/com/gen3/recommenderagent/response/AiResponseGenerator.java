@@ -1,14 +1,14 @@
 package com.gen3.recommenderagent.response;
 
-import static com.gen3.recommenderagent.domain.RecommendationPolicy.MAX_BOOK_COUNT;
+import static com.gen3.recommenderagent.domain.recommendation.RecommendationPolicy.MAX_BOOK_COUNT;
 import static com.gen3.recommenderagent.response.ResponseBudget.limitWords;
 import static com.gen3.recommenderagent.response.ResponseBudget.wordCount;
 
 import com.gen3.recommenderagent.ai.AiProviderCalls;
 import com.gen3.recommenderagent.ai.AiProviderException;
-import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.Recommendation;
-import com.gen3.recommenderagent.domain.session.SemanticQuery;
+import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
+import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import java.util.List;
@@ -176,7 +176,7 @@ public class AiResponseGenerator {
     // Produces the final prompt string the AI sees
     return resolvedCriteria(currentRequest)
         + String.format(
-            "User request: %s. Intent: %s. Genres: %s. Recommendation count: %d. Limit notice: %s. Recommendations: %s.",
+            "User request: %s. ConversationAction: %s. Genres: %s. Recommendation count: %d. Limit notice: %s. Recommendations: %s.",
             requestSummary,
             intentSummary,
             genresSummary,

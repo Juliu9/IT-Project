@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.gen3.catalogue.model.AudiobookCandidate;
 import com.gen3.catalogue.model.AudiobookRecord;
-import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.ranker.scorer.CompositeScorer;
 import com.gen3.recommenderagent.ranker.scorer.RetrievalRelevanceScorer;
 import com.gen3.recommenderagent.ranker.scorer.ScoreResult;

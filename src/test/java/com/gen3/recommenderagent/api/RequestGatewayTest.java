@@ -10,8 +10,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.ConversationTurn;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.inputparser.AiParser;
 import com.gen3.recommenderagent.inputparser.CommandParser;
 import com.gen3.recommenderagent.inputparser.InputParser;
@@ -46,13 +47,17 @@ class RequestGatewayTest {
             new AiParser(
                 client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
     var completed = new ConversationTurn();
-    completed.setIntent(com.gen3.recommenderagent.domain.Intent.HELP);
+    completed.setIntent(ConversationAction.HELP);
     when(sessionTransitionService.process(
-            org.mockito.ArgumentMatchers.eq("session"), org.mockito.ArgumentMatchers.eq("user"),
-            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+            org.mockito.ArgumentMatchers.eq("session"),
+            org.mockito.ArgumentMatchers.eq("user"),
+            org.mockito.ArgumentMatchers.eq("help"),
+            org.mockito.ArgumentMatchers.any(
+                com.gen3.recommenderagent.inputparser.UserIntent.class),
+            org.mockito.ArgumentMatchers.any()))
         .thenAnswer(
             call ->
-                ((java.util.function.Function<ConversationTurn, Object>) call.getArgument(3))
+                ((java.util.function.Function<ConversationTurn, Object>) call.getArgument(4))
                     .apply(completed));
     when(responseGenerator.generate(null, completed)).thenReturn("Supported operations.");
     var gateway =
@@ -80,7 +85,7 @@ class RequestGatewayTest {
   @Test
   void standardApiDoesNotBuildOrCollectDemoMetrics() throws Exception {
     var parsed = new ConversationDraft();
-    var completed = ConversationTurn.fromDraft(parsed);
+    var completed = ConversationDraft.toTurn(parsed);
     when(inputParser.parse("more")).thenReturn(parsed);
     when(sessionTransitionService.process(
             org.mockito.ArgumentMatchers.eq("session"),
@@ -89,9 +94,7 @@ class RequestGatewayTest {
             org.mockito.ArgumentMatchers.any()))
         .thenAnswer(
             call ->
-                ((java.util.function.Function<
-                            com.gen3.recommenderagent.domain.session.ConversationTurn, Object>)
-                        call.getArgument(3))
+                ((java.util.function.Function<ConversationTurn, Object>) call.getArgument(3))
                     .apply(completed));
     when(responseGenerator.generate(null, completed)).thenReturn("No more recommendations.");
     var gateway =
@@ -132,7 +135,7 @@ class RequestGatewayTest {
     ConversationTurn resolved = new ConversationTurn();
     resolved.setRequestId("request-1");
     resolved.setPersonalised(true);
-    resolved.setIntent(com.gen3.recommenderagent.domain.Intent.MORE_RESULTS);
+    resolved.setIntent(ConversationAction.MORE_RESULTS);
     when(inputParser.parse("more"))
         .thenAnswer(
             invocation -> {
@@ -150,9 +153,7 @@ class RequestGatewayTest {
             org.mockito.ArgumentMatchers.any()))
         .thenAnswer(
             call ->
-                ((java.util.function.Function<
-                            com.gen3.recommenderagent.domain.session.ConversationTurn, Object>)
-                        call.getArgument(3))
+                ((java.util.function.Function<ConversationTurn, Object>) call.getArgument(3))
                     .apply(RequestTelemetry.measure("recommendMs", () -> resolved)));
     when(responseGenerator.generate(null, resolved)).thenReturn("No more recommendations.");
     var realTelemetry = new RequestTelemetry(new tools.jackson.databind.ObjectMapper());

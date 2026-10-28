@@ -1,7 +1,9 @@
 package com.gen3.recommenderagent.inputparser;
 
-import com.gen3.recommenderagent.domain.conversation.ConversationRules;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.application.conversation.SessionRequest;
+import com.gen3.recommenderagent.application.conversation.workflow.ConversationRules;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.util.List;
@@ -25,7 +27,7 @@ public class InputParser {
     this.aiParser = aiParser;
   }
 
-  private boolean hasSearchValue(ParsedRequest parsed, String path) {
+  private boolean hasSearchValue(UserIntent parsed, String path) {
     String[] parts = path.split("\\.");
     Object value;
     if (parts[0].equals("mustInclude") || parts[0].equals("mustNotInclude")) {
@@ -67,7 +69,30 @@ public class InputParser {
         : value instanceof String text && !text.isBlank();
   }
 
+  /**
+   * Extracts the user's stated meaning. This method deliberately performs no session mutation or
+   * business decision; those occur at the session transition boundary.
+   */
+  public UserIntent parseUserIntent(String rawText, SessionContext context) {
+    return parseUserIntent(rawText, () -> context);
+  }
+
+  /** Parses without session reference data for direct parser callers. */
+  public UserIntent parseUserIntent(String rawText) {
+    return parseUserIntent(rawText, SessionContext.EMPTY);
+  }
+
+  /** Converts parser output for the existing conversation executor. */
   public SessionRequest parse(String rawText) {
+    return toSessionRequest(rawText, parseUserIntent(rawText));
+  }
+
+  /**
+   * Defers session loading until the AI path actually needs it. Complete commands and invalid input
+   * never touch session storage merely to obtain parser context.
+   */
+  public UserIntent parseUserIntent(
+      String rawText, java.util.function.Supplier<SessionContext> contextSupplier) {
     long started = System.nanoTime();
     String mode = "VALIDATION";
     String outcome = "FAILURE";
@@ -75,20 +100,28 @@ public class InputParser {
       validateText(rawText);
 
       var countInput = CountInput.check(rawText);
-      ParsedRequest parsed = commandParser.parse(rawText);
+      UserIntent parsed = commandParser.parse(rawText);
       if (parsed == null && countInput.invalid()) {
         parsed = commandParser.parse(countInput.modelText());
       }
       mode = parsed == null ? "AI" : "FAST_PATH";
       if (parsed == null) {
-        parsed = aiParser.parse(countInput.modelText());
+        SessionContext context =
+            contextSupplier == null ? SessionContext.EMPTY : contextSupplier.get();
+        parsed =
+            context == null || context.isEmpty()
+                ? aiParser.parse(countInput.modelText())
+                : aiParser.parse(countInput.modelText(), context);
+      }
+      if (parsed == null) {
+        throw new InvalidRequestException(
+            "I couldn't determine what you'd like to do. Could you rephrase that?");
       }
 
-      boolean invalidCount = normalizeCount(rawText, countInput, parsed);
-      SessionRequest request = toRequest(rawText, parsed, invalidCount);
+      parsed.setInvalidBookCount(normalizeCount(rawText, countInput, parsed));
 
       outcome = "SUCCESS";
-      return request;
+      return parsed;
     } finally {
       LOGGER.info(
           "parser.completed mode={} outcome={} durationMs={}",
@@ -96,6 +129,11 @@ public class InputParser {
           outcome,
           TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
     }
+  }
+
+  /** Converts validated user meaning into the request consumed by conversation policy. */
+  public SessionRequest toSessionRequest(String rawText, UserIntent parsed) {
+    return toRequest(rawText, parsed, parsed.isInvalidBookCount());
   }
 
   private void validateText(String rawText) {
@@ -111,8 +149,7 @@ public class InputParser {
     }
   }
 
-  private boolean normalizeCount(
-      String rawText, CountInput.Check countInput, ParsedRequest parsed) {
+  private boolean normalizeCount(String rawText, CountInput.Check countInput, UserIntent parsed) {
     // A number retained as a stated subject is not also a quantity error.
     if (!countInput.invalid() && CountInput.describesZero(rawText, parsed)) {
       parsed.setInvalidBookCount(false);
@@ -122,24 +159,24 @@ public class InputParser {
     }
 
     boolean invalidCount =
-        parsed.getIntent() != com.gen3.recommenderagent.domain.Intent.EXPLAIN_RECOMMENDATION
+        parsed.getIntent() != ConversationAction.EXPLAIN_RECOMMENDATION
             && (countInput.invalid()
                 || parsed.isInvalidBookCount()
                 || (parsed.getBookCount() != null && parsed.getBookCount().signum() <= 0));
     if (invalidCount && countInput.invalid()) {
       parsed.setIntent(
-          parsed.getIntent() == com.gen3.recommenderagent.domain.Intent.MORE_RESULTS
-              ? com.gen3.recommenderagent.domain.Intent.MORE_RESULTS
+          parsed.getIntent() == ConversationAction.MORE_RESULTS
+              ? ConversationAction.MORE_RESULTS
               : CountInput.setting(rawText) || countInput.modelText().equals("1")
-                  ? com.gen3.recommenderagent.domain.Intent.CHANGE_COUNT
+                  ? ConversationAction.CHANGE_COUNT
                   : CountInput.more(rawText)
-                      ? com.gen3.recommenderagent.domain.Intent.MORE_RESULTS
-                      : com.gen3.recommenderagent.domain.Intent.RECOMMENDATION);
+                      ? ConversationAction.MORE_RESULTS
+                      : ConversationAction.RECOMMENDATION);
     }
     return invalidCount;
   }
 
-  private SessionRequest toRequest(String rawText, ParsedRequest parsed, boolean invalidCount) {
+  private SessionRequest toRequest(String rawText, UserIntent parsed, boolean invalidCount) {
     SessionRequest request = new SessionRequest();
     request.setIntent(parsed.getIntent());
     request.setShorter(parsed.isShorter());
@@ -168,9 +205,7 @@ public class InputParser {
     ConversationRules.normalizeInput(request);
     request.setInvalidBookCount(invalidCount);
     request.setBookCount(
-        invalidCount
-                || parsed.getIntent()
-                    == com.gen3.recommenderagent.domain.Intent.EXPLAIN_RECOMMENDATION
+        invalidCount || parsed.getIntent() == ConversationAction.EXPLAIN_RECOMMENDATION
             ? null
             : boundedInteger(parsed.getBookCount()));
     request.setRequestId(createUuidV7().toString());
@@ -178,15 +213,13 @@ public class InputParser {
     return request;
   }
 
-  private void applySearchReplacements(
-      String rawText, ParsedRequest parsed, SessionRequest request) {
-    if (parsed.getIntent() == com.gen3.recommenderagent.domain.Intent.RECOMMENDATION
-        || parsed.getIntent() == com.gen3.recommenderagent.domain.Intent.REFINE) {
-      new com.gen3.recommenderagent.domain.session.SessionPreferences()
-          .updated(null, null, parsed.getReplaceSearchFields());
+  private void applySearchReplacements(String rawText, UserIntent parsed, SessionRequest request) {
+    if (parsed.getIntent() == ConversationAction.RECOMMENDATION
+        || parsed.getIntent() == ConversationAction.REFINE) {
+      new SessionPreferences().updated(null, null, parsed.getReplaceSearchFields());
       request.setReplaceSearchFields(parsed.getReplaceSearchFields());
       String command =
-          com.gen3.recommenderagent.domain.conversation.ConversationText.normalizeCommand(rawText);
+          com.gen3.recommenderagent.inputparser.ConversationText.normalizeCommand(rawText);
       if (command.matches("^(?:also|add|additionally)\\b.*")
           && !command.matches(".*\\b(?:instead|replace|rather than|switch)\\b.*")) {
         // Keep field removals while protecting supplied additions from model replacement flags.
@@ -201,7 +234,7 @@ public class InputParser {
 
   private void applyPersonalisation(String rawText, SessionRequest request) {
     String command =
-        com.gen3.recommenderagent.domain.conversation.ConversationText.normalizeCommand(rawText);
+        com.gen3.recommenderagent.inputparser.ConversationText.normalizeCommand(rawText);
     if (command.matches(
             "^(?:i want |give me |recommend |show me )?(?:a |an |some |[0-9]+ )?(?:books?|audiobooks?) (?:by|narrated by) .+")
         && !command.matches(

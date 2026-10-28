@@ -10,12 +10,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
-import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.storage.session.SessionCommitException;
 import com.gen3.recommenderagent.storage.session.SessionRepository;
@@ -30,7 +31,7 @@ class SessionTransitionServiceTest {
     SessionRepository sessions = mock(SessionRepository.class);
     RecommendationWorkflow workflow = mock(RecommendationWorkflow.class);
     Session session = new Session();
-    ConversationDraft request = request(Intent.RECOMMENDATION);
+    ConversationDraft request = request(ConversationAction.RECOMMENDATION);
     List<Recommendation> recommendations =
         List.of(
             new Recommendation("book-1", 1, 0.9, "First"),
@@ -44,15 +45,13 @@ class SessionTransitionServiceTest {
     assertEquals(
         recommendations.stream().map(Recommendation::getBookId).toList(),
         result.getRecommendations().stream().map(Recommendation::getBookId).toList());
-    assertEquals(
-        com.gen3.recommenderagent.domain.session.ConversationDecision.RECOMMENDATIONS,
-        result.getDecision());
+    assertEquals(ConversationDecision.RECOMMENDATIONS, result.getDecision());
     verify(sessions).update(eq("session-1"), eq("user-1"), any());
     assertNotNull(result.getRequestId());
     assertNotNull(result.getCreatedAt());
-    assertEquals(List.of("book-1", "book-2"), session.getShownBooks());
-    assertEquals(1, session.getRequests().size());
-    assertEquals(result.getRequestId(), session.getRequests().getFirst().getRequestId());
+    assertEquals(List.of("book-1", "book-2"), session.getActiveSearch().getShownBookIds());
+    assertNotNull(session.getActiveSearch().getSearch());
+    assertEquals(result.getRequestId(), session.getActiveSearch().getSearch().getRequestId());
   }
 
   @Test
@@ -60,16 +59,14 @@ class SessionTransitionServiceTest {
     SessionRepository sessions = mock(SessionRepository.class);
     RecommendationWorkflow workflow = mock(RecommendationWorkflow.class);
     Session session = new Session();
-    ConversationDraft request = request(Intent.CHANGE_COUNT);
+    ConversationDraft request = request(ConversationAction.CHANGE_COUNT);
     request.setBookCount(2);
 
     runUpdate(sessions, session);
 
     ConversationTurn result = service(sessions, workflow).process("session-2", "user-2", request);
 
-    assertEquals(
-        com.gen3.recommenderagent.domain.session.ConversationDecision.COUNT_CHANGED,
-        result.getDecision());
+    assertEquals(ConversationDecision.COUNT_CHANGED, result.getDecision());
     verify(sessions).update(eq("session-2"), eq("user-2"), any());
     assertEquals(2, session.getBookCount());
     assertEquals(List.of(), result.getRecommendations());
@@ -81,7 +78,7 @@ class SessionTransitionServiceTest {
     SessionRepository sessions = mock(SessionRepository.class);
     RecommendationWorkflow workflow = mock(RecommendationWorkflow.class);
     Session session = new Session();
-    ConversationDraft request = request(Intent.RECOMMENDATION);
+    ConversationDraft request = request(ConversationAction.RECOMMENDATION);
 
     when(workflow.recommend(any(), eq(session))).thenReturn(List.of());
     when(sessions.update(any(), any(), any()))
@@ -104,7 +101,7 @@ class SessionTransitionServiceTest {
     return ConversationTestSupport.transitions(sessions, workflow);
   }
 
-  private ConversationDraft request(Intent intent) {
+  private ConversationDraft request(ConversationAction intent) {
     ConversationDraft request = new ConversationDraft();
     request.setIntent(intent);
     return request;

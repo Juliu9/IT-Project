@@ -16,14 +16,15 @@ participant "RecommendationWorkflow\nEmbedding → retrieval → ranking" as Wor
 participant "ConversationResponseGenerator\nAI narration when needed" as Response
 
 User -> Gateway : Natural-language request
-Gateway -> Parser : Parse intent, criteria and count
-Parser --> Gateway : Parsed request
+Gateway -> Parser : Extract stated user intent
+Parser --> Gateway : UserIntent
 note over Parser
-  Only RECOMMENDATION and REFINE accept
-  new semantic criteria.
+  Command fast paths do not load session context.
+  The AI fallback receives only bounded reference context.
+  Parser output does not decide final session behavior.
   Parser and response chat models can differ.
 end note
-Gateway -> Transition : Process request
+Gateway -> Transition : Resolve and process UserIntent
 Transition -> Sessions : update(sessionId, userId, change)
 activate Sessions
 note over Sessions
@@ -32,17 +33,18 @@ note over Sessions
 end note
 Sessions -> Transition : Apply change to loaded session
 activate Transition
+Transition -> Transition : Convert intent to SessionRequest\nApply session guardrails
 Transition -> Engine : Resolve, validate and complete the turn
 activate Engine
 
 alt REPEAT
-  Engine -> Engine : Restore last completed request outcome\nKeep pending queue unchanged
+  Engine -> Engine : Restore LastOutcome\nKeep ActiveSearch unchanged
 else Explanation or repeat recommendations
   Engine -> Engine : Reuse displayed page or saved outcome\nNo candidate retrieval
 else MORE with no previous search
   Engine -> Engine : Mark search clarification required\nDo not retrieve candidates
 else Recommendation, refinement, or MORE
-  Engine -> Engine : Intent handler resolves context and preferences\nDiscard stale queue if search changed
+  Engine -> Engine : Intent handler resolves context and preferences\nReplace ActiveSearch if search changes
   Engine -> Engine : Take pending recommendations, up to requested count
   opt Page still needs books
     Engine -> Workflow : Build fresh batch, excluding shown IDs and cached tail
@@ -57,7 +59,7 @@ else Recommendation, refinement, or MORE
     deactivate Workflow
     Engine -> Engine : Fill page from new queue\nReturn fewer if necessary
   end
-  Engine -> Engine : Handler completes action; history records the turn\nEmpty MORE = no further matches
+  Engine -> Engine : Handler completes action; update LastOutcome\nEmpty MORE = no further matches
 else Count, preference, history, help or unknown action
   Engine -> Engine : Apply the relevant session action\nNo candidate retrieval
 end

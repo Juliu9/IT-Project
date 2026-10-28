@@ -3,6 +3,9 @@ package com.gen3.recommenderagent.domain.session;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
+import com.gen3.recommenderagent.domain.conversation.ExplanationSelection;
 
 /** One unfinished action, with only the context required to answer its current question. */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
@@ -61,17 +64,17 @@ public abstract class PendingQuestion {
   public static final class Search extends SearchRequest {}
 
   public static final class Count extends PendingQuestion {
-    private SessionRequest request;
+    private ConversationTurn request;
 
     public Count() {
       setDecision(ConversationDecision.COUNT_CLARIFICATION);
     }
 
-    public SessionRequest getRequest() {
+    public ConversationTurn getRequest() {
       return request;
     }
 
-    public void setRequest(SessionRequest value) {
+    public void setRequest(ConversationTurn value) {
       request = value;
     }
   }

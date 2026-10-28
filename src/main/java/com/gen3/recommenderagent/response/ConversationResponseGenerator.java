@@ -1,11 +1,13 @@
 package com.gen3.recommenderagent.response;
 
-import static com.gen3.recommenderagent.domain.RecommendationPolicy.MAX_BOOK_COUNT;
+import static com.gen3.recommenderagent.domain.recommendation.RecommendationPolicy.MAX_BOOK_COUNT;
 
-import com.gen3.recommenderagent.domain.conversation.ConversationRules;
-import com.gen3.recommenderagent.domain.session.ConversationDecision;
-import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.application.conversation.workflow.ConversationRules;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -39,7 +41,8 @@ public class ConversationResponseGenerator implements ResponseGenerator {
         currentRequest != null && currentRequest.getDecision() != null
             ? currentRequest.getDecision()
             : ConversationRules.decisionFor(
-                recommendations, currentRequest == null ? null : currentRequest.toDraft());
+                recommendations,
+                currentRequest == null ? null : ConversationDraft.fromTurn(currentRequest));
     if (decision == ConversationDecision.RECOMMENDATIONS
         || decision == ConversationDecision.EXPLANATION) {
       String notice =
@@ -70,7 +73,8 @@ public class ConversationResponseGenerator implements ResponseGenerator {
         currentRequest != null && currentRequest.getDecision() != null
             ? currentRequest.getDecision()
             : ConversationRules.decisionFor(
-                recommendations, currentRequest == null ? null : currentRequest.toDraft());
+                recommendations,
+                currentRequest == null ? null : ConversationDraft.fromTurn(currentRequest));
     if (decision == ConversationDecision.SEARCH_CLARIFICATION
         || decision == ConversationDecision.PREFERENCE_CLARIFICATION) {
       RequestTelemetry.responseMode(decision.name());
@@ -215,7 +219,7 @@ public class ConversationResponseGenerator implements ResponseGenerator {
 
   private boolean olderRequest(ConversationTurn request) {
     return request.getMustInclude() != null
-        && com.gen3.recommenderagent.domain.conversation.ConversationText.isOlderRefinement(
+        && com.gen3.recommenderagent.inputparser.ConversationText.isOlderRefinement(
             request.getMustInclude().getPublicationYear());
   }
 
@@ -255,12 +259,11 @@ public class ConversationResponseGenerator implements ResponseGenerator {
       return "I couldn't find audiobooks matching your current search and saved preferences. "
           + "Would you like to try a different author, genre, or filter?";
     }
-    if (currentRequest != null
-        && currentRequest.getIntent() == com.gen3.recommenderagent.domain.Intent.REPEAT) {
+    if (currentRequest != null && currentRequest.getIntent() == ConversationAction.REPEAT) {
       return "I couldn't find any audiobooks matching those search criteria. Would you like to try a different genre, author, narrator, or description?";
     }
     if (currentRequest != null
-        && (currentRequest.getIntent() == com.gen3.recommenderagent.domain.Intent.REFINE
+        && (currentRequest.getIntent() == ConversationAction.REFINE
             || (currentRequest.getMustInclude() != null
                 && currentRequest.getMustInclude().getPublicationYear() != null))) {
       return "I couldn't find books matching those criteria. Would you like to try a different author, genre, or filter?";

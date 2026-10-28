@@ -1,11 +1,11 @@
 package com.gen3.recommenderagent.inputparser;
 
-import static com.gen3.recommenderagent.domain.conversation.ConversationText.normalizeCommand;
-import static com.gen3.recommenderagent.domain.conversation.ConversationText.selectionReply;
+import static com.gen3.recommenderagent.inputparser.ConversationText.normalizeCommand;
+import static com.gen3.recommenderagent.inputparser.ConversationText.selectionReply;
 
-import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.conversation.ConversationText;
-import com.gen3.recommenderagent.domain.session.ExactCriteria;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.conversation.ExplanationSelection;
+import com.gen3.recommenderagent.domain.search.ExactCriteria;
 import java.math.BigInteger;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
@@ -43,17 +43,17 @@ public class CommandParser {
           "(?:(?:recommend|show me|give me|i want|i'd like|i would like) )?"
               + "(?:some )?(?:books|audiobooks) from ((?:around|(?:the )?period) [0-9]{4})");
 
-  public ParsedRequest parse(String rawText) {
+  public UserIntent parse(String rawText) {
     String command = normalizeCommand(rawText);
     if (ConversationText.isCancellationReply(command)) {
-      var parsed = new ParsedRequest();
-      parsed.setIntent(Intent.CANCEL);
+      var parsed = new UserIntent();
+      parsed.setIntent(ConversationAction.CANCEL);
       return parsed;
     }
     var temporaryCount = TEMPORARY_MORE_COUNT.matcher(command);
     if (temporaryCount.matches()) {
       var action = parse(temporaryCount.group(1));
-      if (action != null && action.getIntent() == Intent.MORE_RESULTS) {
+      if (action != null && action.getIntent() == ConversationAction.MORE_RESULTS) {
         action.setBookCount(countValue(temporaryCount.group(2)));
         return action;
       }
@@ -94,8 +94,8 @@ public class CommandParser {
       return searchFieldRemoval;
     }
     if (isContextualReply(rawText)) {
-      var parsed = new ParsedRequest();
-      parsed.setIntent(Intent.UNKNOWN);
+      var parsed = new UserIntent();
+      parsed.setIntent(ConversationAction.UNKNOWN);
       return parsed;
     }
     var changedCount = changedCount(command);
@@ -110,16 +110,16 @@ public class CommandParser {
     if (countedMore != null) {
       return countedMore;
     }
-    Intent intent = keywordIntent(command);
+    ConversationAction intent = keywordIntent(command);
     if (intent == null) {
       return null;
     }
-    var parsed = new ParsedRequest();
+    var parsed = new UserIntent();
     parsed.setIntent(intent);
     return parsed;
   }
 
-  private ParsedRequest longerRefinement(String command) {
+  private UserIntent longerRefinement(String command) {
     if (java.util.Set.of(
             "make them longer",
             "make it longer",
@@ -127,8 +127,8 @@ public class CommandParser {
             "longer books",
             "longer audiobooks")
         .contains(command)) {
-      var parsed = new ParsedRequest();
-      parsed.setIntent(Intent.REFINE);
+      var parsed = new UserIntent();
+      parsed.setIntent(ConversationAction.REFINE);
       parsed.setLonger(true);
       parsed.setExplicitSearch(true);
       return parsed;
@@ -136,15 +136,15 @@ public class CommandParser {
     return null;
   }
 
-  private ParsedRequest personalisedRecommendation(String command) {
+  private UserIntent personalisedRecommendation(String command) {
     if (java.util.Set.of(
             "give me some books",
             "give me some audiobooks",
             "recommend some books",
             "recommend some audiobooks")
         .contains(command)) {
-      var parsed = new ParsedRequest();
-      parsed.setIntent(Intent.RECOMMENDATION);
+      var parsed = new UserIntent();
+      parsed.setIntent(ConversationAction.RECOMMENDATION);
       parsed.setPersonalised(true);
       parsed.setExplicitSearch(true);
       return parsed;
@@ -152,10 +152,10 @@ public class CommandParser {
     return null;
   }
 
-  private ParsedRequest recencyRefinement(String command) {
+  private UserIntent recencyRefinement(String command) {
     if (ConversationText.isRecencyRefinement(command)) {
-      var parsed = new ParsedRequest();
-      parsed.setIntent(Intent.REFINE);
+      var parsed = new UserIntent();
+      parsed.setIntent(ConversationAction.REFINE);
       parsed.setExplicitSearch(true);
       var criteria = new ExactCriteria();
       criteria.setPublicationYear("more recent");
@@ -165,9 +165,9 @@ public class CommandParser {
     return null;
   }
 
-  private ParsedRequest preferenceRemoval(java.util.regex.Matcher removal) {
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.UPDATE_PREFERENCES);
+  private UserIntent preferenceRemoval(java.util.regex.Matcher removal) {
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.UPDATE_PREFERENCES);
     String term =
         (removal.group(1) == null ? removal.group(2) : removal.group(1))
             .replaceFirst("^(?:the )?(?:author|narrator|genre|topic|keyword) ", "");
@@ -179,7 +179,7 @@ public class CommandParser {
     return parsed;
   }
 
-  private ParsedRequest negativeSearch(String command) {
+  private UserIntent negativeSearch(String command) {
     var negative =
         Pattern.compile("^(?:the same but )?less (violent|dark|scary|romantic)$").matcher(command);
     var without =
@@ -187,9 +187,10 @@ public class CommandParser {
                 "^(?:only )?(?:books|audiobooks) without (romance|horror|fantasy|mystery|crime|comedy|science fiction|thrillers?)$")
             .matcher(command);
     if (negative.matches() || without.matches()) {
-      var parsed = new ParsedRequest();
-      parsed.setIntent(negative.matches() ? Intent.REFINE : Intent.RECOMMENDATION);
-      var query = new com.gen3.recommenderagent.domain.session.SemanticQuery();
+      var parsed = new UserIntent();
+      parsed.setIntent(
+          negative.matches() ? ConversationAction.REFINE : ConversationAction.RECOMMENDATION);
+      var query = new com.gen3.recommenderagent.domain.search.SemanticQuery();
       if (negative.matches()) {
         query.setKeywords(java.util.List.of(negative.group(1)));
       } else {
@@ -202,11 +203,11 @@ public class CommandParser {
     return null;
   }
 
-  private ParsedRequest publicationYearCommand(String command) {
+  private UserIntent publicationYearCommand(String command) {
     var approximateYear = APPROXIMATE_YEAR_REQUEST.matcher(command);
     if (approximateYear.matches()) {
-      var parsed = new ParsedRequest();
-      parsed.setIntent(Intent.RECOMMENDATION);
+      var parsed = new UserIntent();
+      parsed.setIntent(ConversationAction.RECOMMENDATION);
       parsed.setExplicitSearch(true);
       var criteria = new ExactCriteria();
       criteria.setPublicationYear(approximateYear.group(1));
@@ -214,8 +215,8 @@ public class CommandParser {
       return parsed;
     }
     if (ConversationText.isOlderRefinement(command)) {
-      var parsed = new ParsedRequest();
-      parsed.setIntent(Intent.REFINE);
+      var parsed = new UserIntent();
+      parsed.setIntent(ConversationAction.REFINE);
       parsed.setExplicitSearch(true);
       var criteria = new ExactCriteria();
       criteria.setPublicationYear("older");
@@ -225,7 +226,7 @@ public class CommandParser {
     return null;
   }
 
-  private ParsedRequest searchFieldRemoval(String command) {
+  private UserIntent searchFieldRemoval(String command) {
     String cleared =
         switch (command) {
           case "any author",
@@ -241,8 +242,8 @@ public class CommandParser {
           default -> null;
         };
     if (cleared != null) {
-      var parsed = new ParsedRequest();
-      parsed.setIntent(Intent.REFINE);
+      var parsed = new UserIntent();
+      parsed.setIntent(ConversationAction.REFINE);
       parsed.setReplaceSearchFields(java.util.List.of(cleared));
       return parsed;
     }
@@ -256,15 +257,14 @@ public class CommandParser {
         || ConversationText.isWholePageReply(rawText)
         || ConversationText.isAffirmativeReply(rawText)
         || selectionReply(rawText.strip()) != null
-        || com.gen3.recommenderagent.domain.conversation.ConversationText.isPreferenceDecline(
-            rawText);
+        || com.gen3.recommenderagent.inputparser.ConversationText.isPreferenceDecline(rawText);
   }
 
-  private ParsedRequest changedCount(String command) {
+  private UserIntent changedCount(String command) {
     var changedCount = CHANGE_COUNT.matcher(command);
     if (changedCount.matches()) {
-      var parsed = new ParsedRequest();
-      parsed.setIntent(Intent.CHANGE_COUNT);
+      var parsed = new UserIntent();
+      parsed.setIntent(ConversationAction.CHANGE_COUNT);
       parsed.setBookCount(
           countValue(
               changedCount.group(1) == null ? changedCount.group(2) : changedCount.group(1)));
@@ -273,7 +273,7 @@ public class CommandParser {
     return null;
   }
 
-  private ParsedRequest shorterRefinement(String command) {
+  private UserIntent shorterRefinement(String command) {
     if (java.util.Set.of(
             "make them shorter",
             "make it shorter",
@@ -284,8 +284,8 @@ public class CommandParser {
             "shorter audiobooks",
             "shorter books")
         .contains(command)) {
-      var parsed = new ParsedRequest();
-      parsed.setIntent(Intent.REFINE);
+      var parsed = new UserIntent();
+      parsed.setIntent(ConversationAction.REFINE);
       parsed.setShorter(true);
       parsed.setExplicitSearch(true);
       return parsed;
@@ -293,11 +293,11 @@ public class CommandParser {
     return null;
   }
 
-  private ParsedRequest countedMore(String command) {
+  private UserIntent countedMore(String command) {
     var countedMore = COUNTED_MORE.matcher(command);
     if (countedMore.matches()) {
-      var parsed = new ParsedRequest();
-      parsed.setIntent(Intent.MORE_RESULTS);
+      var parsed = new UserIntent();
+      parsed.setIntent(ConversationAction.MORE_RESULTS);
       String count = countedMore.group(1) == null ? countedMore.group(2) : countedMore.group(1);
       parsed.setBookCount(count == null ? BigInteger.ONE : countValue(count));
       return parsed;
@@ -305,7 +305,7 @@ public class CommandParser {
     return null;
   }
 
-  private Intent keywordIntent(String command) {
+  private ConversationAction keywordIntent(String command) {
     return switch (command) {
       case "help",
           "show help",
@@ -317,7 +317,7 @@ public class CommandParser {
           "how do i use this",
           "how does this work",
           "what can i ask" ->
-          Intent.HELP;
+          ConversationAction.HELP;
       case "more",
           "some more",
           "more recommendations",
@@ -332,7 +332,7 @@ public class CommandParser {
           "next",
           "next batch",
           "next page" ->
-          Intent.MORE_RESULTS;
+          ConversationAction.MORE_RESULTS;
       case "repeat",
           "repeat that",
           "say that again",
@@ -341,7 +341,7 @@ public class CommandParser {
           "repeat your last response",
           "repeat the last response",
           "repeat your last answer" ->
-          Intent.REPEAT;
+          ConversationAction.REPEAT;
       case "repeat the books",
           "repeat the recommendations",
           "repeat recommendations",
@@ -353,7 +353,7 @@ public class CommandParser {
           "show those books again",
           "show me the same books again",
           "show me the same audiobook list you gave me earlier" ->
-          Intent.REPEAT_RECOMMENDATIONS;
+          ConversationAction.REPEAT_RECOMMENDATIONS;
       case "explain",
           "explain the recommendations",
           "explain these recommendations",
@@ -370,7 +370,7 @@ public class CommandParser {
           "explain all the recommendations",
           "explain these books",
           "why were these books recommended" ->
-          Intent.EXPLAIN_RECOMMENDATION;
+          ConversationAction.EXPLAIN_RECOMMENDATION;
       case "reset",
           "reset preferences",
           "reset my preferences",
@@ -379,18 +379,18 @@ public class CommandParser {
           "clear my preferences",
           "reset my tastes",
           "reset preferences and count" ->
-          Intent.RESET_PREFERENCES;
+          ConversationAction.RESET_PREFERENCES;
       case "clear",
           "clear history",
           "clear my history",
           "clear recommendation history",
           "clear my recommendation history" ->
-          Intent.CLEAR_HISTORY;
+          ConversationAction.CLEAR_HISTORY;
       default -> null;
     };
   }
 
-  private ParsedRequest explanation(String command) {
+  private UserIntent explanation(String command) {
     String target;
     if (command.startsWith("explain ")) {
       target = command.substring(8);
@@ -401,8 +401,8 @@ public class CommandParser {
     }
     if (target.matches(
         "(?:(?:the |book |number ))?[-−]?(?:[0-9]+\\.[0-9]+|\\.[0-9]+)(?: (?:book|one))?(?: more| in more detail)?")) {
-      var invalid = new ParsedRequest();
-      invalid.setIntent(Intent.EXPLAIN_RECOMMENDATION);
+      var invalid = new UserIntent();
+      invalid.setIntent(ConversationAction.EXPLAIN_RECOMMENDATION);
       invalid.setReferenceRank(BigInteger.ZERO);
       return invalid;
     }
@@ -417,19 +417,17 @@ public class CommandParser {
     if (included == null || excluded == null) {
       return null;
     }
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.EXPLAIN_RECOMMENDATION);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.EXPLAIN_RECOMMENDATION);
     if (sides.length == 1 && included.size() == 1) {
       Integer rank = ConversationText.selectionReply(included.getFirst());
       if (rank != null) {
         parsed.setReferenceRank(BigInteger.valueOf(rank));
       } else {
-        parsed.setExplanationSelection(
-            new com.gen3.recommenderagent.domain.session.ExplanationSelection(included, excluded));
+        parsed.setExplanationSelection(new ExplanationSelection(included, excluded));
       }
     } else {
-      parsed.setExplanationSelection(
-          new com.gen3.recommenderagent.domain.session.ExplanationSelection(included, excluded));
+      parsed.setExplanationSelection(new ExplanationSelection(included, excluded));
     }
     return parsed;
   }

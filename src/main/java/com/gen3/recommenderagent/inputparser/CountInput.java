@@ -65,7 +65,7 @@ final class CountInput {
     return new Check(false, text);
   }
 
-  static boolean describesZero(String text, ParsedRequest parsed) {
+  static boolean describesZero(String text, UserIntent parsed) {
     String normalized = subjectKey(text);
     return java.util.stream.Stream.of(
             parsed.getPositiveSemanticQuery(), parsed.getNegativeSemanticQuery())

@@ -11,25 +11,26 @@ import static org.mockito.Mockito.when;
 import com.gen3.catalogue.model.AudiobookTitle;
 import com.gen3.catalogue.port.AudiobookTitleLookup;
 import com.gen3.catalogue.port.AudiobookVectorRepository;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationEngine;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.conversation.SessionRequest;
 import com.gen3.recommenderagent.application.recommendation.RecommendationPager;
 import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
 import com.gen3.recommenderagent.application.recommendation.SimilarBookResolver;
-import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.ConversationDecision;
-import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.ExactCriteria;
-import com.gen3.recommenderagent.domain.session.ExplanationSelection;
-import com.gen3.recommenderagent.domain.session.Recommendation;
-import com.gen3.recommenderagent.domain.session.SemanticQuery;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
+import com.gen3.recommenderagent.domain.conversation.ExplanationSelection;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
+import com.gen3.recommenderagent.domain.search.ExactCriteria;
+import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.inputparser.AiParser;
 import com.gen3.recommenderagent.inputparser.CommandParser;
 import com.gen3.recommenderagent.inputparser.InputParser;
-import com.gen3.recommenderagent.inputparser.ParsedRequest;
+import com.gen3.recommenderagent.inputparser.UserIntent;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
 import com.gen3.recommenderagent.response.ConversationResponseGenerator;
 import com.gen3.recommenderagent.retrieval.plan.ExactFilterPolicy;
@@ -71,7 +72,7 @@ class ApprovedInputFlowTest {
     when(workflow.recommend(any(), any()))
         .thenAnswer(
             call -> {
-              com.gen3.recommenderagent.domain.session.ConversationDraft input =
+              com.gen3.recommenderagent.application.conversation.ConversationDraft input =
                   call.getArgument(0);
               if (input.isPersonalised()
                   && input.getPositiveSemanticQuery() == null
@@ -95,7 +96,7 @@ class ApprovedInputFlowTest {
             });
   }
 
-  private SessionRequest request(Intent intent, String raw) {
+  private SessionRequest request(ConversationAction intent, String raw) {
     var request = new SessionRequest();
     request.setIntent(intent);
     request.setRawText(raw);
@@ -107,7 +108,7 @@ class ApprovedInputFlowTest {
   }
 
   private ConversationTurn search() {
-    var request = request(Intent.RECOMMENDATION, "fantasy");
+    var request = request(ConversationAction.RECOMMENDATION, "fantasy");
     var query = new SemanticQuery();
     query.setGenres(List.of("fantasy"));
     request.setPositiveSemanticQuery(query);
@@ -120,7 +121,7 @@ class ApprovedInputFlowTest {
   }
 
   private ConversationTurn selection(List<String> include, List<String> exclude) {
-    var request = request(Intent.EXPLAIN_RECOMMENDATION, "explain selection");
+    var request = request(ConversationAction.EXPLAIN_RECOMMENDATION, "explain selection");
     request.setExplanationSelection(new ExplanationSelection(include, exclude));
     return engine.process(session, request);
   }
@@ -134,7 +135,7 @@ class ApprovedInputFlowTest {
     session.setPreferences(old);
     year = null;
     search();
-    var refine = request(Intent.REFINE, "more recent under two hours");
+    var refine = request(ConversationAction.REFINE, "more recent under two hours");
     var exact = new ExactCriteria();
     exact.setPublicationYear("more recent");
     exact.setDuration("under 2 hours");
@@ -149,14 +150,14 @@ class ApprovedInputFlowTest {
             Session.class);
     var result = process("2000");
     assertThat(session.getPendingQuestion()).isNull();
-    assertThat(result.getIntent()).isEqualTo(Intent.UNKNOWN);
+    assertThat(result.getIntent()).isEqualTo(ConversationAction.UNKNOWN);
     assertThat(result.getRecommendations()).isEmpty();
   }
 
   @Test
   void rejectingDurationExtensionKeepsTheOriginalSearchAndQueuedPage() {
     duration = 50;
-    var original = request(Intent.RECOMMENDATION, "under 55 minutes");
+    var original = request(ConversationAction.RECOMMENDATION, "under 55 minutes");
     var exact = new ExactCriteria();
     exact.setDuration("under 55 minutes");
     original.setMustInclude(exact);
@@ -173,7 +174,8 @@ class ApprovedInputFlowTest {
   void startingYearReplyPreservesTheEntirePendingRefinementThroughHelpAndReload() {
     year = null;
     search();
-    var refine = request(Intent.REFINE, "more recent and under two hours by Suzanne Collins");
+    var refine =
+        request(ConversationAction.REFINE, "more recent and under two hours by Suzanne Collins");
     var exact = new ExactCriteria();
     exact.setPublicationYear("more recent");
     exact.setDuration("under 2 hours");
@@ -196,7 +198,7 @@ class ApprovedInputFlowTest {
   void durationReplyPreservesPendingAuthorAndGenre(boolean longer) {
     duration = null;
     search();
-    var refine = request(Intent.REFINE, "change runtime and author");
+    var refine = request(ConversationAction.REFINE, "change runtime and author");
     refine.setLonger(longer);
     refine.setShorter(!longer);
     var exact = new ExactCriteria();
@@ -213,7 +215,7 @@ class ApprovedInputFlowTest {
                 : ConversationDecision.SHORTER_DURATION_CLARIFICATION);
     process("help");
     reload();
-    var answer = request(Intent.RECOMMENDATION, "under three hours");
+    var answer = request(ConversationAction.RECOMMENDATION, "under three hours");
     exact = new ExactCriteria();
     exact.setDuration("under 3 hours");
     answer.setMustInclude(exact);
@@ -226,7 +228,7 @@ class ApprovedInputFlowTest {
   @Test
   void olderUsesAverageYearAndPreservesTheLowerBoundUntilExtensionIsApproved() {
     year = 2000;
-    var original = request(Intent.RECOMMENDATION, "fantasy from 2000");
+    var original = request(ConversationAction.RECOMMENDATION, "fantasy from 2000");
     var exact = new ExactCriteria();
     exact.setPublicationYear("from 2000");
     original.setMustInclude(exact);
@@ -257,7 +259,7 @@ class ApprovedInputFlowTest {
   @Test
   void longerUsesLongestDisplayedRuntimeAndConflictingUpperBoundNeedsConfirmation() {
     duration = 50;
-    var original = request(Intent.RECOMMENDATION, "under 55 minutes");
+    var original = request(ConversationAction.RECOMMENDATION, "under 55 minutes");
     var exact = new ExactCriteria();
     exact.setDuration("under 55 minutes");
     original.setMustInclude(exact);
@@ -311,7 +313,7 @@ class ApprovedInputFlowTest {
     process("remove Suzanne Collins from my preferences");
     assertThat(session.getPreferences().getPositiveSemanticQuery().getAuthors()).isNull();
     assertThat(session.getPreferences().getMustInclude().getAuthors()).isNull();
-    assertThat(session.getPendingRecommendations()).hasSize(15);
+    assertThat(session.getActiveSearch().getPendingRecommendations()).hasSize(15);
     verifyNoInteractions(ai);
   }
 
@@ -406,8 +408,8 @@ class ApprovedInputFlowTest {
         "Give me 2.5 mystery books"
       })
   void invalidCountsDoNotRetrieveAndTheCorrectionResumesTheOriginalSearch(String text) {
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.RECOMMENDATION);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.RECOMMENDATION);
     parsed.setInvalidBookCount(true);
     parsed.setBookCount(BigInteger.ONE);
     var query = new SemanticQuery();
@@ -419,7 +421,7 @@ class ApprovedInputFlowTest {
     var question = process(text);
     assertThat(question.getDecision()).isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
     assertThat(batch).isEqualTo(calls);
-    assertThat(session.getPendingRecommendations()).hasSize(15);
+    assertThat(session.getActiveSearch().getPendingRecommendations()).hasSize(15);
     assertThat(responses.generate(question.getRecommendations(), question))
         .contains("whole number from one to five");
     process("help");
@@ -436,7 +438,7 @@ class ApprovedInputFlowTest {
     assertThat(process("0 more").getDecision()).isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
     assertThat(process("2.5").getDecision()).isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
     var result = process("2");
-    assertThat(result.getIntent()).isEqualTo(Intent.MORE_RESULTS);
+    assertThat(result.getIntent()).isEqualTo(ConversationAction.MORE_RESULTS);
     assertThat(result.getRecommendations()).hasSize(2);
     assertThat(session.getBookCount()).isEqualTo(5);
   }
@@ -449,11 +451,11 @@ class ApprovedInputFlowTest {
                 new AudiobookTitle("a", "Reference", List.of("One")),
                 new AudiobookTitle("b", "Reference", List.of("Two"))));
     when(vectors.findEmbeddingByBookId(anyString())).thenReturn(Optional.of(new float[] {1, 0}));
-    var search = request(Intent.RECOMMENDATION, "similar to Reference");
+    var search = request(ConversationAction.RECOMMENDATION, "similar to Reference");
     search.setSimilarToTitle("Reference");
     search.setExplicitSearch(true);
     engine.process(session, search);
-    var invalid = request(Intent.CHANGE_COUNT, "set count to zero");
+    var invalid = request(ConversationAction.CHANGE_COUNT, "set count to zero");
     invalid.setInvalidBookCount(true);
     engine.process(session, invalid);
     reload();
@@ -462,7 +464,7 @@ class ApprovedInputFlowTest {
     assertThat(responses.generate(count.getRecommendations(), count))
         .contains("3 recommendations")
         .doesNotContain("Which book");
-    assertThat(process("2").getIntent()).isEqualTo(Intent.UNKNOWN);
+    assertThat(process("2").getIntent()).isEqualTo(ConversationAction.UNKNOWN);
     assertThat(session.getPendingQuestion()).isNull();
   }
 
@@ -473,7 +475,7 @@ class ApprovedInputFlowTest {
                 new AudiobookTitle("a", "Reference", List.of("One")),
                 new AudiobookTitle("b", "Reference", List.of("Two"))));
     when(vectors.findEmbeddingByBookId(anyString())).thenReturn(Optional.of(new float[] {1, 0}));
-    var input = request(Intent.RECOMMENDATION, "similar to Reference under two hours");
+    var input = request(ConversationAction.RECOMMENDATION, "similar to Reference under two hours");
     input.setSimilarToTitle("Reference");
     input.setBookCount(2);
     input.setExplicitSearch(true);
@@ -490,7 +492,7 @@ class ApprovedInputFlowTest {
         .thenReturn(List.of(new AudiobookTitle("hobbit", "The Hobbit", List.of("Tolkien"))));
     reload();
     var result = process("None of those, try The Hobbit");
-    assertThat(result.getIntent()).isEqualTo(Intent.RECOMMENDATION);
+    assertThat(result.getIntent()).isEqualTo(ConversationAction.RECOMMENDATION);
     assertThat(result.getSimilarBook().bookId()).isEqualTo("hobbit");
     assertThat(result.getMustInclude().getDuration()).isEqualTo("under 2 hours");
     assertThat(result.getRecommendations()).hasSize(2);
@@ -504,7 +506,7 @@ class ApprovedInputFlowTest {
     referenceChoices();
     var result = process(reply);
     assertThat(result.getDecision()).isEqualTo(ConversationDecision.CANCELLED);
-    assertThat(session.getPendingSimilarBook()).isNull();
+    assertThat(session.getPendingQuestion()).isNull();
     assertThat(process("repeat the recommendations").getRecommendations())
         .extracting(Recommendation::getBookId)
         .containsExactlyElementsOf(
@@ -519,7 +521,7 @@ class ApprovedInputFlowTest {
     verifyNoInteractions(workflow);
     process("help");
     reload();
-    var taste = request(Intent.RECOMMENDATION, "fantasy");
+    var taste = request(ConversationAction.RECOMMENDATION, "fantasy");
     var query = new SemanticQuery();
     query.setGenres(List.of("fantasy"));
     taste.setPositiveSemanticQuery(query);
@@ -533,7 +535,7 @@ class ApprovedInputFlowTest {
   void combinedMoreCountIsTemporary(String text) {
     search();
     var result = process(text);
-    assertThat(result.getIntent()).isEqualTo(Intent.MORE_RESULTS);
+    assertThat(result.getIntent()).isEqualTo(ConversationAction.MORE_RESULTS);
     assertThat(result.getRecommendations()).hasSize(3);
     assertThat(session.getBookCount()).isEqualTo(5);
     assertThat(process("more").getRecommendations()).hasSize(5);
@@ -546,7 +548,7 @@ class ApprovedInputFlowTest {
   @ValueSource(strings = {"more", "repeat the recommendations"})
   void switchingActionsDiscardsTheAbandonedCountRequest(String action) {
     search();
-    var invalid = request(Intent.RECOMMENDATION, "zero mystery books");
+    var invalid = request(ConversationAction.RECOMMENDATION, "zero mystery books");
     invalid.setInvalidBookCount(true);
     invalid.setExplicitSearch(true);
     var query = new SemanticQuery();
@@ -561,7 +563,7 @@ class ApprovedInputFlowTest {
     process("repeat");
     reload();
     var more = process("2");
-    assertThat(more.getIntent()).isEqualTo(Intent.MORE_RESULTS);
+    assertThat(more.getIntent()).isEqualTo(ConversationAction.MORE_RESULTS);
     assertThat(more.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
     assertThat(more.getRecommendations()).hasSize(2);
   }
@@ -590,8 +592,8 @@ class ApprovedInputFlowTest {
     preferences.setPositiveSemanticQuery(tastes);
     session.setPreferences(preferences);
     var before =
-        com.gen3.recommenderagent.domain.conversation.ConversationHistory.latestDisplayedSearch(
-            session);
+        com.gen3.recommenderagent.application.conversation.workflow.ConversationHistory
+            .latestDisplayedSearch(session);
     org.mockito.Mockito.clearInvocations(workflow);
     process("help");
     process("repeat");
@@ -604,8 +606,8 @@ class ApprovedInputFlowTest {
     assertThat(session.getPreferences().getPositiveSemanticQuery().getGenres())
         .containsExactly("horror");
     var after =
-        com.gen3.recommenderagent.domain.conversation.ConversationHistory.latestDisplayedSearch(
-            session);
+        com.gen3.recommenderagent.application.conversation.workflow.ConversationHistory
+            .latestDisplayedSearch(session);
     assertThat(after.getRequestId()).isEqualTo(before.getRequestId());
     assertThat(after.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
     assertThat(process("repeat").getDecision()).isEqualTo(ConversationDecision.SEARCH_DECLINED);
@@ -619,7 +621,7 @@ class ApprovedInputFlowTest {
     org.mockito.Mockito.clearInvocations(workflow);
     reload();
     var repeated = process("repeat");
-    assertThat(repeated.getIntent()).isEqualTo(Intent.REPEAT);
+    assertThat(repeated.getIntent()).isEqualTo(ConversationAction.REPEAT);
     assertThat(repeated.getDecision()).isEqualTo(ConversationDecision.NO_MATCHES);
     assertThat(repeated.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
     assertThat(responses.generate(repeated.getRecommendations(), repeated))
@@ -653,16 +655,17 @@ class ApprovedInputFlowTest {
       process("repeat");
       reload();
     }
-    var before = session.getRequests().getLast();
+    var before = session.getActiveSearch().getSearch();
     var question = process("yes");
     assertThat(question.getDecision()).isEqualTo(ConversationDecision.SEARCH_CHANGE_CLARIFICATION);
     assertThat(responses.generate(question.getRecommendations(), question))
         .contains("What would you like to change");
-    assertThat(session.getRequests().getLast().getRequestId()).isEqualTo(before.getRequestId());
+    assertThat(session.getActiveSearch().getSearch().getRequestId())
+        .isEqualTo(before.getRequestId());
     verifyNoInteractions(workflow);
     process("help");
     reload();
-    var change = request(Intent.REFINE, "under two hours");
+    var change = request(ConversationAction.REFINE, "under two hours");
     var criteria = new ExactCriteria();
     criteria.setDuration("under 2 hours");
     change.setMustInclude(criteria);
@@ -676,7 +679,7 @@ class ApprovedInputFlowTest {
   @ValueSource(strings = {"explain", "repeat the recommendations"})
   void newPageActionsAbandonPersonalisationButKeepTheDisplayedPage(String action) {
     var displayed = search();
-    var personalised = request(Intent.RECOMMENDATION, "personalised for me");
+    var personalised = request(ConversationAction.RECOMMENDATION, "personalised for me");
     personalised.setPersonalised(true);
     personalised.setExplicitSearch(true);
     var question = engine.process(session, personalised);
@@ -699,7 +702,7 @@ class ApprovedInputFlowTest {
     assertThat(responses.generate(result.getRecommendations(), result))
         .doesNotContain("To continue your personalised request");
     assertThat(session.isAwaitingPersonalisedPreferences()).isFalse();
-    var answer = request(Intent.RECOMMENDATION, "horror");
+    var answer = request(ConversationAction.RECOMMENDATION, "horror");
     var query = new SemanticQuery();
     query.setGenres(List.of("horror"));
     answer.setPositiveSemanticQuery(query);
@@ -723,11 +726,13 @@ class ApprovedInputFlowTest {
   void completeApproximateYearSearchDoesNotInheritThePreviousGenre(String text) {
     search();
     var result = process(text);
-    assertThat(result.getIntent()).isEqualTo(Intent.RECOMMENDATION);
+    assertThat(result.getIntent()).isEqualTo(ConversationAction.RECOMMENDATION);
     assertThat(result.getPositiveSemanticQuery()).isNull();
     assertThat(result.getRecommendations()).hasSize(5);
     var bounds =
-        new ExactFilterPolicy().filters(result.toDraft(), java.util.Set.of()).mustInclude();
+        new ExactFilterPolicy()
+            .filters(ConversationDraft.fromTurn(result), java.util.Set.of())
+            .mustInclude();
     assertThat(bounds.minimumPublicationYear()).isEqualTo(1995);
     assertThat(bounds.maximumPublicationYear()).isEqualTo(2005);
     assertThat(batch).isEqualTo(2);

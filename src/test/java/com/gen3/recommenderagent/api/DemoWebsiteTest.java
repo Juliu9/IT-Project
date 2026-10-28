@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
@@ -74,8 +75,9 @@ class DemoWebsiteTest {
       throws Exception {
     var gateway = mock(RequestGateway.class);
     var catalogue = mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class);
-    var turn = new com.gen3.recommenderagent.domain.session.ConversationTurn();
-    var book = new com.gen3.recommenderagent.domain.session.Recommendation("id", 1, 0.7, "Title");
+    var turn = new ConversationTurn();
+    var book =
+        new com.gen3.recommenderagent.domain.recommendation.Recommendation("id", 1, 0.7, "Title");
     turn.setRecommendations(java.util.List.of(book));
     when(gateway.handleDemoRequest("session", "user", "books"))
         .thenReturn(new RequestGateway.DemoResponse("Your books", turn, null));
@@ -109,7 +111,7 @@ class DemoWebsiteTest {
   void skipsCatalogueLookupWhenThereAreNoRecommendations() throws Exception {
     var gateway = mock(RequestGateway.class);
     var catalogue = mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class);
-    var turn = new com.gen3.recommenderagent.domain.session.ConversationTurn();
+    var turn = new ConversationTurn();
     when(gateway.handleDemoRequest("session", "user", "help"))
         .thenReturn(new RequestGateway.DemoResponse("Help", turn, null));
     var result = new DemoWebsite(gateway, catalogue).recommend("session", "user", "help");
@@ -121,9 +123,9 @@ class DemoWebsiteTest {
   void omitsVectorsFromDevPayloadWithoutChangingSessionData() {
     var gateway = mock(RequestGateway.class);
     var catalogue = mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class);
-    var turn = new com.gen3.recommenderagent.domain.session.ConversationTurn();
+    var turn = new ConversationTurn();
     turn.setSimilarBook(
-        new com.gen3.recommenderagent.domain.session.SimilarBookReference(
+        new com.gen3.recommenderagent.domain.search.SimilarBookReference(
             "book", "Title", java.util.List.of("Author"), new float[] {1, 0}));
     turn.setSimilarityQueryVector(new float[] {0, 1});
     turn.setUserPreferenceSnapshot(

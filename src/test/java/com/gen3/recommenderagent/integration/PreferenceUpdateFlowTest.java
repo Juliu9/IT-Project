@@ -14,15 +14,15 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendationWorkflow;
-import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.ConversationDecision;
-import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.ExactCriteria;
-import com.gen3.recommenderagent.domain.session.Recommendation;
-import com.gen3.recommenderagent.domain.session.SemanticQuery;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
+import com.gen3.recommenderagent.domain.search.ExactCriteria;
+import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectors;
@@ -55,7 +55,7 @@ class PreferenceUpdateFlowTest {
       })
   void countCommandsStillWorkWhileAPreferenceEditQuestionIsPending(String command) {
     process(update(tastes("romance")));
-    process(request(Intent.UPDATE_PREFERENCES));
+    process(request(ConversationAction.UPDATE_PREFERENCES));
     var ai = mock(AiParser.class);
     var parser = new InputParser(new CommandParser(), ai);
     var first = service.process("session", "user", parser.parse(command));
@@ -113,17 +113,17 @@ class PreferenceUpdateFlowTest {
               List.of());
     }
     process(update(tastes("horror")));
-    var count = request(Intent.CHANGE_COUNT);
+    var count = request(ConversationAction.CHANGE_COUNT);
     count.setBookCount(2);
     process(count);
-    var search = request(Intent.RECOMMENDATION);
+    var search = request(ConversationAction.RECOMMENDATION);
     search.setPersonalised(true);
     process(search);
-    process(request(Intent.RESET_PREFERENCES));
+    process(request(ConversationAction.RESET_PREFERENCES));
     for (int page = 0; page < 3; page++) {
-      process(request(Intent.MORE_RESULTS));
+      process(request(ConversationAction.MORE_RESULTS));
     }
-    var result = process(request(Intent.MORE_RESULTS));
+    var result = process(request(ConversationAction.MORE_RESULTS));
     assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
     assertThat(result.isPreferenceClarificationRequired()).isFalse();
     assertThat(result.getRecommendations())
@@ -141,7 +141,7 @@ class PreferenceUpdateFlowTest {
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {"more", "another", "2 more", "another five"})
   void moreAbandonsTheUnfinishedPersonalisedSearchAndAsksForCriteria(String text) {
-    var search = request(Intent.RECOMMENDATION);
+    var search = request(ConversationAction.RECOMMENDATION);
     search.setPersonalised(true);
     search.setExplicitSearch(true);
     search.setPositiveSemanticQuery(tastes("horror").getPositiveSemanticQuery());
@@ -156,7 +156,7 @@ class PreferenceUpdateFlowTest {
         .isFalse();
     assertThat(sessions.getSession("session", "user").getPreferences()).isNull();
     verifyNoInteractions(vectors, retriever, ranker);
-    var answer = request(Intent.REFINE);
+    var answer = request(ConversationAction.REFINE);
     answer.setPositiveSemanticQuery(tastes("adventure").getPositiveSemanticQuery());
     var resumed = process(answer);
     assertThat(resumed.isPreferenceClarificationRequired()).isFalse();
@@ -168,7 +168,7 @@ class PreferenceUpdateFlowTest {
 
   @Test
   void tasteReplyDoesNotPromotePendingSearchConstraintsOrSemanticsToSavedPreferences() {
-    var search = request(Intent.RECOMMENDATION);
+    var search = request(ConversationAction.RECOMMENDATION);
     search.setPersonalised(true);
     search.setExplicitSearch(true);
     var filter = new ExactCriteria();
@@ -177,7 +177,7 @@ class PreferenceUpdateFlowTest {
     search.setMustInclude(filter);
     search.setPositiveSemanticQuery(tastes("fantasy").getPositiveSemanticQuery());
     process(search);
-    var reply = request(Intent.RECOMMENDATION);
+    var reply = request(ConversationAction.RECOMMENDATION);
     reply.setPositiveSemanticQuery(tastes("horror").getPositiveSemanticQuery());
     var resumed = process(reply);
     assertThat(resumed.getMustInclude().getAuthors()).containsExactly("Suzanne Collins");
@@ -186,7 +186,7 @@ class PreferenceUpdateFlowTest {
     assertThat(saved.getPositiveSemanticQuery().getGenres()).containsExactly("horror");
     assertThat(saved.getMustInclude().getAuthors()).isNullOrEmpty();
     assertThat(saved.getMustInclude().getDuration()).isNull();
-    var next = request(Intent.RECOMMENDATION);
+    var next = request(ConversationAction.RECOMMENDATION);
     next.setExplicitSearch(true);
     next.setPositiveSemanticQuery(tastes("adventure").getPositiveSemanticQuery());
     var result = process(next);
@@ -197,13 +197,13 @@ class PreferenceUpdateFlowTest {
 
   @Test
   void explicitPreferenceUpdateAbandonsTheUnfinishedSearch() {
-    var search = request(Intent.RECOMMENDATION);
+    var search = request(ConversationAction.RECOMMENDATION);
     search.setPersonalised(true);
     var filter = new ExactCriteria();
     filter.setAuthors(List.of("Suzanne Collins"));
     search.setMustInclude(filter);
     process(search);
-    process(request(Intent.HELP));
+    process(request(ConversationAction.HELP));
     var result = process(update(tastes("horror")));
     assertThat(result.getRecommendations()).isEmpty();
     assertThat(result.getDecision()).isEqualTo(ConversationDecision.PREFERENCES_UPDATED);
@@ -219,22 +219,22 @@ class PreferenceUpdateFlowTest {
 
   @Test
   void countAbandonsGenreQuestionAndHelpDoesNotRestoreIt() {
-    var search = request(Intent.RECOMMENDATION);
+    var search = request(ConversationAction.RECOMMENDATION);
     search.setPersonalised(true);
     process(search);
-    var count = request(Intent.CHANGE_COUNT);
+    var count = request(ConversationAction.CHANGE_COUNT);
     count.setBookCount(2);
     process(count);
-    process(request(Intent.HELP));
+    process(request(ConversationAction.HELP));
     assertThat(sessions.getSession("session", "user").getPendingDecision()).isNull();
-    var reply = request(Intent.RECOMMENDATION);
+    var reply = request(ConversationAction.RECOMMENDATION);
     reply.setPositiveSemanticQuery(tastes("horror").getPositiveSemanticQuery());
     assertThat(process(reply).getRecommendations()).hasSize(2);
   }
 
   @Test
   void unrelatedPreferenceEditAbandonsThePendingGenreQuestion() {
-    var search = request(Intent.RECOMMENDATION);
+    var search = request(ConversationAction.RECOMMENDATION);
     search.setPersonalised(true);
     process(search);
     var filterPreferences = new SessionPreferences();
@@ -244,7 +244,7 @@ class PreferenceUpdateFlowTest {
     var result = process(update(filterPreferences));
     assertThat(result.getDecision()).isEqualTo(ConversationDecision.PREFERENCES_UPDATED);
     assertThat(sessions.getSession("session", "user").getPendingDecision()).isNull();
-    var answer = request(Intent.RECOMMENDATION);
+    var answer = request(ConversationAction.RECOMMENDATION);
     answer.setPositiveSemanticQuery(tastes("horror").getPositiveSemanticQuery());
     assertThat(process(answer).getRecommendations()).hasSize(5);
     assertThat(
@@ -255,33 +255,35 @@ class PreferenceUpdateFlowTest {
   @Test
   void resetClearsPreferencesAndCountButPreservesDisplayedAndPendingBooks() {
     process(update(tastes("horror")));
-    var count = request(Intent.CHANGE_COUNT);
+    var count = request(ConversationAction.CHANGE_COUNT);
     count.setBookCount(2);
     process(count);
-    var page = process(request(Intent.RECOMMENDATION));
+    var page = process(request(ConversationAction.RECOMMENDATION));
     var session = sessions.getSession("session", "user");
-    var pending = List.copyOf(session.getPendingRecommendations());
-    var shown = List.copyOf(session.getShownBooks());
+    var pending = List.copyOf(session.getActiveSearch().getPendingRecommendations());
+    var shown = List.copyOf(session.getActiveSearch().getShownBookIds());
     org.mockito.Mockito.clearInvocations(users, vectors, retriever, ranker);
     var parser = new InputParser(new CommandParser(), mock(AiParser.class));
     var reset = service.process("session", "user", parser.parse("reset my preferences"));
     session = sessions.getSession("session", "user");
-    assertThat(reset.getIntent()).isEqualTo(Intent.RESET_PREFERENCES);
+    assertThat(reset.getIntent()).isEqualTo(ConversationAction.RESET_PREFERENCES);
     assertThat(reset.getDecision()).isEqualTo(ConversationDecision.PREFERENCES_RESET);
     assertThat(session.getPreferences()).isNull();
     assertThat(session.getBookCount()).isEqualTo(5);
-    assertThat(session.getPendingRecommendations()).usingRecursiveComparison().isEqualTo(pending);
-    assertThat(session.getShownBooks()).containsExactlyElementsOf(shown);
+    assertThat(session.getActiveSearch().getPendingRecommendations())
+        .usingRecursiveComparison()
+        .isEqualTo(pending);
+    assertThat(session.getActiveSearch().getShownBookIds()).containsExactlyElementsOf(shown);
     verifyNoInteractions(users, vectors, retriever, ranker);
     var response = new ConversationResponseGenerator(new AiResponseGenerator(null));
     assertThat(response.generate(reset.getRecommendations(), reset)).contains("reset", "5");
-    var replay = process(request(Intent.REPEAT));
+    var replay = process(request(ConversationAction.REPEAT));
     assertThat(replay.getDecision()).isEqualTo(ConversationDecision.PREFERENCES_RESET);
-    assertThat(process(request(Intent.REPEAT_RECOMMENDATIONS)).getRecommendations())
+    assertThat(process(request(ConversationAction.REPEAT_RECOMMENDATIONS)).getRecommendations())
         .extracting(Recommendation::getBookId)
         .containsExactlyElementsOf(Recommendation.bookIds(page.getRecommendations()));
-    assertThat(process(request(Intent.MORE_RESULTS)).getRecommendations()).hasSize(5);
-    var personalised = request(Intent.RECOMMENDATION);
+    assertThat(process(request(ConversationAction.MORE_RESULTS)).getRecommendations()).hasSize(5);
+    var personalised = request(ConversationAction.RECOMMENDATION);
     personalised.setPersonalised(true);
     assertThat(process(personalised).isPreferenceClarificationRequired()).isTrue();
   }
@@ -289,17 +291,21 @@ class PreferenceUpdateFlowTest {
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void resetCancelsPendingPreferenceQuestions(boolean personalisation) {
-    var pending = request(personalisation ? Intent.RECOMMENDATION : Intent.UPDATE_PREFERENCES);
+    var pending =
+        request(
+            personalisation
+                ? ConversationAction.RECOMMENDATION
+                : ConversationAction.UPDATE_PREFERENCES);
     pending.setPersonalised(personalisation);
     process(pending);
-    process(request(Intent.RESET_PREFERENCES));
+    process(request(ConversationAction.RESET_PREFERENCES));
     var session = sessions.getSession("session", "user");
     assertThat(session.isAwaitingPreferenceUpdate()).isFalse();
     assertThat(session.isAwaitingPersonalisedPreferences()).isFalse();
     assertThat(session.getPreferences()).isNull();
   }
 
-  private ConversationDraft request(Intent intent) {
+  private ConversationDraft request(ConversationAction intent) {
     var request = new ConversationDraft();
     request.setIntent(intent);
     return request;
@@ -318,7 +324,7 @@ class PreferenceUpdateFlowTest {
   }
 
   private ConversationDraft update(SessionPreferences changes) {
-    var request = request(Intent.UPDATE_PREFERENCES);
+    var request = request(ConversationAction.UPDATE_PREFERENCES);
     request.setPreferenceUpdates(changes);
     return request;
   }
@@ -367,30 +373,31 @@ class PreferenceUpdateFlowTest {
                 .generate(question.getRecommendations(), question))
         .contains("What would you like to change");
     assertThat(saved()).isNull();
-    var reply = request(Intent.RECOMMENDATION);
+    var reply = request(ConversationAction.RECOMMENDATION);
     reply.setPositiveSemanticQuery(tastes("horror").getPositiveSemanticQuery());
     var result = process(reply);
-    assertThat(result.getIntent()).isEqualTo(Intent.UPDATE_PREFERENCES);
+    assertThat(result.getIntent()).isEqualTo(ConversationAction.UPDATE_PREFERENCES);
     assertThat(result.getPositiveSemanticQuery()).isNull();
     assertThat(result.getRecommendations()).isEmpty();
     assertThat(saved().getPositiveSemanticQuery().getGenres()).containsExactly("horror");
-    assertThat(process(request(Intent.REPEAT)).getDecision())
+    assertThat(process(request(ConversationAction.REPEAT)).getDecision())
         .isEqualTo(ConversationDecision.PREFERENCES_UPDATED);
-    assertThat(process(request(Intent.MORE_RESULTS)).getDecision())
+    assertThat(process(request(ConversationAction.MORE_RESULTS)).getDecision())
         .isEqualTo(ConversationDecision.SEARCH_CLARIFICATION);
     verifyNoInteractions(vectors, retriever, ranker, users);
   }
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.EnumSource(
-      value = Intent.class,
+      value = ConversationAction.class,
       names = {"RECOMMENDATION", "REFINE"})
-  void sparseParsedTasteReplyDerivesPreferenceUpdatesOnlyWhenContextRequiresThem(Intent intent) {
+  void sparseParsedTasteReplyDerivesPreferenceUpdatesOnlyWhenContextRequiresThem(
+      ConversationAction intent) {
     process(update(null));
     String raw = "fantasy but avoid romance, in English";
     var parsed =
         new org.springframework.ai.converter.BeanOutputConverter<>(
-                com.gen3.recommenderagent.inputparser.ParsedRequest.class)
+                com.gen3.recommenderagent.inputparser.UserIntent.class)
             .convert(
                 "{\"intent\":\""
                     + intent
@@ -410,7 +417,7 @@ class PreferenceUpdateFlowTest {
             .responseEntity(
                 org.mockito.ArgumentMatchers
                     .<org.springframework.ai.converter.StructuredOutputConverter<
-                            com.gen3.recommenderagent.inputparser.ParsedRequest>>
+                            com.gen3.recommenderagent.inputparser.UserIntent>>
                         any()))
         .thenReturn(new org.springframework.ai.chat.client.ResponseEntity<>(null, parsed));
     var parser =
@@ -432,13 +439,13 @@ class PreferenceUpdateFlowTest {
   @Test
   void explicitSearchAndCancelExitThePendingUpdate() {
     process(update(null));
-    var search = request(Intent.RECOMMENDATION);
+    var search = request(ConversationAction.RECOMMENDATION);
     search.setExplicitSearch(true);
     search.setPositiveSemanticQuery(tastes("fantasy").getPositiveSemanticQuery());
-    assertThat(process(search).getIntent()).isEqualTo(Intent.RECOMMENDATION);
+    assertThat(process(search).getIntent()).isEqualTo(ConversationAction.RECOMMENDATION);
     assertThat(sessions.getSession("session", "user").isAwaitingPreferenceUpdate()).isFalse();
     process(update(null));
-    process(request(Intent.CANCEL));
+    process(request(ConversationAction.CANCEL));
     assertThat(sessions.getSession("session", "user").isAwaitingPreferenceUpdate()).isFalse();
   }
 
@@ -446,7 +453,7 @@ class PreferenceUpdateFlowTest {
   void cachedMoreRepeatAndRefillsKeepOldPreferencesButRefineAndNewSearchUseNewOnes()
       throws Exception {
     process(update(tastes("romance")));
-    var search = request(Intent.RECOMMENDATION);
+    var search = request(ConversationAction.RECOMMENDATION);
     var include = new ExactCriteria();
     include.setDuration("under 5 hours");
     search.setMustInclude(include);
@@ -455,26 +462,26 @@ class PreferenceUpdateFlowTest {
     changed.setReplacePreferenceFields(List.of("positiveSemanticQuery.genres"));
     process(changed);
     assertThat(
-            process(request(Intent.REPEAT_RECOMMENDATIONS))
+            process(request(ConversationAction.REPEAT_RECOMMENDATIONS))
                 .getRecommendations()
                 .getFirst()
                 .getBookId())
         .isEqualTo("book-1");
     for (int i = 0; i < 4; i++) {
-      var more = process(request(Intent.MORE_RESULTS));
+      var more = process(request(ConversationAction.MORE_RESULTS));
       assertThat(more.getPositiveSemanticQuery().getGenres()).containsExactly("romance");
       assertThat(more.getMustInclude().getDuration()).isEqualTo("under 5 hours");
       assertThat(more.getRecommendations().getFirst().getBookId()).isEqualTo("book-" + (6 + i * 5));
     }
     verify(users).findEmbeddingByUserId("user");
-    var refine = request(Intent.REFINE);
+    var refine = request(ConversationAction.REFINE);
     var shorter = new ExactCriteria();
     shorter.setDuration("under 3 hours");
     refine.setMustInclude(shorter);
     var result = process(refine);
     assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("horror");
     assertThat(result.getMustInclude().getDuration()).isEqualTo("under 3 hours");
-    var fresh = process(request(Intent.RECOMMENDATION));
+    var fresh = process(request(ConversationAction.RECOMMENDATION));
     assertThat(fresh.getPositiveSemanticQuery().getGenres()).containsExactly("horror");
     assertThat(fresh.getMustInclude().getDuration()).isNull();
     verify(users, times(3)).findEmbeddingByUserId("user");
@@ -483,18 +490,18 @@ class PreferenceUpdateFlowTest {
   @Test
   void shortUpdateReplyKeepsThePreviousPageAndQueue() {
     process(update(tastes("romance")));
-    process(request(Intent.RECOMMENDATION));
+    process(request(ConversationAction.RECOMMENDATION));
     process(update(null));
-    var reply = request(Intent.REFINE);
+    var reply = request(ConversationAction.REFINE);
     reply.setPositiveSemanticQuery(tastes("horror").getPositiveSemanticQuery());
-    assertThat(process(reply).getIntent()).isEqualTo(Intent.UPDATE_PREFERENCES);
+    assertThat(process(reply).getIntent()).isEqualTo(ConversationAction.UPDATE_PREFERENCES);
     assertThat(
-            process(request(Intent.REPEAT_RECOMMENDATIONS))
+            process(request(ConversationAction.REPEAT_RECOMMENDATIONS))
                 .getRecommendations()
                 .getFirst()
                 .getBookId())
         .isEqualTo("book-1");
-    var more = process(request(Intent.MORE_RESULTS));
+    var more = process(request(ConversationAction.MORE_RESULTS));
     assertThat(more.getRecommendations().getFirst().getBookId()).isEqualTo("book-6");
     assertThat(more.getPositiveSemanticQuery().getGenres()).containsExactly("romance");
     verify(ranker).rank(anyList(), eq(20), any(RankingContext.class));
@@ -503,13 +510,13 @@ class PreferenceUpdateFlowTest {
   @Test
   void updatedTastesDoNotEraseExplicitSearchCriteria() {
     process(update(tastes("romance")));
-    var search = request(Intent.RECOMMENDATION);
+    var search = request(ConversationAction.RECOMMENDATION);
     search.setPositiveSemanticQuery(tastes("fantasy").getPositiveSemanticQuery());
     process(search);
     var change = update(tastes("horror"));
     change.setReplacePreferenceFields(List.of("positiveSemanticQuery.genres"));
     process(change);
-    var refine = request(Intent.REFINE);
+    var refine = request(ConversationAction.REFINE);
     var shorter = new ExactCriteria();
     shorter.setDuration("under 3 hours");
     refine.setMustInclude(shorter);
@@ -520,17 +527,17 @@ class PreferenceUpdateFlowTest {
   @Test
   void newerSelectionQuestionsTakePriorityOverAnOlderPreferenceQuestion() {
     process(update(tastes("fantasy")));
-    process(request(Intent.RECOMMENDATION));
+    process(request(ConversationAction.RECOMMENDATION));
     process(update(null));
-    var explain = request(Intent.EXPLAIN_RECOMMENDATION);
+    var explain = request(ConversationAction.EXPLAIN_RECOMMENDATION);
     explain.setReferenceRank(6);
     assertThat(process(explain).getDecision())
         .isEqualTo(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
-    var selection = request(Intent.UNKNOWN);
+    var selection = request(ConversationAction.UNKNOWN);
     selection.setRawText("1");
     assertThat(process(selection).getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
-    process(request(Intent.CHANGE_COUNT));
-    var count = request(Intent.UNKNOWN);
+    process(request(ConversationAction.CHANGE_COUNT));
+    var count = request(ConversationAction.UNKNOWN);
     count.setRawText("2");
     assertThat(process(count).getDecision()).isEqualTo(ConversationDecision.COUNT_CHANGED);
   }
@@ -538,13 +545,13 @@ class PreferenceUpdateFlowTest {
   @Test
   void explicitMoreFiltersRemainCriteriaForTheNextRefinement() {
     process(update(tastes("romance")));
-    process(request(Intent.RECOMMENDATION));
-    var more = request(Intent.MORE_RESULTS);
+    process(request(ConversationAction.RECOMMENDATION));
+    var more = request(ConversationAction.MORE_RESULTS);
     var english = new ExactCriteria();
     english.setLanguage("English");
     more.setMustInclude(english);
     process(more);
-    var refine = request(Intent.REFINE);
+    var refine = request(ConversationAction.REFINE);
     var shorter = new ExactCriteria();
     shorter.setDuration("under 5 hours");
     refine.setMustInclude(shorter);
@@ -558,10 +565,10 @@ class PreferenceUpdateFlowTest {
     var old = new UserPreferenceEmbedding("user", new float[] {1, 0}, null);
     var changed = new UserPreferenceEmbedding("user", new float[] {0, 1}, null);
     when(users.findEmbeddingByUserId("user")).thenReturn(Optional.of(old), Optional.of(changed));
-    process(request(Intent.RECOMMENDATION));
+    process(request(ConversationAction.RECOMMENDATION));
     process(update(tastes("horror")));
     for (int i = 0; i < 4; i++) {
-      process(request(Intent.MORE_RESULTS));
+      process(request(ConversationAction.MORE_RESULTS));
     }
     var captured = ArgumentCaptor.forClass(RankingContext.class);
     verify(ranker, times(2)).rank(anyList(), eq(20), captured.capture());
@@ -570,14 +577,14 @@ class PreferenceUpdateFlowTest {
             context ->
                 assertThat(context.userPreferences().favouritesVector()).containsExactly(1, 0));
     verify(users).findEmbeddingByUserId("user");
-    process(request(Intent.RECOMMENDATION));
+    process(request(ConversationAction.RECOMMENDATION));
     verify(users, times(2)).findEmbeddingByUserId("user");
   }
 
   @Test
   void contradictoryUpdatesPreserveProfileAndBatch() throws Exception {
     process(update(tastes("romance")));
-    process(request(Intent.RECOMMENDATION));
+    process(request(ConversationAction.RECOMMENDATION));
     String before = new ObjectMapper().writeValueAsString(sessions.getSession("session", "user"));
     var impossible = new SessionPreferences();
     var include = new ExactCriteria();

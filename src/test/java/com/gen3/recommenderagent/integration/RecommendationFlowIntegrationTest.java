@@ -13,11 +13,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.gen3.catalogue.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.api.RequestGateway;
 import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendationWorkflow;
-import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.SemanticQuery;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.inputparser.InputParser;
@@ -91,8 +91,8 @@ class RecommendationFlowIntegrationTest {
     Session savedSession = sessionRepository.getSession("session-1", "user-1");
     assertNotNull(savedSession);
     assertEquals("user-1", savedSession.getUserId());
-    assertEquals(1, savedSession.getRequests().size());
-    var recommendations = savedSession.getRequests().getFirst().getRecommendations();
+    assertNotNull(savedSession.getActiveSearch().getSearch());
+    var recommendations = savedSession.getActiveSearch().getSearch().getRecommendations();
     assertEquals(3, recommendations.size());
 
     Set<String> returnedBookIds =
@@ -112,7 +112,7 @@ class RecommendationFlowIntegrationTest {
   void returnsTheNoMatchesFallbackWhenTheCatalogueHasNoEligibleBooks() throws Exception {
     String rawText = "Recommend science fiction from a missing source";
     var request = parsedRequest(rawText);
-    var include = new com.gen3.recommenderagent.domain.session.ExactCriteria();
+    var include = new com.gen3.recommenderagent.domain.search.ExactCriteria();
     include.setSource("missing-test-source");
     request.setMustInclude(include);
     var sessions = new RecommendationFlowTestSupport.InMemorySessionRepository();
@@ -133,8 +133,8 @@ class RecommendationFlowIntegrationTest {
                         + " just yet. Would you like to try a different genre, author, narrator, or description?"));
     var saved = sessions.getSession("no-matches", "user-1");
     assertNotNull(saved);
-    assertTrue(saved.getRequests().getFirst().getRecommendations().isEmpty());
-    assertTrue(saved.getPendingRecommendations().isEmpty());
+    assertTrue(saved.getActiveSearch().getSearch().getRecommendations().isEmpty());
+    assertTrue(saved.getActiveSearch().getPendingRecommendations().isEmpty());
   }
 
   private MockMvc recommendationEndpoint(
@@ -194,7 +194,7 @@ class RecommendationFlowIntegrationTest {
 
     ConversationDraft request = new ConversationDraft();
     request.setRawText(rawText);
-    request.setIntent(Intent.RECOMMENDATION);
+    request.setIntent(ConversationAction.RECOMMENDATION);
     request.setPositiveSemanticQuery(semanticQuery);
     request.setBookCount(3);
     return request;

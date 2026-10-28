@@ -1,11 +1,9 @@
 package com.gen3.recommenderagent.application.conversation;
 
+import com.gen3.recommenderagent.application.conversation.workflow.ConversationDispatcher;
 import com.gen3.recommenderagent.application.recommendation.RecommendationPager;
-import com.gen3.recommenderagent.domain.conversation.ConversationDispatcher;
-import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.ConversationTurn;
+import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.domain.session.Session;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.gen3.recommenderagent.retrieval.plan.ExactFilterPolicy;
 import java.util.ArrayList;
@@ -33,11 +31,11 @@ public class ConversationEngine {
   }
 
   public ConversationTurn process(Session session, SessionRequest request) {
-    return ConversationTurn.fromDraft(apply(session, request));
+    return ConversationDraft.toTurn(apply(session, request));
   }
 
   private ConversationDraft apply(Session session, SessionRequest original) {
-    var previousBatch = new ArrayList<>(session.getPendingRecommendations());
+    var previousBatch = new ArrayList<>(session.getActiveSearch().getPendingRecommendations());
     ConversationDraft result =
         conversation.begin(
             session,
@@ -51,7 +49,7 @@ public class ConversationEngine {
     }
     // An unanswered taste question must not consume the previous completed search's batch.
     if (result.isPreferenceClarificationRequired()) {
-      session.setPendingRecommendations(previousBatch);
+      session.getActiveSearch().setPendingRecommendations(previousBatch);
     }
     conversation.finish(session, result, original);
     String retrievalMode = conversation.retrievalMode(result);

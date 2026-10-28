@@ -10,10 +10,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.ExactCriteria;
-import com.gen3.recommenderagent.domain.session.SemanticQuery;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.application.conversation.SessionRequest;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.search.ExactCriteria;
+import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -32,8 +32,8 @@ class InputParserTest {
       })
   void descriptiveZeroPhrasesReachAiWithoutBeingRewritten(String text) {
     var ai = mock(AiParser.class);
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.RECOMMENDATION);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.RECOMMENDATION);
     parsed.setInvalidBookCount(true);
     parsed.setBookCount(java.math.BigInteger.ZERO);
     var query = new SemanticQuery();
@@ -64,8 +64,8 @@ class InputParserTest {
       })
   void zeroSubjectChecksIgnoreWhitespaceDifferences(String text) {
     var ai = mock(AiParser.class);
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.RECOMMENDATION);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.RECOMMENDATION);
     parsed.setInvalidBookCount(true);
     var query = new SemanticQuery();
     query.setKeywords(List.of("zero gravity"));
@@ -82,7 +82,7 @@ class InputParserTest {
   void fractionalExplanationPositionsCannotBecomeWholeRanks(String text) {
     var ai = mock(AiParser.class);
     var result = new InputParser(new CommandParser(), ai).parse(text);
-    assertEquals(Intent.EXPLAIN_RECOMMENDATION, result.getIntent());
+    assertEquals(ConversationAction.EXPLAIN_RECOMMENDATION, result.getIntent());
     assertEquals(0, result.getReferenceRank());
     verifyNoInteractions(ai);
   }
@@ -90,12 +90,12 @@ class InputParserTest {
   @Test
   void zeroTopicComparisonDoesNotSuppressAnExplicitInvalidQuantityOrChangePeople() {
     var ai = mock(AiParser.class);
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.RECOMMENDATION);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.RECOMMENDATION);
     var query = new SemanticQuery();
     query.setKeywords(List.of("zero gravity"));
     parsed.setPositiveSemanticQuery(query);
-    var exact = new com.gen3.recommenderagent.domain.session.ExactCriteria();
+    var exact = new com.gen3.recommenderagent.domain.search.ExactCriteria();
     exact.setAuthors(List.of("Anne-Marie Smith"));
     parsed.setMustInclude(exact);
     when(ai.parse(anyString())).thenReturn(parsed);
@@ -109,8 +109,8 @@ class InputParserTest {
   @Test
   void ambiguousWordCountsCanStillBeRejectedByAiWithoutLosingCriteria() {
     var ai = mock(AiParser.class);
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.RECOMMENDATION);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.RECOMMENDATION);
     parsed.setInvalidBookCount(true);
     var query = new SemanticQuery();
     query.setGenres(List.of("mystery"));
@@ -127,7 +127,7 @@ class InputParserTest {
   void genericBookRequestsUsePersonalisedRecommendationsWithoutAi(String text) {
     var ai = mock(AiParser.class);
     var result = new InputParser(new CommandParser(), ai).parse(text);
-    assertEquals(Intent.RECOMMENDATION, result.getIntent());
+    assertEquals(ConversationAction.RECOMMENDATION, result.getIntent());
     assertEquals(true, result.isPersonalised());
     assertEquals(true, result.isExplicitSearch());
     assertEquals(null, result.getMustInclude());
@@ -145,7 +145,7 @@ class InputParserTest {
   void clearingOneSearchFilterUsesTheFastPath(String text, String field) {
     var ai = mock(AiParser.class);
     var result = new InputParser(new CommandParser(), ai).parse(text);
-    assertEquals(Intent.REFINE, result.getIntent());
+    assertEquals(ConversationAction.REFINE, result.getIntent());
     assertEquals(List.of(field), result.getReplaceSearchFields());
     verifyNoInteractions(ai);
   }
@@ -159,8 +159,8 @@ class InputParserTest {
       })
   void explicitAdditionsIgnoreErroneousModelReplacementFlags(String text) {
     var ai = mock(AiParser.class);
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.REFINE);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.REFINE);
     parsed.setReplaceSearchFields(List.of("positiveSemanticQuery.genres"));
     var query = new SemanticQuery();
     query.setGenres(List.of("mystery"));
@@ -182,11 +182,11 @@ class InputParserTest {
       })
   void invalidRecommendationCountsDoNotInventANumericCountForAi(String text, String modelText) {
     var ai = mock(AiParser.class);
-    var countOnly = new ParsedRequest();
-    countOnly.setIntent(Intent.CHANGE_COUNT);
+    var countOnly = new UserIntent();
+    countOnly.setIntent(ConversationAction.CHANGE_COUNT);
     when(ai.parse(anyString())).thenReturn(countOnly);
-    var recommendation = new ParsedRequest();
-    recommendation.setIntent(Intent.RECOMMENDATION);
+    var recommendation = new UserIntent();
+    recommendation.setIntent(ConversationAction.RECOMMENDATION);
     var query = new SemanticQuery();
     query.setGenres(List.of("mystery"));
     recommendation.setPositiveSemanticQuery(query);
@@ -224,11 +224,11 @@ class InputParserTest {
       })
   void completeApproximateYearRequestsUseRecommendationsWithoutAi(String text) {
     var ai = mock(AiParser.class);
-    var wrongIntent = new ParsedRequest();
-    wrongIntent.setIntent(Intent.REFINE);
+    var wrongIntent = new UserIntent();
+    wrongIntent.setIntent(ConversationAction.REFINE);
     when(ai.parse(anyString())).thenReturn(wrongIntent);
     var result = new InputParser(new CommandParser(), ai).parse(text);
-    assertEquals(Intent.RECOMMENDATION, result.getIntent());
+    assertEquals(ConversationAction.RECOMMENDATION, result.getIntent());
     assertEquals(true, result.isExplicitSearch());
     assertEquals(false, result.isPersonalised());
     var bounds =
@@ -262,18 +262,18 @@ class InputParserTest {
       })
   void missingOrNullModelIntentsBecomeUnknown(String json) {
     var ai = mock(AiParser.class);
-    var parsed = new ObjectMapper().readValue(json, ParsedRequest.class);
+    var parsed = new ObjectMapper().readValue(json, UserIntent.class);
     when(ai.parse(anyString())).thenReturn(parsed);
     var result = new InputParser(new CommandParser(), ai).parse("an unrecognised request");
-    assertEquals(Intent.UNKNOWN, result.getIntent());
+    assertEquals(ConversationAction.UNKNOWN, result.getIntent());
     assertEquals(null, result.getPositiveSemanticQuery());
   }
 
   @Test
   void invalidCountIntentCorrectionHappensBeforeSemanticFieldsCanBeCleared() {
     var ai = mock(AiParser.class);
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.CHANGE_COUNT);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.CHANGE_COUNT);
     parsed.setBookCount(java.math.BigInteger.ONE);
     var genre = new SemanticQuery();
     genre.setGenres(List.of("mystery"));
@@ -281,7 +281,7 @@ class InputParserTest {
     when(ai.parse(anyString())).thenReturn(parsed);
     var result =
         new InputParser(new CommandParser(), ai).parse("I want two and a half mystery books");
-    assertEquals(Intent.RECOMMENDATION, result.getIntent());
+    assertEquals(ConversationAction.RECOMMENDATION, result.getIntent());
     assertEquals(true, result.isInvalidBookCount());
     assertEquals(List.of("mystery"), result.getPositiveSemanticQuery().getGenres());
   }
@@ -289,10 +289,10 @@ class InputParserTest {
   @Test
   void plainAuthorRequestsCannotAccidentallyRequirePersonalisationButKeepNameCasing() {
     var ai = mock(AiParser.class);
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.RECOMMENDATION);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.RECOMMENDATION);
     parsed.setPersonalised(true);
-    var exact = new com.gen3.recommenderagent.domain.session.ExactCriteria();
+    var exact = new com.gen3.recommenderagent.domain.search.ExactCriteria();
     exact.setAuthors(List.of("Suzanne Collins"));
     parsed.setMustInclude(exact);
     when(ai.parse(anyString())).thenReturn(parsed);
@@ -310,16 +310,16 @@ class InputParserTest {
   @Test
   void modelRecencyCriteriaNormalizeBeforeLeavingTheParser() {
     var ai = mock(AiParser.class);
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.RECOMMENDATION);
-    var exact = new com.gen3.recommenderagent.domain.session.ExactCriteria();
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    var exact = new com.gen3.recommenderagent.domain.search.ExactCriteria();
     exact.setPublicationYear("more recent");
     parsed.setMustInclude(exact);
     when(ai.parse(anyString())).thenReturn(parsed);
     var result =
         new InputParser(new CommandParser(), ai)
             .parse("I want the same kinds of books but from more recent times");
-    assertEquals(Intent.REFINE, result.getIntent());
+    assertEquals(ConversationAction.REFINE, result.getIntent());
     assertEquals("more recent", result.getMustInclude().getPublicationYear());
     assertEquals(true, result.isExplicitSearch());
   }
@@ -327,8 +327,8 @@ class InputParserTest {
   @Test
   void anAdditionCanAlsoExplicitlyReplaceAnotherField() {
     var ai = mock(AiParser.class);
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.REFINE);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.REFINE);
     parsed.setReplaceSearchFields(List.of("mustInclude.duration"));
     when(ai.parse(anyString())).thenReturn(parsed);
     assertEquals(
@@ -341,8 +341,8 @@ class InputParserTest {
   @Test
   void compoundAdditionKeepsTheRemovalButCannotReplaceTheAddedGenre() {
     var ai = mock(AiParser.class);
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.REFINE);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.REFINE);
     parsed.setReplaceSearchFields(List.of("positiveSemanticQuery.genres", "mustInclude.duration"));
     var query = new SemanticQuery();
     query.setGenres(List.of("mystery"));
@@ -358,8 +358,8 @@ class InputParserTest {
   @Test
   void modelSearchReplacementsAreCopiedAndInvalidPathsAreRejected() {
     var ai = mock(AiParser.class);
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.REFINE);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.REFINE);
     parsed.setReplaceSearchFields(List.of("positiveSemanticQuery.genres"));
     var query = new SemanticQuery();
     query.setGenres(List.of("horror"));
@@ -380,7 +380,7 @@ class InputParserTest {
   void moreRecentIsARefinementComparedWithTheDisplayedPageWithoutAi() {
     var ai = mock(AiParser.class);
     var result = new InputParser(new CommandParser(), ai).parse("more recent");
-    assertEquals(Intent.REFINE, result.getIntent());
+    assertEquals(ConversationAction.REFINE, result.getIntent());
     assertEquals("more recent", result.getMustInclude().getPublicationYear());
     assertEquals(null, result.getPositiveSemanticQuery());
     assertEquals(false, result.isPersonalised());
@@ -393,7 +393,7 @@ class InputParserTest {
   void preferenceDeclinesSkipAiButNeedContextToCancel(String text) {
     var ai = mock(AiParser.class);
     var parsed = new InputParser(new CommandParser(), ai).parse(text);
-    assertEquals(Intent.UNKNOWN, parsed.getIntent());
+    assertEquals(ConversationAction.UNKNOWN, parsed.getIntent());
     verifyNoInteractions(ai);
   }
 
@@ -402,7 +402,9 @@ class InputParserTest {
       strings = {"yes", "yes please", "yeah", "sure", "go ahead", "okay"})
   void confirmationsSkipAiAndLetTheSessionResolveTheirMeaning(String text) {
     var ai = mock(AiParser.class);
-    assertEquals(Intent.UNKNOWN, new InputParser(new CommandParser(), ai).parse(text).getIntent());
+    assertEquals(
+        ConversationAction.UNKNOWN,
+        new InputParser(new CommandParser(), ai).parse(text).getIntent());
     verifyNoInteractions(ai);
   }
 
@@ -421,7 +423,7 @@ class InputParserTest {
   void explicitCountCommandsDoNotBecomePreferenceUpdates(String text, int count) {
     var parsed = new CommandParser().parse(text);
     assertNotNull(parsed);
-    assertEquals(Intent.CHANGE_COUNT, parsed.getIntent());
+    assertEquals(ConversationAction.CHANGE_COUNT, parsed.getIntent());
     assertEquals(count, parsed.getBookCount().intValue());
   }
 
@@ -437,7 +439,7 @@ class InputParserTest {
   void explanationMoreSelectsOneOriginalRankWithoutAi(String text) {
     var parsed = new CommandParser().parse(text);
     assertNotNull(parsed);
-    assertEquals(Intent.EXPLAIN_RECOMMENDATION, parsed.getIntent());
+    assertEquals(ConversationAction.EXPLAIN_RECOMMENDATION, parsed.getIntent());
     assertEquals(
         text.contains("999") ? Integer.MAX_VALUE : 2, parsed.getReferenceRank().intValue());
     assertEquals(null, parsed.getBookCount());
@@ -481,7 +483,7 @@ class InputParserTest {
         parseModelJson(
             "Tell me the reason for position two",
             "{\"intent\":\"EXPLAIN_RECOMMENDATION\",\"referenceRank\":2}");
-    assertEquals(Intent.EXPLAIN_RECOMMENDATION, request.getIntent());
+    assertEquals(ConversationAction.EXPLAIN_RECOMMENDATION, request.getIntent());
     assertEquals(2, request.getReferenceRank());
     assertEquals(null, request.getBookCount());
     assertEquals(null, request.getPositiveSemanticQuery());
@@ -541,7 +543,7 @@ class InputParserTest {
             .call()
             .responseEntity(AiParser.REQUEST_CONVERTER))
         .thenReturn(
-            new ResponseEntity<ChatResponse, ParsedRequest>(
+            new ResponseEntity<ChatResponse, UserIntent>(
                 null, AiParser.REQUEST_CONVERTER.convert(json)));
     var request =
         new InputParser(
@@ -575,14 +577,14 @@ class InputParserTest {
             .user("avoid romance and any language is fine")
             .call()
             .responseEntity(AiParser.REQUEST_CONVERTER))
-        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+        .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     var result =
         new InputParser(
                 new CommandParser(),
                 new AiParser(
                     client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse("avoid romance and any language is fine");
-    assertEquals(Intent.UPDATE_PREFERENCES, result.getIntent());
+    assertEquals(ConversationAction.UPDATE_PREFERENCES, result.getIntent());
     assertEquals(null, result.getPositiveSemanticQuery());
     assertEquals(null, result.getNegativeSemanticQuery());
     assertEquals(
@@ -594,8 +596,8 @@ class InputParserTest {
 
   @Test
   void mapsExplicitAdditionsAndRoutesStandaloneCriteriaToRecommendation() {
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.RECOMMENDATION);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.RECOMMENDATION);
     parsed.setAddAuthors(true);
     parsed.setAddNarrators(false);
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
@@ -605,14 +607,14 @@ class InputParserTest {
             .user("fantasy under five hours")
             .call()
             .responseEntity(AiParser.REQUEST_CONVERTER))
-        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+        .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     var result =
         new InputParser(
                 new CommandParser(),
                 new AiParser(
                     client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse("fantasy under five hours");
-    assertEquals(Intent.RECOMMENDATION, result.getIntent());
+    assertEquals(ConversationAction.RECOMMENDATION, result.getIntent());
     org.junit.jupiter.api.Assertions.assertTrue(result.isAddAuthors());
     org.junit.jupiter.api.Assertions.assertFalse(result.isAddNarrators());
     org.mockito.Mockito.verify(client.prompt())
@@ -709,7 +711,7 @@ class InputParserTest {
     "forget it,CANCEL",
     "more please,MORE_RESULTS"
   })
-  void exactCommandsSkipAiAndPreserveRequestMetadata(String text, Intent intent) {
+  void exactCommandsSkipAiAndPreserveRequestMetadata(String text, ConversationAction intent) {
     var client = mock(ChatClient.class);
     var parser =
         new InputParser(
@@ -781,8 +783,8 @@ class InputParserTest {
         "cancel that and recommend romance"
       })
   void requestsOutsideExactWhitelistStillUseAi(String text) {
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.UNKNOWN);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.UNKNOWN);
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(client
             .prompt()
@@ -790,14 +792,14 @@ class InputParserTest {
             .user(text)
             .call()
             .responseEntity(AiParser.REQUEST_CONVERTER))
-        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+        .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     var result =
         new InputParser(
                 new CommandParser(),
                 new AiParser(
                     client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse(text);
-    assertEquals(Intent.UNKNOWN, result.getIntent());
+    assertEquals(ConversationAction.UNKNOWN, result.getIntent());
     org.mockito.Mockito.verify(client.prompt().system(anyString()).user(text).call())
         .responseEntity(AiParser.REQUEST_CONVERTER);
   }
@@ -820,7 +822,7 @@ class InputParserTest {
                 new AiParser(
                     client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse(text);
-    assertEquals(Intent.UNKNOWN, result.getIntent());
+    assertEquals(ConversationAction.UNKNOWN, result.getIntent());
     assertEquals(text, result.getRawText());
     assertEquals(null, result.getBookCount());
     assertEquals(null, result.getReferenceRank());
@@ -848,7 +850,7 @@ class InputParserTest {
                 new AiParser(
                     client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse(text);
-    assertEquals(Intent.REFINE, result.getIntent());
+    assertEquals(ConversationAction.REFINE, result.getIntent());
     assertEquals(true, result.isShorter());
     assertEquals(true, result.isExplicitSearch());
     assertEquals(null, result.getPositiveSemanticQuery());
@@ -866,9 +868,10 @@ class InputParserTest {
             new AiParser(
                 client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
     assertEquals(
-        Intent.REPEAT_RECOMMENDATIONS,
+        ConversationAction.REPEAT_RECOMMENDATIONS,
         parser.parse("repeat please the recommendations").getIntent());
-    assertEquals(Intent.REPEAT, parser.parse("could you just repeat that, thanks").getIntent());
+    assertEquals(
+        ConversationAction.REPEAT, parser.parse("could you just repeat that, thanks").getIntent());
     verifyNoInteractions(client);
   }
 
@@ -876,8 +879,8 @@ class InputParserTest {
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {"the second one’s reason", "the second one's reason"})
   void ordinalExplanationGuidanceSeparatesRankFromCount(String text) {
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.EXPLAIN_RECOMMENDATION);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.EXPLAIN_RECOMMENDATION);
     parsed.setReferenceRank(java.math.BigInteger.valueOf(2));
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(client
@@ -886,14 +889,14 @@ class InputParserTest {
             .user(text)
             .call()
             .responseEntity(AiParser.REQUEST_CONVERTER))
-        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+        .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     var result =
         new InputParser(
                 new CommandParser(),
                 new AiParser(
                     client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse(text);
-    assertEquals(Intent.EXPLAIN_RECOMMENDATION, result.getIntent());
+    assertEquals(ConversationAction.EXPLAIN_RECOMMENDATION, result.getIntent());
     assertEquals(2, result.getReferenceRank());
     assertEquals(null, result.getBookCount());
     org.mockito.Mockito.verify(client.prompt())
@@ -906,8 +909,8 @@ class InputParserTest {
 
   @Test
   void mapsExplanationSelectorsWithoutTreatingRankAsBookCount() {
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.EXPLAIN_RECOMMENDATION);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.EXPLAIN_RECOMMENDATION);
     parsed.setReferenceRank(java.math.BigInteger.valueOf(6));
     parsed.setReferenceTitle("Harry Potter");
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
@@ -917,14 +920,14 @@ class InputParserTest {
             .user("why")
             .call()
             .responseEntity(AiParser.REQUEST_CONVERTER))
-        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+        .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     var result =
         new InputParser(
                 new CommandParser(),
                 new AiParser(
                     client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse("why");
-    assertEquals(Intent.EXPLAIN_RECOMMENDATION, result.getIntent());
+    assertEquals(ConversationAction.EXPLAIN_RECOMMENDATION, result.getIntent());
     assertEquals(6, result.getReferenceRank());
     assertEquals("Harry Potter", result.getReferenceTitle());
     assertEquals(null, result.getBookCount());
@@ -949,7 +952,7 @@ class InputParserTest {
             .user(raw)
             .call()
             .responseEntity(AiParser.REQUEST_CONVERTER))
-        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+        .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     var result =
         new InputParser(
                 new CommandParser(),
@@ -1008,7 +1011,7 @@ class InputParserTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.EnumSource(
-      value = Intent.class,
+      value = ConversationAction.class,
       names = {
         "MORE_RESULTS",
         "REPEAT",
@@ -1022,8 +1025,8 @@ class InputParserTest {
         "CANCEL",
         "UNKNOWN"
       })
-  void stripsUnexpectedSemanticInformationFromControlIntents(Intent intent) {
-    var parsed = new ParsedRequest();
+  void stripsUnexpectedSemanticInformationFromControlIntents(ConversationAction intent) {
+    var parsed = new UserIntent();
     parsed.setIntent(intent);
     var query = new SemanticQuery();
     query.setGenres(List.of("horror"));
@@ -1037,7 +1040,7 @@ class InputParserTest {
             .user("control")
             .call()
             .responseEntity(AiParser.REQUEST_CONVERTER))
-        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+        .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     var builder = mock(ChatClient.Builder.class);
     when(builder.build()).thenReturn(client);
     var result = new InputParser(new CommandParser(), new AiParser(builder)).parse("control");
@@ -1051,8 +1054,8 @@ class InputParserTest {
       org.springframework.boot.test.system.OutputCaptureExtension.class)
   void recordsProviderUsageWhileReturningOnlyTheRequest(
       org.springframework.boot.test.system.CapturedOutput output) {
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.HELP);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.HELP);
     var response = mock(ChatResponse.class, RETURNS_DEEP_STUBS);
     when(response.getMetadata().getModel()).thenReturn("parser-model");
     when(response.getMetadata().getUsage().getPromptTokens()).thenReturn(12);
@@ -1073,7 +1076,7 @@ class InputParserTest {
     var result =
         new InputParser(new CommandParser(), new AiParser(client, observer))
             .parse("Could you explain how this service works?");
-    assertEquals(Intent.HELP, result.getIntent());
+    assertEquals(ConversationAction.HELP, result.getIntent());
     org.assertj.core.api.Assertions.assertThat(output.getOut())
         .contains(
             "parser.completed mode=AI outcome=SUCCESS durationMs=",
@@ -1104,7 +1107,7 @@ class InputParserTest {
                 new AiParser(
                     client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse(text);
-    assertEquals(Intent.MORE_RESULTS, result.getIntent());
+    assertEquals(ConversationAction.MORE_RESULTS, result.getIntent());
     assertEquals(2, result.getBookCount());
     assertEquals(null, result.getReferenceRank());
     assertEquals(null, result.getPositiveSemanticQuery());
@@ -1142,7 +1145,7 @@ class InputParserTest {
                 new AiParser(
                     client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse(text);
-    assertEquals(Intent.MORE_RESULTS, result.getIntent());
+    assertEquals(ConversationAction.MORE_RESULTS, result.getIntent());
     assertEquals(count, result.getBookCount());
     assertEquals(null, result.getReferenceRank());
     assertEquals(null, result.getPositiveSemanticQuery());
@@ -1158,8 +1161,8 @@ class InputParserTest {
   })
   void preservesRelativePublicationWindowsForDeterministicFiltering(
       String raw, String window, int years) {
-    var parsed = new ParsedRequest();
-    parsed.setIntent(Intent.RECOMMENDATION);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.RECOMMENDATION);
     var include = new ExactCriteria();
     include.setPublicationYear(window);
     parsed.setMustInclude(include);
@@ -1195,8 +1198,8 @@ class InputParserTest {
   @Test
   void mapsPersonalisedRequestWithoutInventingSearchCriteria() {
     String rawText = "Give me books I would like";
-    ParsedRequest parsed = new ParsedRequest();
-    parsed.setIntent(Intent.RECOMMENDATION);
+    UserIntent parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.RECOMMENDATION);
     parsed.setPersonalised(true);
     ChatClient client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(client
@@ -1205,7 +1208,7 @@ class InputParserTest {
             .user(rawText)
             .call()
             .responseEntity(AiParser.REQUEST_CONVERTER))
-        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsed));
+        .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     ChatClient.Builder builder = mock(ChatClient.Builder.class);
     when(builder.build()).thenReturn(client);
 
@@ -1224,10 +1227,10 @@ class InputParserTest {
     SemanticQuery semanticQuery = new SemanticQuery();
     semanticQuery.setGenres(List.of("science fiction"));
 
-    ParsedRequest parsedRequest = new ParsedRequest();
+    UserIntent parsedRequest = new UserIntent();
     SemanticQuery negativeSemanticQuery = new SemanticQuery();
     negativeSemanticQuery.setKeywords(List.of("romance"));
-    parsedRequest.setIntent(Intent.RECOMMENDATION);
+    parsedRequest.setIntent(ConversationAction.RECOMMENDATION);
     parsedRequest.setPositiveSemanticQuery(semanticQuery);
     parsedRequest.setNegativeSemanticQuery(negativeSemanticQuery);
     ExactCriteria mustInclude = new ExactCriteria();
@@ -1246,7 +1249,7 @@ class InputParserTest {
             .user(rawText)
             .call()
             .responseEntity(AiParser.REQUEST_CONVERTER))
-        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, parsedRequest));
+        .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsedRequest));
 
     ChatClient.Builder builder = mock(ChatClient.Builder.class);
     when(builder.build()).thenReturn(chatClient);
@@ -1256,7 +1259,7 @@ class InputParserTest {
 
     assertNotNull(result);
     assertEquals(rawText, result.getRawText());
-    assertEquals(Intent.RECOMMENDATION, result.getIntent());
+    assertEquals(ConversationAction.RECOMMENDATION, result.getIntent());
     assertSame(semanticQuery, result.getPositiveSemanticQuery());
     assertSame(negativeSemanticQuery, result.getNegativeSemanticQuery());
     assertSame(mustInclude, result.getMustInclude());
@@ -1347,7 +1350,7 @@ class InputParserTest {
             .user(rawText)
             .call()
             .responseEntity(AiParser.REQUEST_CONVERTER))
-        .thenReturn(new ResponseEntity<ChatResponse, ParsedRequest>(null, null));
+        .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, null));
 
     ChatClient.Builder builder = mock(ChatClient.Builder.class);
     when(builder.build()).thenReturn(chatClient);
@@ -1357,7 +1360,7 @@ class InputParserTest {
             IllegalStateException.class,
             () -> new InputParser(new CommandParser(), new AiParser(builder)).parse(rawText));
 
-    assertEquals("AI did not return a ParsedRequest", exception.getMessage());
+    assertEquals("AI did not return a UserIntent", exception.getMessage());
     org.assertj.core.api.Assertions.assertThat(output.getOut())
         .containsPattern("parser.completed mode=AI outcome=FAILURE durationMs=[0-9]+");
   }
@@ -1378,42 +1381,5 @@ class InputParserTest {
     assertEquals("French", request.getMustNotInclude().getLanguage());
     assertEquals("before 2000", request.getMustNotInclude().getPublicationYear());
     assertEquals("Legacy", request.getMustNotInclude().getSource());
-  }
-
-  @Test
-  void sharedExactCriteriaRetainsBothParserSchemaPropertiesAndLegacySessionJson() {
-    var mapper = new ObjectMapper();
-    var schema = mapper.readTree(AiParser.REQUEST_CONVERTER.getJsonSchema());
-    for (String name : List.of("mustInclude", "mustNotInclude")) {
-      var criteria = schema.path("properties").path(name);
-      if (criteria.has("$ref")) {
-        criteria = schema.at(criteria.path("$ref").asText().substring(1));
-      }
-      org.assertj.core.api.Assertions.assertThat(criteria.path("properties").propertyNames())
-          .containsExactlyInAnyOrder(
-              "authors", "narrators", "language", "duration", "publicationYear", "source");
-    }
-    var session =
-        mapper.readValue(
-            """
-        {"requests":[{"intent":"RECOMMENDATION",
-          "mustInclude":{"authors":["Author"],"language":"English","duration":"under 5 hours","publicationYear":"recent","source":"catalogue"},
-          "mustNotInclude":{"narrators":["Narrator"],"language":"French"}}]}
-        """,
-            com.gen3.recommenderagent.domain.session.Session.class);
-    var turn = session.getRequests().getFirst();
-    org.assertj.core.api.Assertions.assertThat(turn.getMustInclude().getAuthors())
-        .containsExactly("Author");
-    org.assertj.core.api.Assertions.assertThat(turn.getMustNotInclude().getNarrators())
-        .containsExactly("Narrator");
-    turn.getMustInclude().setLanguage("German");
-    org.assertj.core.api.Assertions.assertThat(turn.getMustNotInclude().getLanguage())
-        .isEqualTo("French");
-    var json = mapper.readTree(mapper.writeValueAsString(session)).path("requests").get(0);
-    org.assertj.core.api.Assertions.assertThat(json.path("mustInclude").path("language").asText())
-        .isEqualTo("German");
-    org.assertj.core.api.Assertions.assertThat(
-            json.path("mustNotInclude").path("narrators").get(0).asText())
-        .isEqualTo("Narrator");
   }
 }

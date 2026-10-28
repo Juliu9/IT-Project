@@ -2,8 +2,8 @@ package com.gen3.recommenderagent.api;
 
 import com.gen3.catalogue.model.AudiobookRecord;
 import com.gen3.catalogue.port.AudiobookDetailsLookup;
-import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import java.io.IOException;
 import java.util.List;

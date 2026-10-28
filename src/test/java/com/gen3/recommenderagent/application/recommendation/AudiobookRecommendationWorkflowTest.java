@@ -10,8 +10,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gen3.catalogue.model.AudiobookCandidate;
-import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectors;
@@ -46,19 +47,19 @@ class AudiobookRecommendationWorkflowTest {
         new AudiobookRecommendationWorkflow(
             retriever, ranker, new SemanticQueryVectorService(queries), users);
     var request = new ConversationDraft();
-    request.setIntent(com.gen3.recommenderagent.domain.Intent.RECOMMENDATION);
+    request.setIntent(ConversationAction.RECOMMENDATION);
     request
         .getSearchContext()
         .setSimilarBook(
-            new com.gen3.recommenderagent.domain.session.SimilarBookReference(
+            new com.gen3.recommenderagent.domain.search.SimilarBookReference(
                 "hunger", "The Hunger Games", List.of(), new float[] {1, 0}));
-    var filter = new com.gen3.recommenderagent.domain.session.ExactCriteria();
+    var filter = new com.gen3.recommenderagent.domain.search.ExactCriteria();
     filter.setDuration("under 10 hours");
     request.setMustInclude(filter);
     var session = new Session();
     session.setUserId("user");
     workflow.recommend(request, session);
-    request.setIntent(com.gen3.recommenderagent.domain.Intent.MORE_RESULTS);
+    request.setIntent(ConversationAction.MORE_RESULTS);
     workflow.recommend(request, session);
     var vector = ArgumentCaptor.forClass(float[].class);
     var filters = ArgumentCaptor.forClass(com.gen3.catalogue.model.AudiobookFilters.class);
@@ -84,11 +85,11 @@ class AudiobookRecommendationWorkflowTest {
     var users = mock(UserPreferenceVectorRepository.class);
     var workflow = new AudiobookRecommendationWorkflow(retriever, ranker, semantic, users);
     var request = new ConversationDraft();
-    request.setIntent(com.gen3.recommenderagent.domain.Intent.REFINE);
+    request.setIntent(ConversationAction.REFINE);
     request
         .getSearchContext()
         .setSimilarBook(
-            new com.gen3.recommenderagent.domain.session.SimilarBookReference(
+            new com.gen3.recommenderagent.domain.search.SimilarBookReference(
                 "hunger", "The Hunger Games", List.of(), new float[] {1, 0}));
     request.getSearchContext().setSimilarityQueryVector(new float[] {0, 1});
     when(semantic.create(request))
@@ -99,7 +100,7 @@ class AudiobookRecommendationWorkflowTest {
     org.assertj.core.api.Assertions.assertThat(
             request.getSearchContext().getSimilarityQueryVector())
         .containsExactly(expected);
-    request.setIntent(com.gen3.recommenderagent.domain.Intent.MORE_RESULTS);
+    request.setIntent(ConversationAction.MORE_RESULTS);
     org.mockito.Mockito.clearInvocations(semantic);
     workflow.recommend(request, new Session());
     org.mockito.Mockito.verifyNoInteractions(semantic, users);
@@ -119,12 +120,12 @@ class AudiobookRecommendationWorkflowTest {
         .thenReturn(Optional.of(new UserPreferenceEmbedding("user", new float[] {0, 1}, null)));
     var request = new ConversationDraft();
     request.setPersonalised(true);
-    request.setIntent(com.gen3.recommenderagent.domain.Intent.RECOMMENDATION);
+    request.setIntent(ConversationAction.RECOMMENDATION);
     if (withReference) {
       request
           .getSearchContext()
           .setSimilarBook(
-              new com.gen3.recommenderagent.domain.session.SimilarBookReference(
+              new com.gen3.recommenderagent.domain.search.SimilarBookReference(
                   "hunger", "The Hunger Games", List.of(), new float[] {1, 0}));
     }
     when(semantic.create(request))
@@ -154,7 +155,7 @@ class AudiobookRecommendationWorkflowTest {
     request.setBookCount(3);
     Session session = new Session();
     session.setUserId("user-1");
-    session.addRecommendationIds(List.of("already-shown"));
+    session.getActiveSearch().addShownBookIds(List.of("already-shown"));
     SemanticQueryVectors vectors = SemanticQueryVectors.empty();
     UserPreferenceEmbedding preferences =
         new UserPreferenceEmbedding("user-1", new float[] {1, 0}, new float[0]);

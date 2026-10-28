@@ -1,7 +1,7 @@
 package com.gen3.recommenderagent.ranker;
 
 import com.gen3.catalogue.model.AudiobookCandidate;
-import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.ranker.scorer.CompositeScorer;
 import com.gen3.recommenderagent.ranker.scorer.ScoreResult;
 import java.util.ArrayList;

@@ -3,9 +3,9 @@ package com.gen3.recommenderagent.retrieval.plan;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.ExactCriteria;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.search.ExactCriteria;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import java.util.List;
 import java.util.Set;
@@ -43,7 +43,7 @@ class ExactFilterCorrectionTest {
 
   private ConversationDraft request(String field, String required, String forbidden) {
     var request = new ConversationDraft();
-    request.setIntent(Intent.REFINE);
+    request.setIntent(ConversationAction.REFINE);
     var include = new ExactCriteria();
     var exclude = new ExactCriteria();
     switch (field) {

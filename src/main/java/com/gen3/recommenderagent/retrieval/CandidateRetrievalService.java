@@ -2,7 +2,7 @@ package com.gen3.recommenderagent.retrieval;
 
 import com.gen3.catalogue.model.AudiobookCandidate;
 import com.gen3.catalogue.port.AudiobookCandidateSearch;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.application.conversation.SessionRequest;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectors;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
@@ -45,7 +45,7 @@ public class CandidateRetrievalService implements CandidateRetriever {
               && (request.isPersonalised()
                   || (request
                           instanceof
-                          com.gen3.recommenderagent.domain.session.ConversationDraft draft
+                          com.gen3.recommenderagent.application.conversation.ConversationDraft draft
                       && draft.getSearchContext().getSimilarBook() != null))
               && vectors != null
               && !vectors.isEmpty();

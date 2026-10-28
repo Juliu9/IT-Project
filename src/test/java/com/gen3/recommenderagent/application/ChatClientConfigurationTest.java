@@ -5,8 +5,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.inputparser.AiParser;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
@@ -62,15 +63,13 @@ class ChatClientConfigurationTest {
                   context
                       .getBean(com.gen3.recommenderagent.inputparser.InputParser.class)
                       .parse("Find an audiobook");
-              assertThat(parsed.getIntent()).isEqualTo(Intent.RECOMMENDATION);
+              assertThat(parsed.getIntent()).isEqualTo(ConversationAction.RECOMMENDATION);
               Recommendation recommendation = new Recommendation();
               recommendation.setTitle("Book");
               assertThat(
                       context
                           .getBean(ConversationResponseGenerator.class)
-                          .generate(
-                              List.of(recommendation),
-                              new com.gen3.recommenderagent.domain.session.ConversationTurn()))
+                          .generate(List.of(recommendation), new ConversationTurn()))
                   .isEqualTo("Try this audiobook.");
               shared.build().prompt().user("default").call().chatResponse();
               assertThat(requestedModels)

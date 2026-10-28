@@ -7,6 +7,14 @@ import java.util.function.Function;
 public interface SessionRepository {
 
   /**
+   * Loads a best-effort snapshot for parser context. It never grants authority to mutate the
+   * session; the final intent is still resolved inside {@link #update}.
+   */
+  default Session snapshot(String sessionId, String userId) {
+    return null;
+  }
+
+  /**
    * Locks and loads (or creates) the session, applies the change once, then commits before
    * returning its result. A failed change is not saved. Busy sessions and rejected commits throw;
    * the change is never retried automatically. The change must run synchronously and must not

@@ -5,13 +5,12 @@ import com.gen3.catalogue.model.PersonNameNormalizer;
 import com.gen3.catalogue.port.AudiobookTitleLookup;
 import com.gen3.catalogue.port.AudiobookVectorRepository;
 import com.gen3.catalogue.vector.VectorMath;
-import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.ConversationDecision;
-import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.PendingSimilarBook;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.search.SimilarBookReference;
+import com.gen3.recommenderagent.domain.session.PendingQuestion;
 import com.gen3.recommenderagent.domain.session.Session;
-import com.gen3.recommenderagent.domain.session.SimilarBookReference;
 import com.gen3.recommenderagent.retrieval.CandidateRetrievalException;
 import java.io.IOException;
 import java.util.List;
@@ -33,9 +32,9 @@ public class SimilarBookResolver {
   }
 
   public void resolve(Session session, ConversationDraft request) {
-    if (request.getIntent() != Intent.RECOMMENDATION
-        && request.getIntent() != Intent.REFINE
-        && request.getIntent() != Intent.MORE_RESULTS) {
+    if (request.getIntent() != ConversationAction.RECOMMENDATION
+        && request.getIntent() != ConversationAction.REFINE
+        && request.getIntent() != ConversationAction.MORE_RESULTS) {
       return;
     }
     if (request.getDecision() == ConversationDecision.SIMILAR_BOOK_SELECTION
@@ -59,14 +58,14 @@ public class SimilarBookResolver {
             new AudiobookTitle(reference.bookId(), reference.title(), reference.authors()));
       }
       if (request.getDecision() != ConversationDecision.SIMILAR_BOOK_UNAVAILABLE) {
-        session.setPendingSimilarBook(null);
+        session.setPendingQuestion(null);
       }
       return;
     }
     String title = request.getSimilarToTitle();
     if (title == null || title.isBlank()) {
-      if (request.getIntent() == Intent.RECOMMENDATION) {
-        session.setPendingSimilarBook(null);
+      if (request.getIntent() == ConversationAction.RECOMMENDATION) {
+        session.setPendingQuestion(null);
       }
       return;
     }
@@ -103,7 +102,7 @@ public class SimilarBookResolver {
       if (request.getDecision() == ConversationDecision.SIMILAR_BOOK_UNAVAILABLE) {
         request.setSearchClarificationRequired(true);
       } else {
-        session.setPendingSimilarBook(null);
+        session.setPendingQuestion(null);
       }
     } else if (matches.isEmpty()) {
       clarify(session, request, ConversationDecision.SIMILAR_BOOK_NOT_FOUND, List.of());
@@ -154,8 +153,11 @@ public class SimilarBookResolver {
     request.setDecision(decision);
     request.setSearchClarificationRequired(true);
     request.setSimilarBookChoices(choices);
-    var pendingRequest = ConversationTurn.fromDraft(request);
+    var pendingRequest = ConversationDraft.toTurn(request);
     pendingRequest.setRawText(null);
-    session.setPendingSimilarBook(new PendingSimilarBook(pendingRequest, decision));
+    var pending = new PendingQuestion.SimilarBook();
+    pending.setDecision(decision);
+    pending.setRequest(pendingRequest);
+    session.setPendingQuestion(pending);
   }
 }

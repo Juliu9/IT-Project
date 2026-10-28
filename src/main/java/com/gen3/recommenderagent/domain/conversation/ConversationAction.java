@@ -1,0 +1,18 @@
+package com.gen3.recommenderagent.domain.conversation;
+
+/** User-level operations. Candidate retrieval is derived from request content, not intent. */
+public enum ConversationAction {
+  RECOMMENDATION,
+  REFINE,
+  MORE_RESULTS,
+  REPEAT,
+  REPEAT_RECOMMENDATIONS,
+  EXPLAIN_RECOMMENDATION,
+  CHANGE_COUNT,
+  UPDATE_PREFERENCES,
+  RESET_PREFERENCES,
+  CLEAR_HISTORY,
+  HELP,
+  CANCEL,
+  UNKNOWN;
+}

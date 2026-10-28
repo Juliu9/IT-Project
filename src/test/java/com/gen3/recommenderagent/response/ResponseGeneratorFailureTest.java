@@ -8,9 +8,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.ConversationTurn;
-import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
 import java.util.List;
 import java.util.stream.Stream;
@@ -37,10 +36,10 @@ class ResponseGeneratorFailureTest {
     assertThat(
             new ConversationResponseGenerator(
                     new AiResponseGenerator(client, AiOperationObserver.noop()))
-                .generate(books, ConversationTurn.fromDraft(request)))
+                .generate(books, ConversationDraft.toTurn(request)))
         .isEqualTo(
             new ConversationResponseGenerator(new AiResponseGenerator(null))
-                .generate(books, ConversationTurn.fromDraft(request)));
+                .generate(books, ConversationDraft.toTurn(request)));
   }
 
   @ParameterizedTest
@@ -52,10 +51,10 @@ class ResponseGeneratorFailureTest {
     assertThat(
             new ConversationResponseGenerator(
                     new AiResponseGenerator(client, AiOperationObserver.noop()))
-                .generate(books, ConversationTurn.fromDraft(request)))
+                .generate(books, ConversationDraft.toTurn(request)))
         .isEqualTo(
             new ConversationResponseGenerator(new AiResponseGenerator(null))
-                .generate(books, ConversationTurn.fromDraft(request)));
+                .generate(books, ConversationDraft.toTurn(request)));
   }
 
   @Test
@@ -67,7 +66,7 @@ class ResponseGeneratorFailureTest {
             () ->
                 new ConversationResponseGenerator(
                         new AiResponseGenerator(client, AiOperationObserver.noop()))
-                    .generate(List.of(broken), ConversationTurn.fromDraft(request)))
+                    .generate(List.of(broken), ConversationDraft.toTurn(request)))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessage("invalid recommendation");
     verifyNoInteractions(client);
@@ -83,7 +82,7 @@ class ResponseGeneratorFailureTest {
             () ->
                 new ConversationResponseGenerator(
                         new AiResponseGenerator(client, AiOperationObserver.noop()))
-                    .generate(books, ConversationTurn.fromDraft(request)))
+                    .generate(books, ConversationDraft.toTurn(request)))
         .isSameAs(failure);
   }
 

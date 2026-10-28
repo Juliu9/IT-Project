@@ -1,11 +1,11 @@
 package com.gen3.recommenderagent.application.recommendation;
 
-import static com.gen3.recommenderagent.domain.RecommendationPolicy.RECOMMENDATION_BATCH_SIZE;
+import static com.gen3.recommenderagent.domain.recommendation.RecommendationPolicy.RECOMMENDATION_BATCH_SIZE;
 
 import com.gen3.catalogue.vector.VectorMath;
-import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.ConversationDraft;
-import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectors;
@@ -54,7 +54,7 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
   public List<Recommendation> recommend(ConversationDraft request, Session session) {
     UserPreferenceEmbedding preferences;
     if (request != null
-        && request.getIntent() == Intent.MORE_RESULTS
+        && request.getIntent() == ConversationAction.MORE_RESULTS
         && request.isUserPreferencesLoaded()) {
       preferences = request.getUserPreferenceSnapshot();
     } else {
@@ -74,7 +74,7 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
         session != null && session.getPreferences() != null && session.getPreferences().hasValues();
     if (request != null
         && request.isPersonalised()
-        && request.getIntent() != Intent.MORE_RESULTS
+        && request.getIntent() != ConversationAction.MORE_RESULTS
         && preferences == null
         && !hasSavedPreferences
         && !answeringTasteQuestion) {
@@ -123,7 +123,7 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
     var context = request == null ? null : request.getSearchContext();
     var reference = context == null ? null : context.getSimilarBook();
     if (reference != null
-        && request.getIntent() == Intent.MORE_RESULTS
+        && request.getIntent() == ConversationAction.MORE_RESULTS
         && context.getSimilarityQueryVector() != null) {
       return new SemanticQueryVectors(List.of(context.getSimilarityQueryVector()), List.of());
     }
@@ -168,9 +168,9 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
   }
 
   private Set<String> shownBooks(Session session) {
-    if (session == null || session.getShownBooks() == null) {
+    if (session == null || session.getActiveSearch().getShownBookIds() == null) {
       return Set.of();
     }
-    return new HashSet<>(session.getShownBooks());
+    return new HashSet<>(session.getActiveSearch().getShownBookIds());
   }
 }

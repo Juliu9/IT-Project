@@ -7,16 +7,18 @@ For setup and commands, start with the [README](../README.md).
 
 ## Request pipeline
 
-1. `RequestGateway` accepts text plus user/session IDs. `InputParser` returns a structured
-   `SessionRequest` through exact-command matching or model extraction.
-2. `SessionTransitionService` loads the session under its lock. `ConversationEngine` resolves the
-   action through `ConversationDispatcher`, validates criteria, and requests a page only when needed.
+1. `RequestGateway` accepts text plus user/session IDs. `InputParser` returns a `UserIntent` through
+   exact-command matching or model extraction. Exact commands never load session context; only the AI
+   path receives the bounded parser context.
+2. `SessionTransitionService` locks and loads the session. `IntentResolver` converts the stated
+   intent into a `SessionRequest`, then `ConversationEngine` applies session rules, validates
+   criteria, and requests a page only when needed.
 3. `AudiobookRecommendationWorkflow` prepares query vectors; `AudiobookRetrievalPlanner` builds the
    mandatory exact filters and retrieval mode. `CandidateRetrievalService` queries the selected adapter.
 4. `RankingService` combines available retrieval relevance, stored-user preference similarity, and
    universal rules such as recency/duration plausibility. Weights belong in
    [configuration](configuration.md#ranking-rules).
-5. The session commits the completed turn, queue and shown IDs together. Response generation then
+5. The session commits the completed outcome and active-search state together. Response generation then
    uses fixed wording or a separate chat client; the response model never selects the books.
 
 Catalogue embedding, summary generation, migration and CSV imports run in separate maintenance
@@ -29,8 +31,11 @@ See the [request sequence diagram](diagrams/recommendation-flow.svg) for executi
 | --- | --- | --- |
 | Conversation policy | Rules governing how a request uses earlier criteria, preferences, recommendations, and history. | Intent routing or response wording |
 | Conversation decision | Resolved conversational action, such as presenting recommendations, asking for clarification, or acknowledging an action. | Response text, intent, or “conversation outcome” |
+| User intent | The parser's statement of what the user meant, before session rules interpret references or pending questions. | A final action or a persisted request |
+| Session request | The executable request created from a user intent while the session is locked. | Parser output |
 | Search context | Retained criteria and personalisation choice for the latest recommendation search. | The entire conversation or saved preferences |
-| Pending recommendations | Ranked books from the current search that have not yet been shown. | Shown books or the last page |
+| Active search | The current completed search, its bounded shown IDs, and its pending recommendation queue. | A conversation-wide history |
+| Last outcome | The most recent completed turn and decision, used by repeat. | The active search |
 
 ## Session guarantees and replacement
 
@@ -199,15 +204,15 @@ repeats exhaustion rather than falling back to an older page. Clearing history r
 A pending explanation-target question accepts “all of them” as the whole displayed page, including
 after HELP or a cache reload. Outside that question, the reply remains context-dependent.
 
-The session stores one bounded `lastRequest` snapshot and its `lastDecision`, separately from
-search/preference history. Raw input and final response text are not stored. A repeated explanation
-uses the original selected books and criteria; AI wording may vary. Old sessions without these
-fields fall back to their latest retained request. Clearing history removes the old snapshot, then
-retains only the clear-history acknowledgement for replay.
+`Session.lastOutcome` stores one completed turn and decision for REPEAT. `Session.activeSearch`
+stores the one search that can be refined, paged, or used as displayed-page context, together with
+bounded shown IDs and pending recommendation snapshots. Raw input and final response text are not
+stored. A repeated explanation uses the original selected books and criteria; AI wording may vary.
+Clearing history removes the active search and replaces the repeat outcome with its acknowledgement.
 
-Pending recommendations are catalogue snapshots. Edits and removals affect new batches; cached
-items are not rechecked on each page. Sessions without a pending queue refill normally. The queue
-needs no Redis-specific keys or additional storage-adapter operations.
+Pending recommendations are catalogue snapshots inside `ActiveSearch`. Edits and removals affect
+new batches; cached items are not rechecked on each page. The queue needs no Redis-specific keys or
+additional storage-adapter operations.
 
 ### Session preference updates and search snapshots
 
@@ -368,12 +373,13 @@ The recommendation server is under `com.gen3.recommenderagent`:
 | --- | --- |
 | `api` | HTTP requests and error responses |
 | `application` | Session transaction boundary and shared chat-client wiring |
-| `application.conversation` | Conversation engine and handler composition |
+| `application.conversation` | Intent resolution, executable request/draft state, conversation engine and request/preference mapping |
+| `application.conversation.workflow` | Dispatch, handlers, clarification, criteria merging, history and conversation rules |
 | `application.recommendation` | Recommendation workflow and cached-page management |
-| `domain` | Intents and recommendation limits |
-| `domain.conversation` | Intent dispatch, handlers, clarification, criteria merging and history policy |
-| `domain.session` | Input, working-draft, search-context, completed-turn and session models |
-| `inputparser` / `response` | Structured request parsing and response wording |
+| `domain.conversation` | Conversation actions, decisions, completed turns and explanation selectors |
+| `domain.session` | Session aggregate, pending question, active search and last outcome |
+| `domain.search` / `domain.recommendation` | Search criteria/value objects and recommendation limits/results |
+| `inputparser` / `response` | Structured request parsing, raw-text/duration interpretation, and response wording |
 | `embedding` | QueryEmbeddingService, positive/negative query vectors |
 | `retrieval` / `retrieval.plan` | Candidate search execution, retrieval plans and filter parsing |
 | `ranker` / `ranker.scorer` | Candidate ranking and scoring rules |
@@ -418,24 +424,26 @@ generation remains in `embeddingjob`; the query embedding module only embeds liv
 | `ConversationHistory` | Retained searches, metadata and replay snapshots |
 | `ConversationResponseGenerator` / `AiResponseGenerator` | Fixed wording and AI narration after the session commits |
 
-The parser returns `SessionRequest`, which contains incoming intent, criteria and edit instructions.
-Provider responses and token usage stay inside the parser. A `ConversationDraft` holds working state
-inside the session transition. `SearchContext` groups explicit and effective criteria with frozen
-reading-preference evidence. Completion creates a `ConversationTurn` for response generation and
-session history; parser-only edit instructions are not persisted in that turn.
+`UserIntent` is the parser's small, untrusted statement of user meaning. Provider responses and
+token usage stay inside the parser. `IntentResolver` converts it to a `SessionRequest` while the
+session is locked; conversation policy then resolves pending questions, page references and search
+availability. A `ConversationDraft` holds working state inside that transition. `SearchContext`
+groups explicit and effective criteria with frozen reading-preference evidence. Completion creates a
+`ConversationTurn` for response generation and session state; parser-only edit instructions are not
+persisted in that turn. `LastOutcome` carries the completed turn and decision consumed by replay and
+response generation.
 
-Redis retains the existing flat search-field names. Old snapshots with parser-only fields remain
-readable; those fields are ignored. Decisions remain outside serialized turns, in
-`Session.lastDecision`, so existing replay snapshots continue to work without flushing sessions.
-The response generator consumes the resolved decision; direct callers without one use the shared
-`ConversationRules` classifier.
+Development sessions use only the current `Session` schema: `pendingQuestion`, `activeSearch`, and
+`lastOutcome`. Reset Redis or use a new session ID when this schema changes.
 
 ### Input parsing
 
 `InputParser` validates input, tries `CommandParser`, and falls back to `AiParser` when no exact
-command matches. It converts either result into a session request and logs the total parsing time.
-`AiParser` owns the model prompt, output schema, and provider calls. Exact commands skip the model
-but still use the normal session/conversation pipeline. The switch in
+command matches. Both paths produce `UserIntent`; conversion to `SessionRequest` happens later,
+inside the locked session transition. `AiParser` owns the model prompt, output schema, and provider
+calls. The AI path receives only bounded reference context (the current pending question, latest
+action and up to five displayed titles). Exact commands skip both the model and context load but
+still use the normal session/conversation pipeline. The switch in
 [`CommandParser`](../src/main/java/com/gen3/recommenderagent/inputparser/CommandParser.java)
 is the authoritative alias list. It covers Help, More (including “next”), both repeat actions,
 page explanations, clear history and cancellation.
