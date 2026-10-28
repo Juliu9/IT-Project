@@ -79,6 +79,9 @@ distinguishes no AI call from unavailable usage. Costs are not estimated.
 User/session headers identify a conversation; they are not authentication. Establish a verified
 identity boundary before exposing the service to untrusted clients. Local Compose publishes its
 service ports on `127.0.0.1` only; this does not authenticate the HTTP API.
+Both endpoints require nonblank `X-User-Id` and `X-Session-Id` headers of at most 256 Java characters
+each. Invalid IDs return `400` before parsing or session access. IDs remain opaque and are passed
+through unchanged; UUID formatting is not required.
 
 ### Verification and live-test prerequisites
 
