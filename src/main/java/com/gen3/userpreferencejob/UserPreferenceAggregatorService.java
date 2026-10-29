@@ -32,15 +32,15 @@ public class UserPreferenceAggregatorService {
   public UserPreferenceAggregatorService(
       AudiobookVectorRepository audiobookVectorRepository,
       UserPreferenceVectorRepository userPreferenceVectorRepository) {
-    this(audiobookVectorRepository, userPreferenceVectorRepository, 100, 10_000);
+    this(audiobookVectorRepository, userPreferenceVectorRepository, 1_000, 100_000);
   }
 
   @Autowired
   public UserPreferenceAggregatorService(
       AudiobookVectorRepository audiobookVectorRepository,
       UserPreferenceVectorRepository userPreferenceVectorRepository,
-      @Value("${user.preferences.import.max-users-per-group:100}") int maximumUsers,
-      @Value("${user.preferences.import.max-book-ids-per-group:10000}") int maximumBookIds) {
+      @Value("${user.preferences.import.max-users-per-group:1000}") int maximumUsers,
+      @Value("${user.preferences.import.max-book-ids-per-group:100000}") int maximumBookIds) {
     if (maximumUsers < 1 || maximumBookIds < 1) {
       throw new IllegalArgumentException("Preference import group limits must be positive");
     }

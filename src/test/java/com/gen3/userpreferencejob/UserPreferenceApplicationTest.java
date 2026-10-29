@@ -37,6 +37,7 @@ class UserPreferenceApplicationTest {
                     .doesNotHaveBean(org.springframework.ai.openai.OpenAiAudioSpeechModel.class)
                     .hasSingleBean(UserPreferenceStartupImporter.class)
                     .hasSingleBean(UserPreferenceAggregatorService.class)
+                    .hasSingleBean(DryRunUserPreferenceRepository.class)
                     .doesNotHaveBean(com.gen3.recommenderagent.api.RequestGateway.class)
                     .doesNotHaveBean(
                         org.springframework.data.redis.connection.RedisConnectionFactory.class));
@@ -49,6 +50,7 @@ class UserPreferenceApplicationTest {
         .withPropertyValues(
             "audiobook.database=solr",
             "user.preferences.import-on-startup=true",
+            "user.preferences.import.mode=write",
             "solr.url=http://localhost:8983/solr",
             "solr.collection=books",
             "solr.username=",
@@ -77,5 +79,65 @@ class UserPreferenceApplicationTest {
         .run(
             context ->
                 assertThat(context).hasFailed().getFailure().hasMessageContaining("separately"));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"", "dry-run ", "WRITE", "true", "yes", "typo"})
+  void rejectsUnknownImportModesBeforeImport(String mode) {
+    runner
+        .withPropertyValues("user.preferences.import-on-startup=true")
+        .withInitializer(
+            context ->
+                context
+                    .getEnvironment()
+                    .getPropertySources()
+                    .addFirst(
+                        new org.springframework.core.env.MapPropertySource(
+                            "importMode", java.util.Map.of("user.preferences.import.mode", mode))))
+        .run(
+            context ->
+                assertThat(context)
+                    .hasFailed()
+                    .getFailure()
+                    .hasMessageContaining("mode must be dry-run or write"));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"qdrant", "solr"})
+  void onlyExplicitWriteModeSelectsDatabaseStorage(String backend) {
+    runner
+        .withPropertyValues(
+            "audiobook.database=" + backend,
+            "user.preferences.import-on-startup=true",
+            "user.preferences.import.mode=write",
+            "solr.url=http://localhost:8983/solr",
+            "solr.collection=books",
+            "solr.username=",
+            "solr.password=")
+        .run(
+            context -> {
+              assertThat(context)
+                  .hasNotFailed()
+                  .doesNotHaveBean(DryRunUserPreferenceRepository.class)
+                  .hasSingleBean(
+                      com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository
+                          .class);
+              var store =
+                  context.getBean(
+                      com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository
+                          .class);
+              if (backend.equals("qdrant")) {
+                assertThat(store)
+                    .isInstanceOf(
+                        com.gen3.recommenderagent.storage.user.qdrant.QdrantUserPreferenceRepository
+                            .class);
+              } else {
+                assertThat(store)
+                    .isInstanceOf(
+                        com.gen3.recommenderagent.storage.user.solr.SolrUserPreferenceRepository
+                            .class);
+              }
+            });
   }
 }

@@ -293,10 +293,11 @@ embedding model. See the maintenance guide for CSV columns and database support.
 | Property under `user.preferences.` | Environment variable | Default / purpose |
 | --- | --- | --- |
 | `import-on-startup` | `USER_PREFERENCES_IMPORT_ON_STARTUP` | `false`; opt-in for the dedicated launcher |
+| `import.mode` | `USER_PREFERENCES_IMPORT_MODE` | `dry-run`; read and calculate without writes; explicit `write` allows saves and clears |
 | `favourites-csv-path` | `USER_PREFERENCES_FAVOURITES_CSV_PATH` | empty; favourites input path |
 | `history-csv-path` | `USER_PREFERENCES_HISTORY_CSV_PATH` | empty; history input path |
-| `import.max-users-per-group` | `USER_PREFERENCES_IMPORT_MAX_USERS_PER_GROUP` | `100`; maximum complete users processed together |
-| `import.max-book-ids-per-group` | `USER_PREFERENCES_IMPORT_MAX_BOOK_IDS_PER_GROUP` | `10000`; maximum distinct books loaded per group |
+| `import.max-users-per-group` | `USER_PREFERENCES_IMPORT_MAX_USERS_PER_GROUP` | `1000`; maximum complete users processed together |
+| `import.max-book-ids-per-group` | `USER_PREFERENCES_IMPORT_MAX_BOOK_IDS_PER_GROUP` | `100000`; maximum distinct books loaded per group |
 
 ### Solr-to-Qdrant migration
 

@@ -188,13 +188,15 @@ reads and writes stay within that database. For Solr, prepare the separate prefe
 schema described in [Solr setup](configuration.md#solr). Solr writes at most 500 user updates per
 batch and commits once per batch; earlier batches remain saved if a later batch fails.
 
-The importer loads vectors for at most 100 users and 10,000 distinct book IDs per group by default.
+The importer loads vectors for at most 1,000 users and 100,000 distinct book IDs per group by default.
 Either limit closes a group; repeated book IDs count once across favourites and history. Each user
 stays whole, and groups release their vectors before the next fetch. Both limits are configurable
 under `user.preferences.import` (see [configuration](configuration.md#user-preference-import)).
 Before any reads or writes, every user is checked against the book-ID limit. An oversized user
 stops the job with their ID, count and limit; no history is truncated. CSV records still reside in
-memory. Database failures can leave earlier groups saved; reruns recompute and overwrite preferences.
+memory. At 1,536 dimensions, 100,000 vectors alone occupy about 586 MiB, before database-client and
+CSV overhead; lower the group limit on memory-constrained machines.
+Database failures can leave earlier groups saved; reruns recompute and overwrite preferences.
 Favourite rows are deduplicated by user and normalized book ID before averaging. Users present in
 the import with no usable book vectors have both stored taste vectors cleared; users absent from
 the input are unchanged. Solr batches these clears with one write and commit per group, checking
@@ -204,11 +206,35 @@ weights halve every 180 days before the result is normalized.
 ```bash
 AUDIOBOOK_DATABASE=solr USER_PREFERENCES_IMPORT_ON_STARTUP=true ./mvnw spring-boot:run \
   -Dapplication.main-class=com.gen3.userpreferencejob.UserPreferenceApplication \
-  -Dspring-boot.run.arguments="--user.preferences.favourites-csv-path=/path/favourites.csv --user.preferences.history-csv-path=/path/history.csv"
+  -Dspring-boot.run.arguments="--user.preferences.import.mode=write --user.preferences.favourites-csv-path=/path/favourites.csv --user.preferences.history-csv-path=/path/history.csv"
 ```
 
 CSV records and aggregation live in `com.gen3.userpreferencejob`. Run this separately from the server
 and other maintenance jobs.
+
+### Read-only dry run (Solr or Qdrant)
+
+`user.preferences.import.mode` defaults to `dry-run`: use the real CSV readers, catalogue-vector
+lookups, group limits and aggregation without saving or clearing user profiles. Only explicit
+`write` mode permits persistence, as in the command above. Any other value fails startup.
+`import-on-startup=true` is still required to launch the job; it does not authorize writes by itself.
+
+With database connection settings configured, run from the repository root:
+
+```bash
+AUDIOBOOK_DATABASE=qdrant USER_PREFERENCES_IMPORT_ON_STARTUP=true \
+./mvnw spring-boot:run \
+  -Dapplication.main-class=com.gen3.userpreferencejob.UserPreferenceApplication \
+  -Dspring-boot.run.arguments="--user.preferences.import.mode=dry-run --user.preferences.favourites-csv-path=data/import-benchmarks/100-users-100-records/favourites.csv --user.preferences.history-csv-path=data/import-benchmarks/100-users-100-records/history.csv"
+```
+
+Use `AUDIOBOOK_DATABASE=solr` for Solr. IDs in the CSVs must exist with compatible vectors in that
+backend; IDs exported from Qdrant are not guaranteed to exist in a different Solr catalogue.
+The dry-run storage sink validates generated vectors and logs generated-profile and missing-vector
+counts instead of database writes. Missing vectors are reported as would-be clears, never performed.
+Completion logs include `mode=dry-run`, `csvReadMs`, `aggregationMs` and `totalMs`. These timings include
+catalogue reads but exclude application startup and real profile persistence. No AI calls occur.
+Dry runs still place read load on the selected catalogue; use read-only credentials when available.
 
 ## Solr launcher verification
 

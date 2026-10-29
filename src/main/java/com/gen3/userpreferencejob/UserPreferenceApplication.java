@@ -29,6 +29,7 @@ import org.springframework.core.env.Environment;
   com.gen3.catalogue.solr.SolrAudiobookRepository.class,
   com.gen3.recommenderagent.storage.user.solr.SolrUserPreferenceRepository.class,
   com.gen3.userpreferencejob.UserPreferenceStartupImporter.class,
+  com.gen3.userpreferencejob.DryRunUserPreferenceRepository.class,
   com.gen3.userpreferencejob.UserPreferenceAggregatorService.class,
   com.gen3.userpreferencejob.UserFavouriteCsvReader.class,
   com.gen3.userpreferencejob.UserHistoryCsvReader.class
@@ -46,6 +47,10 @@ public class UserPreferenceApplication {
   @Bean
   static BeanFactoryPostProcessor validateJob(Environment environment) {
     return factory -> {
+      String mode = environment.getProperty("user.preferences.import.mode", "dry-run");
+      if (!"dry-run".equals(mode) && !"write".equals(mode)) {
+        throw new IllegalArgumentException("user.preferences.import.mode must be dry-run or write");
+      }
       if (!environment.getProperty("user.preferences.import-on-startup", Boolean.class, false)) {
         throw new IllegalArgumentException(
             "Explicitly enable user.preferences.import-on-startup to run this job");
