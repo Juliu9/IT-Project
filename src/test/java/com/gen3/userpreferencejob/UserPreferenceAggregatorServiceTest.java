@@ -124,15 +124,16 @@ class UserPreferenceAggregatorServiceTest {
     when(books.findEmbeddingsByBookIds(org.mockito.ArgumentMatchers.anyCollection()))
         .thenReturn(Map.of("book", new float[] {1, 0}));
     var favourites =
-        java.util.stream.IntStream.range(0, 501)
+        java.util.stream.IntStream.range(0, 1001)
             .mapToObj(i -> new UserFavourite("user-" + i, "book"))
             .toList();
     new UserPreferenceAggregatorService(books, users).aggregateAndSave(favourites, List.of());
     ArgumentCaptor<List<UserPreferenceEmbedding>> saved = ArgumentCaptor.forClass(List.class);
-    verify(users, org.mockito.Mockito.times(6)).saveAll(saved.capture());
+    verify(users, org.mockito.Mockito.times(3)).saveAll(saved.capture());
+    verify(books, org.mockito.Mockito.times(2)).findEmbeddingsByBookIds(Set.of("book"));
     org.assertj.core.api.Assertions.assertThat(saved.getAllValues())
         .extracting(List::size)
-        .containsExactly(100, 100, 100, 100, 100, 1);
+        .containsExactly(500, 500, 1);
   }
 
   @Test
@@ -184,5 +185,32 @@ class UserPreferenceAggregatorServiceTest {
         .hasMessageContaining("3")
         .hasMessageContaining("2");
     org.mockito.Mockito.verifyNoInteractions(books, users);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(ints = {100000, 100001})
+  void defaultBookLimitAcceptsOneHundredThousandButRejectsMore(int count) throws IOException {
+    var books = mock(AudiobookVectorRepository.class);
+    var users = mock(UserPreferenceVectorRepository.class);
+    var input =
+        java.util.stream.IntStream.range(0, count)
+            .mapToObj(i -> new UserFavourite("user", "book-" + i))
+            .toList();
+    var service = new UserPreferenceAggregatorService(books, users);
+    if (count > 100000) {
+      org.assertj.core.api.Assertions.assertThatThrownBy(
+              () -> service.aggregateAndSave(input, List.of()))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("configured limit is 100000");
+      org.mockito.Mockito.verifyNoInteractions(books, users);
+    } else {
+      when(books.findEmbeddingsByBookIds(org.mockito.ArgumentMatchers.anyCollection()))
+          .thenReturn(Map.of());
+      service.aggregateAndSave(input, List.of());
+      verify(books)
+          .findEmbeddingsByBookIds(
+              org.mockito.ArgumentMatchers.argThat(ids -> ids.size() == 100000));
+      verify(users).clearAll(List.of("user"));
+    }
   }
 }

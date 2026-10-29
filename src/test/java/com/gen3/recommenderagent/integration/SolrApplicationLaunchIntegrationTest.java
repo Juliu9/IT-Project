@@ -205,6 +205,8 @@ class SolrApplicationLaunchIntegrationTest {
             Map.of(
                 "user.preferences.import-on-startup",
                 "true",
+                "user.preferences.import.mode",
+                "write",
                 "user.preferences.favourites-csv-path",
                 favourites.toString(),
                 "user.preferences.history-csv-path",
@@ -217,8 +219,40 @@ class SolrApplicationLaunchIntegrationTest {
         new SolrUserPreferenceRepository(client, USERS, 2, BOOKS)
             .findEmbeddingByUserId("launcher-user")
             .orElseThrow();
-    assertThat(user.favouritesVector()).containsExactly(0.6f, 0.8f);
-    assertThat(user.historyVector()).containsExactly(0.6f, 0.8f);
+    org.junit.jupiter.api.Assertions.assertArrayEquals(
+        new float[] {0.6f, 0.8f}, user.favouritesVector(), 0.000001f);
+    org.junit.jupiter.api.Assertions.assertArrayEquals(
+        new float[] {0.6f, 0.8f}, user.historyVector(), 0.000001f);
+
+    Object previousVersion = client.getById(USERS, "launcher-user").getFieldValue("_version_");
+    Path dryFavourites = directory.resolve("dry-run-favourites.csv");
+    Path dryHistory = directory.resolve("dry-run-history.csv");
+    Files.writeString(
+        dryFavourites,
+        "type,user,item\nbook,launcher-user,local:book:200\nbook,dry-run-new-user,local:book:100\n");
+    Files.writeString(dryHistory, "type,user,item,created_at,updated_at\n");
+    try (var context =
+        launch(
+            UserPreferenceApplication.class,
+            null,
+            Map.of(
+                "user.preferences.import-on-startup",
+                "true",
+                "user.preferences.import.mode",
+                "dry-run",
+                "user.preferences.favourites-csv-path",
+                dryFavourites.toString(),
+                "user.preferences.history-csv-path",
+                dryHistory.toString()))) {
+      assertJobIsolation(context);
+      assertThat(
+              context.getBean(
+                  com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository.class))
+          .isInstanceOf(com.gen3.userpreferencejob.DryRunUserPreferenceRepository.class);
+    }
+    assertThat(client.getById(USERS, "launcher-user").getFieldValue("_version_"))
+        .isEqualTo(previousVersion);
+    org.junit.jupiter.api.Assertions.assertNull(client.getById(USERS, "dry-run-new-user"));
 
     try (var context =
         launch(
@@ -279,6 +313,7 @@ class SolrApplicationLaunchIntegrationTest {
     settings.put("audiobook.short-description.batch.mode", "disabled");
     settings.put("audiobook.qdrant.migration.enabled", "false");
     settings.put("user.preferences.import-on-startup", "false");
+    settings.put("user.preferences.import.mode", "dry-run");
     settings.putAll(overrides);
     var builder =
         new SpringApplicationBuilder(application)

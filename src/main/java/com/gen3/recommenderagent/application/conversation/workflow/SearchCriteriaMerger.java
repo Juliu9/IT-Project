@@ -43,8 +43,6 @@ public final class SearchCriteriaMerger {
     ExactCriteria explicitExclude = target.getMustNotInclude();
     ExactCriteria included = merge(base.getMustInclude(), explicitInclude);
     ExactCriteria excluded = merge(base.getMustNotInclude(), explicitExclude);
-    replacePeople(included, explicitInclude, target);
-    replacePeople(excluded, explicitExclude, target);
     target.setMustInclude(included);
     target.setMustNotInclude(excluded);
     var replacements = new java.util.LinkedHashSet<>(inheritedReplacements);
@@ -52,17 +50,8 @@ public final class SearchCriteriaMerger {
     target.setReplaceSearchFields(new ArrayList<>(replacements));
   }
 
-  private static void replacePeople(
-      ExactCriteria merged, ExactCriteria explicit, ConversationDraft target) {
-    if (explicit == null) {
-      return;
-    }
-    if (!target.isAddAuthors() && hasTerms(explicit.getAuthors())) {
-      merged.setAuthors(union(null, explicit.getAuthors()));
-    }
-    if (!target.isAddNarrators() && hasTerms(explicit.getNarrators())) {
-      merged.setNarrators(union(null, explicit.getNarrators()));
-    }
+  private static List<String> person(List<String> base, List<String> supplied) {
+    return union(hasTerms(supplied) ? null : base, supplied);
   }
 
   private static SemanticQuery merge(SemanticQuery base, SemanticQuery override) {
@@ -75,10 +64,10 @@ public final class SearchCriteriaMerger {
     merged.setGenres(
         union(values(base, SemanticQuery::getGenres), values(override, SemanticQuery::getGenres)));
     merged.setAuthors(
-        union(
+        person(
             values(base, SemanticQuery::getAuthors), values(override, SemanticQuery::getAuthors)));
     merged.setNarrators(
-        union(
+        person(
             values(base, SemanticQuery::getNarrators),
             values(override, SemanticQuery::getNarrators)));
     merged.setKeywords(
@@ -94,11 +83,11 @@ public final class SearchCriteriaMerger {
     }
     ExactCriteria merged = new ExactCriteria();
     merged.setAuthors(
-        union(
+        person(
             base == null ? null : base.getAuthors(),
             override == null ? null : override.getAuthors()));
     merged.setNarrators(
-        union(
+        person(
             base == null ? null : base.getNarrators(),
             override == null ? null : override.getNarrators()));
     merged.setLanguage(
@@ -140,8 +129,6 @@ public final class SearchCriteriaMerger {
     copy.setInvalidBookCount(source.isInvalidBookCount());
     copy.setPreferenceRemovalTerms(source.getPreferenceRemovalTerms());
     copy.setPositivePreferenceRemovalOnly(source.isPositivePreferenceRemovalOnly());
-    copy.setAddAuthors(source.isAddAuthors());
-    copy.setAddNarrators(source.isAddNarrators());
     copy.setRequestId(source.getRequestId());
     copy.setRawText(source.getRawText());
     copy.setCreatedAt(source.getCreatedAt());

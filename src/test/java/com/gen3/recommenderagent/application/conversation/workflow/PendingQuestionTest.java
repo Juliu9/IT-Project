@@ -114,7 +114,6 @@ class PendingQuestionTest {
   @EnumSource(
       value = ConversationDecision.class,
       names = {
-        "COUNT_CLARIFICATION",
         "PREFERENCE_CLARIFICATION",
         "PREFERENCE_UPDATE_CLARIFICATION",
         "EXPLANATION_TARGET_CLARIFICATION",

@@ -262,12 +262,14 @@ public class SessionPreferences {
 
   private static List<String> personTerms(
       List<String> base, List<String> additions, List<String> removals, boolean replace) {
-    var result = terms(base, additions, null, replace);
-    if (result == null || removals == null) {
+    var supplied = singlePerson(additions);
+    var removedNames = singlePerson(removals);
+    var result = supplied != null ? supplied : replace ? null : singlePerson(base);
+    if (result == null || removedNames == null) {
       return result;
     }
     var removed =
-        removals.stream()
+        removedNames.stream()
             .filter(java.util.Objects::nonNull)
             .map(PersonNameNormalizer::comparisonKey)
             .collect(java.util.stream.Collectors.toSet());
@@ -276,6 +278,22 @@ public class SessionPreferences {
             .filter(value -> !removed.contains(PersonNameNormalizer.comparisonKey(value)))
             .toList();
     return remaining.isEmpty() ? null : remaining;
+  }
+
+  private static List<String> singlePerson(List<String> values) {
+    if (values == null) {
+      return null;
+    }
+    var unique = new LinkedHashMap<String, String>();
+    values.stream()
+        .filter(value -> value != null && !value.isBlank())
+        .map(String::trim)
+        .forEach(value -> unique.putIfAbsent(PersonNameNormalizer.comparisonKey(value), value));
+    if (unique.size() > 1) {
+      throw new InvalidRequestException(
+          "Please choose only one author and one narrator at a time.");
+    }
+    return unique.isEmpty() ? null : List.copyOf(unique.values());
   }
 
   private static List<String> terms(

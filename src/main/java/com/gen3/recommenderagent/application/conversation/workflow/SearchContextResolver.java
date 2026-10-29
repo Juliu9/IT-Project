@@ -41,8 +41,7 @@ public final class SearchContextResolver implements ConversationHandler {
             || !isRecommendationIntent(session.getActiveSearch().getSearch().getIntent()))) {
       effective.setBookCount(resolveBookCount(effective, session));
       effective.setSearchClarificationRequired(true);
-      session.setPendingRefinementRequest(
-          com.gen3.recommenderagent.application.conversation.ConversationDraft.toTurn(effective));
+      session.setPendingRefinementRequest(ConversationDraft.toStoredTurn(effective));
       return effective;
     }
     if (effective.getIntent() == ConversationAction.REFINE
@@ -157,7 +156,10 @@ public final class SearchContextResolver implements ConversationHandler {
   }
 
   private Integer resolveBookCount(ConversationDraft request, Session session) {
-    if (request != null && request.getBookCount() != null) {
+    if (request != null
+        && !request.isInvalidBookCount()
+        && request.getBookCount() != null
+        && request.getBookCount() > 0) {
       return request.getBookCount();
     }
     return session == null ? null : session.getBookCount();

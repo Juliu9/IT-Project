@@ -1,12 +1,11 @@
 package com.gen3.recommenderagent.application.conversation;
 
-import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.inputparser.SessionContext;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
-/** Produces the bounded parser context from the current user-visible session outcome. */
+/** Projects the retained page independently of the latest action and pending question. */
 @Component
 public class SessionContextProjector {
   private static final int MAX_DISPLAYED_BOOKS = 5;
@@ -25,15 +24,15 @@ public class SessionContextProjector {
                 || session.getLastOutcome().turn().getIntent() == null
             ? null
             : session.getLastOutcome().turn().getIntent().name();
-    List<String> displayed =
-        session.getLastOutcome() == null
-                || session.getLastOutcome().turn() == null
-                || session.getLastOutcome().turn().getRecommendations() == null
+    List<SessionContext.DisplayedBook> displayed =
+        session.getActiveSearch() == null
+                || session.getActiveSearch().getSearch() == null
+                || session.getActiveSearch().getSearch().getRecommendations() == null
             ? List.of()
-            : session.getLastOutcome().turn().getRecommendations().stream()
+            : session.getActiveSearch().getSearch().getRecommendations().stream()
+                .filter(book -> book.getTitle() != null)
                 .limit(MAX_DISPLAYED_BOOKS)
-                .map(Recommendation::getTitle)
-                .filter(java.util.Objects::nonNull)
+                .map(book -> new SessionContext.DisplayedBook(book.getRank(), book.getTitle()))
                 .toList();
     return new SessionContext(pending, action, displayed);
   }

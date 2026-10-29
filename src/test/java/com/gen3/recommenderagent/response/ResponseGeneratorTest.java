@@ -277,13 +277,13 @@ class ResponseGeneratorTest {
   }
 
   @Test
-  void shouldIgnoreAnOversizedCountNotStatedByTheUser() {
+  void unrelatedNumbersDoNotTriggerACapNoticeForAnInRangeCount() {
     ConversationResponseGenerator generator =
         new ConversationResponseGenerator(new AiResponseGenerator(null));
     ConversationDraft request = new ConversationDraft();
     request.setIntent(ConversationAction.RECOMMENDATION);
-    request.setRawText("fantasy");
-    request.setBookCount(10);
+    request.setRawText("fantasy published in 1984");
+    request.setBookCount(3);
 
     String response =
         generator.generate(
@@ -394,14 +394,21 @@ class ResponseGeneratorTest {
         generator.generate(List.of(), ConversationDraft.toTurn(request)));
   }
 
-  @Test
-  void shouldCapAnExplicitChangeCountRequest() {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.NullAndEmptySource
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "Show me 30 recommendations at a time",
+        "set count to thirty",
+        "set count to one hundred"
+      })
+  void cappedCountNoticeUsesTheResolvedCountInsteadOfRawWording(String rawText) {
     ConversationResponseGenerator generator =
         new ConversationResponseGenerator(new AiResponseGenerator(null));
     ConversationDraft request = new ConversationDraft();
     request.setIntent(ConversationAction.CHANGE_COUNT);
-    request.setRawText("Show me 10 recommendations at a time");
-    request.setBookCount(10);
+    request.setRawText(rawText);
+    request.setBookCount(30);
 
     assertEquals(
         "I can give up to 5 recommendations at a time. I'll show 5 recommendations at a time.",

@@ -9,25 +9,32 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.api.RequestGateway;
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.inputparser.InputParser;
+import com.gen3.recommenderagent.inputparser.UserIntent;
 import com.gen3.recommenderagent.response.ResponseGenerator;
 import java.util.List;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class SessionUpdateFlowTest {
 
-  @Test
-  void responseFailureLeavesRecommendationsCommitted() {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void responseFailureLeavesRecommendationsCommitted(boolean demo) {
     var sessions = new RecommendationFlowTestSupport.InMemorySessionRepository();
     InputParser parser = mock(InputParser.class);
-    ConversationDraft request = new ConversationDraft();
+    UserIntent request = new UserIntent();
     request.setIntent(ConversationAction.RECOMMENDATION);
-    when(parser.parse("recommend a book")).thenReturn(request);
+    when(parser.parseUserIntent(
+            org.mockito.ArgumentMatchers.eq("recommend a book"),
+            org.mockito.ArgumentMatchers
+                .<java.util.function.Supplier<com.gen3.recommenderagent.inputparser.SessionContext>>
+                    any()))
+        .thenReturn(request);
     RecommendationWorkflow workflow = mock(RecommendationWorkflow.class);
     when(workflow.recommend(any(), any()))
         .thenReturn(List.of(new Recommendation("book-1", 1, 0.9, "First")));
@@ -46,7 +53,13 @@ class SessionUpdateFlowTest {
 
     assertThrows(
         IllegalStateException.class,
-        () -> gateway.handleRequest("session", "user", "recommend a book"));
+        () -> {
+          if (demo) {
+            gateway.handleDemoRequest("session", "user", "recommend a book");
+          } else {
+            gateway.handleRequest("session", "user", "recommend a book");
+          }
+        });
 
     var stored = sessions.getSession("session", "user");
     assertEquals(List.of("book-1"), stored.getActiveSearch().getShownBookIds());

@@ -12,6 +12,13 @@ import java.util.List;
 
 /** Private-to-conversation working state; never used as a persisted turn or response contract. */
 public class ConversationDraft extends SessionRequest {
+  /** Retains structured context without persisting the user's original message. */
+  public static ConversationTurn toStoredTurn(ConversationDraft draft) {
+    var turn = toTurn(draft);
+    turn.setRawText(null);
+    return turn;
+  }
+
   public static ConversationTurn toTurn(ConversationDraft draft) {
     var turn = new ConversationTurn();
     turn.setSearchContext(draft.getSearchContext().copy());
@@ -24,6 +31,7 @@ public class ConversationDraft extends SessionRequest {
     turn.setReferenceRank(draft.getReferenceRank());
     turn.setReferenceTitle(draft.getReferenceTitle());
     turn.setBookCount(draft.getBookCount());
+    turn.setInvalidBookCount(draft.isInvalidBookCount());
     turn.setDecision(draft.getDecision());
     turn.setPendingQuestion(draft.getPendingQuestion());
     turn.setPreferenceClarificationRequired(draft.isPreferenceClarificationRequired());
@@ -45,6 +53,7 @@ public class ConversationDraft extends SessionRequest {
     draft.setReferenceRank(turn.getReferenceRank());
     draft.setReferenceTitle(turn.getReferenceTitle());
     draft.setBookCount(turn.getBookCount());
+    draft.setInvalidBookCount(turn.isInvalidBookCount());
     draft.setDecision(turn.getDecision());
     draft.setPendingQuestion(turn.getPendingQuestion());
     draft.setPreferenceClarificationRequired(turn.isPreferenceClarificationRequired());

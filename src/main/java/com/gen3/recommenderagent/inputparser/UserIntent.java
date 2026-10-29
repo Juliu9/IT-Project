@@ -123,25 +123,6 @@ public class UserIntent {
     this.referenceTitle = referenceTitle;
   }
 
-  private boolean addAuthors;
-  private boolean addNarrators;
-
-  public boolean isAddAuthors() {
-    return addAuthors;
-  }
-
-  public void setAddAuthors(boolean value) {
-    addAuthors = value;
-  }
-
-  public boolean isAddNarrators() {
-    return addNarrators;
-  }
-
-  public void setAddNarrators(boolean value) {
-    addNarrators = value;
-  }
-
   private SessionPreferences preferenceUpdates;
   private SessionPreferences preferenceRemovals;
   private List<String> replacePreferenceFields;

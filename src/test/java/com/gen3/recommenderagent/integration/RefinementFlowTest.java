@@ -75,52 +75,6 @@ class RefinementFlowTest {
         .parse(text);
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"3", "change count to 3", "three books per page"})
-  void validCountRepliesResumeThePendingSearch(String reply) {
-    var pending = request(ConversationAction.RECOMMENDATION);
-    pending.setExplicitSearch(true);
-    pending.setInvalidBookCount(true);
-    pending.setRawText("Recommend zero fantasy books");
-    var query = new SemanticQuery();
-    query.setGenres(List.of("fantasy"));
-    pending.setPositiveSemanticQuery(query);
-    assertThat(process(pending).getDecision()).isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
-    verifyNoInteractions(workflow);
-    when(workflow.recommend(any(), any()))
-        .thenReturn(List.of(new Recommendation("id", 1, 0.9, "Fantasy")));
-    var result = service.process("session", "user", command(reply));
-    assertThat(result.getIntent()).isEqualTo(ConversationAction.RECOMMENDATION);
-    assertThat(result.getBookCount()).isEqualTo(3);
-    assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
-    assertThat(sessions.getSession("session", "user").getPendingCountRequest()).isNull();
-  }
-
-  @Test
-  void newerInvalidSearchReplacesThePendingRequestWithoutConsumingTheDisplayedBatch() {
-    search(null, null);
-    var before =
-        sessions.getSession("session", "user").getActiveSearch().getPendingRecommendations();
-    for (String genre : List.of("fantasy", "romance")) {
-      var pending = request(ConversationAction.RECOMMENDATION);
-      pending.setRawText("Recommend zero " + genre + " books");
-      pending.setExplicitSearch(true);
-      pending.setInvalidBookCount(true);
-      var query = new SemanticQuery();
-      query.setGenres(List.of(genre));
-      pending.setPositiveSemanticQuery(query);
-      assertThat(process(pending).getDecision())
-          .isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
-      assertThat(
-              sessions.getSession("session", "user").getActiveSearch().getPendingRecommendations())
-          .hasSize(before.size());
-    }
-    var result = service.process("session", "user", command("3"));
-    assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("romance");
-    assertThat(result.getBookCount()).isEqualTo(3);
-  }
-
   @Test
   void moreRecentUsesTheFlooredPageAverageAndPreservesThePeriodUpperBoundAfterReload() {
     var years = List.of(1960, 1975, 1980, 1990, 2005);
@@ -471,6 +425,63 @@ class RefinementFlowTest {
         .containsExactlyElementsOf(replace ? List.of("horror") : List.of("fantasy", "horror"));
     assertThat(result.getSearchCriteria().getPositiveSemanticQuery().getGenres())
         .containsExactlyElementsOf(replace ? List.of("horror") : List.of("fantasy", "horror"));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"", " instead", " replace the genres"})
+  void parsedMoreRefinementsAccumulateUnlessReplacementIsExplicit(String replacement) {
+    var include = new ExactCriteria();
+    include.setDuration("under 10 hours");
+    search(include, null);
+    var initial = request(ConversationAction.RECOMMENDATION);
+    var positive = new SemanticQuery();
+    positive.setGenres(List.of("mystery"));
+    initial.setPositiveSemanticQuery(positive);
+    var negative = new SemanticQuery();
+    negative.setKeywords(List.of("dark"));
+    initial.setNegativeSemanticQuery(negative);
+    initial.setMustInclude(include);
+    process(initial);
+    var ai = mock(com.gen3.recommenderagent.inputparser.AiParser.class);
+    var parser =
+        new com.gen3.recommenderagent.inputparser.InputParser(
+            new com.gen3.recommenderagent.inputparser.CommandParser(), ai);
+    var expected = new java.util.ArrayList<>(List.of("mystery"));
+    for (String genre : List.of("horror", "romance")) {
+      var json = new ObjectMapper();
+      sessions.updateSession(
+          json.readValue(
+              json.writeValueAsString(sessions.getSession("session", "user")), Session.class));
+      var intent = new com.gen3.recommenderagent.inputparser.UserIntent();
+      intent.setIntent(ConversationAction.REFINE);
+      var query = new SemanticQuery();
+      query.setGenres(List.of(genre));
+      intent.setPositiveSemanticQuery(query);
+      // Reproduce the captured model instruction, including its erroneous replacement flag.
+      intent.setReplaceSearchFields(List.of("positiveSemanticQuery.genres"));
+      when(ai.parse(org.mockito.ArgumentMatchers.anyString())).thenReturn(intent);
+      String text = "make it more " + genre + replacement;
+      var result =
+          service.process(
+              "session",
+              "user",
+              text,
+              parser.parseUserIntent(text),
+              java.util.function.Function.identity());
+      if (!replacement.isEmpty()) {
+        expected.clear();
+      }
+      expected.add(genre);
+      assertThat(result.getIntent()).isEqualTo(ConversationAction.REFINE);
+      assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactlyElementsOf(expected);
+      assertThat(result.getSearchCriteria().getPositiveSemanticQuery().getGenres())
+          .containsExactlyElementsOf(expected);
+      assertThat(result.getMustInclude().getDuration()).isEqualTo("under 10 hours");
+      assertThat(result.getNegativeSemanticQuery().getKeywords()).containsExactly("dark");
+      assertThat(result.getReplaceSearchFields())
+          .containsExactlyElementsOf(
+              replacement.isEmpty() ? List.of() : List.of("positiveSemanticQuery.genres"));
+    }
   }
 
   @Test
@@ -834,9 +845,8 @@ class RefinementFlowTest {
     verify(workflow).recommend(any(), any());
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void replacesOrAddsExactAuthorsAndNarrators(boolean add) {
+  @Test
+  void replacesExactAuthorsAndNarrators() {
     var previous = new ExactCriteria();
     previous.setAuthors(List.of("Author A"));
     previous.setNarrators(List.of("Narrator A"));
@@ -847,14 +857,9 @@ class RefinementFlowTest {
     include.setAuthors(List.of("Author B"));
     include.setNarrators(List.of("Narrator B"));
     refinement.setMustInclude(include);
-    refinement.setAddAuthors(add);
-    refinement.setAddNarrators(add);
     var result = process(refinement);
-    assertThat(result.getMustInclude().getAuthors())
-        .containsExactlyElementsOf(add ? List.of("Author A", "Author B") : List.of("Author B"));
-    assertThat(result.getMustInclude().getNarrators())
-        .containsExactlyElementsOf(
-            add ? List.of("Narrator A", "Narrator B") : List.of("Narrator B"));
+    assertThat(result.getMustInclude().getAuthors()).containsExactly("Author B");
+    assertThat(result.getMustInclude().getNarrators()).containsExactly("Narrator B");
     assertThat(result.getMustInclude().getLanguage()).isEqualTo("English");
     assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
   }
@@ -875,9 +880,9 @@ class RefinementFlowTest {
   }
 
   @Test
-  void explicitRequirementOverridesInheritedExclusionWithoutDroppingOtherAuthors() {
+  void explicitRequirementOverridesTheInheritedAuthorExclusion() {
     var exclude = new ExactCriteria();
-    exclude.setAuthors(List.of("Author A", "Author B"));
+    exclude.setAuthors(List.of("Author A"));
     search(null, exclude);
     var refinement = request(ConversationAction.REFINE);
     var include = new ExactCriteria();
@@ -885,7 +890,7 @@ class RefinementFlowTest {
     refinement.setMustInclude(include);
     var result = process(refinement);
     assertThat(result.getMustInclude().getAuthors()).containsExactly("Author A");
-    assertThat(result.getMustNotInclude().getAuthors()).containsExactly("Author B");
+    assertThat(result.getMustNotInclude().getAuthors()).isNullOrEmpty();
   }
 
   @Test
@@ -908,10 +913,10 @@ class RefinementFlowTest {
   }
 
   @Test
-  void partialAuthorExclusionAndSemanticMixturesRemainValid() {
+  void distinctAuthorExclusionAndSemanticMixturesRemainValid() {
     var request = request(ConversationAction.RECOMMENDATION);
     var include = new ExactCriteria();
-    include.setAuthors(List.of("A", "B"));
+    include.setAuthors(List.of("B"));
     var exclude = new ExactCriteria();
     exclude.setAuthors(List.of("A"));
     request.setMustInclude(include);

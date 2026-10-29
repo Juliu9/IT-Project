@@ -98,7 +98,11 @@ class LiveInputParserTest {
   @ParameterizedTest
   @CsvSource({
     "Make it horror instead,horror,true",
-    "Also include mystery in that search,mystery,false"
+    "Also include mystery in that search,mystery,false",
+    "Make it more horror,horror,false",
+    "Make it more romance,romance,false",
+    "Make it more romance instead,romance,true",
+    "Replace the genres with romance,romance,true"
   })
   void distinguishesReplacingAndAddingSearchGenres(String text, String genre, boolean replace) {
     var result = parser.parse(text);
@@ -332,7 +336,7 @@ class LiveInputParserTest {
         "Give me 2.5 mystery books",
         "I want two and a half mystery books"
       })
-  void invalidCountsKeepSearchCriteriaForClarification(String text) {
+  void invalidCountsKeepSearchCriteriaForSavedCountFallback(String text) {
     var result = parser.parse(text);
     assertThat(result.isInvalidBookCount()).isTrue();
     assertThat(result.getBookCount()).isNull();

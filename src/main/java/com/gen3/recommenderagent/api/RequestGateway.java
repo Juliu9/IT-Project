@@ -4,6 +4,7 @@ import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.application.conversation.SessionRequest;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.inputparser.InputParser;
+import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import com.gen3.recommenderagent.inputparser.UserIntent;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.gen3.recommenderagent.response.ResponseGenerator;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/recommendations")
 public class RequestGateway {
+  private static final int MAX_ID_CHARACTERS = 256;
 
   private final InputParser inputParser;
   private final SessionTransitionService sessionTransitionService;
@@ -81,6 +83,8 @@ public class RequestGateway {
       String rawText,
       boolean demo,
       BiFunction<String, ConversationTurn, T> formatResponse) {
+    validateId("X-User-Id", userId);
+    validateId("X-Session-Id", sessionId);
     if (telemetry != null) {
       if (demo) {
         telemetry.startDemo();
@@ -107,11 +111,7 @@ public class RequestGateway {
             return new Generated(response, result);
           };
       Generated generated =
-          parsedIntent == null
-              ? sessionTransitionService.process(
-                  sessionId, userId, inputParser.parse(rawText), generate)
-              : sessionTransitionService.process(
-                  sessionId, userId, rawText, parsedIntent, generate);
+          sessionTransitionService.process(sessionId, userId, rawText, parsedIntent, generate);
       T payload = formatResponse.apply(generated.text(), generated.turn());
       if (telemetry != null) {
         telemetry.complete(generated.turn());
@@ -122,6 +122,13 @@ public class RequestGateway {
       if (telemetry != null && !completed) {
         telemetry.fail(currentRequest);
       }
+    }
+  }
+
+  private static void validateId(String header, String value) {
+    if (value == null || value.isBlank() || value.length() > MAX_ID_CHARACTERS) {
+      throw new InvalidRequestException(
+          header + " must be nonblank and at most " + MAX_ID_CHARACTERS + " characters.");
     }
   }
 }

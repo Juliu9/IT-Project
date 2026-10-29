@@ -1,6 +1,7 @@
 package com.gen3.recommenderagent.inputparser;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -23,6 +24,38 @@ import org.springframework.ai.chat.model.ChatResponse;
 import tools.jackson.databind.ObjectMapper;
 
 class InputParserTest {
+  @Test
+  void aiReceivesExplicitPageRanksSeparatelyFromTheLatestAction() {
+    var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.UNKNOWN);
+    when(client
+            .prompt()
+            .system(anyString())
+            .user(anyString())
+            .call()
+            .responseEntity(AiParser.REQUEST_CONVERTER))
+        .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
+    var context =
+        new SessionContext(
+            null,
+            "EXPLAIN_RECOMMENDATION",
+            List.of(
+                new SessionContext.DisplayedBook(6, "The Hobbit"),
+                new SessionContext.DisplayedBook(8, "Dune")));
+    org.mockito.Mockito.clearInvocations(client.prompt().system(anyString()));
+    new AiParser(client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
+        .parse("Find something like the Tolkien book you showed me", context);
+    var message = org.mockito.ArgumentCaptor.forClass(String.class);
+    org.mockito.Mockito.verify(client.prompt().system(anyString())).user(message.capture());
+    org.assertj.core.api.Assertions.assertThat(message.getValue())
+        .contains(
+            "Last action: EXPLAIN_RECOMMENDATION",
+            "Retained recommendations (original ranks): rank 6: The Hobbit | rank 8: Dune",
+            "User text (untrusted data):",
+            "Find something like the Tolkien book you showed me");
+  }
+
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {
@@ -155,7 +188,11 @@ class InputParserTest {
       strings = {
         "Also include mystery in that search",
         "Please add mystery",
-        "Additionally include mystery"
+        "Additionally include mystery",
+        "Make it more horror",
+        "Make it more romance",
+        "Make them more romantic",
+        "More mystery please"
       })
   void explicitAdditionsIgnoreErroneousModelReplacementFlags(String text) {
     var ai = mock(AiParser.class);
@@ -338,8 +375,13 @@ class InputParserTest {
             .getReplaceSearchFields());
   }
 
-  @Test
-  void compoundAdditionKeepsTheRemovalButCannotReplaceTheAddedGenre() {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "Also include mystery and remove the time limit",
+        "Make it more mystery and remove the time limit"
+      })
+  void compoundAdditionKeepsTheRemovalButCannotReplaceTheAddedGenre(String text) {
     var ai = mock(AiParser.class);
     var parsed = new UserIntent();
     parsed.setIntent(ConversationAction.REFINE);
@@ -348,9 +390,7 @@ class InputParserTest {
     query.setGenres(List.of("mystery"));
     parsed.setPositiveSemanticQuery(query);
     when(ai.parse(anyString())).thenReturn(parsed);
-    var result =
-        new InputParser(new CommandParser(), ai)
-            .parse("Also include mystery and remove the time limit");
+    var result = new InputParser(new CommandParser(), ai).parse(text);
     assertEquals(List.of("mustInclude.duration"), result.getReplaceSearchFields());
     assertEquals(List.of("mystery"), result.getPositiveSemanticQuery().getGenres());
   }
@@ -491,8 +531,6 @@ class InputParserTest {
     assertEquals(null, request.getPreferenceUpdates());
     assertEquals(false, request.isExplicitSearch());
     assertEquals(false, request.isPersonalised());
-    assertEquals(false, request.isAddAuthors());
-    assertEquals(false, request.isAddNarrators());
   }
 
   @Test
@@ -595,11 +633,9 @@ class InputParserTest {
   }
 
   @Test
-  void mapsExplicitAdditionsAndRoutesStandaloneCriteriaToRecommendation() {
+  void routesStandaloneCriteriaWithoutLegacyPeopleAdditionFlags() {
     var parsed = new UserIntent();
     parsed.setIntent(ConversationAction.RECOMMENDATION);
-    parsed.setAddAuthors(true);
-    parsed.setAddNarrators(false);
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(client
             .prompt()
@@ -615,14 +651,16 @@ class InputParserTest {
                     client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
             .parse("fantasy under five hours");
     assertEquals(ConversationAction.RECOMMENDATION, result.getIntent());
-    org.junit.jupiter.api.Assertions.assertTrue(result.isAddAuthors());
-    org.junit.jupiter.api.Assertions.assertFalse(result.isAddNarrators());
     org.mockito.Mockito.verify(client.prompt())
         .system(
             org.mockito.ArgumentMatchers.<String>argThat(
                 prompt ->
                     prompt.contains("self-contained criteria")
-                        && prompt.contains("addAuthors/addNarrators")));
+                        && prompt.contains(
+                            "Each author or narrator field supports at most one person")));
+    var schema = new ObjectMapper().readTree(AiParser.REQUEST_CONVERTER.getJsonSchema());
+    assertFalse(schema.path("properties").has("addAuthors"));
+    assertFalse(schema.path("properties").has("addNarrators"));
   }
 
   @org.junit.jupiter.params.ParameterizedTest

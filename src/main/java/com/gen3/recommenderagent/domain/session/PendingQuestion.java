@@ -11,7 +11,6 @@ import com.gen3.recommenderagent.domain.conversation.ExplanationSelection;
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 @JsonSubTypes({
   @JsonSubTypes.Type(value = PendingQuestion.Search.class, name = "search"),
-  @JsonSubTypes.Type(value = PendingQuestion.Count.class, name = "count"),
   @JsonSubTypes.Type(value = PendingQuestion.Preference.class, name = "preference"),
   @JsonSubTypes.Type(value = PendingQuestion.Explanation.class, name = "explanation"),
   @JsonSubTypes.Type(value = PendingQuestion.SimilarBook.class, name = "similarBook")
@@ -35,7 +34,6 @@ public abstract class PendingQuestion {
   public static PendingQuestion create(ConversationDecision decision) {
     PendingQuestion question =
         switch (decision) {
-          case COUNT_CLARIFICATION -> new Count();
           case PREFERENCE_CLARIFICATION, PREFERENCE_UPDATE_CLARIFICATION -> new Preference();
           case EXPLANATION_TARGET_CLARIFICATION -> new Explanation();
           case SIMILAR_BOOK_SELECTION,
@@ -62,22 +60,6 @@ public abstract class PendingQuestion {
   }
 
   public static final class Search extends SearchRequest {}
-
-  public static final class Count extends PendingQuestion {
-    private ConversationTurn request;
-
-    public Count() {
-      setDecision(ConversationDecision.COUNT_CLARIFICATION);
-    }
-
-    public ConversationTurn getRequest() {
-      return request;
-    }
-
-    public void setRequest(ConversationTurn value) {
-      request = value;
-    }
-  }
 
   public static final class Preference extends SearchRequest {}
 

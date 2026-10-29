@@ -57,21 +57,6 @@ public class Session {
   }
 
   @JsonIgnore
-  public ConversationTurn getPendingCountRequest() {
-    return pendingQuestion instanceof PendingQuestion.Count question ? question.getRequest() : null;
-  }
-
-  public void setPendingCountRequest(ConversationTurn value) {
-    if (value != null) {
-      var question = new PendingQuestion.Count();
-      question.setRequest(value);
-      pendingQuestion = question;
-    } else if (pendingQuestion instanceof PendingQuestion.Count question) {
-      question.setRequest(null);
-    }
-  }
-
-  @JsonIgnore
   public ExplanationSelection getPendingExplanation() {
     return pendingQuestion instanceof PendingQuestion.Explanation question
         ? question.getSelection()

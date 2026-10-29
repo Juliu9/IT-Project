@@ -286,26 +286,6 @@ class ConversationDispatcherTest {
   }
 
   @Test
-  void countClarificationDoesNotRestoreTheAbandonedBookSelection() {
-    var session = new Session();
-    session.setPendingDecision(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
-    var input = request(ConversationAction.CHANGE_COUNT);
-    var count = conversationState.begin(session, input);
-    conversationState.finish(session, count, input);
-    assertEquals(ConversationDecision.COUNT_CLARIFICATION, session.getPendingDecision());
-    var mapper = tools.jackson.databind.json.JsonMapper.builder().build();
-    session = mapper.readValue(mapper.writeValueAsString(session), Session.class);
-    var answer = request(ConversationAction.UNKNOWN);
-    answer.setRawText("2");
-    var changed = conversationState.begin(session, answer);
-    conversationState.finish(session, changed, answer);
-    assertEquals(2, session.getBookCount());
-    assertNull(session.getPendingQuestion());
-    var selected = new ClarificationResolver().resolve(session, answer);
-    assertEquals(ConversationAction.UNKNOWN, selected.getIntent());
-  }
-
-  @Test
   void preferenceUpdateReplacesTheWaitingPersonalisedSearch() {
     var session = new Session();
     var pending = request(ConversationAction.RECOMMENDATION);

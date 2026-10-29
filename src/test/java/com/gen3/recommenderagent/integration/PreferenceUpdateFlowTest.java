@@ -536,9 +536,15 @@ class PreferenceUpdateFlowTest {
     var selection = request(ConversationAction.UNKNOWN);
     selection.setRawText("1");
     assertThat(process(selection).getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
-    process(request(ConversationAction.CHANGE_COUNT));
+    assertThat(process(request(ConversationAction.CHANGE_COUNT)).getDecision())
+        .isEqualTo(ConversationDecision.COUNT_UNCHANGED);
     var count = request(ConversationAction.UNKNOWN);
     count.setRawText("2");
+    assertThat(process(count).getDecision()).isEqualTo(ConversationDecision.UNKNOWN);
+    assertThat(sessions.getSession("session", "user").getPendingQuestion()).isNull();
+    count.setIntent(ConversationAction.CHANGE_COUNT);
+    count.setRawText("set count to 2");
+    count.setBookCount(2);
     assertThat(process(count).getDecision()).isEqualTo(ConversationDecision.COUNT_CHANGED);
   }
 

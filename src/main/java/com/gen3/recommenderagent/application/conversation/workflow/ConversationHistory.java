@@ -34,8 +34,7 @@ public final class ConversationHistory {
 
   // Persist only reusable context; raw text and the temporary decision stay out of history.
   static ConversationTurn historyEntry(ConversationDraft request) {
-    var entry = ConversationDraft.toTurn(request);
-    entry.setRawText(null);
+    var entry = ConversationDraft.toStoredTurn(request);
     entry.setDecision(null);
     return entry;
   }

@@ -166,7 +166,8 @@ public class InputParser {
     if (invalidCount && countInput.invalid()) {
       parsed.setIntent(
           parsed.getIntent() == ConversationAction.MORE_RESULTS
-              ? ConversationAction.MORE_RESULTS
+                  || parsed.getIntent() == ConversationAction.REFINE
+              ? parsed.getIntent()
               : CountInput.setting(rawText) || countInput.modelText().equals("1")
                   ? ConversationAction.CHANGE_COUNT
                   : CountInput.more(rawText)
@@ -192,8 +193,6 @@ public class InputParser {
     request.setReplacePreferenceFields(parsed.getReplacePreferenceFields());
     request.setExplicitSearch(parsed.isExplicitSearch());
     applySearchReplacements(rawText, parsed, request);
-    request.setAddAuthors(parsed.isAddAuthors());
-    request.setAddNarrators(parsed.isAddNarrators());
     request.setReferenceRank(boundedInteger(parsed.getReferenceRank()));
     request.setReferenceTitle(parsed.getReferenceTitle());
     request.setPersonalised(parsed.isPersonalised());
@@ -201,6 +200,14 @@ public class InputParser {
     request.setNegativeSemanticQuery(parsed.getNegativeSemanticQuery());
     request.setMustInclude(parsed.getMustInclude());
     request.setMustNotInclude(parsed.getMustNotInclude());
+    // Validate stated people before normalization can discard unsupported control-intent fields.
+    com.gen3.recommenderagent.application.conversation.PreferenceRequestMapper.fromRequest(request);
+    if (request.getPreferenceUpdates() != null) {
+      request.getPreferenceUpdates().copy();
+    }
+    if (request.getPreferenceRemovals() != null) {
+      request.getPreferenceRemovals().copy();
+    }
     applyPersonalisation(rawText, request);
     ConversationRules.normalizeInput(request);
     request.setInvalidBookCount(invalidCount);
@@ -220,7 +227,7 @@ public class InputParser {
       request.setReplaceSearchFields(parsed.getReplaceSearchFields());
       String command =
           com.gen3.recommenderagent.inputparser.ConversationText.normalizeCommand(rawText);
-      if (command.matches("^(?:also|add|additionally)\\b.*")
+      if (command.matches("^(?:also|add|additionally|(?:make (?:it|them) )?more)\\b.*")
           && !command.matches(".*\\b(?:instead|replace|rather than|switch)\\b.*")) {
         // Keep field removals while protecting supplied additions from model replacement flags.
         var search = parsed;

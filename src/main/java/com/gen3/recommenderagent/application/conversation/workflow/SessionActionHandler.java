@@ -19,6 +19,13 @@ public final class SessionActionHandler implements ConversationHandler {
   }
 
   public ConversationDraft resolve(Session session, ConversationDraft input) {
+    if (input.getIntent() == ConversationAction.CHANGE_COUNT
+        && (input.isInvalidBookCount()
+            || input.getBookCount() == null
+            || input.getBookCount() <= 0)) {
+      input.setInvalidBookCount(true);
+      input.setBookCount(session.getBookCount());
+    }
     return input;
   }
 
@@ -30,7 +37,7 @@ public final class SessionActionHandler implements ConversationHandler {
     request.setRecommendations(List.of());
     switch (request.getIntent()) {
       case CHANGE_COUNT -> {
-        if (request.getBookCount() != null) {
+        if (!request.isInvalidBookCount() && request.getBookCount() != null) {
           session.setBookCount(request.getBookCount());
         }
       }

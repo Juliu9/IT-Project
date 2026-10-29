@@ -9,7 +9,9 @@ import java.util.List;
  * reference data only: the resolver remains the authority for what the request is allowed to do.
  */
 public record SessionContext(
-    String pendingQuestion, String lastAction, List<String> displayedBooks) {
+    String pendingQuestion, String lastAction, List<DisplayedBook> displayedBooks) {
+  public record DisplayedBook(Integer rank, String title) {}
+
   public static final SessionContext EMPTY = new SessionContext(null, null, List.of());
 
   public SessionContext {

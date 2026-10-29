@@ -30,11 +30,9 @@ import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import com.gen3.recommenderagent.inputparser.AiParser;
 import com.gen3.recommenderagent.inputparser.CommandParser;
 import com.gen3.recommenderagent.inputparser.InputParser;
-import com.gen3.recommenderagent.inputparser.UserIntent;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
 import com.gen3.recommenderagent.response.ConversationResponseGenerator;
 import com.gen3.recommenderagent.retrieval.plan.ExactFilterPolicy;
-import java.math.BigInteger;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.IntStream;
@@ -118,6 +116,261 @@ class ApprovedInputFlowTest {
   private void reload() {
     var json = new ObjectMapper();
     session = json.readValue(json.writeValueAsString(session), Session.class);
+  }
+
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(ConversationAction.class)
+  void everyIntentHasTheExpectedOutcomeAndSideEffects(ConversationAction action) {
+    var page = search();
+    var preferences = new SessionPreferences();
+    var tastes = new SemanticQuery();
+    tastes.setKeywords(List.of("adventure"));
+    preferences.setPositiveSemanticQuery(tastes);
+    session.setPreferences(preferences);
+    session.setBookCount(3);
+    reload();
+    var json = new ObjectMapper();
+    String beforeSearch = json.writeValueAsString(session.getActiveSearch());
+    String beforePreferences = json.writeValueAsString(session.getPreferences());
+    org.mockito.Mockito.clearInvocations(workflow);
+    String text =
+        switch (action) {
+          case RECOMMENDATION -> "recommend mystery books";
+          case REFINE -> "make it more horror";
+          case MORE_RESULTS -> "more";
+          case REPEAT -> "repeat";
+          case REPEAT_RECOMMENDATIONS -> "repeat the recommendations";
+          case EXPLAIN_RECOMMENDATION -> "explain the second one";
+          case CHANGE_COUNT -> "set count to two";
+          case UPDATE_PREFERENCES -> "remember that I like comedy";
+          case RESET_PREFERENCES -> "reset preferences";
+          case CLEAR_HISTORY -> "clear history";
+          case HELP -> "help";
+          case CANCEL -> "cancel";
+          case UNKNOWN -> "1";
+        };
+    if (action == ConversationAction.RECOMMENDATION
+        || action == ConversationAction.REFINE
+        || action == ConversationAction.UPDATE_PREFERENCES) {
+      var stated = new com.gen3.recommenderagent.inputparser.UserIntent();
+      stated.setIntent(action);
+      var query = new SemanticQuery();
+      if (action == ConversationAction.UPDATE_PREFERENCES) {
+        var update = new SessionPreferences();
+        query.setKeywords(List.of("comedy"));
+        update.setPositiveSemanticQuery(query);
+        stated.setPreferenceUpdates(update);
+      } else {
+        query.setGenres(List.of(action == ConversationAction.REFINE ? "horror" : "mystery"));
+        stated.setPositiveSemanticQuery(query);
+      }
+      when(ai.parse(anyString())).thenReturn(stated);
+    }
+    var result = process(text);
+    assertThat(result.getIntent()).isEqualTo(action);
+    assertThat(result.getDecision())
+        .isEqualTo(
+            switch (action) {
+              case RECOMMENDATION, REFINE, MORE_RESULTS, REPEAT, REPEAT_RECOMMENDATIONS ->
+                  ConversationDecision.RECOMMENDATIONS;
+              case EXPLAIN_RECOMMENDATION -> ConversationDecision.EXPLANATION;
+              case CHANGE_COUNT -> ConversationDecision.COUNT_CHANGED;
+              case UPDATE_PREFERENCES -> ConversationDecision.PREFERENCES_UPDATED;
+              case RESET_PREFERENCES -> ConversationDecision.PREFERENCES_RESET;
+              case CLEAR_HISTORY -> ConversationDecision.HISTORY_CLEARED;
+              case HELP -> ConversationDecision.HELP;
+              case CANCEL -> ConversationDecision.CANCELLED;
+              case UNKNOWN -> ConversationDecision.UNKNOWN;
+            });
+    assertThat(responses.generate(result.getRecommendations(), result)).isNotBlank();
+    switch (action) {
+      case RECOMMENDATION, REFINE -> {
+        org.mockito.Mockito.verify(workflow).recommend(any(), any());
+        assertThat(result.getRecommendations()).hasSize(3);
+        assertThat(result.getPositiveSemanticQuery().getGenres())
+            .containsExactlyElementsOf(
+                action == ConversationAction.REFINE
+                    ? List.of("fantasy", "horror")
+                    : List.of("mystery"));
+      }
+      case MORE_RESULTS -> {
+        assertThat(result.getRecommendations())
+            .extracting(Recommendation::getRank)
+            .containsExactly(1, 2, 3);
+        assertThat(result.getRecommendations())
+            .extracting(Recommendation::getBookId)
+            .containsExactly("book-1-6", "book-1-7", "book-1-8");
+        assertThat(session.getActiveSearch().getPendingRecommendations()).hasSize(12);
+      }
+      case REPEAT, REPEAT_RECOMMENDATIONS ->
+          assertThat(result.getRecommendations())
+              .extracting(Recommendation::getBookId)
+              .containsExactlyElementsOf(Recommendation.bookIds(page.getRecommendations()));
+      case EXPLAIN_RECOMMENDATION ->
+          assertThat(result.getRecommendations())
+              .extracting(Recommendation::getRank)
+              .containsExactly(2);
+      case CHANGE_COUNT -> assertThat(session.getBookCount()).isEqualTo(2);
+      case UPDATE_PREFERENCES ->
+          assertThat(session.getPreferences().getPositiveSemanticQuery().getKeywords())
+              .containsExactly("adventure", "comedy");
+      case RESET_PREFERENCES -> {
+        assertThat(session.getPreferences()).isNull();
+        assertThat(session.getBookCount()).isEqualTo(5);
+      }
+      case CLEAR_HISTORY -> {
+        assertThat(session.getActiveSearch().getSearch()).isNull();
+        assertThat(session.getActiveSearch().getPendingRecommendations()).isEmpty();
+        assertThat(session.getActiveSearch().getShownBookIds()).isEmpty();
+      }
+      case HELP, CANCEL, UNKNOWN -> assertThat(result.getRecommendations()).isEmpty();
+      default -> throw new AssertionError("Missing intent assertions: " + action);
+    }
+    if (action != ConversationAction.RECOMMENDATION && action != ConversationAction.REFINE) {
+      verifyNoInteractions(workflow);
+    }
+    if (action != ConversationAction.RECOMMENDATION
+        && action != ConversationAction.REFINE
+        && action != ConversationAction.MORE_RESULTS
+        && action != ConversationAction.CLEAR_HISTORY) {
+      assertThat(json.writeValueAsString(session.getActiveSearch())).isEqualTo(beforeSearch);
+    }
+    if (action != ConversationAction.UPDATE_PREFERENCES
+        && action != ConversationAction.RESET_PREFERENCES) {
+      assertThat(json.writeValueAsString(session.getPreferences())).isEqualTo(beforePreferences);
+    }
+    if (action != ConversationAction.CHANGE_COUNT
+        && action != ConversationAction.RESET_PREFERENCES) {
+      assertThat(session.getBookCount()).isEqualTo(3);
+    }
+    reload();
+    assertThat(session.getLastOutcome().decision()).isEqualTo(result.getDecision());
+  }
+
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = ConversationDecision.class,
+      names = {
+        "PREFERENCE_CLARIFICATION",
+        "PREFERENCE_UPDATE_CLARIFICATION",
+        "SEARCH_CLARIFICATION",
+        "SHORTER_DURATION_CLARIFICATION",
+        "LONGER_DURATION_CLARIFICATION",
+        "RECENCY_YEAR_CLARIFICATION",
+        "SIMILAR_BOOK_SELECTION"
+      })
+  void pendingRequestsDoNotStoreRawMessagesAcrossHelpAndReload(ConversationDecision decision)
+      throws Exception {
+    String raw = "private-original-message-marker";
+    var action =
+        switch (decision) {
+          case PREFERENCE_CLARIFICATION, SIMILAR_BOOK_SELECTION ->
+              ConversationAction.RECOMMENDATION;
+          case PREFERENCE_UPDATE_CLARIFICATION -> ConversationAction.UPDATE_PREFERENCES;
+          case SEARCH_CLARIFICATION -> ConversationAction.MORE_RESULTS;
+          default -> ConversationAction.REFINE;
+        };
+    var input = request(action, raw);
+    switch (decision) {
+      case SIMILAR_BOOK_SELECTION -> {
+        input.setSimilarToTitle("Potter");
+        when(titles.findBooksByTitle(anyString(), any(), anyInt()))
+            .thenReturn(
+                List.of(
+                    new AudiobookTitle("potter-1", "Potter One", List.of("Author")),
+                    new AudiobookTitle("potter-2", "Potter Two", List.of("Author"))));
+      }
+      case PREFERENCE_CLARIFICATION, PREFERENCE_UPDATE_CLARIFICATION, SEARCH_CLARIFICATION -> {}
+      default -> {
+        duration = null;
+        year = null;
+        search();
+        input.setExplicitSearch(true);
+        input.setShorter(decision == ConversationDecision.SHORTER_DURATION_CLARIFICATION);
+        input.setLonger(decision == ConversationDecision.LONGER_DURATION_CLARIFICATION);
+        if (decision == ConversationDecision.RECENCY_YEAR_CLARIFICATION) {
+          var include = new ExactCriteria();
+          include.setPublicationYear("more recent");
+          input.setMustInclude(include);
+        }
+      }
+    }
+    var result = engine.process(session, input);
+    assertThat(result.getDecision()).isEqualTo(decision);
+    assertThat(result.getRawText()).isEqualTo(raw);
+    assertThat(new ObjectMapper().writeValueAsString(session)).doesNotContain(raw);
+    reload();
+    var pending =
+        (com.gen3.recommenderagent.domain.session.PendingQuestion.SearchRequest)
+            session.getPendingQuestion();
+    assertThat(pending.getRequest().getRawText()).isNull();
+    assertThat(session.getPendingDecision()).isEqualTo(decision);
+    if (input.getIntent() == ConversationAction.REFINE) {
+      assertThat(pending.getRequest().getPositiveSemanticQuery().getGenres())
+          .containsExactly("fantasy");
+    }
+    if (decision == ConversationDecision.SIMILAR_BOOK_SELECTION) {
+      assertThat(pending.getRequest().getSimilarBookChoices()).hasSize(2);
+    }
+    process("help");
+    reload();
+    assertThat(session.getPendingDecision()).isEqualTo(decision);
+    assertThat(
+            ((com.gen3.recommenderagent.domain.session.PendingQuestion.SearchRequest)
+                    session.getPendingQuestion())
+                .getRequest()
+                .getRawText())
+        .isNull();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"help", "explain the second one", "set count to 3"})
+  void parserContextRetainsThePageAcrossInterveningActions(String action) {
+    var page = search().getRecommendations();
+    var outcome = process(action);
+    reload();
+    var context =
+        new com.gen3.recommenderagent.application.conversation.SessionContextProjector()
+            .project(session);
+    assertThat(context.lastAction()).isEqualTo(outcome.getIntent().name());
+    assertThat(context.displayedBooks())
+        .containsExactlyElementsOf(
+            page.stream()
+                .map(
+                    book ->
+                        new com.gen3.recommenderagent.inputparser.SessionContext.DisplayedBook(
+                            book.getRank(), book.getTitle()))
+                .toList());
+    var aiIntent = new com.gen3.recommenderagent.inputparser.UserIntent();
+    aiIntent.setIntent(ConversationAction.UNKNOWN);
+    when(ai.parse("Could you find something resembling the Tolkien book you showed me?", context))
+        .thenReturn(aiIntent);
+    parser.parseUserIntent(
+        "Could you find something resembling the Tolkien book you showed me?", context);
+    org.mockito.Mockito.verify(ai)
+        .parse("Could you find something resembling the Tolkien book you showed me?", context);
+  }
+
+  @Test
+  void parserContextUsesTheNewPageWithItsOriginalRanks() {
+    search();
+    var next = process("more");
+    process("help");
+    reload();
+    var context =
+        new com.gen3.recommenderagent.application.conversation.SessionContextProjector()
+            .project(session);
+    assertThat(context.displayedBooks())
+        .extracting(com.gen3.recommenderagent.inputparser.SessionContext.DisplayedBook::rank)
+        .containsExactlyElementsOf(
+            next.getRecommendations().stream().map(Recommendation::getRank).toList());
+    assertThat(context.displayedBooks().getFirst().title()).isEqualTo("Book 6");
+    process("clear history");
+    assertThat(
+            new com.gen3.recommenderagent.application.conversation.SessionContextProjector()
+                .project(session)
+                .displayedBooks())
+        .isEmpty();
   }
 
   private ConversationTurn selection(List<String> include, List<String> exclude) {
@@ -399,50 +652,6 @@ class ApprovedInputFlowTest {
     assertThat(process("2").getDecision()).isEqualTo(ConversationDecision.UNKNOWN);
   }
 
-  @ParameterizedTest
-  @ValueSource(
-      strings = {
-        "Give me zero mystery books",
-        "Give me minus two mystery books",
-        "I want two and a half mystery books",
-        "Give me 2.5 mystery books"
-      })
-  void invalidCountsDoNotRetrieveAndTheCorrectionResumesTheOriginalSearch(String text) {
-    var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.RECOMMENDATION);
-    parsed.setInvalidBookCount(true);
-    parsed.setBookCount(BigInteger.ONE);
-    var query = new SemanticQuery();
-    query.setGenres(List.of("mystery"));
-    parsed.setPositiveSemanticQuery(query);
-    when(ai.parse(anyString())).thenReturn(parsed);
-    search();
-    int calls = batch;
-    var question = process(text);
-    assertThat(question.getDecision()).isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
-    assertThat(batch).isEqualTo(calls);
-    assertThat(session.getActiveSearch().getPendingRecommendations()).hasSize(15);
-    assertThat(responses.generate(question.getRecommendations(), question))
-        .contains("whole number from one to five");
-    process("help");
-    reload();
-    var result = process("3");
-    assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("mystery");
-    assertThat(result.getRecommendations()).hasSize(3);
-    assertThat(session.getBookCount()).isEqualTo(5);
-  }
-
-  @Test
-  void invalidMoreResumesWithATemporaryCountAndInvalidCountRepliesCannotBeRounded() {
-    search();
-    assertThat(process("0 more").getDecision()).isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
-    assertThat(process("2.5").getDecision()).isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
-    var result = process("2");
-    assertThat(result.getIntent()).isEqualTo(ConversationAction.MORE_RESULTS);
-    assertThat(result.getRecommendations()).hasSize(2);
-    assertThat(session.getBookCount()).isEqualTo(5);
-  }
-
   @Test
   void correctingAnInvalidCountSettingDoesNotRestoreReferenceSelection() throws Exception {
     when(titles.findBooksByTitle(anyString(), any(), anyInt()))
@@ -459,7 +668,7 @@ class ApprovedInputFlowTest {
     invalid.setInvalidBookCount(true);
     engine.process(session, invalid);
     reload();
-    var count = process("3");
+    var count = process("set count to 3");
     assertThat(session.getBookCount()).isEqualTo(3);
     assertThat(responses.generate(count.getRecommendations(), count))
         .contains("3 recommendations")
@@ -542,30 +751,6 @@ class ApprovedInputFlowTest {
     process("change count to three books");
     assertThat(session.getBookCount()).isEqualTo(3);
     verifyNoInteractions(ai);
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = {"more", "repeat the recommendations"})
-  void switchingActionsDiscardsTheAbandonedCountRequest(String action) {
-    search();
-    var invalid = request(ConversationAction.RECOMMENDATION, "zero mystery books");
-    invalid.setInvalidBookCount(true);
-    invalid.setExplicitSearch(true);
-    var query = new SemanticQuery();
-    query.setGenres(List.of("mystery"));
-    invalid.setPositiveSemanticQuery(query);
-    assertThat(engine.process(session, invalid).getDecision())
-        .isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
-    process(action);
-    assertThat(session.getPendingCountRequest()).isNull();
-    assertThat(process("0 more").getDecision()).isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
-    process("help");
-    process("repeat");
-    reload();
-    var more = process("2");
-    assertThat(more.getIntent()).isEqualTo(ConversationAction.MORE_RESULTS);
-    assertThat(more.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
-    assertThat(more.getRecommendations()).hasSize(2);
   }
 
   @ParameterizedTest
@@ -710,15 +895,6 @@ class ApprovedInputFlowTest {
     assertThat(resumed.isPersonalised()).isFalse();
     assertThat(resumed.getPositiveSemanticQuery().getGenres()).containsExactly("horror");
     assertThat(session.isAwaitingPersonalisedPreferences()).isFalse();
-  }
-
-  @Test
-  void invalidCombinedMoreCountStillResumesWithATemporaryCount() {
-    search();
-    assertThat(process("more and make it zero at a time").getDecision())
-        .isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
-    assertThat(process("2").getRecommendations()).hasSize(2);
-    assertThat(session.getBookCount()).isEqualTo(5);
   }
 
   @ParameterizedTest

@@ -792,14 +792,9 @@ class RedisSessionRepositoryTest {
   }
 
   @Test
-  void legacySessionsStartWithAnEmptyQueueAndNewQueuesAreBounded() {
-    stringRedisTemplate
-        .opsForValue()
-        .set(
-            key("legacy-batch"),
-            "{\"sessionId\":\"legacy-batch\",\"userId\":\"user-1\",\"bookCount\":5,\"version\":0,\"requests\":[]}");
+  void newSessionsStartWithAnEmptyQueueAndPersistBoundedQueues() {
     redisSessionCache.update(
-        "legacy-batch",
+        "bounded-batch",
         USER_ID,
         session -> {
           assertTrue(session.getActiveSearch().getPendingRecommendations().isEmpty());
@@ -807,12 +802,12 @@ class RedisSessionRepositoryTest {
               .getActiveSearch()
               .setPendingRecommendations(
                   IntStream.rangeClosed(1, 25)
-                      .mapToObj(i -> new Recommendation("legacy-" + i, i, 0.9, "Title " + i))
+                      .mapToObj(i -> new Recommendation("book-" + i, i, 0.9, "Title " + i))
                       .toList());
           return null;
         });
     assertEquals(
-        20, read("legacy-batch", USER_ID).getActiveSearch().getPendingRecommendations().size());
+        20, read("bounded-batch", USER_ID).getActiveSearch().getPendingRecommendations().size());
   }
 
   @Test

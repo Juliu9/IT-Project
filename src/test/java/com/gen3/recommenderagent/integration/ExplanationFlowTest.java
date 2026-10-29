@@ -530,37 +530,6 @@ class ExplanationFlowTest {
     verify(workflow).recommend(any(), any());
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"3", "three", "3 please"})
-  void countQuestionAcceptsShortRepliesAndPreservesTheQueue(String text) throws Exception {
-    search();
-    var question = process(ConversationAction.CHANGE_COUNT);
-    assertThat(question.getDecision()).isEqualTo(ConversationDecision.COUNT_CLARIFICATION);
-    String before =
-        new ObjectMapper()
-            .writeValueAsString(
-                sessions
-                    .getSession("session", "user")
-                    .getActiveSearch()
-                    .getPendingRecommendations());
-    var reply = new ConversationDraft();
-    reply.setIntent(ConversationAction.UNKNOWN);
-    reply.setRawText(text);
-    var result = service.process("session", "user", reply);
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.COUNT_CHANGED);
-    assertThat(sessions.getSession("session", "user").getBookCount()).isEqualTo(3);
-    assertThat(
-            new ObjectMapper()
-                .writeValueAsString(
-                    sessions
-                        .getSession("session", "user")
-                        .getActiveSearch()
-                        .getPendingRecommendations()))
-        .isEqualTo(before);
-    assertThat(process(ConversationAction.MORE_RESULTS).getRecommendations()).hasSize(3);
-    verify(workflow).recommend(any(), any());
-  }
-
   @Test
   void explicitlyAskingForTwoMoreReturnsTwoAndKeepsTheRest() {
     search();

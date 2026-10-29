@@ -28,6 +28,9 @@ public class UserPreferenceStartupImporter implements ApplicationRunner {
   @Value("${user.preferences.history-csv-path}")
   private String historyCsvPath;
 
+  @Value("${user.preferences.import.mode:dry-run}")
+  private String mode;
+
   public UserPreferenceStartupImporter(
       UserFavouriteCsvReader favouriteCsvReader,
       UserHistoryCsvReader historyCsvReader,
@@ -39,14 +42,27 @@ public class UserPreferenceStartupImporter implements ApplicationRunner {
 
   @Override
   public void run(ApplicationArguments args) throws Exception {
-    LOGGER.info("Starting User Preference Vector Aggregation...");
+    long started = System.nanoTime();
+    LOGGER.info("Starting User Preference Vector Aggregation... mode={}", mode);
 
     List<UserFavourite> favourites = favouriteCsvReader.read(Path.of(favouritesCsvPath));
     List<UserHistory> history = historyCsvReader.read(Path.of(historyCsvPath));
+    long readMs = (System.nanoTime() - started) / 1_000_000;
+    long aggregationStarted = System.nanoTime();
 
     aggregatorService.aggregateAndSave(favourites, history);
 
     LOGGER.info(
-        "Successfully aggregated and saved user preference vectors to the selected database.");
+        "user.preferences.import.completed mode={} favourites={} history={} csvReadMs={} aggregationMs={} totalMs={}",
+        mode,
+        favourites.size(),
+        history.size(),
+        readMs,
+        (System.nanoTime() - aggregationStarted) / 1_000_000,
+        (System.nanoTime() - started) / 1_000_000);
+    LOGGER.info(
+        "dry-run".equals(mode)
+            ? "Dry run completed. No user preference vectors were saved or cleared."
+            : "Successfully aggregated and saved user preference vectors to the selected database.");
   }
 }

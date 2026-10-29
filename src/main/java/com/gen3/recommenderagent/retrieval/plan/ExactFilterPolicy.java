@@ -431,7 +431,7 @@ public class ExactFilterPolicy {
         request.setDecision(ConversationDecision.RECENCY_EXHAUSTED);
       } else {
         request.setDecision(ConversationDecision.RECENCY_RANGE_CONFIRMATION);
-        session.setPendingRefinementRequest(ConversationDraft.toTurn(request));
+        session.setPendingRefinementRequest(ConversationDraft.toStoredTurn(request));
       }
       request.setSearchClarificationRequired(true);
       return;
@@ -450,7 +450,7 @@ public class ExactFilterPolicy {
       ConversationDraft request, Session session, ConversationDecision question) {
     request.setDecision(question);
     request.setSearchClarificationRequired(true);
-    session.setPendingRefinementRequest(ConversationDraft.toTurn(request));
+    session.setPendingRefinementRequest(ConversationDraft.toStoredTurn(request));
   }
 
   private void setYear(ConversationDraft request, String value) {
