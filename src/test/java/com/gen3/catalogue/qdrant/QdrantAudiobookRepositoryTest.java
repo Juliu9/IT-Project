@@ -195,6 +195,9 @@ class QdrantAudiobookRepositoryTest {
     var request = ArgumentCaptor.forClass(ScrollPoints.class);
     verify(client).scrollAsync(request.capture());
     assertThat(request.getValue().getFilter().toString()).contains("bookId", "catalogue-id");
+    assertThat(request.getValue().getLimit()).isEqualTo(100);
+    assertThat(request.getValue().getWithPayload())
+        .isEqualTo(io.qdrant.client.WithPayloadSelectorFactory.enable(true));
     assertThat(request.getValue().getWithVectors())
         .isEqualTo(io.qdrant.client.WithVectorsSelectorFactory.enable(false));
   }
@@ -347,16 +350,43 @@ class QdrantAudiobookRepositoryTest {
         new QdrantAudiobookRepository(client, mapper, sparseEncoder, "audiobooks", 2);
 
     repository.findEmbeddingsByBookIds(
-        IntStream.range(0, 101).mapToObj(index -> "book-" + index).toList());
+        IntStream.range(0, 501).mapToObj(index -> "book-" + index).toList());
 
     var requests = ArgumentCaptor.forClass(ScrollPoints.class);
     verify(client, times(2)).scrollAsync(requests.capture());
     assertThat(requests.getAllValues())
         .allSatisfy(
             request -> {
-              assertThat(request.getLimit()).isEqualTo(100);
+              assertThat(request.getLimit()).isEqualTo(500);
               assertThat(request.getFilter().getMust(0).getField().getKey()).isEqualTo("bookId");
+              assertThat(request.getWithPayload())
+                  .isEqualTo(
+                      io.qdrant.client.WithPayloadSelectorFactory.include(List.of("bookId")));
+              assertThat(request.getWithVectors())
+                  .isEqualTo(io.qdrant.client.WithVectorsSelectorFactory.include(List.of("dense")));
             });
+    assertThat(
+            requests
+                .getAllValues()
+                .getFirst()
+                .getFilter()
+                .getMust(0)
+                .getField()
+                .getMatch()
+                .getKeywords()
+                .getStringsCount())
+        .isEqualTo(500);
+    assertThat(
+            requests
+                .getAllValues()
+                .getLast()
+                .getFilter()
+                .getMust(0)
+                .getField()
+                .getMatch()
+                .getKeywords()
+                .getStringsList())
+        .containsExactly("book-500");
   }
 
   @Test

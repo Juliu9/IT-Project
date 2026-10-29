@@ -25,7 +25,6 @@ package "userpreferencejob" as userpreferencejob {
   class "UserPreferenceAggregatorService" as C0 {
     - AudiobookVectorRepository audiobookVectorRepository
     - UserPreferenceVectorRepository userPreferenceVectorRepository
-    - int maximumUsers
     - int maximumBookIds
     + void aggregateAndSave(List<UserFavourite>,List<UserHistory>)
     - void aggregateGroup(List<String>,Set<String>,Map<String,List<UserFavourite>>,Map<String,List<UserHistory>>,Instant)

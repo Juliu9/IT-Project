@@ -306,8 +306,9 @@ public class QdrantAudiobookRepository
   private Map<String, RetrievedPoint> findRecordsByBookIds(List<String> ids, boolean withVectors)
       throws IOException {
     Map<String, RetrievedPoint> records = new LinkedHashMap<>();
-    for (int start = 0; start < ids.size(); start += 100) {
-      var batch = ids.subList(start, Math.min(start + 100, ids.size()));
+    int batchSize = withVectors ? 500 : 100;
+    for (int start = 0; start < ids.size(); start += batchSize) {
+      var batch = ids.subList(start, Math.min(start + batchSize, ids.size()));
       var request =
           io.qdrant.client.grpc.Points.ScrollPoints.newBuilder()
               .setCollectionName(collection)
@@ -316,9 +317,17 @@ public class QdrantAudiobookRepository
                       .addMust(
                           io.qdrant.client.ConditionFactory.matchKeywords(
                               QdrantAudiobookSchema.BOOK_ID, batch)))
-              .setLimit(100)
-              .setWithPayload(enable(true))
-              .setWithVectors(io.qdrant.client.WithVectorsSelectorFactory.enable(withVectors));
+              .setLimit(batchSize)
+              .setWithPayload(
+                  withVectors
+                      ? io.qdrant.client.WithPayloadSelectorFactory.include(
+                          List.of(QdrantAudiobookSchema.BOOK_ID))
+                      : enable(true))
+              .setWithVectors(
+                  withVectors
+                      ? io.qdrant.client.WithVectorsSelectorFactory.include(
+                          List.of(QdrantPointMapper.DENSE_VECTOR))
+                      : io.qdrant.client.WithVectorsSelectorFactory.enable(false));
       while (true) {
         var page =
             await(client.scrollAsync(request.build()), "resolve catalogue book IDs in Qdrant");

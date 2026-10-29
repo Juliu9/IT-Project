@@ -1,5 +1,7 @@
 package com.gen3.userpreferencejob;
 
+import java.time.Instant;
+import java.util.UUID;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -39,6 +41,12 @@ public class UserPreferenceApplication {
     try (var context =
         new SpringApplicationBuilder(UserPreferenceApplication.class)
             .web(WebApplicationType.NONE)
+            .properties(
+                "logging.file.name=logs/user-import/"
+                    + Instant.now().toEpochMilli()
+                    + "-"
+                    + UUID.randomUUID()
+                    + ".log")
             .run(args)) {
       // Close database clients when the maintenance runner finishes.
     }

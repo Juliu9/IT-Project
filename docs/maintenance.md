@@ -188,14 +188,17 @@ reads and writes stay within that database. For Solr, prepare the separate prefe
 schema described in [Solr setup](configuration.md#solr). Solr writes at most 500 user updates per
 batch and commits once per batch; earlier batches remain saved if a later batch fails.
 
-The importer loads vectors for at most 1,000 users and 100,000 distinct book IDs per group by default.
-Either limit closes a group; repeated book IDs count once across favourites and history. Each user
-stays whole, and groups release their vectors before the next fetch. Both limits are configurable
-under `user.preferences.import` (see [configuration](configuration.md#user-preference-import)).
+The importer loads vectors for at most 100,000 distinct book IDs per group by default, regardless
+of user count. Repeated book IDs count once across users, favourites and history. Each user stays
+whole, and groups release their vectors before the next fetch. Profile saves and clears are batched
+at 500 users. The book-ID limit is configurable under `user.preferences.import`
+(see [configuration](configuration.md#user-preference-import)).
 Before any reads or writes, every user is checked against the book-ID limit. An oversized user
 stops the job with their ID, count and limit; no history is truncated. CSV records still reside in
 memory. At 1,536 dimensions, 100,000 vectors alone occupy about 586 MiB, before database-client and
 CSV overhead; lower the group limit on memory-constrained machines.
+Qdrant vector lookups fetch up to 500 book IDs per sequential request and select only the `bookId`
+payload and `dense` vector. Book-detail lookups still fetch full metadata in batches of 100.
 Database failures can leave earlier groups saved; reruns recompute and overwrite preferences.
 Favourite rows are deduplicated by user and normalized book ID before averaging. Users present in
 the import with no usable book vectors have both stored taste vectors cleared; users absent from
@@ -235,6 +238,13 @@ counts instead of database writes. Missing vectors are reported as would-be clea
 Completion logs include `mode=dry-run`, `csvReadMs`, `aggregationMs` and `totalMs`. These timings include
 catalogue reads but exclude application startup and real profile persistence. No AI calls occur.
 Dry runs still place read load on the selected catalogue; use read-only credentials when available.
+
+Every launch of `UserPreferenceApplication` also saves application output to a unique
+`logs/user-import/<epoch-milliseconds>-<uuid>.log` file, including startup errors, import progress
+and completion timings. Console output is unchanged. This applies to both backends and both modes;
+no extra command flags are needed. Logs are ignored by Git and retained until manually removed.
+Override the destination with `--logging.file.name=/path/to/import.log` if needed. Maven output
+before the application starts is not included.
 
 ## Solr launcher verification
 

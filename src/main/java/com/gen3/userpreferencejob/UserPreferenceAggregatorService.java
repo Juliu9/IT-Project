@@ -26,25 +26,22 @@ public class UserPreferenceAggregatorService {
   private final AudiobookVectorRepository audiobookVectorRepository;
   private final UserPreferenceVectorRepository userPreferenceVectorRepository;
 
-  private final int maximumUsers;
   private final int maximumBookIds;
 
   public UserPreferenceAggregatorService(
       AudiobookVectorRepository audiobookVectorRepository,
       UserPreferenceVectorRepository userPreferenceVectorRepository) {
-    this(audiobookVectorRepository, userPreferenceVectorRepository, 1_000, 100_000);
+    this(audiobookVectorRepository, userPreferenceVectorRepository, 100_000);
   }
 
   @Autowired
   public UserPreferenceAggregatorService(
       AudiobookVectorRepository audiobookVectorRepository,
       UserPreferenceVectorRepository userPreferenceVectorRepository,
-      @Value("${user.preferences.import.max-users-per-group:1000}") int maximumUsers,
       @Value("${user.preferences.import.max-book-ids-per-group:100000}") int maximumBookIds) {
-    if (maximumUsers < 1 || maximumBookIds < 1) {
-      throw new IllegalArgumentException("Preference import group limits must be positive");
+    if (maximumBookIds < 1) {
+      throw new IllegalArgumentException("Preference import book-ID limit must be positive");
     }
-    this.maximumUsers = maximumUsers;
     this.maximumBookIds = maximumBookIds;
     this.audiobookVectorRepository = audiobookVectorRepository;
     this.userPreferenceVectorRepository = userPreferenceVectorRepository;
@@ -87,8 +84,7 @@ public class UserPreferenceAggregatorService {
               favsByUser.getOrDefault(userId, List.of()),
               histByUser.getOrDefault(userId, List.of()));
       long additions = ids.stream().filter(id -> !groupBooks.contains(id)).count();
-      if (!group.isEmpty()
-          && (group.size() == maximumUsers || groupBooks.size() + additions > maximumBookIds)) {
+      if (!group.isEmpty() && groupBooks.size() + additions > maximumBookIds) {
         aggregateGroup(group, groupBooks, favsByUser, histByUser, now);
         group.clear();
         groupBooks.clear();
@@ -141,6 +137,10 @@ public class UserPreferenceAggregatorService {
 
       if (aggregatedFavs.length == 0 && aggregatedHist.length == 0) {
         usersToClear.add(userId);
+        if (usersToClear.size() == 500) {
+          userPreferenceVectorRepository.clearAll(List.copyOf(usersToClear));
+          usersToClear.clear();
+        }
         continue;
       }
       pending.add(new UserPreferenceEmbedding(userId, aggregatedFavs, aggregatedHist));

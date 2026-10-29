@@ -118,22 +118,55 @@ class UserPreferenceAggregatorServiceTest {
   }
 
   @Test
-  void writesBoundedBatchesIncludingTheFinalPartialBatch() throws IOException {
+  void sharesBookLookupAcrossTenThousandUsersAndStillWritesBoundedBatches() throws IOException {
     var books = mock(AudiobookVectorRepository.class);
     var users = mock(UserPreferenceVectorRepository.class);
     when(books.findEmbeddingsByBookIds(org.mockito.ArgumentMatchers.anyCollection()))
         .thenReturn(Map.of("book", new float[] {1, 0}));
     var favourites =
-        java.util.stream.IntStream.range(0, 1001)
+        java.util.stream.IntStream.range(0, 10001)
             .mapToObj(i -> new UserFavourite("user-" + i, "book"))
             .toList();
     new UserPreferenceAggregatorService(books, users).aggregateAndSave(favourites, List.of());
     ArgumentCaptor<List<UserPreferenceEmbedding>> saved = ArgumentCaptor.forClass(List.class);
-    verify(users, org.mockito.Mockito.times(3)).saveAll(saved.capture());
-    verify(books, org.mockito.Mockito.times(2)).findEmbeddingsByBookIds(Set.of("book"));
+    verify(users, org.mockito.Mockito.times(21)).saveAll(saved.capture());
+    verify(books).findEmbeddingsByBookIds(Set.of("book"));
     org.assertj.core.api.Assertions.assertThat(saved.getAllValues())
         .extracting(List::size)
+        .containsExactlyElementsOf(
+            java.util.stream.IntStream.range(0, 21).mapToObj(i -> i < 20 ? 500 : 1).toList());
+  }
+
+  @Test
+  void boundsClearsWhenManyUsersShareMissingBooks() throws IOException {
+    var books = mock(AudiobookVectorRepository.class);
+    var users = mock(UserPreferenceVectorRepository.class);
+    when(books.findEmbeddingsByBookIds(org.mockito.ArgumentMatchers.anyCollection()))
+        .thenReturn(Map.of());
+    var input =
+        java.util.stream.IntStream.range(0, 1001)
+            .mapToObj(i -> new UserFavourite("user-" + i, "missing"))
+            .toList();
+    new UserPreferenceAggregatorService(books, users).aggregateAndSave(input, List.of());
+    ArgumentCaptor<List<String>> cleared = ArgumentCaptor.forClass(List.class);
+    verify(users, org.mockito.Mockito.times(3)).clearAll(cleared.capture());
+    verify(books).findEmbeddingsByBookIds(Set.of("missing"));
+    org.assertj.core.api.Assertions.assertThat(cleared.getAllValues())
+        .extracting(List::size)
         .containsExactly(500, 500, 1);
+    verifyNoMoreInteractions(users);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(ints = {0, -1})
+  void rejectsNonPositiveBookLimits(int limit) {
+    var books = mock(AudiobookVectorRepository.class);
+    var users = mock(UserPreferenceVectorRepository.class);
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> new UserPreferenceAggregatorService(books, users, limit))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("book-ID limit must be positive");
+    org.mockito.Mockito.verifyNoInteractions(books, users);
   }
 
   @Test
@@ -149,7 +182,7 @@ class UserPreferenceAggregatorServiceTest {
               return ids.stream()
                   .collect(java.util.stream.Collectors.toMap(id -> id, id -> new float[] {1, 0}));
             });
-    new UserPreferenceAggregatorService(books, users, 100, 2)
+    new UserPreferenceAggregatorService(books, users, 2)
         .aggregateAndSave(
             List.of(
                 new UserFavourite("a", "one"),
@@ -178,7 +211,7 @@ class UserPreferenceAggregatorServiceTest {
             new UserFavourite("z-large", "three"));
     org.assertj.core.api.Assertions.assertThatThrownBy(
             () ->
-                new UserPreferenceAggregatorService(books, users, 1, 2)
+                new UserPreferenceAggregatorService(books, users, 2)
                     .aggregateAndSave(input, List.of()))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("z-large")
