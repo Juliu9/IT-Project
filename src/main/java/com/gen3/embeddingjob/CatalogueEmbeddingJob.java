@@ -29,46 +29,52 @@ public class CatalogueEmbeddingJob {
   }
 
   public void run() throws Exception {
-    String cursor = null;
-    int scanned = 0;
-    int indexed = 0;
-    do {
-      int limit = maximumRecords == 0 ? pageSize : Math.min(pageSize, maximumRecords - scanned);
-      if (limit == 0) {
-        break;
-      }
-      var page = store.embeddingPage(cursor, limit);
-      var valid =
-          page.books().stream()
-              .filter(
-                  book ->
-                      book.record() != null
-                          && book.record().id() != null
-                          && !book.record().id().isBlank())
-              .filter(book -> !indexer.buildAudiobookText(book.record()).isBlank())
-              .toList();
-      if (!valid.isEmpty()) {
-        var embeddings =
-            indexer.embedAudiobooks(valid.stream().map(book -> book.record()).toList());
-        if (embeddings.size() != valid.size()) {
-          throw new IllegalStateException("Embedding batch does not match the source records");
+    try (var progress = new com.gen3.maintenance.JobProgress("catalogue.embeddings")) {
+      String cursor = null;
+      int scanned = 0;
+      int indexed = 0;
+      do {
+        int limit = maximumRecords == 0 ? pageSize : Math.min(pageSize, maximumRecords - scanned);
+        if (limit == 0) {
+          break;
         }
-        var updates = new ArrayList<AudiobookEmbeddingStore.Update>();
-        for (int i = 0; i < valid.size(); i++) {
-          updates.add(
-              new AudiobookEmbeddingStore.Update(
-                  valid.get(i).storageReference(), embeddings.get(i)));
+        progress.stage("reading catalogue");
+        var page = store.embeddingPage(cursor, limit);
+        var valid =
+            page.books().stream()
+                .filter(
+                    book ->
+                        book.record() != null
+                            && book.record().id() != null
+                            && !book.record().id().isBlank())
+                .filter(book -> !indexer.buildAudiobookText(book.record()).isBlank())
+                .toList();
+        if (!valid.isEmpty()) {
+          progress.stage("generating embeddings");
+          var embeddings =
+              indexer.embedAudiobooks(valid.stream().map(book -> book.record()).toList());
+          if (embeddings.size() != valid.size()) {
+            throw new IllegalStateException("Embedding batch does not match the source records");
+          }
+          var updates = new ArrayList<AudiobookEmbeddingStore.Update>();
+          for (int i = 0; i < valid.size(); i++) {
+            updates.add(
+                new AudiobookEmbeddingStore.Update(
+                    valid.get(i).storageReference(), embeddings.get(i)));
+          }
+          progress.stage("writing embeddings");
+          store.updateEmbeddings(updates);
+          indexed += updates.size();
         }
-        store.updateEmbeddings(updates);
-        indexed += updates.size();
-      }
-      scanned += page.books().size();
-      cursor = page.nextCursor();
-      LOGGER.info("catalogue.embedding.progress scanned={} indexed={}", scanned, indexed);
-      if (page.books().isEmpty()) {
-        break;
-      }
-    } while (cursor != null);
-    LOGGER.info("catalogue.embedding.completed scanned={} indexed={}", scanned, indexed);
+        scanned += page.books().size();
+        progress.update(scanned, -1);
+        cursor = page.nextCursor();
+        LOGGER.info("catalogue.embedding.progress scanned={} indexed={}", scanned, indexed);
+        if (page.books().isEmpty()) {
+          break;
+        }
+      } while (cursor != null);
+      LOGGER.info("catalogue.embedding.completed scanned={} indexed={}", scanned, indexed);
+    }
   }
 }

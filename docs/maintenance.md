@@ -8,12 +8,39 @@ connections in the shell or IDE. AI generation incurs provider charges.
 Solr scans continue after the last processed ID, so earlier insertions/deletions do not shift later
 pages. This is not a frozen snapshot: records inserted behind that ID require another run. Keep the
 catalogue stable when a job must cover one exact dataset.
-Migration and preference import need no AI credentials. Their launchers, and the summary launcher,
+
+## Automatic progress reporting
+
+Maintenance jobs print `maintenance.progress` immediately and every 10 seconds while running.
+This covers snapshot export/validation/loading, embedding generation, catalogue migration,
+user-import preparation/aggregation, and short-description submit/import/recovery.
+
+```text
+maintenance.progress job=book.snapshot.rebuild stage=reading catalogue and writing snapshot processed=12500 total=unknown elapsedMs=60000 sinceProgressMs=1500
+```
+
+`stage` identifies current work or I/O, `processed` is the last completed counter update for that
+stage, and `sinceProgressMs` is the time since the stage or counter changed. Snapshot counts advance
+per export page (or every 1,000 vectors during local validation/loading). User aggregation reports
+users processed and a known user total. CSV preparation updates counts every 10,000 rows;
+embedding/migration counters advance after completed pages. Short-description database imports and
+provider polling retain their existing detailed progress events.
+
+`total=unknown` means no exact total is available; limits are not presented as totals and no ETA is
+invented. A heartbeat proves the reporter is alive, not that a pending remote operation is advancing.
+An increasing `sinceProgressMs` during a read, write, or provider wait makes that lack of advancement
+visible. It does not trigger retries, cancel work, query the database, or declare success.
+The reporter stops automatically on success or failure. Use the job's existing completion event and
+`BUILD SUCCESS` as confirmation of success. Already-running jobs must finish or be restarted before
+they can use new reporting code; updating files does not instrument a running JVM.
+
+Migration, snapshot rebuilds and preference import need no AI credentials. Their launchers, and the summary launcher,
 disable unused Spring AI models; the summary provider handles its own transport and credentials.
 
 | Job | Databases | AI generation | Changes |
 | --- | --- | --- | --- |
-| Catalogue embeddings | Solr or Qdrant | Embeddings | Existing records' vectors |
+| Catalogue embeddings | Solr or Qdrant | Embeddings | Existing records' vectors, then local snapshot |
+| Book-vector snapshot | Solr or Qdrant | None | Local binary file only; database is read-only |
 | Migration | Solr → Qdrant | None | Copies absent destination books |
 | Short descriptions | Solr or Qdrant | Batch summaries | Missing short descriptions |
 | User preferences | Solr or Qdrant | None | Aggregated user vectors |
@@ -52,6 +79,10 @@ AUDIOBOOK_EMBEDDING_INDEX_ENABLED=true AUDIOBOOK_DATABASE=solr \
   rejects the stale update instead of recreating a partial document or attaching an outdated vector.
   Earlier updates may already be saved; rerun against the current catalogue after resolving the conflict.
 - Rerunning starts at the beginning and regenerates existing vectors, incurring charges again.
+- After a successful pass, a separate full-catalogue snapshot export runs. A failed export leaves
+  the previous snapshot intact and fails the launcher. Retry only the [snapshot rebuild](#build-or-refresh-the-local-snapshot)
+  to avoid paying for embedding generation again. Changing models requires a complete compatible
+  catalogue reindex before publishing; existing records have no stored model identifier to verify.
 - The process closes its clients when finished. It cannot run alongside migration or summary generation.
 
 Implementation lives in `com.gen3.embeddingjob`. Another database implements
@@ -188,17 +219,26 @@ reads and writes stay within that database. For Solr, prepare the separate prefe
 schema described in [Solr setup](configuration.md#solr). Solr writes at most 500 user updates per
 batch and commits once per batch; earlier batches remain saved if a later batch fails.
 
-The importer loads vectors for at most 100,000 distinct book IDs per group by default, regardless
-of user count. Repeated book IDs count once across users, favourites and history. Each user stays
-whole, and groups release their vectors before the next fetch. Profile saves and clears are batched
+The importer uses the last valid local book-vector snapshot, not remote catalogue lookups. It loads
+and verifies that snapshot before reading CSVs or writing any profiles. There is no age-based expiry
+and no fallback to remote reads. Each process pins its loaded snapshot even if a new one is published.
+It groups at most 100,000 distinct book IDs by default, regardless of user count. Each user stays
+whole. Profile saves and clears are batched
 at 500 users. The book-ID limit is configurable under `user.preferences.import`
 (see [configuration](configuration.md#user-preference-import)).
-Before any reads or writes, every user is checked against the book-ID limit. An oversized user
-stops the job with their ID, count and limit; no history is truncated. CSV records still reside in
-memory. At 1,536 dimensions, 100,000 vectors alone occupy about 586 MiB, before database-client and
-CSV overhead; lower the group limit on memory-constrained machines.
-Qdrant vector lookups fetch up to 500 book IDs per sequential request and select only the `bookId`
-payload and `dense` vector. Book-detail lookups still fetch full metadata in batches of 100.
+Before any profile writes, every user is checked against the book-ID limit. An oversized user
+stops the job with their ID and limit; no history is truncated. CSVs are streamed into sorted binary
+runs, merged on disk, and fully validated before profile writes. Unordered inputs are supported;
+duplicate favourites collapse and duplicate history retains the latest interaction. Whole-user
+batches target 100,000 rows (`user.preferences.import.max-records-in-memory`); a single larger
+user remains whole, bounded by the distinct-book limit. Temporary files live under
+`user.preferences.import.work-directory` (default `./data/user-import-work`) and are cleaned on
+success or failure. Allow temporary disk space comparable to the input files; a killed process
+may leave its uniquely named work directory behind. The full snapshot resides in RAM and is
+reused across groups. At 1,536 dimensions,
+200,000 vectors alone occupy about 1.14 GiB, before ID maps, CSVs, clients and runtime overhead.
+The group limit does not bound this cache. Give the dedicated importer enough heap (for example,
+`-Dspring-boot.run.jvmArguments="-Xmx3g"` for the demo) and monitor actual memory use.
 Database failures can leave earlier groups saved; reruns recompute and overwrite preferences.
 Favourite rows are deduplicated by user and normalized book ID before averaging. Users present in
 the import with no usable book vectors have both stored taste vectors cleared; users absent from
@@ -217,8 +257,8 @@ and other maintenance jobs.
 
 ### Read-only dry run (Solr or Qdrant)
 
-`user.preferences.import.mode` defaults to `dry-run`: use the real CSV readers, catalogue-vector
-lookups, group limits and aggregation without saving or clearing user profiles. Only explicit
+`user.preferences.import.mode` defaults to `dry-run`: use the real CSV readers, local snapshot,
+group limits and aggregation without saving or clearing user profiles. Only explicit
 `write` mode permits persistence, as in the command above. Any other value fails startup.
 `import-on-startup=true` is still required to launch the job; it does not authorize writes by itself.
 
@@ -233,11 +273,12 @@ AUDIOBOOK_DATABASE=qdrant USER_PREFERENCES_IMPORT_ON_STARTUP=true \
 
 Use `AUDIOBOOK_DATABASE=solr` for Solr. IDs in the CSVs must exist with compatible vectors in that
 backend; IDs exported from Qdrant are not guaranteed to exist in a different Solr catalogue.
-The dry-run storage sink validates generated vectors and logs generated-profile and missing-vector
+Build a snapshot first using the command below. The dry-run storage sink validates generated vectors and logs generated-profile and missing-vector
 counts instead of database writes. Missing vectors are reported as would-be clears, never performed.
-Completion logs include `mode=dry-run`, `csvReadMs`, `aggregationMs` and `totalMs`. These timings include
-catalogue reads but exclude application startup and real profile persistence. No AI calls occur.
-Dry runs still place read load on the selected catalogue; use read-only credentials when available.
+Completion logs include `mode=dry-run`, `snapshotLoadMs`, `csvReadMs` (parsing and spilling),
+`sortMs` (merging and validation), `aggregationMs`, and `totalMs`, plus user and unique-row counts.
+They exclude application startup and real profile persistence. No AI calls or remote catalogue-vector
+lookups occur during daily imports. Snapshot rebuilds do read the catalogue.
 
 Every launch of `UserPreferenceApplication` also saves application output to a unique
 `logs/user-import/<epoch-milliseconds>-<uuid>.log` file, including startup errors, import progress
@@ -245,6 +286,37 @@ and completion timings. Console output is unchanged. This applies to both backen
 no extra command flags are needed. Logs are ignored by Git and retained until manually removed.
 Override the destination with `--logging.file.name=/path/to/import.log` if needed. Maven output
 before the application starts is not included.
+
+### Build or refresh the local snapshot
+
+```bash
+AUDIOBOOK_DATABASE=qdrant QDRANT_TIMEOUT=120s ./mvnw spring-boot:run \
+  -Dapplication.main-class=com.gen3.snapshotjob.BookVectorSnapshotApplication \
+  -Dspring-boot.run.profiles=dev
+```
+
+Use `AUDIOBOOK_DATABASE=solr` to export Solr instead. This dedicated job only reads existing vectors;
+it neither generates embeddings nor changes database records. The embedding-index launcher also
+runs this separate rebuild step after a successful embedding pass. A failed rebuild fails that
+workflow and can be retried with this command without generating embeddings again.
+
+Files live under `data/book-vector-snapshot/<backend>/<collection-hash>.bin`, or the configured
+`BOOK_VECTOR_SNAPSHOT_DIRECTORY`. Both jobs must use the same persistent directory and catalogue
+settings. A snapshot is one binary file with a versioned metadata header (backend, collection,
+declared embedding model, dimensions, creation time), exact float32 vectors keyed by book ID, count,
+and SHA-256 checksum. It is ignored by Git. Missing vectors are excluded; an empty export is rejected.
+
+A rebuild streams to a separate temporary file and validates it before atomic replacement. Any
+failure leaves the previous published snapshot intact; filesystems without atomic replacement fail
+the rebuild rather than publishing partially. Do not run catalogue writers during export: pagination
+is not a database-wide transactional snapshot. Retain the previous snapshot until a refresh succeeds.
+
+Daily imports accept the last compatible snapshot regardless of age. They reject missing, truncated,
+corrupt, dimension/model/backend/collection-incompatible snapshots before any user-profile writes.
+Freshness is not inferred from a checksum: new/changed/deleted catalogue books require an explicit
+refresh, including changes made outside the embedding job. Books absent from an older snapshot are
+treated as unavailable; users with no available evidence can have profiles cleared in explicit write
+mode. The snapshot never modifies the Solr/Qdrant record schemas.
 
 ## Solr launcher verification
 

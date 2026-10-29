@@ -39,30 +39,36 @@ public class SolrToQdrantMigrator implements ApplicationRunner {
   /** Reads every Solr page and copies records absent from Qdrant. */
   @Override
   public void run(ApplicationArguments arguments) throws Exception {
-    destination.initialize();
-    int scanned = 0;
-    String afterId = null;
-    int migrated = 0;
-    while (true) {
-      int remaining = maximumRecords == 0 ? batchSize : maximumRecords - scanned;
-      if (remaining <= 0) {
-        break;
-      }
-      int pageLimit = Math.min(batchSize, remaining);
-      List<AudiobookEmbedding> books = source.findStoredBooks(afterId, pageLimit);
-      if (books.isEmpty()) {
-        break;
-      }
+    try (var progress = new com.gen3.maintenance.JobProgress("catalogue.migration")) {
+      progress.stage("initializing destination");
+      destination.initialize();
+      int scanned = 0;
+      String afterId = null;
+      int migrated = 0;
+      while (true) {
+        int remaining = maximumRecords == 0 ? batchSize : maximumRecords - scanned;
+        if (remaining <= 0) {
+          break;
+        }
+        int pageLimit = Math.min(batchSize, remaining);
+        progress.stage("reading source catalogue");
+        List<AudiobookEmbedding> books = source.findStoredBooks(afterId, pageLimit);
+        if (books.isEmpty()) {
+          break;
+        }
 
-      migrated += destination.importStoredBooks(books);
-      scanned += books.size();
-      afterId = books.getLast().record().id();
-      LOGGER.info("Migrated {} audiobook records from Solr to Qdrant", migrated);
+        progress.stage("writing destination catalogue");
+        migrated += destination.importStoredBooks(books);
+        scanned += books.size();
+        progress.update(scanned, -1);
+        afterId = books.getLast().record().id();
+        LOGGER.info("Migrated {} audiobook records from Solr to Qdrant", migrated);
 
-      if (books.size() < pageLimit) {
-        break;
+        if (books.size() < pageLimit) {
+          break;
+        }
       }
+      LOGGER.info("Solr-to-Qdrant migration complete: {} records", migrated);
     }
-    LOGGER.info("Solr-to-Qdrant migration complete: {} records", migrated);
   }
 }

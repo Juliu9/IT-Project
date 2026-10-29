@@ -9,9 +9,6 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
@@ -23,10 +20,7 @@ public class UserHistoryCsvReader {
   private static final DateTimeFormatter DATE_FORMATTER =
       DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-  private record UserBook(String userId, String bookId) {}
-
-  public List<UserHistory> read(Path path) throws IOException {
-    Map<UserBook, UserHistory> recentsByUserAndBook = new LinkedHashMap<>();
+  public void read(Path path, CsvRecordConsumer<UserHistory> consumer) throws IOException {
 
     CSVFormat format =
         CSVFormat.DEFAULT
@@ -63,17 +57,8 @@ public class UserHistoryCsvReader {
               LocalDateTime.parse(updatedAtRaw, DATE_FORMATTER).toInstant(ZoneOffset.UTC);
         }
 
-        UserHistory history = new UserHistory(userId, bookId, lastInteractionTime);
-        UserBook dedupeKey = new UserBook(userId, bookId);
-        recentsByUserAndBook.merge(
-            dedupeKey,
-            history,
-            (current, replacement) ->
-                replacement.lastInteractionTime().isAfter(current.lastInteractionTime())
-                    ? replacement
-                    : current);
+        consumer.accept(new UserHistory(userId, bookId, lastInteractionTime));
       }
     }
-    return List.copyOf(recentsByUserAndBook.values());
   }
 }

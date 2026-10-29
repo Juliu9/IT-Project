@@ -27,6 +27,7 @@ import org.springframework.core.env.Environment;
       org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration.class
     })
 @Import({
+  com.gen3.snapshotjob.SnapshotConfiguration.class,
   SolrConfig.class,
   com.gen3.embeddingjob.store.SolrEmbeddingStore.class,
   com.gen3.embeddingjob.store.QdrantEmbeddingStore.class,
@@ -74,11 +75,16 @@ public class EmbeddingIndexApplication {
   ApplicationRunner embeddingJob(
       AudiobookEmbeddingStore store,
       EmbeddingModel model,
+      com.gen3.catalogue.snapshot.BookVectorSnapshot snapshot,
+      com.gen3.catalogue.snapshot.BookVectorSnapshot.Source snapshotSource,
+      @Value("${book.vector-snapshot.page-size:500}") int snapshotPageSize,
       @Value("${audiobook.embedding-index.page-size:100}") int pageSize,
       @Value("${audiobook.embedding-index.maximum-records:0}") int maximumRecords) {
-    return args ->
-        new CatalogueEmbeddingJob(
-                store, new AudiobookEmbeddingIndexer(model), pageSize, maximumRecords)
-            .run();
+    return args -> {
+      new CatalogueEmbeddingJob(
+              store, new AudiobookEmbeddingIndexer(model), pageSize, maximumRecords)
+          .run();
+      snapshot.rebuild(snapshotSource, snapshotPageSize);
+    };
   }
 }

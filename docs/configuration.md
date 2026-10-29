@@ -297,6 +297,20 @@ embedding model. See the maintenance guide for CSV columns and database support.
 | `favourites-csv-path` | `USER_PREFERENCES_FAVOURITES_CSV_PATH` | empty; favourites input path |
 | `history-csv-path` | `USER_PREFERENCES_HISTORY_CSV_PATH` | empty; history input path |
 | `import.max-book-ids-per-group` | `USER_PREFERENCES_IMPORT_MAX_BOOK_IDS_PER_GROUP` | `100000`; maximum distinct books loaded per group |
+| `import.max-records-in-memory` | `USER_PREFERENCES_IMPORT_MAX_RECORDS_IN_MEMORY` | `100000`; sort-run and whole-user batch target |
+| `import.work-directory` | `USER_PREFERENCES_IMPORT_WORK_DIRECTORY` | `./data/user-import-work`; temporary external-sort files |
+
+### Local book-vector snapshots
+
+| Property | Environment | Default / meaning |
+| --- | --- | --- |
+| `book.vector-snapshot.directory` | `BOOK_VECTOR_SNAPSHOT_DIRECTORY` | `./data/book-vector-snapshot`; persistent local snapshot storage shared by maintenance jobs |
+| `book.vector-snapshot.page-size` | `BOOK_VECTOR_SNAPSHOT_PAGE_SIZE` | `500`; catalogue records read per snapshot export page |
+
+Snapshots are separated by backend and catalogue collection. Compatibility uses the backend,
+collection, configured `spring.ai.openai.embedding.options.model`, and `embedding.dimensions`.
+The model identifier is a declared contract: existing database records do not store model provenance.
+Changing servers while retaining the same backend/collection name requires a manual snapshot rebuild.
 
 ### Solr-to-Qdrant migration
 

@@ -62,22 +62,25 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
     if ("disabled".equalsIgnoreCase(mode)) {
       return;
     }
-    if ("submit".equalsIgnoreCase(mode)) {
-      submit();
-      return;
+    try (var progress = new com.gen3.maintenance.JobProgress("short.descriptions." + mode)) {
+      if ("submit".equalsIgnoreCase(mode)) {
+        submit(progress);
+        return;
+      }
+      if ("import".equalsIgnoreCase(mode)) {
+        importCompletedBatch(progress);
+        return;
+      }
+      if ("recover".equalsIgnoreCase(mode)) {
+        recoverFailedBatch(progress);
+        return;
+      }
+      throw new IllegalArgumentException("Unknown audiobook.short-description.batch.mode: " + mode);
     }
-    if ("import".equalsIgnoreCase(mode)) {
-      importCompletedBatch();
-      return;
-    }
-    if ("recover".equalsIgnoreCase(mode)) {
-      recoverFailedBatch();
-      return;
-    }
-    throw new IllegalArgumentException("Unknown audiobook.short-description.batch.mode: " + mode);
   }
 
-  private void submit() throws IOException, InterruptedException {
+  private void submit(com.gen3.maintenance.JobProgress progress)
+      throws IOException, InterruptedException {
     Path manifest = manifestPath();
     if (Files.exists(manifest)) {
       throw new IllegalStateException(
@@ -85,23 +88,27 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
               + manifest
               + ". Import it before submitting another batch.");
     }
+    progress.stage("finding books missing short descriptions");
     List<StoredAudiobook> books =
         enrichmentStore.findRecordsWithoutShortDescription(maximumRecords);
     Files.createDirectories(outputDirectory);
     List<StoredAudiobook> validBooks = validBooks(books);
     int records = validBooks.size();
+    progress.update(0, records);
     if (records == 0) {
       LOGGER.info("No audiobook descriptions were available for short-description enrichment");
       return;
     }
 
     // Uploads cannot create a generation batch, so upload failure is safe to retry.
+    progress.stage("uploading generation input");
     String inputId =
         provider.upload(validBooks.stream().map(StoredAudiobook::record).toList(), outputDirectory);
     // Once submission starts, an uncertain outcome must retain the record references.
     writeManifest(manifest, "", validBooks);
     String submittedBatchId;
     try {
+      progress.stage("submitting provider batch");
       submittedBatchId = provider.submit(inputId);
     } catch (IOException exception) {
       throw new IOException(
@@ -116,6 +123,7 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
       throw interrupted;
     }
     writeManifest(manifest, submittedBatchId, validBooks);
+    progress.update(records, records);
     LOGGER.info(
         "Submitted short-description batch {} for {} records. Set AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MODE=import after it completes.",
         submittedBatchId,
@@ -134,9 +142,11 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
     return valid;
   }
 
-  private void importCompletedBatch() throws IOException, InterruptedException {
+  private void importCompletedBatch(com.gen3.maintenance.JobProgress progress)
+      throws IOException, InterruptedException {
     BatchManifest manifest = readManifest();
     String importedBatchId = resolvedBatchId(manifest);
+    progress.stage("waiting for provider results");
     Map<String, String> descriptions = provider.completedDescriptions(importedBatchId);
     List<AudiobookEnrichmentStore.ShortDescriptionUpdate> updates =
         descriptions.entrySet().stream()
@@ -150,7 +160,10 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
                         manifest.storageReferences().get(entry.getKey()),
                         trimToWordLimit(entry.getValue())))
             .toList();
+    progress.stage("writing short descriptions");
+    progress.update(0, updates.size());
     enrichmentStore.updateShortDescriptions(updates);
+    progress.update(updates.size(), updates.size());
     Files.delete(manifestPath());
     LOGGER.info("Imported {} generated short audiobook descriptions", updates.size());
   }
@@ -168,10 +181,13 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
     return resolvedId;
   }
 
-  private void recoverFailedBatch() throws IOException, InterruptedException {
+  private void recoverFailedBatch(com.gen3.maintenance.JobProgress progress)
+      throws IOException, InterruptedException {
     BatchManifest manifest = readManifest();
     String recoveredBatchId = resolvedBatchId(manifest);
+    progress.stage("checking provider failure status");
     provider.verifyTerminalFailure(recoveredBatchId);
+    progress.stage("archiving recovery manifest");
     Path archived =
         outputDirectory.resolve(
             "short-description-batch-recovered-" + java.util.UUID.randomUUID() + ".json");

@@ -192,6 +192,18 @@ class SolrApplicationLaunchIntegrationTest {
     assertThat(copied.getFirst().record().shortDescription()).isEqualTo("A friendship adventure.");
     assertThat(copied.getLast().vector()).isNull();
 
+    try (var context =
+        launch(com.gen3.snapshotjob.BookVectorSnapshotApplication.class, null, Map.of())) {
+      assertJobIsolation(context);
+      assertThat(context.getBeansOfType(EmbeddingModel.class)).isEmpty();
+      assertThat(
+              context
+                  .getBean(com.gen3.catalogue.snapshot.BookVectorSnapshot.class)
+                  .findEmbeddingByBookId("local_100")
+                  .orElseThrow())
+          .containsExactly(0.6f, 0.8f);
+    }
+
     Path favourites = directory.resolve("favourites.csv");
     Path history = directory.resolve("history.csv");
     Files.writeString(favourites, "type,user,item\nbook,launcher-user,local:book:100\n");
@@ -306,6 +318,7 @@ class SolrApplicationLaunchIntegrationTest {
     settings.put("solr.username", "");
     settings.put("solr.password", "");
     settings.put("embedding.dimensions", "2");
+    settings.put("book.vector-snapshot.directory", directory.resolve("snapshots").toString());
     settings.put("spring.ai.model.embedding", "none");
     settings.put("spring.ai.model.chat", "none");
     settings.put("spring.ai.openai.api-key", "local-test");
