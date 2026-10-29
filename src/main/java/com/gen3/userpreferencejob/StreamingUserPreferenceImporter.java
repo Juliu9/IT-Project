@@ -1,6 +1,6 @@
 package com.gen3.userpreferencejob;
 
-import com.gen3.maintenance.JobProgress;
+import com.gen3.jobruntime.JobProgress;
 import com.gen3.userpreferencejob.UserPreferenceExternalSort.Row;
 import com.gen3.userpreferencejob.model.UserFavourite;
 import com.gen3.userpreferencejob.model.UserHistory;

@@ -19,13 +19,17 @@ package "migrationjob" {
   component "MigrationApplication\nSolrToQdrantMigrator" as Migration #DBEAFE
 }
 package "userpreferencejob" {
-  component "UserPreferenceApplication\nCSV readers + preference aggregation" as Preferences #DBEAFE
+  component "UserPreferenceApplication\nStreamingUserPreferenceImporter\nExternal sort + whole-user aggregation" as Preferences #DBEAFE
+}
+package "snapshotjob" {
+  component "BookVectorSnapshotApplication\nSnapshotConfiguration + SnapshotSources" as Snapshot #DBEAFE
 }
 component "catalogue\nAudiobook ports, adapters,\nmodels and vector utilities" as Shared #FEF3C7
 database "Selected catalogue\nSolr OR Qdrant" as Catalogue
 database "Solr source" as SolrSource
 database "Qdrant destination" as QdrantTarget
-database "Selected database\nBook + user preference vectors\nSolr OR Qdrant" as UserStore
+database "Selected user-preference collection\nSolr OR Qdrant" as UserStore
+artifact "Persistent binary snapshot\nBookVectorSnapshot\nLast compatible version; checksummed" as LocalSnapshot
 artifact "Favourites + history CSVs" as CSV
 cloud "Embedding model" as EmbeddingModel
 cloud "Batch summary provider" as SummaryModel
@@ -34,25 +38,32 @@ Embedding ..> Shared : reuses
 Summary ..> Shared : reuses
 Migration ..> Shared : reuses
 Preferences ..> Shared : reuses
+Snapshot ..> Shared : reuses
 
 Embedding --> Catalogue : read existing records / update vectors
 Embedding --> EmbeddingModel : book text → embedding
+Embedding --> LocalSnapshot : export existing vectors after success\nusing shared snapshot publisher
+Snapshot --> Catalogue : read existing IDs and dense vectors
+Snapshot --> LocalSnapshot : validate then atomically publish
 Summary --> Catalogue : read descriptions / fill missing summaries
 Summary --> SummaryModel : submit batch / import completed output
 Migration --> SolrSource : read existing fields and vectors
 Migration --> QdrantTarget : copy books absent by bookId
 CSV --> Preferences : user interactions
-Preferences --> UserStore : read existing book vectors / save taste vectors
+Preferences --> LocalSnapshot : validate and load once\nno remote catalogue-vector lookup
+Preferences --> UserStore : explicit write: save or clear taste vectors\ndry-run: validating sink, no writes
 
 note bottom of Shared
-  Jobs do not call one another.
+  Embedding and snapshot launchers share one publisher.
+  Daily user import consumes the last compatible snapshot.
+  All jobs use jobruntime.JobProgress for periodic reporting.
   recommenderagent does not depend on the jobs.
   Catalogue code has no dependency on recommenderagent.
   User-preference storage remains in recommenderagent.storage.user.
 end note
 legend bottom
   Migration copies existing data; it generates no embeddings or summaries.
-  Each job has its own non-web launcher and opt-in settings.
+  Five non-web launchers; snapshot launcher needs no enable flag.
   Jobs never run during ordinary recommendation-server startup.
   Run maintenance writers separately against a stable catalogue.
 endlegend

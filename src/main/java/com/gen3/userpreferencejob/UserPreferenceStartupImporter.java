@@ -39,7 +39,7 @@ public class UserPreferenceStartupImporter implements ApplicationRunner {
     long started = System.nanoTime();
     LOGGER.info("Starting User Preference Vector Aggregation... mode={}", mode);
     long snapshotLoadMs;
-    try (var progress = new com.gen3.maintenance.JobProgress("user.import.prepare")) {
+    try (var progress = new com.gen3.jobruntime.JobProgress("user.import.prepare")) {
       progress.stage("validating and loading snapshot");
       snapshot.validate();
       snapshotLoadMs = (System.nanoTime() - started) / 1_000_000;

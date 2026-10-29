@@ -1,91 +1,66 @@
 @startuml
 !pragma layout smetana
-title userpreferencejob
+title Streaming user-preference import
 skinparam packageStyle rectangle
 skinparam classAttributeIconSize 0
 hide empty members
 
-package "userpreferencejob" as userpreferencejob {
-  package "model" {
-    class "UserFavourite" as C2 {
-      - String userId
-      - String bookId
-      + String userId()
-      + String bookId()
-    }
-    class "UserHistory" as C8 {
-      - String userId
-      - String bookId
-      - Instant lastInteractionTime
-      + Instant lastInteractionTime()
-      + String userId()
-      + String bookId()
-    }
-  }
-  class "UserPreferenceAggregatorService" as C0 {
-    - AudiobookVectorRepository audiobookVectorRepository
-    - UserPreferenceVectorRepository userPreferenceVectorRepository
-    - int maximumBookIds
-    + void aggregateAndSave(List<UserFavourite>,List<UserHistory>)
-    - void aggregateGroup(List<String>,Set<String>,Map<String,List<UserFavourite>>,Map<String,List<UserHistory>>,Instant)
-    - Set<String> bookIds(List<UserFavourite>,List<UserHistory>)
-    - void addVector(List<float[]>,float[])
-  }
-  class "UserFavouriteCsvReader" as C1 {
-    + List<UserFavourite> read(Path)
-  }
-  class "UserPreferenceApplication" as C3 {
+package "userpreferencejob" {
+  class UserPreferenceApplication {
     + {static} void main(String[])
-    ~ {static} BeanFactoryPostProcessor validateJob(Environment)
   }
-  class "UserHistoryCsvReader" as C4 {
-    - {static} DateTimeFormatter DATE_FORMATTER
-    + List<UserHistory> read(Path)
-  }
-  class "UserHistoryCsvReader$UserBook" as C5 {
-    - String userId
-    - String bookId
-    + String userId()
-    + String bookId()
-  }
-  class "UserPreferenceStartupImporter" as C6 {
-    - {static} Logger LOGGER
-    - UserFavouriteCsvReader favouriteCsvReader
-    - UserHistoryCsvReader historyCsvReader
-    - UserPreferenceAggregatorService aggregatorService
-    - String favouritesCsvPath
-    - String historyCsvPath
+  class UserPreferenceStartupImporter {
     + void run(ApplicationArguments)
   }
-  class "BookIdExtractor" as C7 {
-    + {static} String extractAndNormalize(String)
+  class StreamingUserPreferenceImporter {
+    + Result run(Path,Path)
+  }
+  class UserPreferenceExternalSort {
+    ~ void add(Row)
+    ~ Path finish(JobProgress)
+    + void close()
+  }
+  interface "CsvRecordConsumer<T>" as CsvRecordConsumer {
+    ~ void accept(T)
+  }
+  class UserFavouriteCsvReader {
+    + void read(Path,CsvRecordConsumer<UserFavourite>)
+  }
+  class UserHistoryCsvReader {
+    + void read(Path,CsvRecordConsumer<UserHistory>)
+  }
+  class UserPreferenceAggregatorService {
+    + void aggregateAndSave(List<UserFavourite>,List<UserHistory>)
+    + void aggregateAndSave(List<UserFavourite>,List<UserHistory>,Instant)
+  }
+  class DryRunUserPreferenceRepository
+  package model {
+    class UserFavourite
+    class UserHistory
   }
 }
+class "catalogue.snapshot.BookVectorSnapshot" as Snapshot
+interface "storage.user.port.UserPreferenceVectorRepository" as Profiles
 
-package "catalogue" as catalogue <<external>> {
-}
-package "recommenderagent" as recommenderagent <<external>> {
-}
+UserPreferenceApplication --> UserPreferenceStartupImporter : startup runner
+UserPreferenceStartupImporter --> Snapshot : validate/load
+UserPreferenceStartupImporter --> StreamingUserPreferenceImporter
+StreamingUserPreferenceImporter --> UserFavouriteCsvReader
+StreamingUserPreferenceImporter --> UserHistoryCsvReader
+UserFavouriteCsvReader ..> CsvRecordConsumer
+UserHistoryCsvReader ..> CsvRecordConsumer
+StreamingUserPreferenceImporter --> UserPreferenceExternalSort : bounded runs and merge
+StreamingUserPreferenceImporter --> UserPreferenceAggregatorService : whole-user batches; fixed Instant
+UserPreferenceAggregatorService --> Snapshot : read vectors from loaded cache
+UserPreferenceAggregatorService --> Profiles : save/clear
+Profiles <|.. DryRunUserPreferenceRepository
 
-C4 +.. C5
-C0 ..> catalogue : uses
-C0 ..> recommenderagent : uses
-C6 --> C1
-C6 --> C4
-C6 --> C0
-
-' Source: docs/maintenance.md
-note right of userpreferencejob
-  Separate opt-in CSV import job.
-
-  Aggregates existing book vectors:
-  normalized favourites averages and
-  history with a 180-day weight half-life.
-
-  No embedding-model calls are made.
-  Work is grouped by complete users.
-
-  Reruns replace imported users' taste vectors;
-  users absent from the input remain unchanged.
+note bottom of StreamingUserPreferenceImporter
+  Validate all input before profile writes.
+  Favourite duplicates collapse.
+  History duplicates keep latest interaction.
+  Full snapshot remains in RAM; CSVs do not.
+  Explicit write replaces imported users' profiles.
+  Dry-run validates output without writes.
 end note
 @enduml

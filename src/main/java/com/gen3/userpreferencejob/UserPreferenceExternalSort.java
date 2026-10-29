@@ -41,7 +41,7 @@ final class UserPreferenceExternalSort implements AutoCloseable {
     }
   }
 
-  Path finish(com.gen3.maintenance.JobProgress progress) throws IOException {
+  Path finish(com.gen3.jobruntime.JobProgress progress) throws IOException {
     flush();
     if (runs.isEmpty()) {
       Path empty = Files.createTempFile(directory, "empty-", ".bin");
@@ -87,7 +87,7 @@ final class UserPreferenceExternalSort implements AutoCloseable {
     buffer.clear();
   }
 
-  private void merge(List<Path> sources, Path target, com.gen3.maintenance.JobProgress progress)
+  private void merge(List<Path> sources, Path target, com.gen3.jobruntime.JobProgress progress)
       throws IOException {
     var readers = new ArrayList<Reader>();
     var queue =

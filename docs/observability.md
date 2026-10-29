@@ -4,6 +4,9 @@
 
 The optional Alloy collector exports only structured `recommendation.completed` summaries.
 Request text, session contents, and other application log lines remain local.
+Maintenance heartbeats and import timing logs are not shipped by this collector. See
+[job progress](maintenance.md#automatic-progress-reporting) and
+[import logs/timings](jobs/user-preferences.md#read-only-dry-run-solr-or-qdrant).
 
 ## Setup
 

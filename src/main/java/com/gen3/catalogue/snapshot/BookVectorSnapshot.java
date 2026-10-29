@@ -51,7 +51,7 @@ public final class BookVectorSnapshot implements AudiobookVectorRepository {
     Files.createDirectories(parent);
     Path temporary = Files.createTempFile(parent, "snapshot-", ".tmp");
     long count = 0;
-    try (var progress = new com.gen3.maintenance.JobProgress("book.snapshot.rebuild")) {
+    try (var progress = new com.gen3.jobruntime.JobProgress("book.snapshot.rebuild")) {
       var digest = sha256();
       try (var bytes =
               new DigestOutputStream(
@@ -121,7 +121,7 @@ public final class BookVectorSnapshot implements AudiobookVectorRepository {
   /** Validates the entire last published snapshot before any user-profile writes. */
   public synchronized void validate() throws IOException {
     if (loaded == null) {
-      try (var progress = new com.gen3.maintenance.JobProgress("book.snapshot.load")) {
+      try (var progress = new com.gen3.jobruntime.JobProgress("book.snapshot.load")) {
         loaded = read(file, true, progress);
       }
     }
@@ -148,7 +148,7 @@ public final class BookVectorSnapshot implements AudiobookVectorRepository {
   }
 
   private Map<String, float[]> read(
-      Path path, boolean retain, com.gen3.maintenance.JobProgress progress) throws IOException {
+      Path path, boolean retain, com.gen3.jobruntime.JobProgress progress) throws IOException {
     progress.stage(retain ? "loading local vectors" : "validating snapshot");
     progress.update(0, -1);
     var result = new HashMap<String, float[]>();

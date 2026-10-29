@@ -54,7 +54,7 @@ public class UserPreferenceAggregatorService {
 
   public void aggregateAndSave(
       List<UserFavourite> favourites, List<UserHistory> history, Instant asOf) throws IOException {
-    try (var progress = new com.gen3.maintenance.JobProgress("user.import.aggregate")) {
+    try (var progress = new com.gen3.jobruntime.JobProgress("user.import.aggregate")) {
       aggregateAndSave(favourites, history, progress, asOf);
     }
   }
@@ -62,7 +62,7 @@ public class UserPreferenceAggregatorService {
   private void aggregateAndSave(
       List<UserFavourite> favourites,
       List<UserHistory> history,
-      com.gen3.maintenance.JobProgress progress,
+      com.gen3.jobruntime.JobProgress progress,
       Instant now)
       throws IOException {
     progress.stage("grouping input records");
@@ -129,7 +129,7 @@ public class UserPreferenceAggregatorService {
       Map<String, List<UserFavourite>> favsByUser,
       Map<String, List<UserHistory>> histByUser,
       Instant now,
-      com.gen3.maintenance.JobProgress progress,
+      com.gen3.jobruntime.JobProgress progress,
       int processed,
       int total)
       throws IOException {

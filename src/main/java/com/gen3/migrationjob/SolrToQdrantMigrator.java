@@ -39,7 +39,7 @@ public class SolrToQdrantMigrator implements ApplicationRunner {
   /** Reads every Solr page and copies records absent from Qdrant. */
   @Override
   public void run(ApplicationArguments arguments) throws Exception {
-    try (var progress = new com.gen3.maintenance.JobProgress("catalogue.migration")) {
+    try (var progress = new com.gen3.jobruntime.JobProgress("catalogue.migration")) {
       progress.stage("initializing destination");
       destination.initialize();
       int scanned = 0;

@@ -62,7 +62,7 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
     if ("disabled".equalsIgnoreCase(mode)) {
       return;
     }
-    try (var progress = new com.gen3.maintenance.JobProgress("short.descriptions." + mode)) {
+    try (var progress = new com.gen3.jobruntime.JobProgress("short.descriptions." + mode)) {
       if ("submit".equalsIgnoreCase(mode)) {
         submit(progress);
         return;
@@ -79,7 +79,7 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
     }
   }
 
-  private void submit(com.gen3.maintenance.JobProgress progress)
+  private void submit(com.gen3.jobruntime.JobProgress progress)
       throws IOException, InterruptedException {
     Path manifest = manifestPath();
     if (Files.exists(manifest)) {
@@ -142,7 +142,7 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
     return valid;
   }
 
-  private void importCompletedBatch(com.gen3.maintenance.JobProgress progress)
+  private void importCompletedBatch(com.gen3.jobruntime.JobProgress progress)
       throws IOException, InterruptedException {
     BatchManifest manifest = readManifest();
     String importedBatchId = resolvedBatchId(manifest);
@@ -181,7 +181,7 @@ public class BatchShortDescriptionEnricher implements ApplicationRunner {
     return resolvedId;
   }
 
-  private void recoverFailedBatch(com.gen3.maintenance.JobProgress progress)
+  private void recoverFailedBatch(com.gen3.jobruntime.JobProgress progress)
       throws IOException, InterruptedException {
     BatchManifest manifest = readManifest();
     String recoveredBatchId = resolvedBatchId(manifest);

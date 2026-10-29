@@ -39,6 +39,20 @@ OPENAI_API_KEY=ci-placeholder ./mvnw clean verify -DexcludedGroups=external
 
 ## Pull requests
 
+When changing behaviour, update the corresponding documentation in the same change:
+
+- [README](../README.md): project entry point and setup.
+- [Architecture](architecture.md): request/session behaviour and adapter contracts.
+- [Configuration](configuration.md): checked-in properties, environment variables and defaults.
+- [Job runbooks](jobs/README.md): per-job commands, prerequisites, writes, completion and recovery.
+- [Maintenance operations](maintenance.md): shared job execution and progress rules.
+- [Observability](observability.md): telemetry fields and log export.
+- [Diagrams](diagrams/README.md): update sources and regenerate affected SVGs.
+
+Keep each operational instruction in one owning guide and link to it elsewhere. Examples must say
+whether they write records, require live credentials or can incur charges. Generated datasets,
+snapshots and logs under `data/` and `logs/` are local artifacts, not committed fixtures.
+
 - CI must pass (Spotless, Checkstyle and the tests).
 - Pull requests into `main` should be approved by a teammate before they are merged. `main` is protected.
 - For `staging`, ask a teammate to look at anything big before you merge it.

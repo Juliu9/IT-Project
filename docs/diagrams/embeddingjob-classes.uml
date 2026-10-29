@@ -53,7 +53,7 @@ package "embeddingjob" as embeddingjob {
   class "EmbeddingIndexApplication" as C1 {
     + {static} void main(String[])
     ~ {static} BeanFactoryPostProcessor validateJob(Environment)
-    ~ ApplicationRunner embeddingJob(AudiobookEmbeddingStore,EmbeddingModel,int,int)
+    ~ ApplicationRunner embeddingJob(AudiobookEmbeddingStore,EmbeddingModel,BookVectorSnapshot,Source,int,int,int)
   }
   class "AudiobookEmbeddingIndexer" as C5 {
     - EmbeddingModel model
@@ -66,6 +66,7 @@ package "embeddingjob" as embeddingjob {
 }
 
 package "catalogue" as catalogue <<external>> {
+  class BookVectorSnapshot
 }
 
 C2 +.. C3
@@ -76,6 +77,7 @@ C0 --> C2
 C0 --> C5
 C4 ..> catalogue : uses
 C7 ..> catalogue : uses
+C1 --> BookVectorSnapshot : rebuild after successful generation
 
 ' Source: docs/maintenance.md
 note right of embeddingjob
@@ -90,5 +92,6 @@ note right of embeddingjob
 
   Reruns regenerate vectors from the beginning
   and incur embedding charges again.
+  Snapshot-only retries use the standalone launcher.
 end note
 @enduml

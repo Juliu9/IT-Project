@@ -1,11 +1,17 @@
 # Configuration reference
 
-[README](../README.md) · [Architecture](architecture.md) · [Maintenance commands](maintenance.md)
+[README](../README.md) · [Architecture](architecture.md) · [Job runbooks](jobs/README.md)
 
 [`application.properties`](../src/main/resources/application.properties) defines shared rules,
 backend selection, provider connections, and job defaults. Settings are grouped by responsibility:
 universal rules apply across adapters; technology sections configure a particular implementation.
 This reference covers the repository's settings, rather than every property supported by Spring Boot.
+
+The properties file has five numbered areas: shared backend selection, shared AI/vector settings,
+recommendation-server settings, database connections, and maintenance jobs. The maintenance area
+has one subsection for each launcher; summary Batch model settings live with the summary job,
+while interactive chat defaults and shared embedding compatibility remain in the shared AI area.
+Section headings are organisational only; they do not change which properties a launcher can read.
 
 ## Loading and overriding settings
 
@@ -64,6 +70,8 @@ embeddings. It provides editable User ID and Session ID fields, initially genera
 Submitted IDs persist across reloads through session storage and appear in response details.
 Use an imported user's ID to test stored reading preferences; generated IDs have no imported profile.
 Reuse the same user/session pair for follow-ups; change the session ID for a separate conversation.
+Submit with the button or Enter; Shift+Enter inserts a new line. Submission is disabled while a
+request is pending, preventing accidental duplicate sends from the page.
 
 Below the Session Request, the collapsed Recommendation details section shows each book's
 stored catalogue fields (authors, narrators, language, publication year, source, runtime, and
@@ -254,7 +262,8 @@ Expect ranking differences between databases even with equivalent catalogue cont
 Use the dedicated launcher as well as the corresponding opt-in setting. Normal server startup
 rejects enabled maintenance flags. Run jobs individually against the intended database and dataset;
 they can write records and generate provider charges. Commands, prerequisites, and recovery steps
-belong in [Maintenance jobs](maintenance.md).
+belong in the [individual job runbooks](jobs/README.md). Shared safety/progress instructions are in
+[Maintenance operations](maintenance.md). Jobs are not scheduled automatically.
 
 ### Catalogue embedding generation
 
@@ -287,8 +296,10 @@ partial results. OpenAI Batch uses `OPENAI_API_KEY` independently of interactive
 
 ### User-preference import
 
-The job aggregates existing catalogue vectors from CSV interaction records; it does not call an
-embedding model. See the maintenance guide for CSV columns and database support.
+The job streams CSV interaction records and aggregates the last compatible local snapshot; it does
+not call an embedding model or retrieve catalogue vectors remotely. A valid snapshot is required
+in both modes. See the [import runbook](jobs/user-preferences.md) for CSV columns, memory/disk
+requirements and replacement semantics.
 
 | Property under `user.preferences.` | Environment variable | Default / purpose |
 | --- | --- | --- |
@@ -296,7 +307,7 @@ embedding model. See the maintenance guide for CSV columns and database support.
 | `import.mode` | `USER_PREFERENCES_IMPORT_MODE` | `dry-run`; read and calculate without writes; explicit `write` allows saves and clears |
 | `favourites-csv-path` | `USER_PREFERENCES_FAVOURITES_CSV_PATH` | empty; favourites input path |
 | `history-csv-path` | `USER_PREFERENCES_HISTORY_CSV_PATH` | empty; history input path |
-| `import.max-book-ids-per-group` | `USER_PREFERENCES_IMPORT_MAX_BOOK_IDS_PER_GROUP` | `100000`; maximum distinct books loaded per group |
+| `import.max-book-ids-per-group` | `USER_PREFERENCES_IMPORT_MAX_BOOK_IDS_PER_GROUP` | `100000`; maximum distinct books referenced per aggregation group and per user; does not limit the full snapshot cache |
 | `import.max-records-in-memory` | `USER_PREFERENCES_IMPORT_MAX_RECORDS_IN_MEMORY` | `100000`; sort-run and whole-user batch target |
 | `import.work-directory` | `USER_PREFERENCES_IMPORT_WORK_DIRECTORY` | `./data/user-import-work`; temporary external-sort files |
 
@@ -311,6 +322,10 @@ Snapshots are separated by backend and catalogue collection. Compatibility uses 
 collection, configured `spring.ai.openai.embedding.options.model`, and `embedding.dimensions`.
 The model identifier is a declared contract: existing database records do not store model provenance.
 Changing servers while retaining the same backend/collection name requires a manual snapshot rebuild.
+The [snapshot launcher](jobs/snapshots.md) needs no enable flag. Imports accept a compatible snapshot
+regardless of age; refresh it explicitly after catalogue changes. The embedding launcher refreshes
+it automatically after successful embedding generation. Snapshot publication does not change any
+database fields.
 
 ### Solr-to-Qdrant migration
 

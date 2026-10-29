@@ -102,11 +102,11 @@ package "shortdescriptionjob" as shortdescriptionjob {
     - Path outputDirectory
     - int maximumRecords
     + void run(ApplicationArguments)
-    - void submit()
+    - void submit(JobProgress)
     - List<StoredAudiobook> validBooks(List<StoredAudiobook>)
-    - void importCompletedBatch()
+    - void importCompletedBatch(JobProgress)
     - String resolvedBatchId(BatchManifest)
-    - void recoverFailedBatch()
+    - void recoverFailedBatch(JobProgress)
     - Path manifestPath()
     ~ void writeManifest(Path,String,List<StoredAudiobook>)
     - BatchManifest readManifest()

@@ -29,7 +29,7 @@ public class CatalogueEmbeddingJob {
   }
 
   public void run() throws Exception {
-    try (var progress = new com.gen3.maintenance.JobProgress("catalogue.embeddings")) {
+    try (var progress = new com.gen3.jobruntime.JobProgress("catalogue.embeddings")) {
       String cursor = null;
       int scanned = 0;
       int indexed = 0;
