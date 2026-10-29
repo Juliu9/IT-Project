@@ -39,9 +39,9 @@ class CandidateRetrieverConfigurationTest {
           .withBean(AudiobookRetrievalPlanner.class, AudiobookRetrievalPlanner::new);
 
   @Test
-  void rejectsShortDescriptionJobModesOnTheRecommendationServer() {
+  void rejectsShortDescriptionJobOnTheRecommendationServer() {
     runner
-        .withPropertyValues("audiobook.short-description.batch.mode=submit")
+        .withPropertyValues("audiobook.short-description.enabled=true")
         .run(
             context ->
                 assertThat(context)

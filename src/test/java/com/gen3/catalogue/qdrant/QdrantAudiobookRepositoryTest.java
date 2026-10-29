@@ -20,6 +20,7 @@ import com.gen3.catalogue.model.AudiobookFilterConditions;
 import com.gen3.catalogue.model.AudiobookFilters;
 import com.gen3.catalogue.model.AudiobookRecord;
 import com.gen3.catalogue.model.StoredAudiobook;
+import com.gen3.shortdescriptionjob.ShortDescriptionMode;
 import com.gen3.shortdescriptionjob.store.AudiobookEnrichmentStore;
 import com.google.common.util.concurrent.Futures;
 import io.qdrant.client.QdrantClient;
@@ -494,7 +495,7 @@ class QdrantAudiobookRepositoryTest {
     List<StoredAudiobook> records =
         new com.gen3.shortdescriptionjob.store.QdrantShortDescriptionStore(
                 client, mapper, "audiobooks")
-            .findRecordsWithoutShortDescription(10);
+            .findRecordsForShortDescription(10, ShortDescriptionMode.MISSING_ONLY);
 
     assertThat(records).hasSize(1);
     assertThat(records.getFirst().record().id()).isEqualTo("book-3");
@@ -526,7 +527,8 @@ class QdrantAudiobookRepositoryTest {
             List.of(
                 new AudiobookEnrichmentStore.ShortDescriptionUpdate(
                     Base64.getEncoder().encodeToString(mapper.pointId("book-3").toByteArray()),
-                    "A short description.")));
+                    "A short description.")),
+            ShortDescriptionMode.MISSING_ONLY);
 
     ArgumentCaptor<List<io.qdrant.client.grpc.Points.PointsUpdateOperation>> operations =
         ArgumentCaptor.forClass(List.class);

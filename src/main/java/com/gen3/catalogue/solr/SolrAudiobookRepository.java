@@ -310,14 +310,31 @@ public class SolrAudiobookRepository
   }
 
   /** Retains each record's source version across the model call. */
-  public List<StoredAudiobook> findEmbeddingRecords(String afterId, int limit) throws IOException {
+  public List<StoredAudiobook> findEmbeddingRecords(String afterId, int limit, boolean missingOnly)
+      throws IOException {
     var records = new ArrayList<StoredAudiobook>();
-    for (var document : cataloguePage(afterId, limit, false)) {
-      Object version = document.getFieldValue("_version_");
-      if (!(version instanceof Number number) || number.longValue() <= 1) {
-        throw new IOException("Solr must return an exact _version_ for embedding maintenance");
+    String cursor = afterId;
+    int maximum = Math.max(1, limit);
+    // Solr 9.6 vector existence functions fail on segments with no indexed vectors.
+    while (records.size() < maximum) {
+      var page = cataloguePage(cursor, maximum, missingOnly);
+      for (var document : page) {
+        if (records.size() == maximum) {
+          break;
+        }
+        cursor = String.valueOf(document.getFieldValue("id"));
+        if (missingOnly && document.getFieldValue(vectorField) != null) {
+          continue;
+        }
+        Object version = document.getFieldValue("_version_");
+        if (!(version instanceof Number number) || number.longValue() <= 1) {
+          throw new IOException("Solr must return an exact _version_ for embedding maintenance");
+        }
+        records.add(new StoredAudiobook(toRecord(document), Long.toString(number.longValue())));
       }
-      records.add(new StoredAudiobook(toRecord(document), Long.toString(number.longValue())));
+      if (page.size() < maximum) {
+        break;
+      }
     }
     return records;
   }

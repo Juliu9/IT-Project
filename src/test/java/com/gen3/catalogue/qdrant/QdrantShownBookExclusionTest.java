@@ -182,7 +182,8 @@ class QdrantShownBookExclusionTest {
                   client, mapper, "embedding-job", 2),
               new com.gen3.embeddingjob.AudiobookEmbeddingIndexer(model),
               1,
-              0)
+              0,
+              com.gen3.embeddingjob.EmbeddingMode.MISSING_ONLY)
           .run();
       var result =
           client.retrieveAsync("embedding-job", List.of(id), true, true, null).get().getFirst();

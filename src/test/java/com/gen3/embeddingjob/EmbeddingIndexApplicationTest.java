@@ -19,19 +19,20 @@ class EmbeddingIndexApplicationTest {
     var model = mock(EmbeddingModel.class);
     var snapshot = mock(com.gen3.catalogue.snapshot.BookVectorSnapshot.class);
     var source = mock(com.gen3.catalogue.snapshot.BookVectorSnapshot.Source.class);
-    org.mockito.Mockito.when(store.embeddingPage(null, 10))
+    org.mockito.Mockito.when(store.embeddingPage(null, 10, EmbeddingMode.MISSING_ONLY))
         .thenReturn(new AudiobookEmbeddingStore.Page(java.util.List.of(), null));
     new EmbeddingIndexApplication()
-        .embeddingJob(store, model, snapshot, source, 500, 10, 0)
+        .embeddingJob(store, model, snapshot, source, 500, 10, 0, "missing-only")
         .run(new org.springframework.boot.DefaultApplicationArguments());
     org.mockito.Mockito.verify(snapshot).rebuild(source, 500);
+    org.mockito.Mockito.verifyNoInteractions(model);
     org.mockito.Mockito.reset(snapshot);
-    org.mockito.Mockito.when(store.embeddingPage(null, 10))
+    org.mockito.Mockito.when(store.embeddingPage(null, 10, EmbeddingMode.MISSING_ONLY))
         .thenThrow(new java.io.IOException("unavailable"));
     org.assertj.core.api.Assertions.assertThatThrownBy(
             () ->
                 new EmbeddingIndexApplication()
-                    .embeddingJob(store, model, snapshot, source, 500, 10, 0)
+                    .embeddingJob(store, model, snapshot, source, 500, 10, 0, "missing-only")
                     .run(new org.springframework.boot.DefaultApplicationArguments()))
         .isInstanceOf(java.io.IOException.class);
     org.mockito.Mockito.verifyNoInteractions(snapshot);
@@ -114,5 +115,20 @@ class EmbeddingIndexApplicationTest {
                     .hasFailed()
                     .getFailure()
                     .hasMessage("Run embedding indexing separately from migration"));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"", "all", "MISSING_ONLY", "overwrite"})
+  void rejectsUnknownModesBeforeStartingClients(String mode) {
+    runner
+        .withPropertyValues(
+            "audiobook.embedding-index.enabled=true", "audiobook.embedding-index.mode=" + mode)
+        .run(
+            context ->
+                assertThat(context)
+                    .hasFailed()
+                    .getFailure()
+                    .hasMessage(
+                        "audiobook.embedding-index.mode must be missing-only or rebuild-all"));
   }
 }

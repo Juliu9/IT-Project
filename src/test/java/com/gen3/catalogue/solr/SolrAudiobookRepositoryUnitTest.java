@@ -22,6 +22,61 @@ import org.mockito.ArgumentCaptor;
 class SolrAudiobookRepositoryUnitTest {
 
   @Test
+  void missingVectorScanKeepsReadPagesBoundedAndResumesAfterTheLastSelectedBook() throws Exception {
+    var client = mock(SolrClient.class);
+    var responses = new java.util.ArrayList<QueryResponse>();
+    for (var ids :
+        List.of(List.of("a", "b"), List.of("c", "d"), List.of("d", "e"), List.<String>of())) {
+      var documents = new SolrDocumentList();
+      for (String id : ids) {
+        var document = new SolrDocument();
+        document.setField("id", id);
+        document.setField("_version_", 42L);
+        if (id.equals("a") || id.equals("e")) {
+          document.setField("custom_vector", List.of(1f, 0f));
+        }
+        documents.add(document);
+      }
+      var response = mock(QueryResponse.class);
+      when(response.getResults()).thenReturn(documents);
+      responses.add(response);
+    }
+    when(client.query(
+            org.mockito.ArgumentMatchers.eq("books"),
+            org.mockito.ArgumentMatchers.any(SolrQuery.class),
+            org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST)))
+        .thenReturn(responses.get(0), responses.get(1), responses.get(2), responses.get(3));
+    var store =
+        new com.gen3.embeddingjob.store.SolrEmbeddingStore(
+            new SolrAudiobookRepository(client, "books", "custom_vector", 2));
+    var first = store.embeddingPage(null, 2, com.gen3.embeddingjob.EmbeddingMode.MISSING_ONLY);
+    org.assertj.core.api.Assertions.assertThat(first.books())
+        .extracting(book -> book.record().id())
+        .containsExactly("b", "c");
+    assertEquals("c", first.nextCursor());
+    var second =
+        store.embeddingPage(
+            first.nextCursor(), 2, com.gen3.embeddingjob.EmbeddingMode.MISSING_ONLY);
+    org.assertj.core.api.Assertions.assertThat(second.books())
+        .extracting(book -> book.record().id())
+        .containsExactly("d");
+    org.junit.jupiter.api.Assertions.assertNull(second.nextCursor());
+    var queries = ArgumentCaptor.forClass(SolrQuery.class);
+    org.mockito.Mockito.verify(client, org.mockito.Mockito.times(4))
+        .query(
+            org.mockito.ArgumentMatchers.eq("books"),
+            queries.capture(),
+            org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST));
+    org.assertj.core.api.Assertions.assertThat(queries.getAllValues())
+        .allSatisfy(
+            query -> {
+              assertEquals(Integer.valueOf(2), query.getRows());
+              org.assertj.core.api.Assertions.assertThat(query.getFields())
+                  .contains("custom_vector", "_version_");
+            });
+  }
+
+  @Test
   void referenceLookupUsesTheSharedAuthorVariants() throws Exception {
     var client = mock(SolrClient.class);
     var response = mock(QueryResponse.class);

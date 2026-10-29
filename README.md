@@ -1,7 +1,11 @@
 # RecommenderAgent
 
+## Purpose
+
 A Spring Boot backend for conversational audiobook recommendations. It supports new searches,
 refinements, more results, explanations, and replay using Qdrant or Solr, with Redis session storage.
+It gives callers one conversational API instead of requiring them to coordinate search filters,
+ranking, follow-up state, and response generation themselves.
 
 ## How it works
 
@@ -23,9 +27,9 @@ Java sources are under `src/main/java/com/gen3/`:
 | --- | --- |
 | `recommenderagent` | HTTP API, conversation, retrieval, ranking, responses, session/user storage and telemetry |
 | `catalogue` | Shared audiobook models, database contracts/adapters and vector utilities |
-| `embeddingjob` | Generate catalogue vectors, then refresh the local snapshot |
+| `embeddingjob` | Fill missing catalogue vectors (or explicitly rebuild all), then refresh the snapshot |
 | `snapshotjob` | Export existing Solr/Qdrant vectors without generating embeddings |
-| `shortdescriptionjob` | Submit, import and recover generated summaries |
+| `shortdescriptionjob` | Generate missing summaries through regular API calls, or explicitly rebuild them |
 | `migrationjob` | Copy existing supported data from Solr to Qdrant |
 | `userpreferencejob` | Stream CSV favourites/history and aggregate local snapshot vectors |
 | `jobruntime` | Shared periodic job-progress reporting |
@@ -35,12 +39,20 @@ are under `src/test/java/`. `compose.yaml` provides local services, `solr/` cont
 snippets, and `.github/workflows/ci.yml` defines CI. Optional log collection uses
 `compose.observability.yaml` and `observability/`.
 
+## Prerequisites
+
+- **Java 21** and Docker for the documented local setup and container tests.
+- OpenAI credentials and connection settings supplied through the environment or optional dev `.env`.
+- A populated Solr or Qdrant catalogue with the expected schema and compatible book vectors;
+  starting Docker does not create audiobook data. See the [job runbooks](docs/jobs/README.md) to prepare it.
+- Reachable Redis for conversation sessions. Imported user profiles are optional for non-personalised
+  requests; the local vector snapshot is needed for user imports, not the recommendation server.
+
+See [Configuration](docs/configuration.md#local-env-and-terminal-exports) for credentials and connections.
+
 ## Run locally
 
-Requires **Java 21**, Docker, and OpenAI credentials. Prepare a populated catalogue with the
-expected schema; starting Docker does not create audiobook data.
-
-Set up the root `.env` using [Configuration](docs/configuration.md#local-env-and-terminal-exports), then:
+After meeting the prerequisites, start the local services and recommendation server:
 
 ```bash
 docker compose up -d
@@ -81,7 +93,7 @@ environment gates, API charges, and CI behaviour.
 - Select the database with `AUDIOBOOK_DATABASE`; this does not migrate existing data.
 - Keep the dev profile disabled in production. User/session headers are not authentication.
 - Maintenance jobs can write data: inspect the [job runbook](docs/jobs/README.md) first. Snapshot
-  export is database-read-only; user import defaults to dry-run. Retain recovery manifests.
+  export is database-read-only; user import defaults to dry-run.
 - Keep credentials, local logs, and generated maintenance data out of Git.
 
 ## Documentation

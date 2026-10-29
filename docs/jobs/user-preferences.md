@@ -2,12 +2,35 @@
 
 [Job index](README.md) · [Shared operation and progress](../maintenance.md) · [Configuration](../configuration.md)
 
-Read favourites/history CSVs and aggregate existing book vectors into user vectors, without AI calls.
-Both Solr and Qdrant supply the required adapters. Set `AUDIOBOOK_DATABASE=solr` or `qdrant`;
-the snapshot must match that backend and catalogue, and write mode targets its user collection.
-For Solr, prepare the separate preference collection and
-schema described in [Solr setup](../configuration.md#solr). Solr writes at most 500 user updates per
-batch and commits once per batch; earlier batches remain saved if a later batch fails.
+## Purpose
+
+Turn users' favourites and listening history into stored taste vectors so personalised requests
+can reuse those preferences without re-aggregating entire histories during each conversation.
+Without this import, equivalent profiles would need another producer, or recommendations would
+have to rely on the user's current request rather than imported listening evidence.
+
+The job aggregates existing book vectors from a local snapshot without AI calls.
+
+## Prerequisites
+
+- Java 21 and both favourites/history CSVs following the [CSV input contract](#csv-input-contract).
+  Supply a header-only file when one side has no records, and complete intended evidence for
+  every user included in a write-mode run.
+- A valid local book-vector snapshot matching the selected backend, catalogue, declared model,
+  and dimensions. Build it with the [snapshot job](snapshots.md) before running this import.
+- `AUDIOBOOK_DATABASE=solr` or `qdrant`, with the connection settings for the selected user store.
+  In write mode, provide permission to save and clear imported users' taste vectors. For Solr,
+  prepare the separate preference collection and schema in [Solr setup](../configuration.md#solr).
+- Enough heap for the full snapshot and writable temporary disk space comparable to the CSV inputs;
+  see the processing details below.
+
+Neither OpenAI credentials nor Redis is required. Dry-run still requires a valid local snapshot;
+startup clients can contact the selected database even though profiles are not written.
+
+## Processing and storage
+
+Solr writes at most 500 user updates per batch and commits once per batch; earlier batches remain
+saved if a later batch fails. Write mode targets the selected backend's user collection.
 
 The importer uses the last valid local book-vector snapshot, not remote catalogue lookups. It loads
 and verifies that snapshot before reading CSVs or writing any profiles. There is no age-based expiry

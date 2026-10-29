@@ -1,12 +1,24 @@
 # Book-vector snapshot job
 
+## Purpose
+
 Exports existing Solr or Qdrant book vectors to a checksummed local binary file. User-preference
 imports load this file instead of repeatedly retrieving vectors from the catalogue database.
+The standalone launcher also avoids rerunning the embedding launcher merely to refresh this file
+or retry a failed export. Without it, snapshot refreshes would depend on that embedding workflow.
+
+## Prerequisites
+
+- Java 21, an existing compatible catalogue, and database credentials where required.
+- Writable persistent storage shared with the user importer, with space for the published snapshot
+  and its temporary replacement.
+- Matching backend, collection, declared embedding model and dimensions, and a stable catalogue
+  during export. No OpenAI credentials or Redis are needed.
+
+## Operation
 
 - Launcher: `com.gen3.snapshotjob.BookVectorSnapshotApplication`.
 - Writes: local snapshot file only; no database records or schemas are changed.
-- Requires: an existing compatible catalogue, database credentials where applicable, and writable
-  persistent storage. No OpenAI credentials or Redis are needed.
 - Also runs automatically after successful catalogue embedding generation.
 - A failed refresh preserves the previous published snapshot. Daily imports accept the last
   compatible version regardless of age; catalogue changes require a refresh.

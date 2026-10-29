@@ -44,9 +44,7 @@ public class BookVectorSnapshotApplication {
       if (environment.getProperty("user.preferences.import-on-startup", Boolean.class, false)
           || environment.getProperty("audiobook.embedding-index.enabled", Boolean.class, false)
           || environment.getProperty("audiobook.qdrant.migration.enabled", Boolean.class, false)
-          || !environment
-              .getProperty("audiobook.short-description.batch.mode", "disabled")
-              .equals("disabled")) {
+          || environment.getProperty("audiobook.short-description.enabled", Boolean.class, false)) {
         throw new IllegalArgumentException(
             "Run standalone snapshot rebuild separately from other maintenance jobs");
       }

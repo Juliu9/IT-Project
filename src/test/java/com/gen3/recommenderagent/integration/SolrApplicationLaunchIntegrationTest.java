@@ -12,7 +12,7 @@ import com.gen3.recommenderagent.RecommenderAgentApplication;
 import com.gen3.recommenderagent.storage.user.solr.SolrUserPreferenceRepository;
 import com.gen3.recommenderagent.testsupport.SolrContainerTestSupport;
 import com.gen3.shortdescriptionjob.ShortDescriptionApplication;
-import com.gen3.shortdescriptionjob.provider.ShortDescriptionBatchProvider;
+import com.gen3.shortdescriptionjob.provider.ShortDescriptionGenerator;
 import com.gen3.userpreferencejob.UserPreferenceApplication;
 import io.qdrant.client.QdrantClient;
 import java.nio.file.Files;
@@ -137,42 +137,22 @@ class SolrApplicationLaunchIntegrationTest {
     assertThat(client.getById(BOOKS, "local_100").getFieldValue("client_custom_s"))
         .isEqualTo("keep");
 
-    Path output = directory.resolve("summaries");
-    for (String mode : List.of("submit", "import", "submit", "recover")) {
-      try (var context =
-          launch(
-              ShortDescriptionApplication.class,
-              Summaries.class,
-              Map.of(
-                  "audiobook.short-description.batch.mode",
-                  mode,
-                  "audiobook.short-description.batch.provider",
-                  "test",
-                  "audiobook.short-description.batch.maximum-records",
-                  "1",
-                  "audiobook.short-description.batch.output-directory",
-                  output.toString()))) {
-        assertJobIsolation(context);
-        assertThat(context.getBeansOfType(EmbeddingModel.class)).isEmpty();
-        assertThat(context.getBeansOfType(ChatModel.class)).isEmpty();
-      }
-      assertThat(Files.exists(output.resolve("short-description-batch.json")))
-          .isEqualTo(mode.equals("submit"));
+    try (var context =
+        launch(
+            ShortDescriptionApplication.class,
+            Summaries.class,
+            Map.of(
+                "audiobook.short-description.enabled",
+                "true",
+                "audiobook.short-description.maximum-records",
+                "1"))) {
+      assertJobIsolation(context);
+      assertThat(context.getBeansOfType(EmbeddingModel.class)).isEmpty();
+      assertThat(context.getBeansOfType(ChatModel.class)).isEmpty();
     }
     assertThat(client.getById(BOOKS, "local_100").getFieldValue("short_description"))
         .isEqualTo("A friendship adventure.");
     assertThat(client.getById(BOOKS, "local_200").getFieldValue("short_description")).isNull();
-    try (var files = Files.list(output)) {
-      assertThat(
-              files
-                  .filter(
-                      path ->
-                          path.getFileName()
-                              .toString()
-                              .startsWith("short-description-batch-recovered-"))
-                  .count())
-          .isEqualTo(1);
-    }
 
     var copied = new java.util.ArrayList<com.gen3.catalogue.model.AudiobookEmbedding>();
     var destination = mock(com.gen3.catalogue.qdrant.QdrantAudiobookRepository.class);
@@ -323,7 +303,7 @@ class SolrApplicationLaunchIntegrationTest {
     settings.put("spring.ai.model.chat", "none");
     settings.put("spring.ai.openai.api-key", "local-test");
     settings.put("audiobook.embedding-index.enabled", "false");
-    settings.put("audiobook.short-description.batch.mode", "disabled");
+    settings.put("audiobook.short-description.enabled", "false");
     settings.put("audiobook.qdrant.migration.enabled", "false");
     settings.put("user.preferences.import-on-startup", "false");
     settings.put("user.preferences.import.mode", "dry-run");
@@ -361,13 +341,9 @@ class SolrApplicationLaunchIntegrationTest {
   @TestConfiguration(proxyBeanMethods = false)
   static class Summaries {
     @Bean
-    ShortDescriptionBatchProvider summaryProvider() throws Exception {
-      var provider = mock(ShortDescriptionBatchProvider.class);
-      when(provider.id()).thenReturn("test");
-      when(provider.upload(anyList(), any(Path.class))).thenReturn("input-local");
-      when(provider.submit("input-local")).thenReturn("batch-local");
-      when(provider.completedDescriptions("batch-local"))
-          .thenReturn(Map.of("local_100", "A friendship adventure."));
+    ShortDescriptionGenerator summaryProvider() throws Exception {
+      var provider = mock(ShortDescriptionGenerator.class);
+      when(provider.generate(anyList())).thenReturn(Map.of("local_100", "A friendship adventure."));
       return provider;
     }
   }

@@ -6,9 +6,13 @@ skinparam classAttributeIconSize 0
 hide empty members
 
 package "embeddingjob" as embeddingjob {
+  enum EmbeddingMode {
+    MISSING_ONLY
+    REBUILD_ALL
+  }
   package "store" {
     interface "AudiobookEmbeddingStore" as C2 {
-      ~ Page embeddingPage(String,int)
+      ~ Page embeddingPage(String,int,EmbeddingMode)
       ~ void updateEmbeddings(List<Update>)
     }
     class "AudiobookEmbeddingStore$Page" as C3 {
@@ -29,7 +33,7 @@ package "embeddingjob" as embeddingjob {
       - String collection
       - int vectorDimension
       - boolean checked
-      + Page embeddingPage(String,int)
+      + Page embeddingPage(String,int,EmbeddingMode)
       + void updateEmbeddings(List<Update>)
       - void requireCollection()
       - void validateDimension(float[])
@@ -38,7 +42,7 @@ package "embeddingjob" as embeddingjob {
     }
     class "SolrEmbeddingStore" as C7 {
       - SolrAudiobookRepository repository
-      + Page embeddingPage(String,int)
+      + Page embeddingPage(String,int,EmbeddingMode)
       + void updateEmbeddings(List<Update>)
     }
   }
@@ -48,12 +52,13 @@ package "embeddingjob" as embeddingjob {
     - AudiobookEmbeddingIndexer indexer
     - int pageSize
     - int maximumRecords
+    - EmbeddingMode mode
     + void run()
   }
   class "EmbeddingIndexApplication" as C1 {
     + {static} void main(String[])
     ~ {static} BeanFactoryPostProcessor validateJob(Environment)
-    ~ ApplicationRunner embeddingJob(AudiobookEmbeddingStore,EmbeddingModel,BookVectorSnapshot,Source,int,int,int)
+    ~ ApplicationRunner embeddingJob(AudiobookEmbeddingStore,EmbeddingModel,BookVectorSnapshot,Source,int,int,int,String)
   }
   class "AudiobookEmbeddingIndexer" as C5 {
     - EmbeddingModel model
@@ -83,15 +88,16 @@ C1 --> BookVectorSnapshot : rebuild after successful generation
 note right of embeddingjob
   Separate opt-in catalogue embedding job.
 
-  Regenerates dense vectors for existing books.
+  Default missing-only fills absent dense vectors.
+  Explicit rebuild-all regenerates existing vectors.
   Qdrant also receives sparse keyword vectors.
   Metadata and short descriptions are preserved.
 
   Uses the selected Solr or Qdrant database.
   No Redis is required.
 
-  Reruns regenerate vectors from the beginning
-  and incur embedding charges again.
+  Missing-only reruns skip already-filled books.
+  Rebuild-all reruns incur generation charges again.
   Snapshot-only retries use the standalone launcher.
 end note
 @enduml

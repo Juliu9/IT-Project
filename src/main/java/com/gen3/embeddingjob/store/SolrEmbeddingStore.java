@@ -1,6 +1,7 @@
 package com.gen3.embeddingjob.store;
 
 import com.gen3.catalogue.solr.SolrAudiobookRepository;
+import com.gen3.embeddingjob.EmbeddingMode;
 import java.io.IOException;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -17,8 +18,9 @@ public class SolrEmbeddingStore implements AudiobookEmbeddingStore {
   }
 
   @Override
-  public Page embeddingPage(String cursor, int limit) throws IOException {
-    var records = repository.findEmbeddingRecords(cursor, limit);
+  public Page embeddingPage(String cursor, int limit, EmbeddingMode mode) throws IOException {
+    var records =
+        repository.findEmbeddingRecords(cursor, limit, mode == EmbeddingMode.MISSING_ONLY);
     return new Page(records, records.size() < limit ? null : records.getLast().record().id());
   }
 

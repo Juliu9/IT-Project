@@ -30,7 +30,7 @@ Only user import has a `dry-run` mode; the other jobs must be treated as real op
 
 Maintenance jobs print `maintenance.progress` immediately and every 10 seconds while running.
 This covers snapshot export/validation/loading, embedding generation, catalogue migration,
-user-import preparation/aggregation, and short-description submit/import/recovery.
+user-import preparation/aggregation, and short-description selection/generation/writes.
 
 ```text
 maintenance.progress job=book.snapshot.rebuild stage=reading catalogue and writing snapshot processed=12500 total=unknown elapsedMs=60000 sinceProgressMs=1500
@@ -40,8 +40,8 @@ maintenance.progress job=book.snapshot.rebuild stage=reading catalogue and writi
 stage, and `sinceProgressMs` is the time since the stage or counter changed. Snapshot counts advance
 per export page (or every 1,000 vectors during local validation/loading). User aggregation reports
 users processed and a known user total. CSV preparation updates counts every 10,000 rows;
-embedding/migration counters advance after completed pages. Short-description database imports and
-provider polling retain their existing detailed progress events.
+embedding/migration counters advance after completed pages. Short-description writes log a
+processed-book count after each completed request.
 
 `total=unknown` means no exact total is available; limits are not presented as totals and no ETA is
 invented. A heartbeat proves the reporter is alive, not that a pending remote operation is advancing.
@@ -77,7 +77,7 @@ See [Snapshot rebuild](jobs/snapshots.md#build-or-refresh-the-local-snapshot).
 
 ## Solr launcher verification
 
-The container test starts the actual embedding, snapshot, summary (submit/import/recover), and preference
+The container test starts the actual embedding, snapshot, summary generation, and preference
 applications, executes their startup jobs, then starts the recommendation HTTP server with Solr and
 Redis. It also checks migration reads from Solr. AI and the migration destination use test doubles;
 all data writes stay in disposable containers and temporary files.

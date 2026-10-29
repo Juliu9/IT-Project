@@ -2,15 +2,28 @@
 
 [Job index](README.md) · [Shared operation and progress](../maintenance.md) · [Configuration](../configuration.md)
 
-**Purpose:** Copy supported existing catalogue fields, short descriptions, and stored dense vectors.
-This is the only job connecting to two databases. Source vectors must match the destination dimensions.
+## Purpose
 
-## Prerequisites and run
+Move an existing Solr catalogue into Qdrant without paying to regenerate its stored embeddings or
+summaries. Without this job, the supported fields and vectors would need a separate export/import
+process or the destination catalogue would need rebuilding from source data.
 
-Configure both Solr source and Qdrant destination connections and credentials in the root `.env`
-or environment. Redis and AI credentials are unnecessary. The source collection must already exist;
-the destination may be initialized by the migration. Set the intended target dimensions and retain
-the existing Qdrant schema when reusing a collection. This job has no dry-run mode.
+This is the only job connecting to two databases. It copies supported catalogue fields,
+short descriptions, and existing dense vectors, skipping books already present at the destination.
+
+## Prerequisites
+
+- Java 21 and reachable Solr source and Qdrant destination services.
+- Both connection settings and required credentials supplied through the root dev `.env` or environment.
+- An existing Solr source collection containing the records to copy. The destination collection
+  may be initialized by the migration.
+- Source vectors compatible with the configured destination dimensions and schema. Retain the
+  existing Qdrant schema when reusing a collection.
+- Read access to Solr, write access to Qdrant, and no other catalogue writers during migration.
+
+Redis and AI credentials are unnecessary. This job has no dry-run mode.
+
+## Run
 
 ```bash
 QDRANT_MIGRATION_ENABLED=true ./mvnw spring-boot:run \

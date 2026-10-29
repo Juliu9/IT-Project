@@ -13,7 +13,7 @@ package "embeddingjob" {
   component "EmbeddingIndexApplication\nCatalogueEmbeddingJob\nAudiobookEmbeddingIndexer" as Embedding #DCFCE7
 }
 package "shortdescriptionjob" {
-  component "ShortDescriptionApplication\nBatchShortDescriptionEnricher" as Summary #DCFCE7
+  component "ShortDescriptionApplication\nShortDescriptionEnricher" as Summary #DCFCE7
 }
 package "migrationjob" {
   component "MigrationApplication\nSolrToQdrantMigrator" as Migration #DBEAFE
@@ -32,7 +32,7 @@ database "Selected user-preference collection\nSolr OR Qdrant" as UserStore
 artifact "Persistent binary snapshot\nBookVectorSnapshot\nLast compatible version; checksummed" as LocalSnapshot
 artifact "Favourites + history CSVs" as CSV
 cloud "Embedding model" as EmbeddingModel
-cloud "Batch summary provider" as SummaryModel
+cloud "Regular summary API" as SummaryModel
 
 Embedding ..> Shared : reuses
 Summary ..> Shared : reuses
@@ -40,13 +40,13 @@ Migration ..> Shared : reuses
 Preferences ..> Shared : reuses
 Snapshot ..> Shared : reuses
 
-Embedding --> Catalogue : read existing records / update vectors
+Embedding --> Catalogue : read books / fill missing or rebuild vectors
 Embedding --> EmbeddingModel : book text → embedding
 Embedding --> LocalSnapshot : export existing vectors after success\nusing shared snapshot publisher
 Snapshot --> Catalogue : read existing IDs and dense vectors
 Snapshot --> LocalSnapshot : validate then atomically publish
-Summary --> Catalogue : read descriptions / fill missing summaries
-Summary --> SummaryModel : submit batch / import completed output
+Summary --> Catalogue : read descriptions / fill missing or rebuild summaries
+Summary --> SummaryModel : generate missing summaries (regular API)
 Migration --> SolrSource : read existing fields and vectors
 Migration --> QdrantTarget : copy books absent by bookId
 CSV --> Preferences : user interactions

@@ -22,8 +22,7 @@ public class CandidateRetrieverConfiguration {
         throw new IllegalArgumentException(
             "Run embedding indexing with the dedicated EmbeddingIndexApplication entry point");
       }
-      if (!"disabled"
-          .equals(environment.getProperty("audiobook.short-description.batch.mode", "disabled"))) {
+      if (environment.getProperty("audiobook.short-description.enabled", Boolean.class, false)) {
         throw new IllegalArgumentException(
             "Run short-description generation with the dedicated ShortDescriptionApplication entry point");
       }

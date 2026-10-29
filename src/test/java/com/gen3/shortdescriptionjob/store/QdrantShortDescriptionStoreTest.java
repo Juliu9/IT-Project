@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.gen3.catalogue.qdrant.Bm25SparseTextEncoder;
 import com.gen3.catalogue.qdrant.QdrantPointMapper;
+import com.gen3.shortdescriptionjob.ShortDescriptionMode;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Points.CreateFieldIndexCollection;
 import io.qdrant.client.grpc.Points.RetrievedPoint;
@@ -49,7 +50,7 @@ class QdrantShortDescriptionStoreTest {
     var store =
         new QdrantShortDescriptionStore(
             client, new QdrantPointMapper(new Bm25SparseTextEncoder()), "books");
-    assertThat(store.findRecordsWithoutShortDescription(1))
+    assertThat(store.findRecordsForShortDescription(1, ShortDescriptionMode.MISSING_ONLY))
         .extracting(book -> book.record().id())
         .containsExactly("valid");
     var pages = ArgumentCaptor.forClass(ScrollPoints.class);

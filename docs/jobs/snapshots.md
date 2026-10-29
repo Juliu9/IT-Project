@@ -2,13 +2,25 @@
 
 [Job index](README.md) · [Shared operation and progress](../maintenance.md) · [Configuration](../configuration.md)
 
-## Purpose and prerequisites
+## Purpose
 
-Export existing catalogue vectors into a persistent local binary file for user-preference imports.
-This is independently runnable and also invoked by the embedding launcher after a successful pass.
-Configure the selected Solr or Qdrant catalogue and compatible model/dimensions. Existing vectors
-are required; no AI credentials, Redis, or user-preference collection is needed. Allow disk space
-for both the published file and its temporary replacement.
+Keep existing book vectors in a persistent local binary file so daily user-preference imports
+avoid repeated remote catalogue-vector lookups. The embedding launcher refreshes it automatically
+after a successful pass; this separate job can refresh it independently or retry a failed export.
+Without the standalone job, refreshing the snapshot would require running the embedding launcher
+again, even when no embedding generation is needed.
+
+## Prerequisites
+
+- Java 21 and a reachable, populated Solr or Qdrant catalogue with existing compatible vectors.
+- Database connection settings and credentials where required, plus the matching declared model,
+  vector dimensions, backend, and collection settings.
+- A writable persistent snapshot directory shared with the user importer. Allow disk space for
+  both the published file and its temporary replacement.
+- A stable catalogue with no concurrent writers during export.
+
+No AI credentials, Redis, user-preference collection, or running recommendation server is needed.
+This job reads existing vectors; it cannot generate missing ones.
 
 ## Build or refresh the local snapshot
 

@@ -12,12 +12,14 @@ public class CatalogueEmbeddingJob {
   private final AudiobookEmbeddingIndexer indexer;
   private final int pageSize;
   private final int maximumRecords;
+  private final EmbeddingMode mode;
 
   public CatalogueEmbeddingJob(
       AudiobookEmbeddingStore store,
       AudiobookEmbeddingIndexer indexer,
       int pageSize,
-      int maximumRecords) {
+      int maximumRecords,
+      EmbeddingMode mode) {
     if (pageSize < 1 || maximumRecords < 0) {
       throw new IllegalArgumentException(
           "Embedding page size must be positive and maximum records nonnegative");
@@ -26,6 +28,7 @@ public class CatalogueEmbeddingJob {
     this.indexer = indexer;
     this.pageSize = pageSize;
     this.maximumRecords = maximumRecords;
+    this.mode = java.util.Objects.requireNonNull(mode);
   }
 
   public void run() throws Exception {
@@ -39,7 +42,7 @@ public class CatalogueEmbeddingJob {
           break;
         }
         progress.stage("reading catalogue");
-        var page = store.embeddingPage(cursor, limit);
+        var page = store.embeddingPage(cursor, limit, mode);
         var valid =
             page.books().stream()
                 .filter(
@@ -69,12 +72,14 @@ public class CatalogueEmbeddingJob {
         scanned += page.books().size();
         progress.update(scanned, -1);
         cursor = page.nextCursor();
-        LOGGER.info("catalogue.embedding.progress scanned={} indexed={}", scanned, indexed);
+        LOGGER.info(
+            "catalogue.embedding.progress mode={} scanned={} indexed={}", mode, scanned, indexed);
         if (page.books().isEmpty()) {
           break;
         }
       } while (cursor != null);
-      LOGGER.info("catalogue.embedding.completed scanned={} indexed={}", scanned, indexed);
+      LOGGER.info(
+          "catalogue.embedding.completed mode={} scanned={} indexed={}", mode, scanned, indexed);
     }
   }
 }

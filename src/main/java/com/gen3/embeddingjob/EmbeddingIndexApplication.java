@@ -56,8 +56,9 @@ public class EmbeddingIndexApplication {
         throw new IllegalArgumentException(
             "Explicitly enable audiobook.embedding-index.enabled to run this job");
       }
-      if (!"disabled"
-          .equals(environment.getProperty("audiobook.short-description.batch.mode", "disabled"))) {
+      EmbeddingMode.parse(
+          environment.getProperty("audiobook.embedding-index.mode", "missing-only"));
+      if (environment.getProperty("audiobook.short-description.enabled", Boolean.class, false)) {
         throw new IllegalArgumentException(
             "Run embedding indexing separately from short-description generation");
       }
@@ -79,10 +80,12 @@ public class EmbeddingIndexApplication {
       com.gen3.catalogue.snapshot.BookVectorSnapshot.Source snapshotSource,
       @Value("${book.vector-snapshot.page-size:500}") int snapshotPageSize,
       @Value("${audiobook.embedding-index.page-size:100}") int pageSize,
-      @Value("${audiobook.embedding-index.maximum-records:0}") int maximumRecords) {
+      @Value("${audiobook.embedding-index.maximum-records:0}") int maximumRecords,
+      @Value("${audiobook.embedding-index.mode:missing-only}") String mode) {
+    EmbeddingMode selection = EmbeddingMode.parse(mode);
     return args -> {
       new CatalogueEmbeddingJob(
-              store, new AudiobookEmbeddingIndexer(model), pageSize, maximumRecords)
+              store, new AudiobookEmbeddingIndexer(model), pageSize, maximumRecords, selection)
           .run();
       snapshot.rebuild(snapshotSource, snapshotPageSize);
     };

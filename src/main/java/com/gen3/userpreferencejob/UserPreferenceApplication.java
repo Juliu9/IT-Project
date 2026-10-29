@@ -67,9 +67,7 @@ public class UserPreferenceApplication {
       }
       if (environment.getProperty("audiobook.qdrant.migration.enabled", Boolean.class, false)
           || environment.getProperty("audiobook.embedding-index.enabled", Boolean.class, false)
-          || !"disabled"
-              .equals(
-                  environment.getProperty("audiobook.short-description.batch.mode", "disabled"))) {
+          || environment.getProperty("audiobook.short-description.enabled", Boolean.class, false)) {
         throw new IllegalArgumentException("Run maintenance jobs separately");
       }
     };

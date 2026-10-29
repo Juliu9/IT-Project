@@ -9,7 +9,7 @@ This reference covers the repository's settings, rather than every property supp
 
 The properties file has five numbered areas: shared backend selection, shared AI/vector settings,
 recommendation-server settings, database connections, and maintenance jobs. The maintenance area
-has one subsection for each launcher; summary Batch model settings live with the summary job,
+has one subsection for each launcher; summary model settings live with the summary job,
 while interactive chat defaults and shared embedding compatibility remain in the shared AI area.
 Section headings are organisational only; they do not change which properties a launcher can read.
 
@@ -157,7 +157,7 @@ reindexing and preference regeneration before serving queries against changed em
 
 Separate parser and response model names still use their configured provider; a model-name override
 does not switch providers. Provider replacement is described in [chat-model wiring](architecture.md#chat-models).
-The summary Batch model is separate from both interactive roles.
+The summary model is separate from both interactive roles.
 
 ## Ranking rules
 
@@ -267,32 +267,43 @@ belong in the [individual job runbooks](jobs/README.md). Shared safety/progress 
 
 ### Catalogue embedding generation
 
-Target selection uses `AUDIOBOOK_DATABASE` (`qdrant` or `solr`). The job reads existing records,
-regenerates vectors, and preserves metadata. The Qdrant implementation also builds sparse vectors.
+Target selection uses `AUDIOBOOK_DATABASE` (`qdrant` or `solr`). The job fills missing dense vectors
+by default and preserves metadata. Explicit `rebuild-all` replaces existing vectors too. The Qdrant
+implementation also builds sparse vectors for each book being embedded.
 
 | Property under `audiobook.embedding-index.` | Environment variable | Default / purpose |
 | --- | --- | --- |
 | `enabled` | `AUDIOBOOK_EMBEDDING_INDEX_ENABLED` | `false`; explicit opt-in |
+| `mode` | `AUDIOBOOK_EMBEDDING_INDEX_MODE` | `missing-only`; generate absent dense vectors, or explicit `rebuild-all` |
 | `page-size` | `AUDIOBOOK_EMBEDDING_INDEX_PAGE_SIZE` | `100`; records per page |
-| `maximum-records` | `AUDIOBOOK_EMBEDDING_INDEX_MAXIMUM_RECORDS` | `0`; full catalogue, or a positive record limit |
+| `maximum-records` | `AUDIOBOOK_EMBEDDING_INDEX_MAXIMUM_RECORDS` | `0`; all records matching the mode, or a positive scan limit |
+
+Missing-only does not detect edited book text or the model that produced an existing vector.
+Model/dimension changes require a complete compatible rebuild; see the
+[embedding runbook](jobs/embeddings.md#edited-books-and-model-changes). Both modes rebuild the full
+book-vector snapshot after a successful pass, even if no embeddings were generated.
 
 ### Short-description generation
 
-The selected database supplies descriptions and receives summaries. Submission calls the provider;
-import writes completed summaries. Keep the output directory and pending manifests between runs.
+The selected database supplies eligible records and receives generated text immediately.
+This job uses regular OpenAI calls, not the Batch API. It runs only through its dedicated launcher
+with explicit enablement.
 
-| Property under `audiobook.short-description.batch.` | Environment variable | Default / purpose |
+| Property under `audiobook.short-description.` | Environment variable | Default / purpose |
 | --- | --- | --- |
-| `mode` | `AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MODE` | `disabled`; choose `submit`, `import`, or `recover` explicitly |
-| `provider` | `AUDIOBOOK_SHORT_DESCRIPTION_BATCH_PROVIDER` | `openai`; must have a registered provider adapter |
-| `id` | `AUDIOBOOK_SHORT_DESCRIPTION_BATCH_ID` | empty; optional explicit batch ID, otherwise use the pending manifest |
-| `output-directory` | `AUDIOBOOK_SHORT_DESCRIPTION_BATCH_OUTPUT_DIRECTORY` | `./data/short-descriptions`; local batch and recovery files |
-| `maximum-records` | `AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MAXIMUM_RECORDS` | `100000`; submission record cap |
-| `openai.base-url` | `OPENAI_BATCH_BASE_URL` | `https://api.openai.com/v1`; Batch transport endpoint |
-| `openai.model` | `OPENAI_BATCH_MODEL` | `gpt-4o-mini`; summary model |
+| `enabled` | `AUDIOBOOK_SHORT_DESCRIPTION_ENABLED` | `false`; explicitly enable the dedicated job |
+| `mode` | `AUDIOBOOK_SHORT_DESCRIPTION_MODE` | `missing-only`; explicit `rebuild-all` regenerates and overwrites existing summaries |
+| `maximum-records` | `AUDIOBOOK_SHORT_DESCRIPTION_MAXIMUM_RECORDS` | `100000`; eligible-book cap per run; positive |
+| `concurrency` | `AUDIOBOOK_SHORT_DESCRIPTION_CONCURRENCY` | `5`; maximum concurrent generation requests; positive |
+| `openai.base-url` | `OPENAI_SHORT_DESCRIPTION_BASE_URL` | `https://api.openai.com/v1`; regular API endpoint |
+| `openai.model` | `OPENAI_SHORT_DESCRIPTION_MODEL` | `gpt-4o-mini`; summary model |
 
-Recovery verifies terminal provider failure and archives the pending manifest; it does not import
-partial results. OpenAI Batch uses `OPENAI_API_KEY` independently of interactive chat clients.
+The job uses `OPENAI_API_KEY` independently of interactive Spring AI chat clients.
+It groups up to ten books per request and saves each completed request. Rerun after failure to
+fill remaining missing summaries in the default mode; rebuild-all starts again and can recharge
+already processed books. The cap applies to either mode; raise it to cover the whole catalogue for
+a full rebuild. No manifests or separate import step are used.
+See the [short-description runbook](jobs/short-descriptions.md).
 
 ### User-preference import
 
@@ -345,7 +356,7 @@ It copies existing supported fields and vectors without generating embeddings or
 | Local development | Start Redis and Qdrant with Compose, populate the catalogue, supply `OPENAI_API_KEY`, and use the `dev` profile for `.env` loading and the website. |
 | Remote Qdrant | Set `QDRANT_URL`, `QDRANT_GRPC_PORT`, authentication and collection names for the remote instance; configure Redis separately. |
 | Solr recommendation server | Select `AUDIOBOOK_DATABASE=solr`, configure both collections and their schemas above, populate catalogue vectors, and provide OpenAI and Redis connections. |
-| Catalogue maintenance in Solr | Select `AUDIOBOOK_DATABASE=solr`, supply Solr connection/schema settings, and run the dedicated embedding or summary launcher with its opt-in mode. Embedding generation needs OpenAI credentials; summary generation uses its selected Batch provider. |
+| Catalogue maintenance in Solr | Select `AUDIOBOOK_DATABASE=solr`, supply Solr connection/schema settings, and run the dedicated embedding or summary launcher with its opt-in mode. Embedding generation needs OpenAI credentials; summary generation uses its regular API client. |
 
 Optional Grafana settings belong to the Compose collector rather than `application.properties`;
 see [observability setup](observability.md#setup).

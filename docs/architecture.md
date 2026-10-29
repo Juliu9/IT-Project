@@ -428,7 +428,11 @@ generation remains in `embeddingjob`; the query embedding module only embeds liv
 Five sibling job packages have dedicated non-web launchers. They are not started by the server
 and do not schedule themselves. See the [job runbooks](jobs/README.md) for commands and recovery.
 
-`embeddingjob` generates catalogue embeddings, then uses the snapshot publisher shared with
+`embeddingjob` fills absent catalogue dense vectors by default; explicit `rebuild-all` regenerates
+existing vectors too. Qdrant filters dense-vector presence in the database. Solr reads bounded pages
+of stored vectors to check presence, including catalogues/segments with no indexed vectors; both
+adapters select books before any AI calls. Existing presence does not prove text/model freshness.
+After a successful pass, including a no-op, the launcher uses the full-catalogue snapshot publisher shared with
 `snapshotjob`. The standalone publisher only exports existing vectors; it can retry snapshot
 publication independently of paid generation. `catalogue.snapshot.BookVectorSnapshot` owns the
 versioned binary format, compatibility checks, checksum, atomic publication and process-local cache.
