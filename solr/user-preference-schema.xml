@@ -1,0 +1,9 @@
+<!-- Add to a SEPARATE user-preference collection, selected by SOLR_USER_PREFERENCE_COLLECTION.
+     Use a string id unique key containing the exact external user ID, and the usual _version_ field.
+     Match vectorDimension to EMBEDDING_DIMENSIONS. These fields are optional, stored, single-valued.
+     Existing fields must support Solr atomic updates (stored or docValues, except copy targets). -->
+<schema>
+  <fieldType name="user_preference_vector" class="solr.DenseVectorField" vectorDimension="1536" similarityFunction="cosine"/>
+  <field name="favouritesVector" type="user_preference_vector" indexed="true" stored="true" multiValued="false"/>
+  <field name="historyVector" type="user_preference_vector" indexed="true" stored="true" multiValued="false"/>
+</schema>

@@ -3,9 +3,9 @@ package com.gen3.embeddingjob;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import com.gen3.catalogue.solr.SolrAudiobookRepository;
 import com.gen3.embeddingjob.store.AudiobookEmbeddingStore;
 import com.gen3.embeddingjob.store.QdrantEmbeddingStore;
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
 import io.qdrant.client.QdrantClient;
 import org.apache.solr.client.solrj.SolrClient;
 import org.junit.jupiter.api.Test;
@@ -13,6 +13,31 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 class EmbeddingIndexApplicationTest {
+  @Test
+  void publishesSnapshotOnlyAfterSuccessfulEmbeddingPass() throws Exception {
+    var store = mock(AudiobookEmbeddingStore.class);
+    var model = mock(EmbeddingModel.class);
+    var snapshot = mock(com.gen3.catalogue.snapshot.BookVectorSnapshot.class);
+    var source = mock(com.gen3.catalogue.snapshot.BookVectorSnapshot.Source.class);
+    org.mockito.Mockito.when(store.embeddingPage(null, 10, EmbeddingMode.MISSING_ONLY))
+        .thenReturn(new AudiobookEmbeddingStore.Page(java.util.List.of(), null));
+    new EmbeddingIndexApplication()
+        .embeddingJob(store, model, snapshot, source, 500, 10, 0, "missing-only")
+        .run(new org.springframework.boot.DefaultApplicationArguments());
+    org.mockito.Mockito.verify(snapshot).rebuild(source, 500);
+    org.mockito.Mockito.verifyNoInteractions(model);
+    org.mockito.Mockito.reset(snapshot);
+    org.mockito.Mockito.when(store.embeddingPage(null, 10, EmbeddingMode.MISSING_ONLY))
+        .thenThrow(new java.io.IOException("unavailable"));
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () ->
+                new EmbeddingIndexApplication()
+                    .embeddingJob(store, model, snapshot, source, 500, 10, 0, "missing-only")
+                    .run(new org.springframework.boot.DefaultApplicationArguments()))
+        .isInstanceOf(java.io.IOException.class);
+    org.mockito.Mockito.verifyNoInteractions(snapshot);
+  }
+
   private final ApplicationContextRunner runner =
       new ApplicationContextRunner()
           .withUserConfiguration(EmbeddingIndexApplication.class)
@@ -67,17 +92,16 @@ class EmbeddingIndexApplicationTest {
   }
 
   @Test
-  void replacementDatabaseCanSupplyItsOwnEmbeddingStoreAdapter() {
+  void rejectsUnsupportedSnapshotBackends() {
     runner
         .withPropertyValues("audiobook.embedding-index.enabled=true", "audiobook.database=other")
         .withBean(AudiobookEmbeddingStore.class, () -> mock(AudiobookEmbeddingStore.class))
         .run(
             context ->
                 assertThat(context)
-                    .hasNotFailed()
-                    .hasSingleBean(AudiobookEmbeddingStore.class)
-                    .doesNotHaveBean(SolrClient.class)
-                    .doesNotHaveBean(QdrantClient.class));
+                    .hasFailed()
+                    .getFailure()
+                    .hasMessageContaining("Error creating bean"));
   }
 
   @Test
@@ -91,5 +115,20 @@ class EmbeddingIndexApplicationTest {
                     .hasFailed()
                     .getFailure()
                     .hasMessage("Run embedding indexing separately from migration"));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"", "all", "MISSING_ONLY", "overwrite"})
+  void rejectsUnknownModesBeforeStartingClients(String mode) {
+    runner
+        .withPropertyValues(
+            "audiobook.embedding-index.enabled=true", "audiobook.embedding-index.mode=" + mode)
+        .run(
+            context ->
+                assertThat(context)
+                    .hasFailed()
+                    .getFailure()
+                    .hasMessage(
+                        "audiobook.embedding-index.mode must be missing-only or rebuild-all"));
   }
 }

@@ -4,6 +4,9 @@
 
 The optional Alloy collector exports only structured `recommendation.completed` summaries.
 Request text, session contents, and other application log lines remain local.
+Maintenance heartbeats and import timing logs are not shipped by this collector. See
+[job progress](maintenance.md#automatic-progress-reporting) and
+[import logs/timings](jobs/user-preferences.md#read-only-dry-run-solr-or-qdrant).
 
 ## Setup
 
@@ -65,6 +68,14 @@ Show failed requests:
 
 A successful built-in response after model failure can have outcome `SUCCESS`. Token totals are
 reported usage, not a complete billing total when an operation's usage is unavailable.
+
+## Local parser timing
+
+Every parser invocation emits `parser.completed` with `durationMs`, `outcome=SUCCESS|FAILURE`,
+and `mode=FAST_PATH|AI`. Inputs rejected before either path use `mode=VALIDATION`.
+The request summary retains `stages.parseMs` even when the parser skips AI or completes in zero
+milliseconds. AI operation logs and token totals include actual calls only; a fast-path parse does
+not emit an AI operation. These individual parser logs stay local under the collector's export rules.
 
 ## Export rules
 

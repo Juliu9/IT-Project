@@ -21,7 +21,11 @@
       .label { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px; font-weight: 600; }
       .label span { color: var(--muted); font-size: 12px; font-weight: 400; }
       textarea { width: 100%; min-height: 140px; resize: vertical; padding: 16px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); font: inherit; line-height: 1.6; }
-      textarea:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgb(37 99 235 / 10%); }
+      .identity-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 20px; }
+      .identity-fields label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; }
+      .identity-fields input { width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+      .identity-note { margin: 0 0 20px; color: var(--muted); font-size: 12px; }
+      .identity-fields input:focus, textarea:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgb(37 99 235 / 10%); }
       .actions { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-top: 14px; }
       .examples { display: flex; flex-wrap: wrap; gap: 8px; }
       .example { border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; background: #f9fafb; color: var(--muted); cursor: pointer; font: inherit; font-size: 12px; }
@@ -33,6 +37,13 @@
       .result { border: 1px solid var(--line); background: white; }
       .error { border: 1px solid #fecaca; background: #fef2f2; color: #b91c1c; }
       .loading { color: var(--muted); text-align: center; }
+      .recommendations { display: none; margin-top: 24px; }
+      .recommendation-list { display: grid; gap: 12px; }
+      .recommendation h3 { margin: 0 0 12px; font-size: 16px; }
+      .recommendation p { white-space: pre-wrap; line-height: 1.6; }
+      .recommendation dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 16px; font-size: 13px; }
+      .recommendation dt { color: var(--muted); }
+      .recommendation dd { margin: 0; overflow-wrap: anywhere; }
       .metrics { display: none; margin-top: 28px; }
       .metrics-title { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
       .metrics-title h2 { margin: 0; font-size: 17px; }
@@ -70,8 +81,14 @@
         <p>Describe the audiobook you want and the recommendation agent will find a suitable next listen.</p>
       </section>
       <section class="card">
+        <div class="identity-fields">
+          <div><label for="user-id">User ID</label><input id="user-id" type="text" required pattern="[ -~]+" aria-describedby="identity-note" autocomplete="off"></div>
+          <div><label for="session-id">Session ID</label><input id="session-id" type="text" required pattern="[ -~]+" aria-describedby="identity-note" autocomplete="off"></div>
+        </div>
+        <p id="identity-note" class="identity-note">Use the same IDs for follow-ups. Change the session ID to test a new conversation. IDs must use standard ASCII characters and cannot be blank.</p>
         <div class="label"><label for="query">Your request</label><span>Natural language</span></div>
         <textarea maxlength="10000" id="query" placeholder="e.g. I want a short mystery audiobook with a female narrator. Nothing too dark."></textarea>
+        <p class="identity-note">Enter to submit. Shift+Enter for a new line.</p>
         <div class="actions">
           <div class="examples">
             <button class="example" type="button" data-example="Recommend fantasy audiobooks with a strong female protagonist.">Fantasy</button>
@@ -97,12 +114,21 @@
         <summary>Agent Processing Details</summary>
         <div class="details-content">
           <div class="metadata-grid">
+            <div class="metadata"><div class="metadata-label">User ID</div><div id="request-user-id" class="metadata-value">—</div></div>
+            <div class="metadata"><div class="metadata-label">Session ID</div><div id="request-session-id" class="metadata-value">—</div></div>
             <div class="metadata"><div class="metadata-label">Request ID</div><div id="request-id" class="metadata-value">—</div></div>
             <div class="metadata"><div class="metadata-label">Intent</div><div id="intent" class="metadata-value">—</div></div>
             <div class="metadata"><div class="metadata-label">Personalised</div><div id="personalised" class="metadata-value">—</div></div>
           </div>
           <div class="metadata-label">Session Request</div>
           <pre id="session-request"></pre>
+          <details id="recommendations" class="recommendations">
+            <summary>Recommendation details</summary>
+            <div class="details-content">
+              <p id="catalogue-error" role="status"></p>
+              <div id="recommendation-list" class="recommendation-list"></div>
+            </div>
+          </details>
         </div>
       </details>
       <footer>Recommendation Agent · Local demonstration environment</footer>
@@ -114,11 +140,17 @@
         identity = crypto.randomUUID();
         sessionStorage.setItem(identityKey, identity);
       }
+      const userId = document.getElementById("user-id");
+      const sessionId = document.getElementById("session-id");
+      userId.value = sessionStorage.getItem("audiobook-demo-user-id") ?? identity;
+      sessionId.value = sessionStorage.getItem("audiobook-demo-session-id") ?? identity;
       const query = document.getElementById("query");
       const submit = document.getElementById("submit");
       const loading = document.getElementById("loading");
       const error = document.getElementById("error");
       const result = document.getElementById("result");
+      const recommendations = document.getElementById("recommendations");
+      const recommendationList = document.getElementById("recommendation-list");
       const metrics = document.getElementById("metrics");
       const details = document.getElementById("details");
 
@@ -129,54 +161,123 @@
 
       async function requestRecommendation() {
         if (submit.disabled) return;
+        userId.value = userId.value.trim();
+        sessionId.value = sessionId.value.trim();
+        if (!userId.reportValidity() || !sessionId.reportValidity()) return;
+        const requestUserId = userId.value;
+        const requestSessionId = sessionId.value;
+        sessionStorage.setItem("audiobook-demo-user-id", requestUserId);
+        sessionStorage.setItem("audiobook-demo-session-id", requestSessionId);
         const text = query.value.trim();
         error.style.display = "none";
         result.style.display = "none";
+        recommendations.style.display = "none";
+        recommendationList.replaceChildren();
         metrics.style.display = "none";
         details.style.display = "none";
         submit.disabled = true;
+        userId.disabled = true;
+        sessionId.disabled = true;
         submit.textContent = "Processing…";
         loading.style.display = "block";
         try {
           const response = await fetch("/api/v1/recommendations/demo", {
             method: "POST",
-            headers: { "Content-Type": "text/plain;charset=UTF-8", "X-Session-Id": identity, "X-User-Id": identity },
+            headers: { "Content-Type": "text/plain;charset=UTF-8", "X-Session-Id": requestSessionId, "X-User-Id": requestUserId },
             body: text
           });
           if (!response.ok) {
             const message = await response.text();
-            throw new Error(message || `The server returned ${response.status}.`);
+            throw new Error(message || `I couldn't complete that request just now (status ${response.status}). Please try again.`);
           }
           const payload = await response.json();
           result.textContent = payload.response;
           result.style.display = "block";
+          displayRecommendations(payload.sessionRequest?.recommendations, payload.catalogueBooks, payload.catalogueError);
           displayMetrics(payload.metrics);
           displayRequest(payload.sessionRequest);
+          document.getElementById("request-user-id").textContent = requestUserId;
+          document.getElementById("request-session-id").textContent = requestSessionId;
         } catch (exception) {
           error.textContent = exception instanceof TypeError
-            ? "Unable to connect to the Recommendation Agent. Make sure the server is running on port 8080."
-            : `Request failed: ${exception.message}`;
+            ? "I couldn't reach the recommendation service. Please check that it's running on port 8080 and try again."
+            : exception.message;
           error.style.display = "block";
         } finally {
           loading.style.display = "none";
           submit.disabled = false;
+          userId.disabled = false;
+          sessionId.disabled = false;
           submit.textContent = "Get recommendations";
         }
       }
 
+      function displayRecommendations(books, catalogueBooks, catalogueError) {
+        const metadata = new Map((catalogueBooks ?? []).map((book) => [book.id, book]));
+        const notice = document.getElementById("catalogue-error");
+        notice.textContent = catalogueError ?? "";
+        notice.hidden = !catalogueError;
+        recommendationList.replaceChildren();
+        recommendations.style.display = books?.length ? "block" : "none";
+        recommendations.open = false;
+        for (const book of books ?? []) {
+          const payload = metadata.get(book.id);
+          const card = document.createElement("article");
+          card.className = "card recommendation";
+          const title = document.createElement("h3");
+          title.textContent = `${book.rank ?? "—"}. ${book.title ?? "Untitled audiobook"}`;
+          card.append(title);
+          const fields = document.createElement("dl");
+          const values = [
+            ["Book ID", book.id],
+            ["Catalogue title", payload?.title],
+            ["Authors", payload?.authors?.join(", ") || null],
+            ["Narrators", payload?.narrators?.join(", ") || null],
+            ["Language", payload?.language],
+            ["Publication date", payload?.pubdate],
+            ["Source", payload?.source],
+            ["Score", book.score],
+            ["Runtime", (payload?.duration_minutes ?? book.duration_minutes) == null ? null : `${payload?.duration_minutes ?? book.duration_minutes} minutes`],
+            ["Reading preferences used", book.readingPreferencesUsed == null ? null : book.readingPreferencesUsed ? "Yes" : "No"]
+          ];
+          for (const [label, value] of values) {
+            const term = document.createElement("dt");
+            const detail = document.createElement("dd");
+            term.textContent = label;
+            detail.textContent = value ?? "Unavailable";
+            fields.append(term, detail);
+          }
+          card.append(fields);
+          const description = document.createElement("p");
+          description.textContent = payload?.shortDescription || book.shortDescription || "Short description unavailable.";
+          card.append(description);
+          if (payload?.description) {
+            const fullDescription = document.createElement("p");
+            fullDescription.textContent = `Description: ${payload.description}`;
+            card.append(fullDescription);
+          }
+          recommendationList.append(card);
+        }
+      }
+
       function displayMetrics(data) {
+        if (!data) {
+          metrics.style.display = "none";
+          return;
+        }
+        const stages = data.stages ?? {};
         const number = (value) => value == null ? "—" : Number(value).toLocaleString();
         const operations = data.operations ?? {};
         const available = (operation) => operation.available && operation.promptTokens != null && operation.completionTokens != null;
         const usage = (operation) => !operation ? "Not called" : !available(operation)
           ? "Usage unavailable"
           : `${number(operation.promptTokens)} input / ${number(operation.completionTokens)} output tokens`;
-        document.getElementById("parse-tokens").textContent = usage(operations.parse);
+        document.getElementById("parse-tokens").textContent = operations.parse ? usage(operations.parse) : "No AI call";
         document.getElementById("response-tokens").textContent = usage(operations.generate_response);
         document.getElementById("embed-tokens").textContent = `Query embedding: ${usage(operations.embed_query)}`;
-        document.getElementById("parse-ms").textContent = number(data.stages.parseMs);
-        document.getElementById("recommend-ms").textContent = number(data.stages.recommendMs);
-        document.getElementById("response-ms").textContent = number(data.stages.responseMs);
+        document.getElementById("parse-ms").textContent = number(stages.parseMs);
+        document.getElementById("recommend-ms").textContent = number(stages.recommendMs);
+        document.getElementById("response-ms").textContent = number(stages.responseMs);
         document.getElementById("total-ms").textContent = number(data.totalMs);
         const calls = Object.values(operations);
         document.getElementById("total-tokens").textContent = calls.every(available)
@@ -196,7 +297,10 @@
       details.style.display = "none";
       submit.addEventListener("click", requestRecommendation);
       query.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) requestRecommendation();
+        if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+          event.preventDefault();
+          if (!event.repeat) requestRecommendation();
+        }
       });
     </script>
   </body>

@@ -51,6 +51,8 @@ public class RequestBodyLimit extends RequestBodyAdviceAdapter {
   }
 
   private ResponseStatusException tooLarge() {
-    return new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "Request body is too large");
+    return new ResponseStatusException(
+        HttpStatus.PAYLOAD_TOO_LARGE,
+        "That message is a little too long. Could you shorten it and try again?");
   }
 }

@@ -1,11 +1,11 @@
 package com.gen3.embeddingjob;
 
+import com.gen3.catalogue.qdrant.Bm25SparseTextEncoder;
+import com.gen3.catalogue.qdrant.QdrantConfig;
+import com.gen3.catalogue.qdrant.QdrantPointMapper;
+import com.gen3.catalogue.solr.SolrAudiobookRepository;
+import com.gen3.catalogue.solr.SolrConfig;
 import com.gen3.embeddingjob.store.AudiobookEmbeddingStore;
-import com.gen3.recommenderagent.storage.audiobook.qdrant.Bm25SparseTextEncoder;
-import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantConfig;
-import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantPointMapper;
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrConfig;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
@@ -27,6 +27,7 @@ import org.springframework.core.env.Environment;
       org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration.class
     })
 @Import({
+  com.gen3.snapshotjob.SnapshotConfiguration.class,
   SolrConfig.class,
   com.gen3.embeddingjob.store.SolrEmbeddingStore.class,
   com.gen3.embeddingjob.store.QdrantEmbeddingStore.class,
@@ -55,8 +56,9 @@ public class EmbeddingIndexApplication {
         throw new IllegalArgumentException(
             "Explicitly enable audiobook.embedding-index.enabled to run this job");
       }
-      if (!"disabled"
-          .equals(environment.getProperty("audiobook.short-description.batch.mode", "disabled"))) {
+      EmbeddingMode.parse(
+          environment.getProperty("audiobook.embedding-index.mode", "missing-only"));
+      if (environment.getProperty("audiobook.short-description.enabled", Boolean.class, false)) {
         throw new IllegalArgumentException(
             "Run embedding indexing separately from short-description generation");
       }
@@ -74,11 +76,18 @@ public class EmbeddingIndexApplication {
   ApplicationRunner embeddingJob(
       AudiobookEmbeddingStore store,
       EmbeddingModel model,
+      com.gen3.catalogue.snapshot.BookVectorSnapshot snapshot,
+      com.gen3.catalogue.snapshot.BookVectorSnapshot.Source snapshotSource,
+      @Value("${book.vector-snapshot.page-size:500}") int snapshotPageSize,
       @Value("${audiobook.embedding-index.page-size:100}") int pageSize,
-      @Value("${audiobook.embedding-index.maximum-records:0}") int maximumRecords) {
-    return args ->
-        new CatalogueEmbeddingJob(
-                store, new AudiobookEmbeddingIndexer(model), pageSize, maximumRecords)
-            .run();
+      @Value("${audiobook.embedding-index.maximum-records:0}") int maximumRecords,
+      @Value("${audiobook.embedding-index.mode:missing-only}") String mode) {
+    EmbeddingMode selection = EmbeddingMode.parse(mode);
+    return args -> {
+      new CatalogueEmbeddingJob(
+              store, new AudiobookEmbeddingIndexer(model), pageSize, maximumRecords, selection)
+          .run();
+      snapshot.rebuild(snapshotSource, snapshotPageSize);
+    };
   }
 }

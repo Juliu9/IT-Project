@@ -1,9 +1,7 @@
 package com.gen3.userpreferencejob;
 
-import com.gen3.userpreferencejob.model.UserFavourite;
-import com.gen3.userpreferencejob.model.UserHistory;
+import com.gen3.shared.jobruntime.JobProgress;
 import java.nio.file.Path;
-import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,9 +16,8 @@ public class UserPreferenceStartupImporter implements ApplicationRunner {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(UserPreferenceStartupImporter.class);
 
-  private final UserFavouriteCsvReader favouriteCsvReader;
-  private final UserHistoryCsvReader historyCsvReader;
-  private final UserPreferenceAggregatorService aggregatorService;
+  private final StreamingUserPreferenceImporter importer;
+  private final com.gen3.catalogue.snapshot.BookVectorSnapshot snapshot;
 
   @Value("${user.preferences.favourites-csv-path}")
   private String favouritesCsvPath;
@@ -28,25 +25,43 @@ public class UserPreferenceStartupImporter implements ApplicationRunner {
   @Value("${user.preferences.history-csv-path}")
   private String historyCsvPath;
 
+  @Value("${user.preferences.import.mode:dry-run}")
+  private String mode;
+
   public UserPreferenceStartupImporter(
-      UserFavouriteCsvReader favouriteCsvReader,
-      UserHistoryCsvReader historyCsvReader,
-      UserPreferenceAggregatorService aggregatorService) {
-    this.favouriteCsvReader = favouriteCsvReader;
-    this.historyCsvReader = historyCsvReader;
-    this.aggregatorService = aggregatorService;
+      StreamingUserPreferenceImporter importer,
+      com.gen3.catalogue.snapshot.BookVectorSnapshot snapshot) {
+    this.importer = importer;
+    this.snapshot = snapshot;
   }
 
   @Override
   public void run(ApplicationArguments args) throws Exception {
-    LOGGER.info("Starting User Preference Vector Aggregation...");
-
-    List<UserFavourite> favourites = favouriteCsvReader.read(Path.of(favouritesCsvPath));
-    List<UserHistory> history = historyCsvReader.read(Path.of(historyCsvPath));
-
-    aggregatorService.aggregateAndSave(favourites, history);
+    long started = System.nanoTime();
+    LOGGER.info("Starting User Preference Vector Aggregation... mode={}", mode);
+    long snapshotLoadMs;
+    try (var progress = new JobProgress("user.import.prepare")) {
+      progress.stage("validating and loading snapshot");
+      snapshot.validate();
+      snapshotLoadMs = (System.nanoTime() - started) / 1_000_000;
+    }
+    var result = importer.run(Path.of(favouritesCsvPath), Path.of(historyCsvPath));
 
     LOGGER.info(
-        "Successfully aggregated and saved user preference vectors to the selected database.");
+        "user.preferences.import.completed mode={} favourites={} history={} users={} uniqueRecords={} snapshotLoadMs={} csvReadMs={} sortMs={} aggregationMs={} totalMs={}",
+        mode,
+        result.favourites(),
+        result.history(),
+        result.users(),
+        result.uniqueRecords(),
+        snapshotLoadMs,
+        result.csvReadMs(),
+        result.sortMs(),
+        result.aggregationMs(),
+        (System.nanoTime() - started) / 1_000_000);
+    LOGGER.info(
+        "dry-run".equals(mode)
+            ? "Dry run completed. No user preference vectors were saved or cleared."
+            : "Successfully aggregated and saved user preference vectors to the selected database.");
   }
 }

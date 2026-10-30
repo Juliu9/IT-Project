@@ -31,7 +31,8 @@ final class RecommendationFlowTestSupport {
     private final Set<SessionKey> locked = ConcurrentHashMap.newKeySet();
 
     @Override
-    public <T> T update(String sessionId, String userId, Function<Session, T> change) {
+    public <T, R> R update(
+        String sessionId, String userId, Function<Session, T> change, Function<T, R> afterCommit) {
       SessionKey key = new SessionKey(sessionId, userId);
       if (!locked.add(key)) {
         throw new SessionBusyException();
@@ -51,7 +52,7 @@ final class RecommendationFlowTestSupport {
         session.setVersion(session.getVersion() + 1);
         session.setExpiresAt(Instant.now().plus(Duration.ofHours(24)));
         sessions.put(key, new ObjectMapper().convertValue(session, Session.class));
-        return result;
+        return afterCommit.apply(result);
       } finally {
         locked.remove(key);
       }

@@ -1,0 +1,64 @@
+package com.gen3.recommenderagent.domain.search;
+
+import java.util.List;
+
+/** Exact catalogue constraints; inclusion or exclusion is determined by the containing property. */
+public class ExactCriteria {
+
+  private List<String> authors;
+  private List<String> narrators;
+  private String language;
+  private String duration;
+  private String publicationYear;
+  private String source;
+
+  public ExactCriteria() {}
+
+  public List<String> getAuthors() {
+    return authors;
+  }
+
+  public void setAuthors(List<String> authors) {
+    this.authors = authors;
+  }
+
+  public List<String> getNarrators() {
+    return narrators;
+  }
+
+  public void setNarrators(List<String> narrators) {
+    this.narrators = narrators;
+  }
+
+  public String getLanguage() {
+    return language;
+  }
+
+  public void setLanguage(String language) {
+    this.language = language;
+  }
+
+  public String getDuration() {
+    return duration;
+  }
+
+  public void setDuration(String duration) {
+    this.duration = duration;
+  }
+
+  public String getPublicationYear() {
+    return publicationYear;
+  }
+
+  public void setPublicationYear(String publicationYear) {
+    this.publicationYear = publicationYear;
+  }
+
+  public String getSource() {
+    return source;
+  }
+
+  public void setSource(String source) {
+    this.source = source;
+  }
+}

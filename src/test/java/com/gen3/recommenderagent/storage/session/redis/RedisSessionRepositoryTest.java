@@ -13,16 +13,16 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import com.gen3.recommenderagent.application.RecommendationWorkflow;
-import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.MustInclude;
-import com.gen3.recommenderagent.domain.session.MustNotInclude;
-import com.gen3.recommenderagent.domain.session.Recommendation;
-import com.gen3.recommenderagent.domain.session.SemanticQuery;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
+import com.gen3.recommenderagent.domain.search.ExactCriteria;
+import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.storage.session.SessionBusyException;
 import com.gen3.recommenderagent.storage.session.SessionCommitException;
 import com.gen3.recommenderagent.storage.session.SessionRepository;
@@ -276,9 +276,9 @@ class RedisSessionRepositoryTest {
 
     Session session = session("session-request-test");
 
-    SessionRequest request = new SessionRequest();
+    ConversationDraft request = new ConversationDraft();
 
-    session.setRequests(List.of(request));
+    session.getActiveSearch().setSearch(ConversationDraft.toTurn(request));
 
     write(session);
 
@@ -286,20 +286,18 @@ class RedisSessionRepositoryTest {
 
     assertNotNull(retrieved);
 
-    assertNotNull(retrieved.getRequests());
-
-    assertEquals(1, retrieved.getRequests().size());
+    assertNotNull(retrieved.getActiveSearch().getSearch());
   }
 
   @Test
   void shouldStoreShownBooksAsIdsOnly() {
     Session session = session("shown-book-ids-test");
-    session.addRecommendationIds(List.of("book-1", "book-2"));
+    session.getActiveSearch().addShownBookIds(List.of("book-1", "book-2"));
 
     write(session);
 
     Session retrieved = read("shown-book-ids-test", USER_ID);
-    assertEquals(List.of("book-1", "book-2"), retrieved.getShownBooks());
+    assertEquals(List.of("book-1", "book-2"), retrieved.getActiveSearch().getShownBookIds());
   }
 
   @Test
@@ -308,7 +306,7 @@ class RedisSessionRepositoryTest {
 
     SemanticQuery positiveQuery = new SemanticQuery();
     positiveQuery.setGenres(List.of("fantasy"));
-    MustInclude mustInclude = new MustInclude();
+    ExactCriteria mustInclude = new ExactCriteria();
     mustInclude.setLanguage("English");
 
     SessionPreferences preferences = new SessionPreferences();
@@ -344,18 +342,18 @@ class RedisSessionRepositoryTest {
 
     semanticQuery.setKeywords(List.of("war", "Europe"));
 
-    SessionRequest request = new SessionRequest();
+    ConversationDraft request = new ConversationDraft();
 
     request.setPositiveSemanticQuery(semanticQuery);
 
-    session.setRequests(List.of(request));
+    session.getActiveSearch().setSearch(ConversationDraft.toTurn(request));
 
     write(session);
 
     Session retrieved = read("semanticQuery-test", USER_ID);
 
     SemanticQuery retrievedSemanticQuery =
-        retrieved.getRequests().get(0).getPositiveSemanticQuery();
+        retrieved.getActiveSearch().getSearch().getPositiveSemanticQuery();
 
     assertNotNull(retrievedSemanticQuery);
 
@@ -380,17 +378,18 @@ class RedisSessionRepositoryTest {
     SemanticQuery negativeQuery = new SemanticQuery();
     negativeQuery.setGenres(List.of("romance"));
 
-    SessionRequest request = new SessionRequest();
+    ConversationDraft request = new ConversationDraft();
 
     request.setNegativeSemanticQuery(negativeQuery);
 
-    session.setRequests(List.of(request));
+    session.getActiveSearch().setSearch(ConversationDraft.toTurn(request));
 
     write(session);
 
     Session retrieved = read("negative-query-test", USER_ID);
 
-    SemanticQuery retrievedQuery = retrieved.getRequests().get(0).getNegativeSemanticQuery();
+    SemanticQuery retrievedQuery =
+        retrieved.getActiveSearch().getSearch().getNegativeSemanticQuery();
 
     assertNotNull(retrievedQuery);
     assertEquals(List.of("romance"), retrievedQuery.getGenres());
@@ -405,29 +404,29 @@ class RedisSessionRepositoryTest {
 
     Session session = session("constraints-test");
 
-    MustInclude mustInclude = new MustInclude();
+    ExactCriteria mustInclude = new ExactCriteria();
     mustInclude.setDuration("under 10 hours");
     mustInclude.setLanguage("English");
     mustInclude.setPublicationYear("after 2020");
     mustInclude.setSource("NLS");
-    MustNotInclude mustNotInclude = new MustNotInclude();
+    ExactCriteria mustNotInclude = new ExactCriteria();
     mustNotInclude.setLanguage("French");
     mustNotInclude.setPublicationYear("before 2000");
     mustNotInclude.setSource("Legacy");
 
-    SessionRequest request = new SessionRequest();
+    ConversationDraft request = new ConversationDraft();
 
     request.setBookCount(5);
     request.setMustInclude(mustInclude);
     request.setMustNotInclude(mustNotInclude);
 
-    session.setRequests(List.of(request));
+    session.getActiveSearch().setSearch(ConversationDraft.toTurn(request));
 
     write(session);
 
     Session retrieved = read("constraints-test", USER_ID);
 
-    SessionRequest retrievedRequest = retrieved.getRequests().get(0);
+    ConversationTurn retrievedRequest = retrieved.getActiveSearch().getSearch();
     assertEquals(5, retrievedRequest.getBookCount());
     assertEquals("under 10 hours", retrievedRequest.getMustInclude().getDuration());
     assertEquals("English", retrievedRequest.getMustInclude().getLanguage());
@@ -452,28 +451,28 @@ class RedisSessionRepositoryTest {
             new Recommendation("book1", 1, 10.0, "Book One"),
             new Recommendation("book2", 1, 20.0, "Book Two"));
 
-    SessionRequest request = new SessionRequest();
+    ConversationDraft request = new ConversationDraft();
 
     request.setRecommendations(recommendations);
 
-    session.setRequests(List.of(request));
+    session.getActiveSearch().setSearch(ConversationDraft.toTurn(request));
 
     write(session);
 
     Session retrieved = read("recommendations-test", USER_ID);
 
     List<Recommendation> retrievedRecommendations =
-        retrieved.getRequests().get(0).getRecommendations();
+        retrieved.getActiveSearch().getSearch().getRecommendations();
 
     assertNotNull(retrievedRecommendations);
 
     assertEquals(2, retrievedRecommendations.size());
 
-    assertEquals("book1", retrievedRecommendations.get(0).getBookId());
+    assertEquals("book1", retrievedRecommendations.get(0).getId());
     assertEquals(1, retrievedRecommendations.get(0).getRank());
     assertEquals(10.0, retrievedRecommendations.get(0).getScore());
 
-    assertEquals("book2", retrievedRecommendations.get(1).getBookId());
+    assertEquals("book2", retrievedRecommendations.get(1).getId());
     assertEquals(1, retrievedRecommendations.get(1).getRank());
     assertEquals(20.0, retrievedRecommendations.get(1).getScore());
   }
@@ -487,15 +486,15 @@ class RedisSessionRepositoryTest {
 
     Session session = session("null-test");
 
-    SessionRequest request = new SessionRequest();
+    ConversationDraft request = new ConversationDraft();
 
-    session.setRequests(List.of(request));
+    session.getActiveSearch().setSearch(ConversationDraft.toTurn(request));
 
     write(session);
 
     Session retrieved = read("null-test", USER_ID);
 
-    SessionRequest retrievedRequest = retrieved.getRequests().get(0);
+    ConversationTurn retrievedRequest = retrieved.getActiveSearch().getSearch();
 
     assertNull(retrievedRequest.getPositiveSemanticQuery());
     assertNull(retrievedRequest.getNegativeSemanticQuery());
@@ -519,17 +518,21 @@ class RedisSessionRepositoryTest {
 
     semanticQuery.setTopics(List.of("WWI"));
 
-    SessionRequest request = new SessionRequest();
+    ConversationDraft request = new ConversationDraft();
 
     request.setPositiveSemanticQuery(semanticQuery);
 
-    session.setRequests(List.of(request));
+    session.getActiveSearch().setSearch(ConversationDraft.toTurn(request));
 
     // First write
     write(session);
 
     // Modify session
-    semanticQuery.setTopics(List.of("WWI", "Vietnam War"));
+    session
+        .getActiveSearch()
+        .getSearch()
+        .getPositiveSemanticQuery()
+        .setTopics(List.of("WWI", "Vietnam War"));
 
     // Second write
     write(session);
@@ -541,7 +544,7 @@ class RedisSessionRepositoryTest {
 
     assertEquals(
         List.of("WWI", "Vietnam War"),
-        retrieved.getRequests().get(0).getPositiveSemanticQuery().getTopics());
+        retrieved.getActiveSearch().getSearch().getPositiveSemanticQuery().getTopics());
   }
 
   @Test
@@ -789,24 +792,22 @@ class RedisSessionRepositoryTest {
   }
 
   @Test
-  void legacySessionsStartWithAnEmptyQueueAndNewQueuesAreBounded() {
-    stringRedisTemplate
-        .opsForValue()
-        .set(
-            key("legacy-batch"),
-            "{\"sessionId\":\"legacy-batch\",\"userId\":\"user-1\",\"bookCount\":5,\"version\":0,\"requests\":[]}");
+  void newSessionsStartWithAnEmptyQueueAndPersistBoundedQueues() {
     redisSessionCache.update(
-        "legacy-batch",
+        "bounded-batch",
         USER_ID,
         session -> {
-          assertTrue(session.getPendingRecommendations().isEmpty());
-          session.setPendingRecommendations(
-              IntStream.rangeClosed(1, 25)
-                  .mapToObj(i -> new Recommendation("legacy-" + i, i, 0.9, "Title " + i))
-                  .toList());
+          assertTrue(session.getActiveSearch().getPendingRecommendations().isEmpty());
+          session
+              .getActiveSearch()
+              .setPendingRecommendations(
+                  IntStream.rangeClosed(1, 25)
+                      .mapToObj(i -> new Recommendation("book-" + i, i, 0.9, "Title " + i))
+                      .toList());
           return null;
         });
-    assertEquals(20, read("legacy-batch", USER_ID).getPendingRecommendations().size());
+    assertEquals(
+        20, read("bounded-batch", USER_ID).getActiveSearch().getPendingRecommendations().size());
   }
 
   @Test
@@ -815,15 +816,18 @@ class RedisSessionRepositoryTest {
         "cached-pages",
         USER_ID,
         session -> {
-          SessionRequest previous = new SessionRequest();
-          previous.setIntent(Intent.RECOMMENDATION);
-          session.getRequests().add(previous);
-          session.setPendingRecommendations(
-              IntStream.rangeClosed(1, 20)
-                  .mapToObj(
-                      i ->
-                          new Recommendation("book-" + i, i, 0.9, "Title " + i, "A short summary."))
-                  .toList());
+          ConversationDraft previous = new ConversationDraft();
+          previous.setIntent(ConversationAction.RECOMMENDATION);
+          session.getActiveSearch().setSearch(ConversationDraft.toTurn(previous));
+          session
+              .getActiveSearch()
+              .setPendingRecommendations(
+                  IntStream.rangeClosed(1, 20)
+                      .mapToObj(
+                          i ->
+                              new Recommendation(
+                                  "book-" + i, i, 0.9, "Title " + i, "A short summary."))
+                      .toList());
           return null;
         });
     CountDownLatch consumed = new CountDownLatch(1);
@@ -831,7 +835,8 @@ class RedisSessionRepositoryTest {
     SessionRepository paused =
         new SessionRepository() {
           @Override
-          public <T> T update(String id, String user, Function<Session, T> change) {
+          public <T, R> R update(
+              String id, String user, Function<Session, T> change, Function<T, R> afterCommit) {
             return redisSessionCache.update(
                 id,
                 user,
@@ -840,19 +845,20 @@ class RedisSessionRepositoryTest {
                   consumed.countDown();
                   await(finish);
                   return result;
-                });
+                },
+                afterCommit);
           }
         };
     RecommendationWorkflow workflow = mock(RecommendationWorkflow.class);
-    var first = new SessionTransitionService(paused, workflow);
+    var first = ConversationTestSupport.transitions(paused, workflow);
     var second =
-        new SessionTransitionService(
+        ConversationTestSupport.transitions(
             new RedisSessionRepository(redisTemplate, stringRedisTemplate), workflow);
     ExecutorService worker = Executors.newSingleThreadExecutor();
     try {
-      SessionRequest more = new SessionRequest();
-      more.setIntent(Intent.MORE_RESULTS);
-      Future<SessionRequest> firstPage =
+      ConversationDraft more = new ConversationDraft();
+      more.setIntent(ConversationAction.MORE_RESULTS);
+      Future<ConversationTurn> firstPage =
           worker.submit(() -> first.process("cached-pages", USER_ID, more));
       assertTrue(consumed.await(5, TimeUnit.SECONDS));
       assertThrows(SessionBusyException.class, () -> second.process("cached-pages", USER_ID, more));
@@ -860,24 +866,83 @@ class RedisSessionRepositoryTest {
       assertEquals(
           List.of("book-1", "book-2", "book-3", "book-4", "book-5"),
           firstPage.get(5, TimeUnit.SECONDS).getRecommendations().stream()
-              .map(Recommendation::getBookId)
+              .map(Recommendation::getId)
               .toList());
       Session saved = read("cached-pages", USER_ID);
-      assertEquals(15, saved.getPendingRecommendations().size());
-      assertEquals("book-6", saved.getPendingRecommendations().getFirst().getBookId());
+      assertEquals(15, saved.getActiveSearch().getPendingRecommendations().size());
       assertEquals(
-          "A short summary.", saved.getPendingRecommendations().getFirst().getShortDescription());
+          "book-6", saved.getActiveSearch().getPendingRecommendations().getFirst().getId());
+      assertEquals(
+          "A short summary.",
+          saved.getActiveSearch().getPendingRecommendations().getFirst().getShortDescription());
       assertEquals(
           List.of("book-6", "book-7", "book-8", "book-9", "book-10"),
           second.process("cached-pages", USER_ID, more).getRecommendations().stream()
-              .map(Recommendation::getBookId)
+              .map(Recommendation::getId)
               .toList());
-      assertEquals(10, read("cached-pages", USER_ID).getShownBooks().size());
+      assertEquals(10, read("cached-pages", USER_ID).getActiveSearch().getShownBookIds().size());
       verifyNoInteractions(workflow);
     } finally {
       finish.countDown();
       worker.shutdownNow();
     }
+  }
+
+  @Test
+  void leaseCoversPostCommitResponseAcrossRepositoryInstances() throws Exception {
+    var generating = new CountDownLatch(1);
+    var release = new CountDownLatch(1);
+    var worker = Executors.newSingleThreadExecutor();
+    var other = new RedisSessionRepository(redisTemplate, stringRedisTemplate);
+    try {
+      Future<String> response =
+          worker.submit(
+              () ->
+                  redisSessionCache.update(
+                      "response-lease",
+                      USER_ID,
+                      session -> {
+                        session.setBookCount(2);
+                        return "saved";
+                      },
+                      result -> {
+                        generating.countDown();
+                        await(release);
+                        return result + " response";
+                      }));
+      assertTrue(generating.await(5, TimeUnit.SECONDS));
+      assertEquals(2, read("response-lease", USER_ID).getBookCount());
+      assertThrows(
+          SessionBusyException.class,
+          () -> other.update("response-lease", USER_ID, session -> null));
+      assertEquals("independent", other.update("other-session", USER_ID, session -> "independent"));
+      release.countDown();
+      assertEquals("saved response", response.get(5, TimeUnit.SECONDS));
+      assertEquals("next", other.update("response-lease", USER_ID, session -> "next"));
+    } finally {
+      release.countDown();
+      worker.shutdownNow();
+    }
+  }
+
+  @Test
+  void failingResponseReleasesLeaseWithoutRollingBackCommittedState() {
+    assertThrows(
+        IllegalStateException.class,
+        () ->
+            redisSessionCache.update(
+                "response-failure",
+                USER_ID,
+                session -> {
+                  session.setBookCount(3);
+                  return "saved";
+                },
+                result -> {
+                  throw new IllegalStateException("generation failed");
+                }));
+    assertEquals(3, read("response-failure", USER_ID).getBookCount());
+    assertEquals(
+        "retry", redisSessionCache.update("response-failure", USER_ID, session -> "retry"));
   }
 
   private Session read(String sessionId, String userId) {

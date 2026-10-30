@@ -1,6 +1,8 @@
 package com.gen3.recommenderagent.embedding;
 
-import com.gen3.recommenderagent.domain.session.SemanticQuery;
+import com.gen3.catalogue.vector.VectorMath;
+import com.gen3.recommenderagent.ai.AiProviderCalls;
+import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
 import java.util.ArrayList;
 import java.util.List;
@@ -52,8 +54,12 @@ public class QueryEmbeddingService {
       return List.copyOf(results);
     }
     var response =
-        aiOperationObserver.observe(
-            "embed_query", () -> model.embedForResponse(texts), AiOperationObserver.AiUsage::from);
+        AiProviderCalls.call(
+            () ->
+                aiOperationObserver.observe(
+                    "embed_query",
+                    () -> model.embedForResponse(texts),
+                    AiOperationObserver.AiUsage::from));
     List<float[]> generated =
         response.getResults().stream().map(embedding -> embedding.getOutput()).toList();
     if (generated.size() != texts.size()) {

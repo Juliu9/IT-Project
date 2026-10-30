@@ -3,10 +3,10 @@ package com.gen3.recommenderagent.ranker.scorer;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
+import com.gen3.catalogue.model.AudiobookCandidate;
+import com.gen3.catalogue.model.AudiobookRecord;
 import com.gen3.recommenderagent.ranker.RankingContext;
 import com.gen3.recommenderagent.ranker.RankingService;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import java.util.List;
 import java.util.Set;
@@ -34,7 +34,7 @@ class UserPreferenceScorerTest {
     var result =
         ranker.rank(List.of(generic, preferred), 2, new RankingContext(preferences, Set.of()));
 
-    assertEquals("preferred", result.getFirst().getBookId());
+    assertEquals("preferred", result.getFirst().getId());
     assertEquals(1.0, result.getFirst().getScore());
   }
 

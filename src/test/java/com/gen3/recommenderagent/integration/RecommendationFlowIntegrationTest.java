@@ -10,15 +10,17 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.gen3.catalogue.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.api.RequestGateway;
-import com.gen3.recommenderagent.application.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.SemanticQuery;
+import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendationWorkflow;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.inputparser.InputParser;
+import com.gen3.recommenderagent.inputparser.UserIntent;
 import com.gen3.recommenderagent.ranker.RankingService;
 import com.gen3.recommenderagent.ranker.scorer.CompositeScorer;
 import com.gen3.recommenderagent.ranker.scorer.RankingScoringProperties;
@@ -26,10 +28,10 @@ import com.gen3.recommenderagent.ranker.scorer.RetrievalRelevanceScorer;
 import com.gen3.recommenderagent.ranker.scorer.UserPreferenceScorer;
 import com.gen3.recommenderagent.ranker.scorer.WeightedScorer;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
+import com.gen3.recommenderagent.response.ConversationResponseGenerator;
 import com.gen3.recommenderagent.retrieval.CandidateRetrievalService;
 import com.gen3.recommenderagent.retrieval.CandidateRetriever;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.testsupport.SolrContainerTestSupport;
 import java.util.List;
 import java.util.Set;
@@ -89,13 +91,13 @@ class RecommendationFlowIntegrationTest {
     Session savedSession = sessionRepository.getSession("session-1", "user-1");
     assertNotNull(savedSession);
     assertEquals("user-1", savedSession.getUserId());
-    assertEquals(1, savedSession.getRequests().size());
-    var recommendations = savedSession.getRequests().getFirst().getRecommendations();
+    assertNotNull(savedSession.getActiveSearch().getSearch());
+    var recommendations = savedSession.getActiveSearch().getSearch().getRecommendations();
     assertEquals(3, recommendations.size());
 
     Set<String> returnedBookIds =
         recommendations.stream()
-            .map(recommendation -> recommendation.getBookId())
+            .map(recommendation -> recommendation.getId())
             .collect(Collectors.toSet());
 
     Set<String> allowedScienceFictionIds =
@@ -103,14 +105,14 @@ class RecommendationFlowIntegrationTest {
     assertTrue(allowedScienceFictionIds.containsAll(returnedBookIds));
     assertFalse(returnedBookIds.contains("book-404"));
     assertFalse(response.contains("book-404"));
-    returnedBookIds.forEach(bookId -> assertTrue(response.contains(bookId)));
+    recommendations.forEach(book -> assertTrue(response.contains(book.getTitle())));
   }
 
   @Test
   void returnsTheNoMatchesFallbackWhenTheCatalogueHasNoEligibleBooks() throws Exception {
     String rawText = "Recommend science fiction from a missing source";
     var request = parsedRequest(rawText);
-    var include = new com.gen3.recommenderagent.domain.session.MustInclude();
+    var include = new com.gen3.recommenderagent.domain.search.ExactCriteria();
     include.setSource("missing-test-source");
     request.setMustInclude(include);
     var sessions = new RecommendationFlowTestSupport.InMemorySessionRepository();
@@ -128,19 +130,24 @@ class RecommendationFlowIntegrationTest {
                 .string(
                     "I couldn't find a good match for "
                         + rawText
-                        + " just yet. Try a genre, author, narrator, or a different description."));
+                        + " just yet. Would you like to try a different genre, author, narrator, or description?"));
     var saved = sessions.getSession("no-matches", "user-1");
     assertNotNull(saved);
-    assertTrue(saved.getRequests().getFirst().getRecommendations().isEmpty());
-    assertTrue(saved.getPendingRecommendations().isEmpty());
+    assertTrue(saved.getActiveSearch().getSearch().getRecommendations().isEmpty());
+    assertTrue(saved.getActiveSearch().getPendingRecommendations().isEmpty());
   }
 
   private MockMvc recommendationEndpoint(
       String rawText,
-      SessionRequest parsedRequest,
+      UserIntent parsedRequest,
       RecommendationFlowTestSupport.InMemorySessionRepository sessionRepository) {
     InputParser inputParser = mock(InputParser.class);
-    when(inputParser.parse(rawText)).thenReturn(parsedRequest);
+    when(inputParser.parseUserIntent(
+            org.mockito.ArgumentMatchers.eq(rawText),
+            org.mockito.ArgumentMatchers
+                .<java.util.function.Supplier<com.gen3.recommenderagent.inputparser.SessionContext>>
+                    any()))
+        .thenReturn(parsedRequest);
 
     SolrAudiobookRepository repository =
         new SolrAudiobookRepository(solrClient, SolrContainerTestSupport.COLLECTION);
@@ -166,10 +173,13 @@ class RecommendationFlowIntegrationTest {
             new SemanticQueryVectorService(embeddingIndexer),
             userPreferences);
     SessionTransitionService applicationService =
-        new SessionTransitionService(sessionRepository, workflow);
+        ConversationTestSupport.transitions(sessionRepository, workflow);
 
     RequestGateway gateway =
-        new RequestGateway(inputParser, applicationService, new AiResponseGenerator(null));
+        new RequestGateway(
+            inputParser,
+            applicationService,
+            new ConversationResponseGenerator(new AiResponseGenerator(null)));
 
     return MockMvcBuilders.standaloneSetup(gateway).build();
   }
@@ -183,15 +193,14 @@ class RecommendationFlowIntegrationTest {
         new RankingScoringProperties.UniversalRuleWeights(0.7, 0.3));
   }
 
-  private SessionRequest parsedRequest(String rawText) {
+  private UserIntent parsedRequest(String rawText) {
     SemanticQuery semanticQuery = new SemanticQuery();
     semanticQuery.setGenres(List.of("science fiction"));
 
-    SessionRequest request = new SessionRequest();
-    request.setRawText(rawText);
-    request.setIntent(Intent.RECOMMENDATION);
+    UserIntent request = new UserIntent();
+    request.setIntent(ConversationAction.RECOMMENDATION);
     request.setPositiveSemanticQuery(semanticQuery);
-    request.setBookCount(3);
+    request.setBookCount(java.math.BigInteger.valueOf(3));
     return request;
   }
 }

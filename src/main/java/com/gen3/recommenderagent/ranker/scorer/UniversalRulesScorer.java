@@ -1,8 +1,8 @@
 package com.gen3.recommenderagent.ranker.scorer;
 
+import com.gen3.catalogue.model.AudiobookCandidate;
+import com.gen3.catalogue.model.AudiobookRecord;
 import com.gen3.recommenderagent.ranker.RankingContext;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
 import java.time.Year;
 import java.util.function.IntSupplier;
 import org.springframework.beans.factory.annotation.Autowired;

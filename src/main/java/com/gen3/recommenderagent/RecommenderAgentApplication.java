@@ -3,7 +3,7 @@ package com.gen3.recommenderagent;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {"com.gen3.recommenderagent", "com.gen3.catalogue"})
 public class RecommenderAgentApplication {
 
   public static void main(String[] args) {

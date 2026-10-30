@@ -5,11 +5,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.application.RecommendationWorkflow;
 import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.domain.Intent;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.application.recommendation.RecommendationPager;
+import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
 import com.gen3.recommenderagent.domain.session.Session;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
+import com.gen3.recommenderagent.retrieval.plan.ExactFilterPolicy;
 import com.gen3.recommenderagent.storage.session.redis.RedisConfig;
 import com.gen3.recommenderagent.storage.session.redis.RedisSessionRepository;
 import java.util.function.Function;
@@ -28,8 +31,29 @@ class SessionStoreConfigurationTest {
   private final ApplicationContextRunner runner =
       new ApplicationContextRunner()
           .withUserConfiguration(
-              RedisConfig.class, RedisSessionRepository.class, SessionTransitionService.class)
-          .withBean(RecommendationWorkflow.class, () -> mock(RecommendationWorkflow.class));
+              RedisConfig.class,
+              RedisSessionRepository.class,
+              SessionTransitionService.class,
+              com.gen3.recommenderagent.application.conversation.ConversationEngine.class,
+              com.gen3.recommenderagent.application.conversation.ConversationConfiguration.class,
+              AudiobookRetrievalPlanner.class,
+              ExactFilterPolicy.class,
+              RecommendationPager.class)
+          .withBean(
+              com.gen3.recommenderagent.application.conversation.IntentResolver.class,
+              () ->
+                  new com.gen3.recommenderagent.application.conversation.IntentResolver(
+                      mock(com.gen3.recommenderagent.inputparser.InputParser.class)))
+          .withBean(
+              com.gen3.recommenderagent.application.conversation.SessionContextProjector.class,
+              com.gen3.recommenderagent.application.conversation.SessionContextProjector::new)
+          .withBean(RecommendationWorkflow.class, () -> mock(RecommendationWorkflow.class))
+          .withBean(
+              com.gen3.recommenderagent.application.recommendation.SimilarBookResolver.class,
+              () ->
+                  new com.gen3.recommenderagent.application.recommendation.SimilarBookResolver(
+                      mock(com.gen3.catalogue.port.AudiobookTitleLookup.class),
+                      mock(com.gen3.catalogue.port.AudiobookVectorRepository.class)));
 
   @TestConfiguration(proxyBeanMethods = false)
   @EnableAutoConfiguration
@@ -93,7 +117,7 @@ class SessionStoreConfigurationTest {
     when(replacement.update(any(), any(), any()))
         .thenAnswer(
             invocation -> {
-              Function<Session, SessionRequest> change = invocation.getArgument(2);
+              Function<Session, ConversationDraft> change = invocation.getArgument(2);
               Session session = new Session();
               session.setSessionId(invocation.getArgument(0));
               session.setUserId(invocation.getArgument(1));
@@ -112,13 +136,13 @@ class SessionStoreConfigurationTest {
                   .doesNotHaveBean(RedisConnectionFactory.class)
                   .doesNotHaveBean(RedisTemplate.class);
               assertThat(context.getBean(SessionRepository.class)).isSameAs(replacement);
-              SessionRequest request = new SessionRequest();
-              request.setIntent(Intent.HELP);
+              ConversationDraft request = new ConversationDraft();
+              request.setIntent(ConversationAction.HELP);
               var result =
                   context
                       .getBean(SessionTransitionService.class)
                       .process("session", "user", request);
-              assertThat(result.getIntent()).isEqualTo(Intent.HELP);
+              assertThat(result.getIntent()).isEqualTo(ConversationAction.HELP);
               assertThat(result.getRecommendations()).isEmpty();
             });
   }

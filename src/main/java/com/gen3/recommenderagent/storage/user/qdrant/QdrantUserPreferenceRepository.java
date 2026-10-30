@@ -56,6 +56,26 @@ public class QdrantUserPreferenceRepository implements UserPreferenceVectorRepos
   }
 
   @Override
+  public void clear(String userId) throws IOException {
+    var pointId = mapper.pointId(userId);
+    if (!collectionExists()) {
+      return;
+    }
+    var filter =
+        io.qdrant.client.grpc.Common.Filter.newBuilder()
+            .addMust(io.qdrant.client.ConditionFactory.hasId(pointId))
+            .build();
+    await(
+        client.deleteVectorsAsync(
+            collection,
+            List.of(
+                QdrantUserPreferenceMapper.FAVOURITES_VECTOR,
+                QdrantUserPreferenceMapper.HISTORY_VECTOR),
+            filter),
+        "clear user preference vectors");
+  }
+
+  @Override
   public Optional<UserPreferenceEmbedding> findEmbeddingByUserId(String userId) throws IOException {
     if (userId == null || userId.isBlank()) {
       return Optional.empty();

@@ -3,8 +3,9 @@ package com.gen3.shortdescriptionjob.store;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
+import com.gen3.catalogue.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.testsupport.SolrContainerTestSupport;
+import com.gen3.shortdescriptionjob.ShortDescriptionMode;
 import java.util.List;
 import java.util.Map;
 import org.apache.solr.client.solrj.SolrClient;
@@ -54,10 +55,7 @@ class SolrShortDescriptionIntegrationTest {
 
   private SolrShortDescriptionStore store(SolrClient connection) {
     return new SolrShortDescriptionStore(
-        connection,
-        new SolrAudiobookRepository(client, COLLECTION, "embedding", 2),
-        COLLECTION,
-        SolrContainerTestSupport.baseUrl(SERVER));
+        connection, new SolrAudiobookRepository(client, COLLECTION, "embedding", 2), COLLECTION);
   }
 
   private void seed(String id, String summary) throws Exception {
@@ -79,14 +77,15 @@ class SolrShortDescriptionIntegrationTest {
     seed("missing", null);
     seed("present", "Existing summary");
     var store = store(client);
-    assertThat(store.findRecordsWithoutShortDescription(100))
+    assertThat(store.findRecordsForShortDescription(100, ShortDescriptionMode.MISSING_ONLY))
         .extracting(book -> book.record().id())
         .contains("missing")
         .doesNotContain("present");
     store.updateShortDescriptions(
         List.of(
             new AudiobookEnrichmentStore.ShortDescriptionUpdate("missing", "Generated summary"),
-            new AudiobookEnrichmentStore.ShortDescriptionUpdate("present", "Replacement")));
+            new AudiobookEnrichmentStore.ShortDescriptionUpdate("present", "Replacement")),
+        ShortDescriptionMode.MISSING_ONLY);
     var updated = client.getById(COLLECTION, "missing");
     assertThat(updated.getFieldValue("short_description")).isEqualTo("Generated summary");
     assertThat(updated.getFieldValue("title")).isEqualTo("Title");
@@ -94,6 +93,30 @@ class SolrShortDescriptionIntegrationTest {
     assertThat(updated.getFieldValues("embedding")).hasSize(2);
     assertThat(client.getById(COLLECTION, "present").getFieldValue("short_description"))
         .isEqualTo("Existing summary");
+  }
+
+  @Test
+  void rebuildAllSelectsAndReplacesExistingSummariesWithoutChangingOtherFields() throws Exception {
+    seed("rebuild-existing", "Old summary");
+    var store = store(client);
+    assertThat(store.findRecordsForShortDescription(100, ShortDescriptionMode.REBUILD_ALL))
+        .extracting(book -> book.record().id())
+        .contains("rebuild-existing");
+    assertThat(store.findRecordsForShortDescription(1, ShortDescriptionMode.REBUILD_ALL))
+        .hasSize(1);
+    var before = client.getById(COLLECTION, "rebuild-existing");
+    store.updateShortDescriptions(
+        List.of(
+            new AudiobookEnrichmentStore.ShortDescriptionUpdate("rebuild-existing", "New summary")),
+        ShortDescriptionMode.REBUILD_ALL);
+    var after = client.getById(COLLECTION, "rebuild-existing");
+    assertThat(after.getFieldValue("short_description")).isEqualTo("New summary");
+    assertThat(after.getFieldValues("embedding"))
+        .containsExactlyElementsOf(before.getFieldValues("embedding"));
+    assertThat(after.getFieldValue("client_custom_s")).isEqualTo("Keep this");
+    assertThat(store.findRecordsForShortDescription(100, ShortDescriptionMode.MISSING_ONLY))
+        .extracting(book -> book.record().id())
+        .doesNotContain("rebuild-existing");
   }
 
   @Test
@@ -122,7 +145,8 @@ class SolrShortDescriptionIntegrationTest {
                     .updateShortDescriptions(
                         List.of(
                             new AudiobookEnrichmentStore.ShortDescriptionUpdate(
-                                "conflict", "Generated summary"))))
+                                "conflict", "Generated summary")),
+                        ShortDescriptionMode.MISSING_ONLY))
         .isInstanceOf(org.apache.solr.common.SolrException.class)
         .hasMessageContaining("version conflict");
     assertThat(client.getById(COLLECTION, "conflict").getFieldValue("short_description"))

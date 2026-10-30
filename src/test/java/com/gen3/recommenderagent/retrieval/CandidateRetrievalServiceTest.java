@@ -7,17 +7,17 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.domain.session.MustInclude;
-import com.gen3.recommenderagent.domain.session.SemanticQuery;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.catalogue.model.AudiobookCandidate;
+import com.gen3.catalogue.model.AudiobookFilterConditions;
+import com.gen3.catalogue.model.AudiobookFilters;
+import com.gen3.catalogue.model.AudiobookRecord;
+import com.gen3.catalogue.port.AudiobookCandidateSearch;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.domain.search.ExactCriteria;
+import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectors;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilterConditions;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookFilters;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookRecord;
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
 import java.io.IOException;
 import java.util.List;
 import java.util.Set;
@@ -30,11 +30,33 @@ import org.junit.jupiter.params.provider.MethodSource;
 class CandidateRetrievalServiceTest {
 
   @Test
+  void shorterRuntimeFilterIsAppliedWithTheOriginalScienceFictionQuery() throws Exception {
+    var search = mock(AudiobookCandidateSearch.class);
+    var embeddings = mock(QueryEmbeddingService.class);
+    var request = requestWithTopic("science fiction");
+    var include = new ExactCriteria();
+    include.setDuration("under 600 minutes");
+    request.setMustInclude(include);
+    float[] vector = {1, 0};
+    var vectors = new SemanticQueryVectors(List.of(vector), List.of());
+    when(embeddings.combineSemanticQueries(vectors)).thenReturn(vector);
+    service("test", search, embeddings).getCandidates(request, vectors, 5, Set.of());
+    var filters = org.mockito.ArgumentCaptor.forClass(AudiobookFilters.class);
+    verify(search)
+        .searchHybrid(
+            org.mockito.ArgumentMatchers.eq(vector),
+            org.mockito.ArgumentMatchers.eq("science fiction"),
+            filters.capture(),
+            org.mockito.ArgumentMatchers.eq(5));
+    assertThat(filters.getValue().mustInclude().maximumDurationMinutes()).isEqualTo(599);
+  }
+
+  @Test
   void routesSemanticAndFilterContentToTheSelectedAdapter() throws Exception {
     AudiobookCandidateSearch candidateSearch = mock(AudiobookCandidateSearch.class);
     QueryEmbeddingService embeddingIndexer = mock(QueryEmbeddingService.class);
-    SessionRequest request = requestWithTopic("desert");
-    MustInclude filter = new MustInclude();
+    ConversationDraft request = requestWithTopic("desert");
+    ExactCriteria filter = new ExactCriteria();
     filter.setLanguage("English");
     request.setMustInclude(filter);
     float[] vector = {0.6f, 0.8f};
@@ -63,7 +85,7 @@ class CandidateRetrievalServiceTest {
 
     List<AudiobookCandidate> result =
         service("qdrant", candidateSearch, embeddingIndexer)
-            .getCandidates(new SessionRequest(), SemanticQueryVectors.empty(), 5, Set.of());
+            .getCandidates(new ConversationDraft(), SemanticQueryVectors.empty(), 5, Set.of());
 
     assertThat(result).isEmpty();
     verify(embeddingIndexer, never()).combineSemanticQueries(SemanticQueryVectors.empty());
@@ -73,7 +95,7 @@ class CandidateRetrievalServiceTest {
   void fallsBackToKeywordSearchWhenNoUsableEmbeddingIsAvailable() throws Exception {
     AudiobookCandidateSearch candidateSearch = mock(AudiobookCandidateSearch.class);
     QueryEmbeddingService embeddingIndexer = mock(QueryEmbeddingService.class);
-    SessionRequest request = requestWithTopic("space");
+    ConversationDraft request = requestWithTopic("space");
     SemanticQueryVectors vectors = new SemanticQueryVectors(List.of(new float[] {1}), List.of());
     when(embeddingIndexer.combineSemanticQueries(vectors)).thenReturn(new float[0]);
 
@@ -86,7 +108,7 @@ class CandidateRetrievalServiceTest {
   void returnsCandidatesFromTheSelectedAdapter() throws Exception {
     AudiobookCandidateSearch candidateSearch = mock(AudiobookCandidateSearch.class);
     QueryEmbeddingService embeddingIndexer = mock(QueryEmbeddingService.class);
-    SessionRequest request = requestWithTopic("space");
+    ConversationDraft request = requestWithTopic("space");
     float[] vector = {0.6f, 0.8f};
     SemanticQueryVectors vectors = new SemanticQueryVectors(List.of(vector), List.of());
     AudiobookRecord book =
@@ -109,7 +131,7 @@ class CandidateRetrievalServiceTest {
   void translatesAdapterFailuresUsingTheConfiguredBackend(String backend) throws Exception {
     AudiobookCandidateSearch candidateSearch = mock(AudiobookCandidateSearch.class);
     QueryEmbeddingService embeddingIndexer = mock(QueryEmbeddingService.class);
-    SessionRequest request = requestWithTopic("space");
+    ConversationDraft request = requestWithTopic("space");
     float[] vector = {0.6f, 0.8f};
     SemanticQueryVectors vectors = new SemanticQueryVectors(List.of(vector), List.of());
     when(embeddingIndexer.combineSemanticQueries(vectors)).thenReturn(vector);
@@ -137,10 +159,10 @@ class CandidateRetrievalServiceTest {
         backend, candidateSearch, embeddingIndexer, new AudiobookRetrievalPlanner());
   }
 
-  private SessionRequest requestWithTopic(String topic) {
+  private ConversationDraft requestWithTopic(String topic) {
     SemanticQuery query = new SemanticQuery();
     query.setTopics(List.of(topic));
-    SessionRequest request = new SessionRequest();
+    ConversationDraft request = new ConversationDraft();
     request.setPositiveSemanticQuery(query);
     return request;
   }

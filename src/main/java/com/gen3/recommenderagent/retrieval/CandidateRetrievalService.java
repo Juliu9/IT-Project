@@ -1,13 +1,13 @@
 package com.gen3.recommenderagent.retrieval;
 
-import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.catalogue.model.AudiobookCandidate;
+import com.gen3.catalogue.port.AudiobookCandidateSearch;
+import com.gen3.recommenderagent.application.conversation.SessionRequest;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectors;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlan;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
-import com.gen3.recommenderagent.storage.audiobook.model.AudiobookCandidate;
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
 import java.io.IOException;
 import java.util.List;
 import java.util.Set;
@@ -41,7 +41,14 @@ public class CandidateRetrievalService implements CandidateRetriever {
       RequestTelemetry.retrievalBackend(backend);
       AudiobookRetrievalPlan plan = retrievalPlanner.plan(limit, request, excludedBookIds);
       boolean personalised =
-          request != null && request.isPersonalised() && vectors != null && !vectors.isEmpty();
+          request != null
+              && (request.isPersonalised()
+                  || (request
+                          instanceof
+                          com.gen3.recommenderagent.application.conversation.ConversationDraft draft
+                      && draft.getSearchContext().getSimilarBook() != null))
+              && vectors != null
+              && !vectors.isEmpty();
       List<AudiobookCandidate> candidates =
           personalised
               ? retrieveSemantic(plan, vectors)

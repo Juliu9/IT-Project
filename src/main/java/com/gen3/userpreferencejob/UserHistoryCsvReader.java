@@ -1,5 +1,6 @@
 package com.gen3.userpreferencejob;
 
+import com.gen3.shared.identity.OpaqueIds;
 import com.gen3.userpreferencejob.model.UserHistory;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -9,9 +10,6 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
@@ -23,8 +21,7 @@ public class UserHistoryCsvReader {
   private static final DateTimeFormatter DATE_FORMATTER =
       DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-  public List<UserHistory> read(Path path) throws IOException {
-    Map<String, UserHistory> recentsByUserAndBook = new LinkedHashMap<>();
+  public void read(Path path, CsvRecordConsumer<UserHistory> consumer) throws IOException {
 
     CSVFormat format =
         CSVFormat.DEFAULT
@@ -43,6 +40,11 @@ public class UserHistoryCsvReader {
         }
 
         String userId = record.get("user");
+        if (!OpaqueIds.isValid(userId)) {
+          throw new IOException(
+              "CSV user must be nonblank and at most 256 characters; row "
+                  + record.getRecordNumber());
+        }
         String item = record.get("item");
         String createdAtRaw = record.get("created_at");
         String updatedAtRaw = record.get("updated_at");
@@ -61,17 +63,8 @@ public class UserHistoryCsvReader {
               LocalDateTime.parse(updatedAtRaw, DATE_FORMATTER).toInstant(ZoneOffset.UTC);
         }
 
-        UserHistory history = new UserHistory(userId, bookId, lastInteractionTime);
-        String dedupeKey = userId + "_" + bookId;
-        recentsByUserAndBook.merge(
-            dedupeKey,
-            history,
-            (current, replacement) ->
-                replacement.lastInteractionTime().isAfter(current.lastInteractionTime())
-                    ? replacement
-                    : current);
+        consumer.accept(new UserHistory(userId, bookId, lastInteractionTime));
       }
     }
-    return List.copyOf(recentsByUserAndBook.values());
   }
 }

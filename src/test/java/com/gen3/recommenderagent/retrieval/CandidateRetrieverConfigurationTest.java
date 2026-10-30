@@ -3,16 +3,16 @@ package com.gen3.recommenderagent.retrieval;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import com.gen3.catalogue.port.AudiobookCandidateSearch;
+import com.gen3.catalogue.port.AudiobookVectorRepository;
+import com.gen3.catalogue.qdrant.Bm25SparseTextEncoder;
+import com.gen3.catalogue.qdrant.QdrantAudiobookRepository;
+import com.gen3.catalogue.qdrant.QdrantConfig;
+import com.gen3.catalogue.qdrant.QdrantPointMapper;
+import com.gen3.catalogue.solr.SolrAudiobookRepository;
+import com.gen3.catalogue.solr.SolrConfig;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookCandidateSearch;
-import com.gen3.recommenderagent.storage.audiobook.port.AudiobookVectorRepository;
-import com.gen3.recommenderagent.storage.audiobook.qdrant.Bm25SparseTextEncoder;
-import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantAudiobookRepository;
-import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantConfig;
-import com.gen3.recommenderagent.storage.audiobook.qdrant.QdrantPointMapper;
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrConfig;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
 import com.gen3.recommenderagent.storage.user.qdrant.QdrantUserPreferenceMapper;
 import com.gen3.recommenderagent.storage.user.qdrant.QdrantUserPreferenceRepository;
@@ -33,14 +33,15 @@ class CandidateRetrieverConfigurationTest {
               QdrantUserPreferenceMapper.class,
               QdrantUserPreferenceRepository.class,
               SolrConfig.class,
-              SolrAudiobookRepository.class)
+              SolrAudiobookRepository.class,
+              com.gen3.recommenderagent.storage.user.solr.SolrUserPreferenceRepository.class)
           .withBean(QueryEmbeddingService.class, () -> mock(QueryEmbeddingService.class))
           .withBean(AudiobookRetrievalPlanner.class, AudiobookRetrievalPlanner::new);
 
   @Test
-  void rejectsShortDescriptionJobModesOnTheRecommendationServer() {
+  void rejectsShortDescriptionJobOnTheRecommendationServer() {
     runner
-        .withPropertyValues("audiobook.short-description.batch.mode=submit")
+        .withPropertyValues("audiobook.short-description.enabled=true")
         .run(
             context ->
                 assertThat(context)
@@ -116,13 +117,30 @@ class CandidateRetrieverConfigurationTest {
   }
 
   @Test
-  void rejectsSolrAsAnIncompleteSoleDatabase() {
+  void selectsOnlySolrWhenConfigured() {
     runner
-        .withPropertyValues("audiobook.database=solr")
+        .withPropertyValues(
+            "audiobook.database=solr",
+            "solr.url=http://localhost:8983/solr",
+            "solr.collection=books",
+            "solr.username=",
+            "solr.password=")
         .run(
-            context ->
-                assertThat(context.getStartupFailure())
-                    .hasMessageContaining("Solr lacks vector lookup and user-preference adapters"));
+            context -> {
+              assertThat(context)
+                  .hasNotFailed()
+                  .hasSingleBean(CandidateRetriever.class)
+                  .hasSingleBean(AudiobookCandidateSearch.class)
+                  .hasSingleBean(AudiobookVectorRepository.class)
+                  .hasSingleBean(UserPreferenceVectorRepository.class)
+                  .hasSingleBean(
+                      com.gen3.recommenderagent.storage.user.solr.SolrUserPreferenceRepository
+                          .class)
+                  .doesNotHaveBean(QdrantClient.class)
+                  .doesNotHaveBean(QdrantConfig.class)
+                  .doesNotHaveBean(QdrantAudiobookRepository.class)
+                  .doesNotHaveBean(QdrantUserPreferenceRepository.class);
+            });
   }
 
   @Test

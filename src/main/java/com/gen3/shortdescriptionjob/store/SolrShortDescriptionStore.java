@@ -1,12 +1,11 @@
 package com.gen3.shortdescriptionjob.store;
 
-import com.gen3.recommenderagent.storage.audiobook.model.StoredAudiobook;
-import com.gen3.recommenderagent.storage.audiobook.solr.SolrAudiobookRepository;
+import com.gen3.catalogue.model.StoredAudiobook;
+import com.gen3.catalogue.solr.SolrAudiobookRepository;
+import com.gen3.shortdescriptionjob.ShortDescriptionMode;
 import java.io.IOException;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrServerException;
@@ -16,7 +15,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
- * Selects missing summaries and applies version-checked updates without replacing catalogue data.
+ * Selects eligible summaries and applies version-checked updates without replacing catalogue data.
  */
 @Component
 @ConditionalOnProperty(name = "audiobook.database", havingValue = "solr")
@@ -24,46 +23,28 @@ public class SolrShortDescriptionStore implements AudiobookEnrichmentStore {
   private final SolrClient client;
   private final SolrAudiobookRepository catalogue;
   private final String collection;
-  private final String endpoint;
 
   public SolrShortDescriptionStore(
       SolrClient client,
       SolrAudiobookRepository catalogue,
-      @Value("${solr.collection}") String collection,
-      @Value("${solr.url}") String endpoint) {
+      @Value("${solr.collection}") String collection) {
     this.client = client;
     this.catalogue = catalogue;
     this.collection = collection;
-    this.endpoint = endpoint;
   }
 
   @Override
-  public DatasetIdentity datasetIdentity() {
-    URI uri = URI.create(endpoint);
-    int port =
-        uri.getPort() < 0 ? ("https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80) : uri.getPort();
-    return new DatasetIdentity(
-        "solr",
-        uri.getScheme().toLowerCase(Locale.ROOT)
-            + "://"
-            + uri.getHost().toLowerCase(Locale.ROOT)
-            + ":"
-            + port
-            + uri.getPath().replaceAll("/+$", "")
-            + "/"
-            + collection);
-  }
-
-  @Override
-  public List<StoredAudiobook> findRecordsWithoutShortDescription(int maximumRecords)
-      throws IOException {
+  public List<StoredAudiobook> findRecordsForShortDescription(
+      int maximumRecords, ShortDescriptionMode mode) throws IOException {
     List<StoredAudiobook> missing = new ArrayList<>();
-    int offset = 0;
+    String afterId = null;
     while (missing.size() < maximumRecords) {
-      var page = catalogue.findAllBooks(offset, 500);
+      var page = catalogue.findAllBooks(afterId, 500);
       for (var book : page) {
         var stored = new StoredAudiobook(book, book.id());
-        if ((book.shortDescription() == null || book.shortDescription().isBlank())
+        if ((mode == ShortDescriptionMode.REBUILD_ALL
+                || book.shortDescription() == null
+                || book.shortDescription().isBlank())
             && AudiobookEnrichmentStore.eligible(stored)) {
           missing.add(stored);
           if (missing.size() == maximumRecords) {
@@ -71,7 +52,9 @@ public class SolrShortDescriptionStore implements AudiobookEnrichmentStore {
           }
         }
       }
-      offset += page.size();
+      if (!page.isEmpty()) {
+        afterId = page.getLast().id();
+      }
       if (page.size() < 500) {
         break;
       }
@@ -80,7 +63,8 @@ public class SolrShortDescriptionStore implements AudiobookEnrichmentStore {
   }
 
   @Override
-  public void updateShortDescriptions(List<ShortDescriptionUpdate> updates) throws IOException {
+  public void updateShortDescriptions(
+      List<ShortDescriptionUpdate> updates, ShortDescriptionMode mode) throws IOException {
     if (updates == null || updates.isEmpty()) {
       return;
     }
@@ -115,7 +99,9 @@ public class SolrShortDescriptionStore implements AudiobookEnrichmentStore {
             continue;
           }
           Object description = current.getFieldValue("short_description");
-          if (description != null && !description.toString().isBlank()) {
+          if (mode == ShortDescriptionMode.MISSING_ONLY
+              && description != null
+              && !description.toString().isBlank()) {
             continue;
           }
           Object version = current.getFieldValue("_version_");
@@ -134,13 +120,13 @@ public class SolrShortDescriptionStore implements AudiobookEnrichmentStore {
         }
         org.slf4j.LoggerFactory.getLogger(getClass())
             .info(
-                "short.description.import.progress processed={} total={}",
+                "short.description.write.progress processed={} total={}",
                 start + batch.size(),
                 valid.size());
       }
     } catch (SolrServerException exception) {
       throw new IOException(
-          "Could not safely update Solr short descriptions; retain the batch manifest and retry",
+          "Could not safely update Solr short descriptions; rerun to fill remaining missing summaries",
           exception);
     }
   }

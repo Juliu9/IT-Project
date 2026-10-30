@@ -55,8 +55,8 @@
         <!-- Model providers throw unrelated runtime types. Only these AI boundaries may catch them. -->
         <module name="SuppressionXpathSingleFilter">
             <property name="checks" value="IllegalCatch"/>
-            <property name="files" value="(AiResponseGenerator|AiOperationObserver)\.java$"/>
-            <property name="query" value="//METHOD_DEF[./IDENT[@text='generate' or @text='observe']]//LITERAL_CATCH"/>
+            <property name="files" value="(AiProviderCalls|AiOperationObserver)\.java$"/>
+            <property name="query" value="//METHOD_DEF[./IDENT[@text='call' or @text='observe']]//LITERAL_CATCH"/>
         </module>
         <module name="EmptyCatchBlock"/>
     </module>

@@ -2,7 +2,7 @@ package com.gen3.recommenderagent.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.gen3.recommenderagent.domain.session.Recommendation;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.storage.session.SessionRepository;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -51,12 +51,12 @@ class LiveRecommendationIntegrationTest {
             sessionId,
             userId,
             session ->
-                session.getRequests().stream()
+                java.util.stream.Stream.ofNullable(session.getActiveSearch().getSearch())
                     .flatMap(saved -> saved.getRecommendations().stream())
                     .toList());
     assertThat(recommendations).hasSizeBetween(1, 5);
     assertThat(recommendations)
-        .extracting(Recommendation::getBookId)
+        .extracting(Recommendation::getId)
         .doesNotHaveDuplicates()
         .allSatisfy(id -> assertThat(id).isNotBlank());
     for (var book : recommendations) {

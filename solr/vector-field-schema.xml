@@ -1,5 +1,7 @@
-<!-- Add these definitions to the target Solr collection schema. -->
+<!-- Add missing definitions to the target Solr schema; pint/pdate are standard Solr types. -->
 <schema>
   <fieldType name="audiobook_vector" class="solr.DenseVectorField" vectorDimension="1536" similarityFunction="cosine"/>
   <field name="embedding" type="audiobook_vector" indexed="true" stored="true"/>
+  <field name="duration_minutes" type="pint" indexed="true" stored="true"/>
+  <field name="pubdate" type="pdate" indexed="true" stored="true"/>
 </schema>

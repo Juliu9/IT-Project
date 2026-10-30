@@ -1,10 +1,14 @@
 package com.gen3.recommenderagent.api;
 
 import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.application.conversation.SessionRequest;
+import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.inputparser.InputParser;
+import com.gen3.recommenderagent.inputparser.InvalidRequestException;
+import com.gen3.recommenderagent.inputparser.UserIntent;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.gen3.recommenderagent.response.ResponseGenerator;
+import com.gen3.shared.identity.OpaqueIds;
 import java.util.function.BiFunction;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -71,14 +75,16 @@ public class RequestGateway {
   }
 
   public record DemoResponse(
-      String response, SessionRequest sessionRequest, RequestTelemetry.Snapshot metrics) {}
+      String response, ConversationTurn sessionRequest, RequestTelemetry.Snapshot metrics) {}
 
   private <T> T process(
       String sessionId,
       String userId,
       String rawText,
       boolean demo,
-      BiFunction<String, SessionRequest, T> formatResponse) {
+      BiFunction<String, ConversationTurn, T> formatResponse) {
+    validateId("X-User-Id", userId);
+    validateId("X-Session-Id", sessionId);
     if (telemetry != null) {
       if (demo) {
         telemetry.startDemo();
@@ -89,20 +95,26 @@ public class RequestGateway {
     SessionRequest currentRequest = null;
     boolean completed = false;
     try {
-      currentRequest = RequestTelemetry.measure("parseMs", () -> inputParser.parse(rawText));
-      SessionRequest parsedRequest = currentRequest;
-      SessionRequest result =
-          demo
-              ? RequestTelemetry.measure(
-                  "recommendMs",
-                  () -> sessionTransitionService.process(sessionId, userId, parsedRequest))
-              : sessionTransitionService.process(sessionId, userId, parsedRequest);
-      String response =
+      UserIntent parsedIntent =
           RequestTelemetry.measure(
-              "responseMs", () -> responseGenerator.generate(result.getRecommendations(), result));
-      T payload = formatResponse.apply(response, result);
+              "parseMs",
+              () ->
+                  inputParser.parseUserIntent(
+                      rawText, () -> sessionTransitionService.parserContext(sessionId, userId)));
+      record Generated(String text, ConversationTurn turn) {}
+      java.util.function.Function<ConversationTurn, Generated> generate =
+          result -> {
+            String response =
+                RequestTelemetry.measure(
+                    "responseMs",
+                    () -> responseGenerator.generate(result.getRecommendations(), result));
+            return new Generated(response, result);
+          };
+      Generated generated =
+          sessionTransitionService.process(sessionId, userId, rawText, parsedIntent, generate);
+      T payload = formatResponse.apply(generated.text(), generated.turn());
       if (telemetry != null) {
-        telemetry.complete(result);
+        telemetry.complete(generated.turn());
       }
       completed = true;
       return payload;
@@ -110,6 +122,12 @@ public class RequestGateway {
       if (telemetry != null && !completed) {
         telemetry.fail(currentRequest);
       }
+    }
+  }
+
+  private static void validateId(String header, String value) {
+    if (!OpaqueIds.isValid(value)) {
+      throw new InvalidRequestException(header + " must be nonblank and at most 256 characters.");
     }
   }
 }

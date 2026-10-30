@@ -7,11 +7,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.domain.Intent;
-import com.gen3.recommenderagent.domain.session.ConversationDecision;
-import com.gen3.recommenderagent.domain.session.Recommendation;
-import com.gen3.recommenderagent.domain.session.SemanticQuery;
-import com.gen3.recommenderagent.domain.session.SessionRequest;
+import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.recommendation.Recommendation;
+import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -27,12 +27,16 @@ class ExplanationResponseTest {
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(client.prompt().system(anyString()).user(anyString()).call().chatResponse())
         .thenReturn(
-            new ChatResponse(List.of(new Generation(new AssistantMessage("An explanation.")))));
+            new ChatResponse(
+                List.of(new Generation(new AssistantMessage("Harry Potter fits your request.")))));
     org.mockito.Mockito.clearInvocations(client.prompt());
     var request = request();
     var books = List.of(book(true), book(false));
-    var generator = new AiResponseGenerator(client, AiOperationObserver.noop());
-    assertThat(generator.generate(books, request)).isEqualTo("An explanation.");
+    var generator =
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(client, AiOperationObserver.noop()));
+    assertThat(generator.generate(books, ConversationDraft.toTurn(request)))
+        .isEqualTo("Harry Potter fits your request.");
     var system = ArgumentCaptor.forClass(String.class);
     verify(client.prompt()).system(system.capture());
     assertThat(system.getValue())
@@ -41,31 +45,52 @@ class ExplanationResponseTest {
             "150 words TOTAL",
             "complete conversational sentences",
             "Vary transitions",
-            "Keep the actual ranks",
+            "Never renumber selected books from 1",
             "only when readingPreferencesUsed=true",
             "Never infer reasons from numerical scores");
-    String prompt = generator.compilePrompt(books, request, "");
+    String prompt =
+        new AiResponseGenerator(null).compilePrompt(books, ConversationDraft.toTurn(request), "");
     assertThat(prompt)
         .contains("fantasy", "readingPreferencesUsed=true", "readingPreferencesUsed=false");
+  }
+
+  @Test
+  void aSingleSelectedBookKeepsItsDisplayedRankInThePromptAndFallback() {
+    var selected = book(false);
+    selected.setRank(2);
+    var request = request();
+    request.setReferenceRank(2);
+    var snapshot = ConversationDraft.toTurn(request);
+    var generator = new AiResponseGenerator(null);
+    assertThat(generator.compilePrompt(List.of(selected), snapshot, ""))
+        .contains("rank=2 title=\"Harry Potter\"")
+        .doesNotContain("rank=1 ");
+    assertThat(new ConversationResponseGenerator(generator).generate(List.of(selected), snapshot))
+        .startsWith("Number 2, Harry Potter");
   }
 
   @Test
   void unavailableModelFallsBackWithoutInventingPreferencesOrMissingDescription() {
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(client.prompt().system(anyString()).user(anyString()).call().chatResponse())
-        .thenThrow(new IllegalStateException("offline"));
+        .thenThrow(new org.springframework.web.client.ResourceAccessException("offline"));
     var known = book(true);
     var unknown = book(false);
     unknown.setShortDescription(null);
-    var generator = new AiResponseGenerator(client, AiOperationObserver.noop());
-    String response = generator.generate(List.of(known, unknown), request());
+    var generator =
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(client, AiOperationObserver.noop()));
+    String response =
+        generator.generate(List.of(known, unknown), ConversationDraft.toTurn(request()));
     assertThat(response)
         .contains(
-            "Your reading preferences were used",
+            "I used your reading preferences to help choose this book",
             "school of magic",
-            "not enough description information");
-    assertThat(new AiResponseGenerator(null).generate(List.of(unknown), request()))
-        .doesNotContain("Your reading preferences were used");
+            "enough detail in this book's description");
+    assertThat(
+            new ConversationResponseGenerator(new AiResponseGenerator(null))
+                .generate(List.of(unknown), ConversationDraft.toTurn(request())))
+        .doesNotContain("I used your reading preferences to help choose this book");
   }
 
   @Test
@@ -79,13 +104,18 @@ class ExplanationResponseTest {
                         new AssistantMessage(
                             "4. **Harry Potter** (rank 4): A school of magic fits your fantasy request.")))));
     String result =
-        new AiResponseGenerator(client, AiOperationObserver.noop())
-            .generate(List.of(book(false)), request());
+        new ConversationResponseGenerator(
+                new AiResponseGenerator(client, AiOperationObserver.noop()))
+            .generate(List.of(book(false)), ConversationDraft.toTurn(request()));
     assertThat(result).isEqualTo("4. Harry Potter A school of magic fits your fantasy request.");
   }
 
-  @Test
-  void oversizedModelOutputUsesABoundedFallbackThatStillIncludesEveryBook() {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = ConversationAction.class,
+      names = {"RECOMMENDATION", "EXPLAIN_RECOMMENDATION"})
+  void oversizedModelOutputUsesABoundedFallbackThatStillIncludesEveryBook(
+      ConversationAction intent) {
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(client.prompt().system(anyString()).user(anyString()).call().chatResponse())
         .thenReturn(
@@ -106,21 +136,27 @@ class ExplanationResponseTest {
                   return book;
                 })
             .toList();
-    var generator = new AiResponseGenerator(client, AiOperationObserver.noop());
-    String result = generator.generate(books, request());
+    var generator =
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(client, AiOperationObserver.noop()));
+    var request = request();
+    request.setIntent(intent);
+    String result = generator.generate(books, ConversationDraft.toTurn(request));
     assertThat(result.split("\\s+")).hasSizeLessThanOrEqualTo(150);
     assertThat(result).doesNotContain("*", "(", ")", "verbose");
     for (int rank = 1; rank <= 5; rank++) {
       assertThat(result).contains("Number " + rank + ", Title " + rank);
     }
-    String offline = new AiResponseGenerator(null).generate(books, request());
+    String offline =
+        new ConversationResponseGenerator(new AiResponseGenerator(null))
+            .generate(books, ConversationDraft.toTurn(request));
     assertThat(offline).isEqualTo(result);
     assertThat(offline).contains(". Number 2,", ". Number 5,").endsWith(".");
   }
 
-  private SessionRequest request() {
-    var request = new SessionRequest();
-    request.setIntent(Intent.EXPLAIN_RECOMMENDATION);
+  private ConversationDraft request() {
+    var request = new ConversationDraft();
+    request.setIntent(ConversationAction.EXPLAIN_RECOMMENDATION);
     request.setDecision(ConversationDecision.EXPLANATION);
     request.setRawText("Why this book?");
     var query = new SemanticQuery();

@@ -80,7 +80,13 @@ public class RedisSessionRepository implements SessionRepository {
   }
 
   @Override
-  public <T> T update(String sessionId, String userId, Function<Session, T> change) {
+  public Session snapshot(String sessionId, String userId) {
+    return redisTemplate.opsForValue().get(sessionKey(sessionId, userId));
+  }
+
+  @Override
+  public <T, R> R update(
+      String sessionId, String userId, Function<Session, T> change, Function<T, R> afterCommit) {
     return RequestTelemetry.measure(
         "sessionLockMs",
         () ->
@@ -96,7 +102,7 @@ public class RedisSessionRepository implements SessionRepository {
                   if (!saved) {
                     throw new SessionCommitException();
                   }
-                  return result;
+                  return afterCommit.apply(result);
                 }));
   }
 
