@@ -2,11 +2,8 @@ package com.gen3.userpreferencejob;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
 
 import com.gen3.catalogue.port.AudiobookVectorRepository;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
@@ -14,8 +11,6 @@ import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepositor
 import io.qdrant.client.QdrantClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Map;
-import java.util.Set;
 import org.apache.solr.client.solrj.SolrClient;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,33 +37,32 @@ class UserPreferenceDryRunTest {
     Path history = directory.resolve("history.csv");
     Files.writeString(favourites, "type,user,item\nbook,test-user,local:book:one\n");
     Files.writeString(history, "type,user,item,created_at,updated_at\n");
-    var books = mock(AudiobookVectorRepository.class);
-    when(books.findEmbeddingsByBookIds(anyCollection()))
-        .thenReturn(missing ? Map.of() : Map.of("local_one", new float[] {1, 0}));
+    var environment =
+        new org.springframework.mock.env.MockEnvironment()
+            .withProperty("audiobook.database", backend)
+            .withProperty(backend + ".collection", "books")
+            .withProperty("embedding.dimensions", "2")
+            .withProperty("book.vector-snapshot.directory", directory.toString());
+    com.gen3.snapshotjob.SnapshotConfiguration.snapshot(environment)
+        .rebuild(
+            (cursor, limit) ->
+                new com.gen3.catalogue.snapshot.BookVectorSnapshot.Page(
+                    java.util.List.of(
+                        new com.gen3.catalogue.snapshot.BookVectorSnapshot.Entry(
+                            missing ? "other" : "local_one", new float[] {1, 0})),
+                    null),
+            10);
     var qdrant = mock(QdrantClient.class);
     var solr = mock(SolrClient.class);
     var runner =
         new ApplicationContextRunner()
             .withUserConfiguration(UserPreferenceApplication.class)
-            .withInitializer(
-                context ->
-                    context.addBeanFactoryPostProcessor(
-                        factory -> {
-                          String catalogue =
-                              com.gen3.catalogue.qdrant.QdrantAudiobookRepository.class.getName();
-                          if (factory.containsBeanDefinition(catalogue)) {
-                            factory.getBeanDefinition(catalogue).setPrimary(false);
-                          }
-                        }))
             .withBean(QdrantClient.class, () -> qdrant)
             .withBean("testSolrClient", SolrClient.class, () -> solr, bean -> bean.setPrimary(true))
-            .withBean(
-                "testBooks",
-                AudiobookVectorRepository.class,
-                () -> books,
-                bean -> bean.setPrimary(true))
             .withPropertyValues(
                 "audiobook.database=" + backend,
+                "qdrant.collection=books",
+                "book.vector-snapshot.directory=" + directory,
                 "embedding.dimensions=2",
                 "user.preferences.import-on-startup=true",
                 "user.preferences.favourites-csv-path=" + favourites,
@@ -98,7 +92,8 @@ class UserPreferenceDryRunTest {
           context
               .getBean(UserPreferenceStartupImporter.class)
               .run(new DefaultApplicationArguments());
-          verify(books).findEmbeddingsByBookIds(Set.of("local_one"));
+          assertThat(context.getBean(AudiobookVectorRepository.class))
+              .isInstanceOf(com.gen3.catalogue.snapshot.BookVectorSnapshot.class);
           verifyNoInteractions(solr, qdrant);
         });
     assertThat(output.getOut())
@@ -110,6 +105,70 @@ class UserPreferenceDryRunTest {
             missing ? "missingVectorUsers=1 clears=0" : "generatedProfiles=1 writes=0",
             "No user preference vectors were saved or cleared.")
         .doesNotContain("Successfully aggregated and saved");
+  }
+
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void invalidSnapshotStopsImportBeforeReadingCsvOrWritingProfiles(boolean corrupt)
+      throws Exception {
+    for (String backend : java.util.List.of("qdrant", "solr")) {
+      for (String mode : java.util.List.of("dry-run", "write")) {
+        var qdrant = mock(QdrantClient.class);
+        var solr = mock(SolrClient.class);
+        Path snapshotDirectory = directory.resolve("invalid");
+        if (corrupt) {
+          var environment =
+              new org.springframework.mock.env.MockEnvironment()
+                  .withProperty("audiobook.database", backend)
+                  .withProperty(backend + ".collection", "books")
+                  .withProperty("embedding.dimensions", "2")
+                  .withProperty("book.vector-snapshot.directory", snapshotDirectory.toString());
+          com.gen3.snapshotjob.SnapshotConfiguration.snapshot(environment)
+              .rebuild(
+                  (cursor, limit) ->
+                      new com.gen3.catalogue.snapshot.BookVectorSnapshot.Page(
+                          java.util.List.of(
+                              new com.gen3.catalogue.snapshot.BookVectorSnapshot.Entry(
+                                  "book", new float[] {1, 0})),
+                          null),
+                  10);
+          try (var files = Files.list(snapshotDirectory.resolve(backend))) {
+            Files.write(
+                files.filter(path -> path.toString().endsWith(".bin")).findFirst().orElseThrow(),
+                new byte[] {1});
+          }
+        }
+        new ApplicationContextRunner()
+            .withUserConfiguration(UserPreferenceApplication.class)
+            .withBean(QdrantClient.class, () -> qdrant)
+            .withBean("testSolrClient", SolrClient.class, () -> solr, bean -> bean.setPrimary(true))
+            .withPropertyValues(
+                "audiobook.database=" + backend,
+                "book.vector-snapshot.directory=" + snapshotDirectory,
+                "qdrant.collection=books",
+                "embedding.dimensions=2",
+                "user.preferences.import-on-startup=true",
+                "user.preferences.import.mode=" + mode,
+                "user.preferences.favourites-csv-path=does-not-exist.csv",
+                "user.preferences.history-csv-path=does-not-exist.csv",
+                "solr.url=http://localhost:8983/solr",
+                "solr.collection=books",
+                "solr.username=",
+                "solr.password=")
+            .run(
+                context -> {
+                  assertThat(context).hasNotFailed();
+                  assertThatThrownBy(
+                          () ->
+                              context
+                                  .getBean(UserPreferenceStartupImporter.class)
+                                  .run(new DefaultApplicationArguments()))
+                      .isInstanceOf(java.io.IOException.class)
+                      .hasMessageContaining("book-vector snapshot");
+                  verifyNoInteractions(qdrant, solr);
+                });
+      }
+    }
   }
 
   @Test

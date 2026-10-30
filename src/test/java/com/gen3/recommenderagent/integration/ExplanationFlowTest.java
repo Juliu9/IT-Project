@@ -273,7 +273,7 @@ class ExplanationFlowTest {
     assertThat(saved()).isEqualTo(before);
     var more = process(ConversationAction.MORE_RESULTS);
     assertThat(more.getRecommendations())
-        .extracting(Recommendation::getBookId)
+        .extracting(Recommendation::getId)
         .containsExactly("book-6", "book-7", "book-8", "book-9", "book-10");
     verify(workflow).recommend(any(), any());
   }
@@ -323,7 +323,7 @@ class ExplanationFlowTest {
     var result = service.process("session", "user", parser.parse("explain"));
     assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
     assertThat(result.getRecommendations())
-        .extracting(Recommendation::getBookId)
+        .extracting(Recommendation::getId)
         .containsExactly("only-book");
     assertThat(responses.generate(result.getRecommendations(), result))
         .contains("Only Book")
@@ -454,7 +454,7 @@ class ExplanationFlowTest {
     assertThat(result.getDecision()).isEqualTo(expected);
     if (expected == ConversationDecision.RECOMMENDATIONS) {
       assertThat(result.getRecommendations())
-          .extracting(Recommendation::getBookId)
+          .extracting(Recommendation::getId)
           .containsExactlyElementsOf(
               text.equals("more")
                   ? List.of("book-6", "book-7", "book-8", "book-9", "book-10")
@@ -539,10 +539,10 @@ class ExplanationFlowTest {
     more.setRawText("2 more");
     more.setBookCount(2);
     assertThat(service.process("session", "user", more).getRecommendations())
-        .extracting(Recommendation::getBookId)
+        .extracting(Recommendation::getId)
         .containsExactly("book-6", "book-7");
     assertThat(sessions.getSession("session", "user").getActiveSearch().getPendingRecommendations())
-        .extracting(Recommendation::getBookId)
+        .extracting(Recommendation::getId)
         .containsExactly("book-8", "book-9", "book-10");
     verify(workflow).recommend(any(), any());
   }

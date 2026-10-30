@@ -39,7 +39,7 @@ class ChatClientConfigurationTest {
               String output =
                   "parser-model".equals(name)
                       ? "{\"intent\":\"RECOMMENDATION\",\"personalised\":false}"
-                      : "Try this audiobook.";
+                      : "Try Book, an audiobook for you.";
               return new ChatResponse(List.of(new Generation(new AssistantMessage(output))));
             });
     ChatClient.Builder shared =
@@ -70,7 +70,7 @@ class ChatClientConfigurationTest {
                       context
                           .getBean(ConversationResponseGenerator.class)
                           .generate(List.of(recommendation), new ConversationTurn()))
-                  .isEqualTo("Try this audiobook.");
+                  .isEqualTo("Try Book, an audiobook for you.");
               shared.build().prompt().user("default").call().chatResponse();
               assertThat(requestedModels)
                   .containsExactly("parser-model", "generator-model", "provider-default");

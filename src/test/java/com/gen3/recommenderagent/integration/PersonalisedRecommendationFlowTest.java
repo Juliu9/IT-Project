@@ -215,7 +215,7 @@ class PersonalisedRecommendationFlowTest {
     var result = process(more);
     assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
     assertThat(result.getRecommendations())
-        .extracting(Recommendation::getBookId)
+        .extracting(Recommendation::getId)
         .containsExactly("remaining");
     verifyNoInteractions(books, embeddingModel, ranker);
   }

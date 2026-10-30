@@ -23,6 +23,139 @@ class QdrantShownBookExclusionTest {
       new GenericContainer<>("qdrant/qdrant:v1.19.1").withExposedPorts(6334);
 
   @Test
+  void migrationAddsAMissingDenseVectorWithoutDroppingExistingSparseData() throws Exception {
+    try (var client =
+        new QdrantClient(
+            QdrantGrpcClient.newBuilder(server.getHost(), server.getMappedPort(6334), false)
+                .build())) {
+      var encoder = new Bm25SparseTextEncoder();
+      var mapper = new QdrantPointMapper(encoder);
+      var repository = new QdrantAudiobookRepository(client, mapper, encoder, "missing-dense", 2);
+      repository.prepareMigration();
+      var book = new AudiobookRecord("book", "s", "Title", List.of(), "Description");
+      var original = mapper.toPoint(new AudiobookEmbedding(book, new float[] {1, 0}));
+      var sparse = original.getVectors().getVectors().getVectorsMap().get("keywords");
+      var pointId = io.qdrant.client.PointIdFactory.id(123L);
+      client
+          .upsertAsync(
+              "missing-dense",
+              List.of(
+                  original.toBuilder()
+                      .setId(pointId)
+                      .setVectors(
+                          io.qdrant.client.VectorsFactory.namedVectors(
+                              java.util.Map.of("keywords", sparse)))
+                      .build()))
+          .get();
+      assertThat(
+              repository.importStoredBooks(
+                  List.of(new AudiobookEmbedding(book, new float[] {2, 3}))))
+          .isEqualTo(1);
+      assertThat(
+              repository.importStoredBooks(
+                  List.of(new AudiobookEmbedding(book, new float[] {0, 1}))))
+          .isZero();
+      var stored =
+          client
+              .retrieveAsync("missing-dense", List.of(pointId), true, true, null)
+              .get()
+              .getFirst();
+      var vectors = stored.getVectors().getVectors().getVectorsMap();
+      assertThat(vectors.get("dense").getDense().getDataList()).containsExactly(2f, 3f);
+      assertThat(vectors.get("keywords").getSparse()).isEqualTo(sparse.getSparse());
+    }
+  }
+
+  @Test
+  void migrationFillsMissingMetadataAndDatesWithoutReplacingExistingValuesOrVectors()
+      throws Exception {
+    try (var client =
+        new QdrantClient(
+            QdrantGrpcClient.newBuilder(server.getHost(), server.getMappedPort(6334), false)
+                .build())) {
+      var encoder = new Bm25SparseTextEncoder();
+      var mapper = new QdrantPointMapper(encoder);
+      var repository = new QdrantAudiobookRepository(client, mapper, encoder, "repair-payload", 2);
+      repository.prepareMigration();
+      var pointId = io.qdrant.client.PointIdFactory.id(98765L);
+      var seeded =
+          mapper
+              .toPoint(
+                  new AudiobookEmbedding(
+                      new AudiobookRecord(
+                          "existing", "kept-source", "Kept title", List.of(), "Kept description"),
+                      new float[] {1, 0}))
+              .toBuilder()
+              .setId(pointId)
+              .putPayload("language", io.qdrant.client.ValueFactory.value(" "))
+              .putPayload("short_description", io.qdrant.client.ValueFactory.value("Kept summary"))
+              .putPayload("client_custom", io.qdrant.client.ValueFactory.value("untouched"))
+              .build();
+      client.upsertAsync("repair-payload", List.of(seeded)).get();
+      var originalVectors =
+          client
+              .retrieveAsync("repair-payload", List.of(pointId), false, true, null)
+              .get()
+              .getFirst()
+              .getVectors();
+      var source =
+          new AudiobookEmbedding(
+              new AudiobookRecord(
+                  "existing",
+                  "source",
+                  "Source title",
+                  List.of("Author"),
+                  "Source description",
+                  List.of("Narrator"),
+                  "English",
+                  125,
+                  "2013-07-03",
+                  "Source summary"),
+              new float[] {0, 1});
+      assertThat(repository.importStoredBooks(List.of(source))).isEqualTo(1);
+      assertThat(repository.importStoredBooks(List.of(source))).isZero();
+      var result =
+          client
+              .retrieveAsync("repair-payload", List.of(pointId), true, true, null)
+              .get()
+              .getFirst();
+      assertThat(result.getId()).isEqualTo(pointId);
+      assertThat(result.getPayloadMap().get("pubdate").getStringValue()).isEqualTo("2013-07-03");
+      assertThat(result.getPayloadMap().get("duration_minutes").getIntegerValue()).isEqualTo(125);
+      assertThat(result.getPayloadMap().get("language").getStringValue()).isEqualTo("English");
+      assertThat(result.getPayloadMap().get("title").getStringValue()).isEqualTo("Kept title");
+      assertThat(result.getPayloadMap().get("short_description").getStringValue())
+          .isEqualTo("Kept summary");
+      assertThat(result.getPayloadMap().get("client_custom").getStringValue())
+          .isEqualTo("untouched");
+      assertThat(result.getPayloadMap())
+          .doesNotContainKeys("bookId", "durationMinutes", "publicationYear");
+      assertThat(result.getVectors()).isEqualTo(originalVectors);
+      repository.importStoredBooks(
+          List.of(
+              new AudiobookEmbedding(
+                  new AudiobookRecord("undated", "s", "Undated", List.of(), "Description"),
+                  new float[] {1, 0})));
+      var years =
+          new AudiobookFilters(
+              new AudiobookFilterConditions(
+                  List.of(), List.of(), null, null, null, null, 2013, 2013),
+              AudiobookFilterConditions.empty(),
+              List.of());
+      assertThat(repository.searchByFilters(years, 10))
+          .extracting(book -> book.audiobook().id())
+          .containsExactly("existing");
+      var otherYears =
+          new AudiobookFilters(
+              new AudiobookFilterConditions(
+                  List.of(), List.of(), null, null, null, null, 2014, null),
+              AudiobookFilterConditions.empty(),
+              List.of());
+      assertThat(repository.searchByFilters(otherYears, 10)).isEmpty();
+    }
+  }
+
+  @Test
   void titleLookupFindsCaseInsensitiveMatchesWithoutChangingExistingPayloads() throws Exception {
     try (var client =
         new QdrantClient(
@@ -136,11 +269,11 @@ class QdrantShownBookExclusionTest {
       org.assertj.core.api.Assertions.assertThatThrownBy(
               () -> repository.findEmbeddingByBookId("catalogue-id"))
           .isInstanceOf(java.io.IOException.class)
-          .hasMessageContaining("Duplicate bookId");
+          .hasMessageContaining("Duplicate catalogue id");
       org.assertj.core.api.Assertions.assertThatThrownBy(
               () -> repository.importStoredBooks(List.of(new AudiobookEmbedding(book, null))))
           .isInstanceOf(java.io.IOException.class)
-          .hasMessageContaining("Duplicate bookId");
+          .hasMessageContaining("Duplicate catalogue id");
     }
   }
 
@@ -165,7 +298,7 @@ class QdrantShownBookExclusionTest {
               List.of(),
               "English",
               60,
-              2020,
+              "2020-01-01",
               "Keep this summary");
       var point =
           mapper.toStoredPoint(new AudiobookEmbedding(record, null)).toBuilder()
@@ -182,7 +315,8 @@ class QdrantShownBookExclusionTest {
                   client, mapper, "embedding-job", 2),
               new com.gen3.embeddingjob.AudiobookEmbeddingIndexer(model),
               1,
-              0)
+              0,
+              com.gen3.embeddingjob.EmbeddingMode.MISSING_ONLY)
           .run();
       var result =
           client.retrieveAsync("embedding-job", List.of(id), true, true, null).get().getFirst();
@@ -214,7 +348,7 @@ class QdrantShownBookExclusionTest {
               List.of(),
               "English",
               60,
-              2020,
+              "2020-01-01",
               "Existing summary");
       var missing = new AudiobookRecord("missing", "source", "No vector", List.of(), null);
       assertThat(
@@ -293,7 +427,7 @@ class QdrantShownBookExclusionTest {
                                   List.of("Narrator"),
                                   "English",
                                   100,
-                                  2020,
+                                  "2020-01-01",
                                   null),
                               VectorMath.normalize(new float[] {1, index / 100.0f})))
                   .map(mapper::toPoint)

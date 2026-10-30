@@ -27,7 +27,8 @@ class ExplanationResponseTest {
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(client.prompt().system(anyString()).user(anyString()).call().chatResponse())
         .thenReturn(
-            new ChatResponse(List.of(new Generation(new AssistantMessage("An explanation.")))));
+            new ChatResponse(
+                List.of(new Generation(new AssistantMessage("Harry Potter fits your request.")))));
     org.mockito.Mockito.clearInvocations(client.prompt());
     var request = request();
     var books = List.of(book(true), book(false));
@@ -35,7 +36,7 @@ class ExplanationResponseTest {
         new ConversationResponseGenerator(
             new AiResponseGenerator(client, AiOperationObserver.noop()));
     assertThat(generator.generate(books, ConversationDraft.toTurn(request)))
-        .isEqualTo("An explanation.");
+        .isEqualTo("Harry Potter fits your request.");
     var system = ArgumentCaptor.forClass(String.class);
     verify(client.prompt()).system(system.capture());
     assertThat(system.getValue())

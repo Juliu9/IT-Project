@@ -326,7 +326,8 @@ class SolrAudiobookRepositoryTest {
             new com.gen3.embeddingjob.store.SolrEmbeddingStore(repository),
             new com.gen3.embeddingjob.AudiobookEmbeddingIndexer(model),
             1,
-            1)
+            1,
+            com.gen3.embeddingjob.EmbeddingMode.REBUILD_ALL)
         .run();
     var updated = solrClient.getById(collection, "book-101");
     assertEquals(original.getFieldValue("title"), updated.getFieldValue("title"));
@@ -366,7 +367,10 @@ class SolrAudiobookRepositoryTest {
     var repository = new SolrAudiobookRepository(solrClient, collection);
     var store = new com.gen3.embeddingjob.store.SolrEmbeddingStore(repository);
     var source =
-        store.embeddingPage(null, 100).books().stream()
+        store
+            .embeddingPage(null, 100, com.gen3.embeddingjob.EmbeddingMode.REBUILD_ALL)
+            .books()
+            .stream()
             .filter(book -> id.equals(book.record().id()))
             .findFirst()
             .orElseThrow();

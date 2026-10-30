@@ -53,8 +53,8 @@ public class SolrAudiobookRepository
     "description",
     "narrators",
     "language",
-    "durationMinutes",
-    "publicationYear",
+    "duration_minutes",
+    "pubdate",
     "short_description"
   };
   private static final double KEYWORD_WEIGHT = 0.4;
@@ -128,16 +128,25 @@ public class SolrAudiobookRepository
     addExactFilter(query, "source", conditions.source(), excluded);
     addRangeFilter(
         query,
-        "durationMinutes",
+        "duration_minutes",
         conditions.minimumDurationMinutes(),
         conditions.maximumDurationMinutes(),
         excluded);
-    addRangeFilter(
-        query,
-        "publicationYear",
-        conditions.minimumPublicationYear(),
-        conditions.maximumPublicationYear(),
-        excluded);
+    if (conditions.minimumPublicationYear() != null
+        || conditions.maximumPublicationYear() != null) {
+      String start =
+          conditions.minimumPublicationYear() == null
+              ? "*"
+              : com.gen3.catalogue.model.PublicationDate.startOfYear(
+                      conditions.minimumPublicationYear())
+                  .toString();
+      String end =
+          conditions.maximumPublicationYear() == null
+              ? "*"
+              : java.time.LocalDate.of(conditions.maximumPublicationYear(), 12, 31)
+                  + "T23:59:59.999Z";
+      query.addFilterQuery((excluded ? "-" : "") + "pubdate:[" + start + " TO " + end + "]");
+    }
   }
 
   private void addRangeFilter(
@@ -310,14 +319,31 @@ public class SolrAudiobookRepository
   }
 
   /** Retains each record's source version across the model call. */
-  public List<StoredAudiobook> findEmbeddingRecords(String afterId, int limit) throws IOException {
+  public List<StoredAudiobook> findEmbeddingRecords(String afterId, int limit, boolean missingOnly)
+      throws IOException {
     var records = new ArrayList<StoredAudiobook>();
-    for (var document : cataloguePage(afterId, limit, false)) {
-      Object version = document.getFieldValue("_version_");
-      if (!(version instanceof Number number) || number.longValue() <= 1) {
-        throw new IOException("Solr must return an exact _version_ for embedding maintenance");
+    String cursor = afterId;
+    int maximum = Math.max(1, limit);
+    // Solr 9.6 vector existence functions fail on segments with no indexed vectors.
+    while (records.size() < maximum) {
+      var page = cataloguePage(cursor, maximum, missingOnly);
+      for (var document : page) {
+        if (records.size() == maximum) {
+          break;
+        }
+        cursor = String.valueOf(document.getFieldValue("id"));
+        if (missingOnly && document.getFieldValue(vectorField) != null) {
+          continue;
+        }
+        Object version = document.getFieldValue("_version_");
+        if (!(version instanceof Number number) || number.longValue() <= 1) {
+          throw new IOException("Solr must return an exact _version_ for embedding maintenance");
+        }
+        records.add(new StoredAudiobook(toRecord(document), Long.toString(number.longValue())));
       }
-      records.add(new StoredAudiobook(toRecord(document), Long.toString(number.longValue())));
+      if (page.size() < maximum) {
+        break;
+      }
     }
     return records;
   }
@@ -573,8 +599,8 @@ public class SolrAudiobookRepository
         field(document, "description"),
         stringList(document.getFieldValue("narrators")),
         field(document, "language"),
-        integer(document.getFieldValue("durationMinutes")),
-        integer(document.getFieldValue("publicationYear")),
+        integer(document.getFieldValue("duration_minutes")),
+        com.gen3.catalogue.model.PublicationDate.normalize(document.getFieldValue("pubdate")),
         field(document, "short_description"));
   }
 

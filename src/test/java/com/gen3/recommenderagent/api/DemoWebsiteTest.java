@@ -93,7 +93,7 @@ class DemoWebsiteTest {
     var result = new DemoWebsite(gateway, catalogue).recommend("session", "user", "books");
     org.assertj.core.api.Assertions.assertThat(result.response()).isEqualTo("Your books");
     org.assertj.core.api.Assertions.assertThat(
-            result.sessionRequest().path("recommendations").get(0).path("bookId").asText())
+            result.sessionRequest().path("recommendations").get(0).path("id").asText())
         .isEqualTo("id");
     org.assertj.core.api.Assertions.assertThat(turn.getRecommendations()).containsExactly(book);
     if (failure) {

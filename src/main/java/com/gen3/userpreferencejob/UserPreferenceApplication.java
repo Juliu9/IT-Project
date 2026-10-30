@@ -1,5 +1,7 @@
 package com.gen3.userpreferencejob;
 
+import java.time.Instant;
+import java.util.UUID;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -20,25 +22,33 @@ import org.springframework.core.env.Environment;
     })
 @Import({
   com.gen3.catalogue.qdrant.QdrantConfig.class,
-  com.gen3.catalogue.qdrant.QdrantPointMapper.class,
-  com.gen3.catalogue.qdrant.Bm25SparseTextEncoder.class,
-  com.gen3.catalogue.qdrant.QdrantAudiobookRepository.class,
   com.gen3.recommenderagent.storage.user.qdrant.QdrantUserPreferenceRepository.class,
   com.gen3.recommenderagent.storage.user.qdrant.QdrantUserPreferenceMapper.class,
   com.gen3.catalogue.solr.SolrConfig.class,
-  com.gen3.catalogue.solr.SolrAudiobookRepository.class,
   com.gen3.recommenderagent.storage.user.solr.SolrUserPreferenceRepository.class,
   com.gen3.userpreferencejob.UserPreferenceStartupImporter.class,
+  com.gen3.userpreferencejob.StreamingUserPreferenceImporter.class,
   com.gen3.userpreferencejob.DryRunUserPreferenceRepository.class,
   com.gen3.userpreferencejob.UserPreferenceAggregatorService.class,
   com.gen3.userpreferencejob.UserFavouriteCsvReader.class,
   com.gen3.userpreferencejob.UserHistoryCsvReader.class
 })
 public class UserPreferenceApplication {
+  @Bean
+  com.gen3.catalogue.snapshot.BookVectorSnapshot bookVectorSnapshot(Environment environment) {
+    return com.gen3.snapshotjob.SnapshotConfiguration.snapshot(environment);
+  }
+
   public static void main(String[] args) {
     try (var context =
         new SpringApplicationBuilder(UserPreferenceApplication.class)
             .web(WebApplicationType.NONE)
+            .properties(
+                "logging.file.name=logs/user-import/"
+                    + Instant.now().toEpochMilli()
+                    + "-"
+                    + UUID.randomUUID()
+                    + ".log")
             .run(args)) {
       // Close database clients when the maintenance runner finishes.
     }
@@ -57,9 +67,7 @@ public class UserPreferenceApplication {
       }
       if (environment.getProperty("audiobook.qdrant.migration.enabled", Boolean.class, false)
           || environment.getProperty("audiobook.embedding-index.enabled", Boolean.class, false)
-          || !"disabled"
-              .equals(
-                  environment.getProperty("audiobook.short-description.batch.mode", "disabled"))) {
+          || environment.getProperty("audiobook.short-description.enabled", Boolean.class, false)) {
         throw new IllegalArgumentException("Run maintenance jobs separately");
       }
     };

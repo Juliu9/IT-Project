@@ -195,7 +195,7 @@ class ResponseGeneratorTest {
         generator.generate(
             List.of(new Recommendation("book-101", 1, 0.9, "Previous book")),
             ConversationDraft.toTurn(request));
-    assertTrue(response.contains("book-101"));
+    assertTrue(response.contains("Previous book"));
   }
 
   @Test
@@ -222,7 +222,8 @@ class ResponseGeneratorTest {
 
     assertNotNull(response);
     assertTrue(response.toLowerCase().contains("action"));
-    assertTrue(response.toLowerCase().contains("book-101"));
+    assertTrue(response.toLowerCase().contains("book1"));
+    assertFalse(response.contains("book-101"));
     assertTrue(response.toLowerCase().contains("recommend"));
   }
 

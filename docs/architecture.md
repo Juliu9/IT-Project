@@ -26,7 +26,7 @@ For setup and commands, start with the [README](../README.md).
 5. The session commits the completed outcome and active-search state together. Response generation then
    uses fixed wording or a separate chat client; the response model never selects the books.
 
-Catalogue embedding, summary generation, migration and CSV imports run in separate maintenance
+Catalogue embedding, snapshot export, summary generation, migration and CSV imports run in dedicated maintenance
 applications. Interactive requests only generate query embeddings when retrieval needs them.
 See the [request sequence diagram](diagrams/recommendation-flow.svg) for execution order.
 
@@ -60,14 +60,14 @@ retried automatically. Other sessions are independent. `sessionLockMs` includes 
 | --- | --- |
 | Session already locked | `409` |
 | Commit rejected or lock lost | `503` |
-| AI connection/service failure or exhausted retries | `503`, with a readable retry message |
+| Parser/query-embedding provider failure or exhausted retries | `503`, with a readable retry message |
+| Catalogue retrieval unavailable | `503`, with a readable retry message |
 
 Set `SESSION_STORE` to a registered replacement adapter's name. This disables the Redis adapter
 and Boot's Redis connections, templates, repositories, and health checks.
 
-Lock keys use a separate `lock:` namespace. When upgrading from the old lock-key scheme, drain
-and stop old instances and let their leases expire before serving traffic with the new version.
-Do not mix the two locking versions.
+Lock keys use a separate `lock:` namespace from session data keys. Response-model failures use the
+built-in narration fallback rather than the parser/query-embedding error response above.
 
 ## Search and retrieval rules
 
@@ -114,8 +114,7 @@ preference resets abandon unfinished searches rather than reviving inherited fil
 “None of those, try The Hobbit” immediately looks up the replacement title with those constraints. Reference author
 lookup and author replies use the same conservative person-name equivalence as exact filters.
 
-Pending choices are stored once in their request snapshot; older snapshots with a duplicate choices
-field remain readable.
+Pending choices are stored once in their request snapshot.
 
 ### Outstanding questions
 
@@ -168,13 +167,15 @@ active search's content and other constraints, and uses `shorter=true` without i
 limit. With no previous search (including cleared/expired/new sessions), it asks what content the
 user wants and performs no retrieval, even when saved preferences exist.
 
-Recommendations retain their catalogue `durationMinutes` through ranking, paging and session storage.
+Recommendations retain their catalogue `duration_minutes` and `pubdate` through ranking, paging and
+session storage. Year-based filters, recency scoring and newer/older comparisons derive years from
+valid publication dates; no `publicationYear` is stored on a book. Search criteria may still express
+`publicationYear` because it is a user-requested year constraint, not catalogue metadata.
 When every displayed duration is known and greater than one minute, a shorter refinement sets the
 new duration filter strictly below the shortest displayed book. The resolved limit is retained for
 More; session preferences are unchanged. If durations are missing, the page is empty, or the shortest
 book is already one minute, it asks for a duration limit and preserves the old page/batch. A numeric
-limit reply refines that search. Older session snapshots without durations remain readable and use
-this clarification path. Explicit duration requests still use their stated bounds.
+limit reply refines that search. Explicit duration requests still use their stated bounds.
 
 ### Context and cached results
 
@@ -252,9 +253,9 @@ The resolved search keeps its effective criteria for `MORE_RESULTS`; refills do 
 session preferences. `userPreferenceSnapshot` and `userPreferencesLoaded` also freeze stored reading
 vectors (including their absence) for retrieval and ranking. New searches/refinements reload them.
 
-Older sessions without explicit criteria metadata retain their saved resolved criteria as the fallback;
-the original explicit/preference split cannot be reconstructed. Missing vector snapshots load once on
-the first refill. New searches record the full snapshot metadata; no database migration is required.
+Search snapshots retain the explicit/effective criteria split and whether stored reading vectors have
+been loaded. Missing reading-vector evidence is loaded once when needed; new searches/refinements
+refresh it. This session evidence is distinct from the local binary book-vector cache used by imports.
 
 ### Refinements and exact-filter corrections
 
@@ -373,7 +374,7 @@ these rules. In 2026 these become 2021–2026, 2025–2026, and 2022–2026 resp
 years. Zero, fractional, negative, and unrepresentably large windows return `400`.
 
 Approximate phrases such as “around 2000” and “the period 2000” mean an inclusive ±5-year
-range: 1995–2005. Bounds stay within calendar years 0–9999; a bare “2000” remains exact.
+range: 1995–2005. Bounds stay within calendar years 1–9999; a bare “2000” remains exact.
 
 Catalogue metadata contains years only, so these are inclusive year ranges, not exact rolling
 month/day cutoffs. Cached pages remain snapshots of the search that produced them.
@@ -408,7 +409,7 @@ Vector lookup ports expose reads only. Embedding writes belong to `AudiobookEmbe
 migration uses its separate existing-data copy operation.
 
 Shared audiobook code lives in sibling `com.gen3.catalogue`: `model`, `port`, `solr`,
-`qdrant`, and `vector`. It has no dependency on `recommenderagent`. The server scans both
+`qdrant`, `vector`, and the local `snapshot` implementation. It has no dependency on `recommenderagent`. The server scans both
 packages; maintenance launchers explicitly import the adapters they need. This is a package
 boundary within the existing Maven module, with unchanged database and configuration formats.
 
@@ -424,6 +425,32 @@ The sibling maintenance packages remain separate runnable jobs. CSV interaction 
 (`UserFavourite` and `UserHistory`) belong to `userpreferencejob.model`. Catalogue embedding
 generation remains in `embeddingjob`; the query embedding module only embeds live search criteria.
 `RecommendationPolicy` owns the existing limits and result-count clamping rules.
+
+## Maintenance modules
+
+Five sibling job packages have dedicated non-web launchers. They are not started by the server
+and do not schedule themselves. See the [job runbooks](jobs/README.md) for commands and recovery.
+
+`embeddingjob` fills absent catalogue dense vectors by default; explicit `rebuild-all` regenerates
+existing vectors too. Qdrant filters dense-vector presence in the database. Solr reads bounded pages
+of stored vectors to check presence, including catalogues/segments with no indexed vectors; both
+adapters select books before any AI calls. Existing presence does not prove text/model freshness.
+After a successful pass, including a no-op, the launcher uses the full-catalogue snapshot publisher shared with
+`snapshotjob`. The standalone publisher only exports existing vectors; it can retry snapshot
+publication independently of paid generation. `catalogue.snapshot.BookVectorSnapshot` owns the
+versioned binary format, compatibility checks, checksum, atomic publication and process-local cache.
+It implements the read-only `AudiobookVectorRepository` interface for user import, but has no Spring
+registration in the recommendation server. Interactive searches continue reading the selected database.
+
+`userpreferencejob` validates and loads that snapshot, streams CSVs through bounded external sorting,
+deduplicates favourites/history, and validates every user's distinct-book limit before profile writes.
+It aggregates complete-user batches with one shared time-decay reference instant. Write mode replaces
+imported users' vectors; dry-run substitutes a validating sink. `jobruntime.JobProgress` provides
+periodic reporting shared by all jobs without initiating database operations or retries.
+
+The snapshot is a local derived file, not a database backup or an incremental change feed. Imports
+accept the last compatible snapshot without an age limit; catalogue changes require refresh. Shared
+record schemas stay unchanged. Jobs remain in the same Maven module and reuse catalogue adapters.
 
 ## Conversation policy
 
@@ -570,7 +597,7 @@ recommendations, not confirmation that a client displayed or spoke them.
 
 Each retained/queued `Recommendation.readingPreferencesUsed` records whether stored preference
 vectors contributed to personalised retrieval or a positive active preference ranking score. It is
-copied when batch items receive page ranks; old session JSON defaults to false. Each scorer returns
+copied when batch items receive page ranks and defaults to false when no evidence was recorded. Each scorer returns
 its evidence in `ScoreResult`; the composite combines available contributions, and ranking reuses
 that result without detecting scorer classes or scoring selected books again. Explanations never
 reload today's preference profile to justify an older selection. They may mention reading preferences
@@ -580,6 +607,10 @@ Response generation uses the existing role-specific chat client, with distinct e
 and an honest built-in fallback. Explanations are plain text with a 150-word total limit; oversized
 AI output uses a bounded fallback covering every selected book. Clarification/no-history responses
 need no response-model call.
+Recommendation and explanation narration also undergo a local title-coverage check, ignoring case,
+accents and punctuation. If any supplied title is missing, the built-in response names every book
+with its rank and available short description, without internal book IDs. This check makes no extra
+AI or database calls; it checks title presence, not whether the AI's explanation is factually correct.
 
 ## Configuration and schema
 
@@ -611,8 +642,9 @@ storage. Maintenance jobs select their own backend with the same property.
 
 ### Add a database adapter
 
-1. Register `AudiobookCandidateSearch`, `AudiobookVectorRepository`, and
-   `UserPreferenceVectorRepository` implementations under the same backend selection.
+1. Register `AudiobookCandidateSearch`, `AudiobookVectorRepository`, `AudiobookTitleLookup`,
+   `AudiobookDetailsLookup`, and `UserPreferenceVectorRepository` implementations under the same
+   backend selection. Title lookup supports similar-book requests; details lookup supports the dev page.
 2. Preserve semantic, keyword, hybrid, and filtered search and the existing write guarantees.
    Report unsupported operations explicitly.
 3. Select the backend with `audiobook.database`. This disables Qdrant clients and adapters.
@@ -641,15 +673,18 @@ creating indexes. Explicit repository writes can create an absent collection; th
 maintenance job requires an existing collection. Existing collections are not automatically
 inspected or migrated.
 
-Qdrant catalogue lookups match the payload's `bookId`, independently of whether the point ID is an
-integer or a UUID. Existing points retain their original IDs during explicit writes; migration skips
-existing books. New books keep the deterministic UUID convention. A generated ID already occupied by
-another record is rejected instead of overwritten.
+Qdrant catalogue lookups match the payload's `id`, independently of whether the point ID is an
+integer or a UUID. Existing points retain their original IDs during explicit writes and migration
+repairs. New books keep the deterministic UUID convention. A generated ID already occupied by
+another record is rejected instead of overwritten. Migration checks every source ID and fills only
+missing supported payload fields from same-named Solr fields, preserving populated target data and
+vectors. Missing/invalid source dates are not guessed.
 
-Each `bookId` must identify one point in the selected collection. Lookup, migration, and explicit
+Each payload `id` must identify one point in the selected collection. Lookup, migration, and explicit
 writes reject multiple matches for a requested book ID; writes also reject duplicate IDs within an
 input batch. No duplicate is selected, merged, or deleted automatically. Matching reads are
-paginated in groups of at most 100. Keep the `bookId` keyword index on existing strict-mode
+paginated with up to 100 requested IDs for metadata and 500 for vector-only reads. Vector-only reads
+select only `id` and the named `dense` vector; metadata lookups do not fetch vectors. Keep the `id` keyword index on existing strict-mode
 collections. Maintenance writes still require a stable catalogue and one writer; checks do not
 enforce uniqueness against concurrent external writers.
 
@@ -667,6 +702,10 @@ A replacement bean affects only its role; its provider must support the model.
 
 Response-model failure or missing/blank text uses built-in recommendation wording and preserves
 the committed session. Failures are logged locally.
+The prompt asks narration to cover every selected book within 150 words, but ordinary recommendation
+text is not programmatically checked for complete title coverage or that word limit. The structured
+recommendation list/count is the authoritative selection; fluent AI text alone does not prove every
+book was narrated. Explanations have the separate formatting/word-limit fallback described above.
 
 ## Request limits
 

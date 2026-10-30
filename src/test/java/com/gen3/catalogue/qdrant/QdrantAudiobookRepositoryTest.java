@@ -19,14 +19,11 @@ import com.gen3.catalogue.model.AudiobookEmbedding;
 import com.gen3.catalogue.model.AudiobookFilterConditions;
 import com.gen3.catalogue.model.AudiobookFilters;
 import com.gen3.catalogue.model.AudiobookRecord;
-import com.gen3.catalogue.model.StoredAudiobook;
-import com.gen3.shortdescriptionjob.store.AudiobookEnrichmentStore;
 import com.google.common.util.concurrent.Futures;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Collections.CreateCollection;
 import io.qdrant.client.grpc.Points.CreateFieldIndexCollection;
 import io.qdrant.client.grpc.Points.DenseVector;
-import io.qdrant.client.grpc.Points.FieldType;
 import io.qdrant.client.grpc.Points.NamedVectorsOutput;
 import io.qdrant.client.grpc.Points.PointStruct;
 import io.qdrant.client.grpc.Points.QueryPoints;
@@ -37,7 +34,6 @@ import io.qdrant.client.grpc.Points.ScrollResponse;
 import io.qdrant.client.grpc.Points.UpdateResult;
 import io.qdrant.client.grpc.Points.VectorOutput;
 import io.qdrant.client.grpc.Points.VectorsOutput;
-import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.IntStream;
@@ -58,7 +54,7 @@ class QdrantAudiobookRepositoryTest {
     for (int i = 0; i < 100; i++) {
       first.addResult(
           RetrievedPoint.newBuilder()
-              .putPayload("bookId", io.qdrant.client.ValueFactory.value("partial-" + i))
+              .putPayload("id", io.qdrant.client.ValueFactory.value("partial-" + i))
               .putPayload(
                   "title",
                   io.qdrant.client.ValueFactory.value("Boundary Reference companion " + i)));
@@ -67,7 +63,7 @@ class QdrantAudiobookRepositoryTest {
     for (String id : List.of("exact-one", "exact-two")) {
       last.addResult(
           RetrievedPoint.newBuilder()
-              .putPayload("bookId", io.qdrant.client.ValueFactory.value(id))
+              .putPayload("id", io.qdrant.client.ValueFactory.value(id))
               .putPayload("title", io.qdrant.client.ValueFactory.value("Boundary Reference")));
     }
     when(client.scrollAsync(any(ScrollPoints.class)))
@@ -177,7 +173,7 @@ class QdrantAudiobookRepositoryTest {
     var point =
         RetrievedPoint.newBuilder()
             .setId(io.qdrant.client.PointIdFactory.id(42))
-            .putPayload("bookId", io.qdrant.client.ValueFactory.value("catalogue-id"))
+            .putPayload("id", io.qdrant.client.ValueFactory.value("catalogue-id"))
             .putPayload("title", io.qdrant.client.ValueFactory.value("Title"))
             .putPayload(
                 "authors",
@@ -194,7 +190,10 @@ class QdrantAudiobookRepositoryTest {
     assertThat(result.getFirst().authors()).containsExactly("Author");
     var request = ArgumentCaptor.forClass(ScrollPoints.class);
     verify(client).scrollAsync(request.capture());
-    assertThat(request.getValue().getFilter().toString()).contains("bookId", "catalogue-id");
+    assertThat(request.getValue().getFilter().toString()).contains("id", "catalogue-id");
+    assertThat(request.getValue().getLimit()).isEqualTo(100);
+    assertThat(request.getValue().getWithPayload())
+        .isEqualTo(io.qdrant.client.WithPayloadSelectorFactory.enable(true));
     assertThat(request.getValue().getWithVectors())
         .isEqualTo(io.qdrant.client.WithVectorsSelectorFactory.enable(false));
   }
@@ -312,7 +311,7 @@ class QdrantAudiobookRepositoryTest {
     RetrievedPoint result =
         RetrievedPoint.newBuilder()
             .setId(io.qdrant.client.PointIdFactory.id(98765L))
-            .putPayload("bookId", io.qdrant.client.ValueFactory.value("book-9"))
+            .putPayload("id", io.qdrant.client.ValueFactory.value("book-9"))
             .setVectors(
                 VectorsOutput.newBuilder()
                     .setVectors(
@@ -347,16 +346,42 @@ class QdrantAudiobookRepositoryTest {
         new QdrantAudiobookRepository(client, mapper, sparseEncoder, "audiobooks", 2);
 
     repository.findEmbeddingsByBookIds(
-        IntStream.range(0, 101).mapToObj(index -> "book-" + index).toList());
+        IntStream.range(0, 501).mapToObj(index -> "book-" + index).toList());
 
     var requests = ArgumentCaptor.forClass(ScrollPoints.class);
     verify(client, times(2)).scrollAsync(requests.capture());
     assertThat(requests.getAllValues())
         .allSatisfy(
             request -> {
-              assertThat(request.getLimit()).isEqualTo(100);
-              assertThat(request.getFilter().getMust(0).getField().getKey()).isEqualTo("bookId");
+              assertThat(request.getLimit()).isEqualTo(500);
+              assertThat(request.getFilter().getMust(0).getField().getKey()).isEqualTo("id");
+              assertThat(request.getWithPayload())
+                  .isEqualTo(io.qdrant.client.WithPayloadSelectorFactory.include(List.of("id")));
+              assertThat(request.getWithVectors())
+                  .isEqualTo(io.qdrant.client.WithVectorsSelectorFactory.include(List.of("dense")));
             });
+    assertThat(
+            requests
+                .getAllValues()
+                .getFirst()
+                .getFilter()
+                .getMust(0)
+                .getField()
+                .getMatch()
+                .getKeywords()
+                .getStringsCount())
+        .isEqualTo(500);
+    assertThat(
+            requests
+                .getAllValues()
+                .getLast()
+                .getFilter()
+                .getMust(0)
+                .getField()
+                .getMatch()
+                .getKeywords()
+                .getStringsList())
+        .containsExactly("book-500");
   }
 
   @Test
@@ -368,7 +393,7 @@ class QdrantAudiobookRepositoryTest {
     var first =
         RetrievedPoint.newBuilder()
             .setId(io.qdrant.client.PointIdFactory.id(1L))
-            .putPayload("bookId", io.qdrant.client.ValueFactory.value("duplicate"))
+            .putPayload("id", io.qdrant.client.ValueFactory.value("duplicate"))
             .build();
     var second = first.toBuilder().setId(io.qdrant.client.PointIdFactory.id(2L)).build();
     when(client.scrollAsync(any(ScrollPoints.class)))
@@ -390,10 +415,10 @@ class QdrantAudiobookRepositoryTest {
             new float[] {1, 0});
     assertThatThrownBy(() -> repository.findEmbeddingByBookId("duplicate"))
         .isInstanceOf(java.io.IOException.class)
-        .hasMessageContaining("Duplicate bookId");
+        .hasMessageContaining("Duplicate catalogue id");
     assertThatThrownBy(() -> repository.importStoredBooks(List.of(record)))
         .isInstanceOf(java.io.IOException.class)
-        .hasMessageContaining("Duplicate bookId");
+        .hasMessageContaining("Duplicate catalogue id");
     verify(client, never()).upsertAsync(anyString(), anyList());
   }
 
@@ -410,7 +435,7 @@ class QdrantAudiobookRepositoryTest {
             new float[] {1, 0});
     assertThatThrownBy(() -> repository.importStoredBooks(List.of(record, record)))
         .isInstanceOf(java.io.IOException.class)
-        .hasMessageContaining("duplicate bookId");
+        .hasMessageContaining("duplicate catalogue id");
     org.mockito.Mockito.verifyNoInteractions(client);
   }
 
@@ -436,81 +461,6 @@ class QdrantAudiobookRepositoryTest {
         .isInstanceOf(java.io.IOException.class)
         .hasMessageContaining("already occupied");
     verify(client, never()).upsertAsync(anyString(), anyList());
-  }
-
-  @Test
-  void loadsOnlyRecordsMissingShortDescriptions() throws Exception {
-    QdrantClient client = mock(QdrantClient.class);
-    SparseTextEncoder sparseEncoder = new Bm25SparseTextEncoder();
-    QdrantPointMapper mapper = new QdrantPointMapper(sparseEncoder);
-    PointStruct point =
-        mapper.toPoint(
-            new AudiobookEmbedding(
-                new AudiobookRecord("book-3", "NLS", "Title", List.of("Author"), "Summary"),
-                new float[] {0.6f, 0.8f}));
-    RetrievedPoint result =
-        RetrievedPoint.newBuilder()
-            .setId(point.getId())
-            .putAllPayload(point.getPayloadMap())
-            .build();
-    when(client.collectionExistsAsync("audiobooks")).thenReturn(Futures.immediateFuture(true));
-    when(client.scrollAsync(any(ScrollPoints.class)))
-        .thenReturn(Futures.immediateFuture(ScrollResponse.newBuilder().addResult(result).build()));
-    when(client.createPayloadIndexAsync(any(CreateFieldIndexCollection.class), any()))
-        .thenReturn(Futures.immediateFuture(UpdateResult.getDefaultInstance()));
-    QdrantAudiobookRepository repository =
-        new QdrantAudiobookRepository(client, mapper, sparseEncoder, "audiobooks", 2);
-
-    List<StoredAudiobook> records =
-        new com.gen3.shortdescriptionjob.store.QdrantShortDescriptionStore(
-                client, mapper, "audiobooks")
-            .findRecordsWithoutShortDescription(10);
-
-    assertThat(records).hasSize(1);
-    assertThat(records.getFirst().record().id()).isEqualTo("book-3");
-    assertThat(records.getFirst().storageReference())
-        .isEqualTo(Base64.getEncoder().encodeToString(point.getId().toByteArray()));
-    ArgumentCaptor<ScrollPoints> request = ArgumentCaptor.forClass(ScrollPoints.class);
-    verify(client).scrollAsync(request.capture());
-    assertThat(request.getValue().getFilter().toString()).contains("short_description");
-    ArgumentCaptor<CreateFieldIndexCollection> index =
-        ArgumentCaptor.forClass(CreateFieldIndexCollection.class);
-    verify(client).createPayloadIndexAsync(index.capture(), any());
-    assertThat(index.getValue().getFieldName()).isEqualTo("short_description");
-    assertThat(index.getValue().getFieldType()).isEqualTo(FieldType.FieldTypeKeyword);
-  }
-
-  @Test
-  void storesShortDescriptionsOnlyWhenTheyAreStillMissing() throws Exception {
-    QdrantClient client = mock(QdrantClient.class);
-    SparseTextEncoder sparseEncoder = new Bm25SparseTextEncoder();
-    QdrantPointMapper mapper = new QdrantPointMapper(sparseEncoder);
-    when(client.collectionExistsAsync("audiobooks")).thenReturn(Futures.immediateFuture(true));
-    when(client.batchUpdateAsync(eq("audiobooks"), anyList()))
-        .thenReturn(Futures.immediateFuture(List.of(UpdateResult.getDefaultInstance())));
-    QdrantAudiobookRepository repository =
-        new QdrantAudiobookRepository(client, mapper, sparseEncoder, "audiobooks", 2);
-
-    new com.gen3.shortdescriptionjob.store.QdrantShortDescriptionStore(client, mapper, "audiobooks")
-        .updateShortDescriptions(
-            List.of(
-                new AudiobookEnrichmentStore.ShortDescriptionUpdate(
-                    Base64.getEncoder().encodeToString(mapper.pointId("book-3").toByteArray()),
-                    "A short description.")));
-
-    ArgumentCaptor<List<io.qdrant.client.grpc.Points.PointsUpdateOperation>> operations =
-        ArgumentCaptor.forClass(List.class);
-    verify(client).batchUpdateAsync(eq("audiobooks"), operations.capture());
-    assertThat(operations.getValue()).hasSize(1);
-    assertThat(
-            operations
-                .getValue()
-                .getFirst()
-                .getSetPayload()
-                .getPointsSelector()
-                .getFilter()
-                .toString())
-        .contains("short_description", "is_empty");
   }
 
   @Test
@@ -546,7 +496,7 @@ class QdrantAudiobookRepositoryTest {
     verify(client, times(7)).createPayloadIndexAsync(index.capture(), any());
     assertThat(index.getAllValues())
         .extracting(CreateFieldIndexCollection::getFieldName)
-        .contains("bookId")
+        .contains("id")
         .doesNotContain("short_description");
   }
 
@@ -591,7 +541,7 @@ class QdrantAudiobookRepositoryTest {
     assertThat(request.getValue().getFilter().getMustCount()).isEqualTo(3);
     assertThat(request.getValue().getFilter().getMustNotCount()).isEqualTo(4);
     assertThat(request.getValue().getFilter().toString())
-        .contains("language", "English", "source", "NLS", "publicationYear", "French", "Legacy")
-        .contains("bookId", "shown-1", "shown-2");
+        .contains("language", "English", "source", "NLS", "pubdate", "French", "Legacy")
+        .contains("id", "shown-1", "shown-2");
   }
 }

@@ -1,11 +1,17 @@
 # Configuration reference
 
-[README](../README.md) · [Architecture](architecture.md) · [Maintenance commands](maintenance.md)
+[README](../README.md) · [Architecture](architecture.md) · [Job runbooks](jobs/README.md)
 
 [`application.properties`](../src/main/resources/application.properties) defines shared rules,
 backend selection, provider connections, and job defaults. Settings are grouped by responsibility:
 universal rules apply across adapters; technology sections configure a particular implementation.
 This reference covers the repository's settings, rather than every property supported by Spring Boot.
+
+The properties file has five numbered areas: shared backend selection, shared AI/vector settings,
+recommendation-server settings, database connections, and maintenance jobs. The maintenance area
+has one subsection for each launcher; summary model settings live with the summary job,
+while interactive chat defaults and shared embedding compatibility remain in the shared AI area.
+Section headings are organisational only; they do not change which properties a launcher can read.
 
 ## Loading and overriding settings
 
@@ -64,6 +70,8 @@ embeddings. It provides editable User ID and Session ID fields, initially genera
 Submitted IDs persist across reloads through session storage and appear in response details.
 Use an imported user's ID to test stored reading preferences; generated IDs have no imported profile.
 Reuse the same user/session pair for follow-ups; change the session ID for a separate conversation.
+Submit with the button or Enter; Shift+Enter inserts a new line. Submission is disabled while a
+request is pending, preventing accidental duplicate sends from the page.
 
 Below the Session Request, the collapsed Recommendation details section shows each book's
 stored catalogue fields (authors, narrators, language, publication year, source, runtime, and
@@ -149,7 +157,7 @@ reindexing and preference regeneration before serving queries against changed em
 
 Separate parser and response model names still use their configured provider; a model-name override
 does not switch providers. Provider replacement is described in [chat-model wiring](architecture.md#chat-models).
-The summary Batch model is separate from both interactive roles.
+The summary model is separate from both interactive roles.
 
 ## Ranking rules
 
@@ -194,6 +202,33 @@ Required by the live server when `SESSION_STORE=redis`; maintenance jobs do not 
 Starting local Docker does not populate either collection. Existing schema and record-identity
 requirements are in [Qdrant schema](architecture.md#qdrant-schema-and-record-identity).
 
+#### Catalogue payload indexes
+
+Prepare these indexes when supplying an existing Qdrant catalogue, especially when strict mode
+rejects filters on unindexed fields. Names and casing must match the stored payload fields.
+
+| Payload fields | Index type | Used for |
+| --- | --- | --- |
+| `id` | Keyword | Catalogue identity lookups, vector reads, and migration checks; separate from Qdrant point ID |
+| `authors`, `narrators`, `language`, `source` | Keyword | Exact inclusion/exclusion filters |
+| `duration_minutes` | Integer | Runtime range filters |
+| `pubdate` | Datetime | Publication-year requests translated to date ranges |
+| `short_description` | Keyword | Missing-summary selection by the short-description job |
+| `title` | Optional full-text, lowercase | Faster reference-title lookup on larger catalogues |
+
+When the catalogue adapter creates a new collection during an explicit write, it creates the
+standard indexes above except `short_description` and `title`. Normal server startup and reads
+do not create collections or backfill indexes on existing collections. Add missing standard indexes
+to an existing catalogue yourself; the short-description job creates its own `short_description`
+index before selecting records. The optional `title` index is not created automatically.
+Payload indexes are separate from the collection's named `dense` and `keywords` (sparse) vectors.
+The explicit Solr-to-Qdrant migrator also prepares `id`, `duration_minutes`, and `pubdate` indexes
+on an existing collection. No `publicationYear` payload is stored or read. A valid `pubdate` may be
+date-only (`2013-07-03`) or an ISO timestamp; timestamps are normalized to UTC. Missing/invalid dates
+have no inferred year. For example, year 2013 filters from January 1, 2013 up to January 1, 2014.
+Catalogue JSON and saved recommendation JSON use `id`, `duration_minutes`, and `pubdate` too.
+Clear old development sessions when switching schemas; there are no legacy field aliases.
+
 ### Solr
 
 These settings apply to the recommendation server and jobs when Solr is selected. Solr is not
@@ -228,11 +263,14 @@ Prepare the collections before use; reads and normal server startup never create
 - **Catalogue:** Use a string `id` unique key as the book ID. Apply the
   [catalogue vector schema](../solr/vector-field-schema.xml), matching the configured field name and
   dimensions. Generate vectors with the opt-in embedding job if absent. The adapter uses `source`,
-  `title`, `authors`, `description`, `narrators`, `language`, `durationMinutes`, `publicationYear`, and
+  `title`, `authors`, `description`, `narrators`, `language`, `duration_minutes`, `pubdate`, and
   `short_description`. Keyword search, including the keyword part of hybrid retrieval, targets only
   the analyzed `all` field; populate it with the text you want searchable. Explicit query field
   selectors are restricted to `all` too. Exact author/narrator/language/source filters still use their
   dedicated keyword (`string`) fields. Store metadata needed for responses and updates.
+  Publication filtering expects indexed/stored `pubdate` with Solr date type `pdate` (or equivalent).
+  Use a stored/indexed integer field for `duration_minutes`. The adapter does not read the old
+  `durationMinutes` or `publicationYear` fields and does not rename your source records.
 - **User preferences:** Create a separate collection using the
   [preference schema](../solr/user-preference-schema.xml). Its string `id` is the exact external user ID;
   `favouritesVector` and `historyVector` are optional stored vectors of the shared dimension. Use the
@@ -254,41 +292,55 @@ Expect ranking differences between databases even with equivalent catalogue cont
 Use the dedicated launcher as well as the corresponding opt-in setting. Normal server startup
 rejects enabled maintenance flags. Run jobs individually against the intended database and dataset;
 they can write records and generate provider charges. Commands, prerequisites, and recovery steps
-belong in [Maintenance jobs](maintenance.md).
+belong in the [individual job runbooks](jobs/README.md). Shared safety/progress instructions are in
+[Maintenance operations](maintenance.md). Jobs are not scheduled automatically.
 
 ### Catalogue embedding generation
 
-Target selection uses `AUDIOBOOK_DATABASE` (`qdrant` or `solr`). The job reads existing records,
-regenerates vectors, and preserves metadata. The Qdrant implementation also builds sparse vectors.
+Target selection uses `AUDIOBOOK_DATABASE` (`qdrant` or `solr`). The job fills missing dense vectors
+by default and preserves metadata. Explicit `rebuild-all` replaces existing vectors too. The Qdrant
+implementation also builds sparse vectors for each book being embedded.
 
 | Property under `audiobook.embedding-index.` | Environment variable | Default / purpose |
 | --- | --- | --- |
 | `enabled` | `AUDIOBOOK_EMBEDDING_INDEX_ENABLED` | `false`; explicit opt-in |
+| `mode` | `AUDIOBOOK_EMBEDDING_INDEX_MODE` | `missing-only`; generate absent dense vectors, or explicit `rebuild-all` |
 | `page-size` | `AUDIOBOOK_EMBEDDING_INDEX_PAGE_SIZE` | `100`; records per page |
-| `maximum-records` | `AUDIOBOOK_EMBEDDING_INDEX_MAXIMUM_RECORDS` | `0`; full catalogue, or a positive record limit |
+| `maximum-records` | `AUDIOBOOK_EMBEDDING_INDEX_MAXIMUM_RECORDS` | `0`; all records matching the mode, or a positive scan limit |
+
+Missing-only does not detect edited book text or the model that produced an existing vector.
+Model/dimension changes require a complete compatible rebuild; see the
+[embedding runbook](jobs/embeddings.md#edited-books-and-model-changes). Both modes rebuild the full
+book-vector snapshot after a successful pass, even if no embeddings were generated.
 
 ### Short-description generation
 
-The selected database supplies descriptions and receives summaries. Submission calls the provider;
-import writes completed summaries. Keep the output directory and pending manifests between runs.
+The selected database supplies eligible records and receives generated text immediately.
+This job uses regular OpenAI calls, not the Batch API. It runs only through its dedicated launcher
+with explicit enablement.
 
-| Property under `audiobook.short-description.batch.` | Environment variable | Default / purpose |
+| Property under `audiobook.short-description.` | Environment variable | Default / purpose |
 | --- | --- | --- |
-| `mode` | `AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MODE` | `disabled`; choose `submit`, `import`, or `recover` explicitly |
-| `provider` | `AUDIOBOOK_SHORT_DESCRIPTION_BATCH_PROVIDER` | `openai`; must have a registered provider adapter |
-| `id` | `AUDIOBOOK_SHORT_DESCRIPTION_BATCH_ID` | empty; optional explicit batch ID, otherwise use the pending manifest |
-| `output-directory` | `AUDIOBOOK_SHORT_DESCRIPTION_BATCH_OUTPUT_DIRECTORY` | `./data/short-descriptions`; local batch and recovery files |
-| `maximum-records` | `AUDIOBOOK_SHORT_DESCRIPTION_BATCH_MAXIMUM_RECORDS` | `100000`; submission record cap |
-| `openai.base-url` | `OPENAI_BATCH_BASE_URL` | `https://api.openai.com/v1`; Batch transport endpoint |
-| `openai.model` | `OPENAI_BATCH_MODEL` | `gpt-4o-mini`; summary model |
+| `enabled` | `AUDIOBOOK_SHORT_DESCRIPTION_ENABLED` | `false`; explicitly enable the dedicated job |
+| `mode` | `AUDIOBOOK_SHORT_DESCRIPTION_MODE` | `missing-only`; explicit `rebuild-all` regenerates and overwrites existing summaries |
+| `maximum-records` | `AUDIOBOOK_SHORT_DESCRIPTION_MAXIMUM_RECORDS` | `100000`; eligible-book cap per run; positive |
+| `concurrency` | `AUDIOBOOK_SHORT_DESCRIPTION_CONCURRENCY` | `5`; maximum concurrent generation requests; positive |
+| `openai.base-url` | `OPENAI_SHORT_DESCRIPTION_BASE_URL` | `https://api.openai.com/v1`; regular API endpoint |
+| `openai.model` | `OPENAI_SHORT_DESCRIPTION_MODEL` | `gpt-4o-mini`; summary model |
 
-Recovery verifies terminal provider failure and archives the pending manifest; it does not import
-partial results. OpenAI Batch uses `OPENAI_API_KEY` independently of interactive chat clients.
+The job uses `OPENAI_API_KEY` independently of interactive Spring AI chat clients.
+It groups up to ten books per request and saves each completed request. Rerun after failure to
+fill remaining missing summaries in the default mode; rebuild-all starts again and can recharge
+already processed books. The cap applies to either mode; raise it to cover the whole catalogue for
+a full rebuild. No manifests or separate import step are used.
+See the [short-description runbook](jobs/short-descriptions.md).
 
 ### User-preference import
 
-The job aggregates existing catalogue vectors from CSV interaction records; it does not call an
-embedding model. See the maintenance guide for CSV columns and database support.
+The job streams CSV interaction records and aggregates the last compatible local snapshot; it does
+not call an embedding model or retrieve catalogue vectors remotely. A valid snapshot is required
+in both modes. See the [import runbook](jobs/user-preferences.md) for CSV columns, memory/disk
+requirements and replacement semantics.
 
 | Property under `user.preferences.` | Environment variable | Default / purpose |
 | --- | --- | --- |
@@ -296,8 +348,25 @@ embedding model. See the maintenance guide for CSV columns and database support.
 | `import.mode` | `USER_PREFERENCES_IMPORT_MODE` | `dry-run`; read and calculate without writes; explicit `write` allows saves and clears |
 | `favourites-csv-path` | `USER_PREFERENCES_FAVOURITES_CSV_PATH` | empty; favourites input path |
 | `history-csv-path` | `USER_PREFERENCES_HISTORY_CSV_PATH` | empty; history input path |
-| `import.max-users-per-group` | `USER_PREFERENCES_IMPORT_MAX_USERS_PER_GROUP` | `1000`; maximum complete users processed together |
-| `import.max-book-ids-per-group` | `USER_PREFERENCES_IMPORT_MAX_BOOK_IDS_PER_GROUP` | `100000`; maximum distinct books loaded per group |
+| `import.max-book-ids-per-group` | `USER_PREFERENCES_IMPORT_MAX_BOOK_IDS_PER_GROUP` | `100000`; maximum distinct books referenced per aggregation group and per user; does not limit the full snapshot cache |
+| `import.max-records-in-memory` | `USER_PREFERENCES_IMPORT_MAX_RECORDS_IN_MEMORY` | `100000`; sort-run and whole-user batch target |
+| `import.work-directory` | `USER_PREFERENCES_IMPORT_WORK_DIRECTORY` | `./data/user-import-work`; temporary external-sort files |
+
+### Local book-vector snapshots
+
+| Property | Environment | Default / meaning |
+| --- | --- | --- |
+| `book.vector-snapshot.directory` | `BOOK_VECTOR_SNAPSHOT_DIRECTORY` | `./data/book-vector-snapshot`; persistent local snapshot storage shared by maintenance jobs |
+| `book.vector-snapshot.page-size` | `BOOK_VECTOR_SNAPSHOT_PAGE_SIZE` | `500`; catalogue records read per snapshot export page |
+
+Snapshots are separated by backend and catalogue collection. Compatibility uses the backend,
+collection, configured `spring.ai.openai.embedding.options.model`, and `embedding.dimensions`.
+The model identifier is a declared contract: existing database records do not store model provenance.
+Changing servers while retaining the same backend/collection name requires a manual snapshot rebuild.
+The [snapshot launcher](jobs/snapshots.md) needs no enable flag. Imports accept a compatible snapshot
+regardless of age; refresh it explicitly after catalogue changes. The embedding launcher refreshes
+it automatically after successful embedding generation. Snapshot publication does not change any
+database fields.
 
 ### Solr-to-Qdrant migration
 
@@ -317,7 +386,7 @@ It copies existing supported fields and vectors without generating embeddings or
 | Local development | Start Redis and Qdrant with Compose, populate the catalogue, supply `OPENAI_API_KEY`, and use the `dev` profile for `.env` loading and the website. |
 | Remote Qdrant | Set `QDRANT_URL`, `QDRANT_GRPC_PORT`, authentication and collection names for the remote instance; configure Redis separately. |
 | Solr recommendation server | Select `AUDIOBOOK_DATABASE=solr`, configure both collections and their schemas above, populate catalogue vectors, and provide OpenAI and Redis connections. |
-| Catalogue maintenance in Solr | Select `AUDIOBOOK_DATABASE=solr`, supply Solr connection/schema settings, and run the dedicated embedding or summary launcher with its opt-in mode. Embedding generation needs OpenAI credentials; summary generation uses its selected Batch provider. |
+| Catalogue maintenance in Solr | Select `AUDIOBOOK_DATABASE=solr`, supply Solr connection/schema settings, and run the dedicated embedding or summary launcher with its opt-in mode. Embedding generation needs OpenAI credentials; summary generation uses its regular API client. |
 
 Optional Grafana settings belong to the Compose collector rather than `application.properties`;
 see [observability setup](observability.md#setup).

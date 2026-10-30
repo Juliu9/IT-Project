@@ -13,7 +13,7 @@ skinparam wrapWidth 180
 actor User
 package "recommenderagent — live requests" {
   component "RequestGateway\nCoordinates the request" as Gateway #DBEAFE
-  component "InputParser\nText → intent + criteria" as Parser #DBEAFE
+  component "InputParser\nCommand fast path OR AI intent extraction" as Parser #DBEAFE
   component "SessionTransitionService\nOwns session transaction" as Session #DBEAFE
   component "ConversationEngine + intent handlers\nResolve, validate and page" as Engine #DBEAFE
   component "AudiobookRecommendationWorkflow\nBuilds a new recommendation batch" as Workflow #DCFCE7
@@ -43,19 +43,15 @@ Workflow --> Ranking : rank candidates
 Gateway --> Response : 3. Generate response after commit
 
 note bottom of Session
-  ConversationDispatcher dispatches validated intent handlers.
-  RecommendationPager consumes and refills the queue.
-  ConversationTurn carries the resolved decision.
-  MORE: use pending recommendations first.
-  REPEAT: replay the latest resolved request.
-  MORE without a previous search: ask for criteria.
-  These paths can skip retrieval and ranking.
+  IntentResolver applies session business rules after parsing.
+  ConversationDispatcher selects the intent handler.
+  RecommendationPager reuses or refills pending results.
+  Replay and explanation can reuse saved session data.
 end note
 note bottom of Adapter
+  Exactly one complete database adapter set is selected.
   Runtime code depends on storage interfaces.
-  application.properties selects the adapter.
-  Qdrant and Solr provide complete adapter sets.
-  Exactly one database is selected for live requests.
+  Session storage is separate from catalogue storage.
 end note
 legend bottom
   Blue: request handling

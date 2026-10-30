@@ -3,6 +3,7 @@ package com.gen3.shortdescriptionjob;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import com.gen3.shortdescriptionjob.provider.ShortDescriptionGenerator;
 import com.gen3.shortdescriptionjob.store.AudiobookEnrichmentStore;
 import com.gen3.shortdescriptionjob.store.QdrantShortDescriptionStore;
 import com.gen3.shortdescriptionjob.store.SolrShortDescriptionStore;
@@ -24,34 +25,61 @@ class ShortDescriptionApplicationTest {
               "solr.username=",
               "solr.password=");
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"", "all", "missing", "REBUILD_ALL"})
+  void rejectsInvalidModeBeforeCreatingClients(String mode) {
+    runner
+        .withPropertyValues(
+            "audiobook.short-description.enabled=true", "audiobook.short-description.mode=" + mode)
+        .run(
+            context ->
+                assertThat(context)
+                    .hasFailed()
+                    .getFailure()
+                    .hasMessage(
+                        "audiobook.short-description.mode must be missing-only or rebuild-all"));
+  }
+
   @Test
-  void requiresExplicitMaintenanceMode() {
+  void requiresExplicitEnablement() {
     runner.run(
         context ->
             assertThat(context)
                 .hasFailed()
                 .getFailure()
                 .hasMessage(
-                    "Explicitly select short-description batch mode submit, import, or recover"));
+                    "Explicitly enable audiobook.short-description.enabled to run this job"));
   }
 
   @Test
-  void acceptsExplicitRecoveryMode() {
+  void suppliedGeneratorReplacesTheDefaultWithoutCreatingAnApiClient() {
+    var generator = mock(ShortDescriptionGenerator.class);
     runner
         .withPropertyValues(
-            "audiobook.short-description.batch.mode=recover", "audiobook.database=solr")
+            "audiobook.short-description.enabled=true",
+            "audiobook.database=solr",
+            "spring.ai.openai.api-key=")
+        .withBean(ShortDescriptionGenerator.class, () -> generator)
+        .run(
+            context -> {
+              assertThat(context).hasNotFailed().hasSingleBean(ShortDescriptionGenerator.class);
+              assertThat(context.getBean(ShortDescriptionGenerator.class)).isSameAs(generator);
+            });
+  }
+
+  @Test
+  void acceptsExplicitGenerationEnablement() {
+    runner
+        .withPropertyValues("audiobook.short-description.enabled=true", "audiobook.database=solr")
         .run(
             context ->
-                assertThat(context)
-                    .hasNotFailed()
-                    .hasSingleBean(BatchShortDescriptionEnricher.class));
+                assertThat(context).hasNotFailed().hasSingleBean(ShortDescriptionEnricher.class));
   }
 
   @Test
   void selectingSolrLoadsOnlyItsSummaryAdapter() {
     runner
-        .withPropertyValues(
-            "audiobook.short-description.batch.mode=submit", "audiobook.database=solr")
+        .withPropertyValues("audiobook.short-description.enabled=true", "audiobook.database=solr")
         .run(
             context ->
                 assertThat(context)
@@ -67,8 +95,7 @@ class ShortDescriptionApplicationTest {
   @Test
   void selectingQdrantLoadsOnlyItsSummaryAdapter() {
     runner
-        .withPropertyValues(
-            "audiobook.short-description.batch.mode=import", "audiobook.database=qdrant")
+        .withPropertyValues("audiobook.short-description.enabled=true", "audiobook.database=qdrant")
         .withBean(QdrantClient.class, () -> mock(QdrantClient.class))
         .run(
             context ->
@@ -83,8 +110,7 @@ class ShortDescriptionApplicationTest {
   void rejectsOtherMaintenanceModes() {
     runner
         .withPropertyValues(
-            "audiobook.short-description.batch.mode=submit",
-            "audiobook.embedding-index.enabled=true")
+            "audiobook.short-description.enabled=true", "audiobook.embedding-index.enabled=true")
         .run(
             context ->
                 assertThat(context)

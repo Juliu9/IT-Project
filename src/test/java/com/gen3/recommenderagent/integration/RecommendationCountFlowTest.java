@@ -181,7 +181,7 @@ class RecommendationCountFlowTest {
     var result = engine.process(session, parser.parse(text));
     assertThat(result.getIntent()).isEqualTo(ConversationAction.MORE_RESULTS);
     assertThat(result.getRecommendations())
-        .extracting(Recommendation::getBookId)
+        .extracting(Recommendation::getId)
         .containsExactly("book-4", "book-5", "book-6");
     assertThat(session.getBookCount()).isEqualTo(3);
     assertThat(session.getActiveSearch().getPendingRecommendations()).hasSize(14);

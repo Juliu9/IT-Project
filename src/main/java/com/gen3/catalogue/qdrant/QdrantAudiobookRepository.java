@@ -105,7 +105,7 @@ public class QdrantAudiobookRepository
             .setWithPayload(
                 io.qdrant.client.WithPayloadSelectorFactory.include(
                     List.of(
-                        QdrantAudiobookSchema.BOOK_ID,
+                        QdrantAudiobookSchema.ID,
                         QdrantAudiobookSchema.TITLE,
                         QdrantAudiobookSchema.AUTHORS)))
             .setWithVectors(io.qdrant.client.WithVectorsSelectorFactory.enable(false));
@@ -206,13 +206,70 @@ public class QdrantAudiobookRepository
     return query(baseQuery(filters, limit).build());
   }
 
-  /** Copies existing source data, leaving existing destination records untouched on reruns. */
+  /** Inserts missing books and fills only absent same-named catalogue fields on existing points. */
   public int importStoredBooks(List<AudiobookEmbedding> records) throws IOException {
     if (records.isEmpty()) {
       return 0;
     }
-    for (AudiobookEmbedding record : records) {
-      if (record.vector() != null && record.vector().length > 0) {
+    validateUniqueBookIds(records);
+    initialize();
+    var existing =
+        findRecordsByBookIds(
+            records.stream().map(record -> record.record().id()).toList(), true, true);
+    requireAvailablePointIds(records, existing);
+    var points = new ArrayList<io.qdrant.client.grpc.Points.PointStruct>();
+    var patches = new ArrayList<io.qdrant.client.grpc.Points.PointsUpdateOperation>();
+    var vectors =
+        io.qdrant.client.grpc.Points.UpdatePointVectors.newBuilder()
+            .setCollectionName(collection)
+            .setWait(true);
+    int updated = 0;
+    var unavailable = new LinkedHashMap<String, Integer>();
+    int missingDates = 0;
+    for (var record : records) {
+      var source = mapper.toStoredPoint(record);
+      var usable = new LinkedHashMap<String, io.qdrant.client.grpc.JsonWithInt.Value>();
+      source
+          .getPayloadMap()
+          .forEach(
+              (key, value) -> {
+                if (usable(value)) {
+                  usable.put(key, value);
+                }
+              });
+      var current = existing.get(record.record().id());
+      var missing = new LinkedHashMap<String, io.qdrant.client.grpc.JsonWithInt.Value>();
+      usable.forEach(
+          (key, value) -> {
+            if (current == null || !usable(current.getPayloadMap().get(key))) {
+              missing.put(key, value);
+            }
+          });
+      for (String field :
+          List.of(
+              "id",
+              "source",
+              "title",
+              "authors",
+              "description",
+              "narrators",
+              "language",
+              "duration_minutes",
+              "pubdate",
+              "short_description")) {
+        if (!usable(usable.get(field))
+            && (current == null || !usable(current.getPayloadMap().get(field)))) {
+          unavailable.merge(field, 1, Integer::sum);
+        }
+      }
+      if (record.record().pubdate() == null) {
+        missingDates++;
+      }
+      boolean fillVector =
+          (current == null || denseVector(current) == null)
+              && record.vector() != null
+              && record.vector().length > 0;
+      if (fillVector) {
         validateDimension(record.vector());
         for (float value : record.vector()) {
           if (!Float.isFinite(value)) {
@@ -220,21 +277,68 @@ public class QdrantAudiobookRepository
           }
         }
       }
+      if (current == null) {
+        points.add(source.toBuilder().clearPayload().putAllPayload(usable).build());
+      } else {
+        if (!missing.isEmpty()) {
+          patches.add(
+              io.qdrant.client.grpc.Points.PointsUpdateOperation.newBuilder()
+                  .setSetPayload(
+                      io.qdrant.client.grpc.Points.PointsUpdateOperation.SetPayload.newBuilder()
+                          .putAllPayload(missing)
+                          .setPointsSelector(
+                              io.qdrant.client.grpc.Points.PointsSelector.newBuilder()
+                                  .setFilter(
+                                      Filter.newBuilder()
+                                          .addMust(
+                                              io.qdrant.client.ConditionFactory.hasId(
+                                                  current.getId())))))
+                  .build());
+        }
+        if (fillVector) {
+          vectors.addPoints(
+              io.qdrant.client.grpc.Points.PointVectors.newBuilder()
+                  .setId(current.getId())
+                  .setVectors(source.getVectors()));
+        }
+        if (!missing.isEmpty() || fillVector) {
+          updated++;
+        }
+      }
     }
-    validateUniqueBookIds(records);
-    initialize();
-    var existing =
-        findRecordsByBookIds(records.stream().map(record -> record.record().id()).toList(), false);
-    requireAvailablePointIds(records, existing);
-    var points =
-        records.stream()
-            .filter(record -> !existing.containsKey(record.record().id()))
-            .map(mapper::toStoredPoint)
-            .toList();
     if (!points.isEmpty()) {
       await(client.upsertAsync(collection, points), "copy existing catalogue data to Qdrant");
     }
-    return points.size();
+    if (!patches.isEmpty()) {
+      await(client.batchUpdateAsync(collection, patches), "fill missing catalogue payload");
+    }
+    if (vectors.getPointsCount() > 0) {
+      await(client.updateVectorsAsync(vectors.build()), "fill missing stored catalogue vectors");
+    }
+    org.slf4j.LoggerFactory.getLogger(getClass())
+        .info(
+            "catalogue.migration.batch created={} updated={} skipped={} unavailableFields={} sourceMissingOrInvalidPubdate={}",
+            points.size(),
+            updated,
+            records.size() - points.size() - updated,
+            unavailable,
+            missingDates);
+    return points.size() + updated;
+  }
+
+  private boolean usable(io.qdrant.client.grpc.JsonWithInt.Value value) {
+    if (value == null
+        || value.hasNullValue()
+        || value.getKindCase() == io.qdrant.client.grpc.JsonWithInt.Value.KindCase.KIND_NOT_SET) {
+      return false;
+    }
+    if (value.hasStringValue()) {
+      return !value.getStringValue().isBlank();
+    }
+    if (value.hasListValue()) {
+      return value.getListValue().getValuesList().stream().anyMatch(this::usable);
+    }
+    return true;
   }
 
   /** Retrieves the stored vector for one favourite audiobook by its catalogue ID. */
@@ -297,7 +401,7 @@ public class QdrantAudiobookRepository
     for (var record : records) {
       String id = record.record().id();
       if (!hasText(id) || !ids.add(id)) {
-        throw new IOException("Missing or duplicate bookId in input batch: " + id);
+        throw new IOException("Missing or duplicate catalogue id in input batch: " + id);
       }
     }
   }
@@ -305,9 +409,15 @@ public class QdrantAudiobookRepository
   /** Book IDs are catalogue keys; existing Qdrant point IDs are opaque. */
   private Map<String, RetrievedPoint> findRecordsByBookIds(List<String> ids, boolean withVectors)
       throws IOException {
+    return findRecordsByBookIds(ids, withVectors, !withVectors);
+  }
+
+  private Map<String, RetrievedPoint> findRecordsByBookIds(
+      List<String> ids, boolean withVectors, boolean fullPayload) throws IOException {
     Map<String, RetrievedPoint> records = new LinkedHashMap<>();
-    for (int start = 0; start < ids.size(); start += 100) {
-      var batch = ids.subList(start, Math.min(start + 100, ids.size()));
+    int batchSize = withVectors ? 500 : 100;
+    for (int start = 0; start < ids.size(); start += batchSize) {
+      var batch = ids.subList(start, Math.min(start + batchSize, ids.size()));
       var request =
           io.qdrant.client.grpc.Points.ScrollPoints.newBuilder()
               .setCollectionName(collection)
@@ -315,18 +425,26 @@ public class QdrantAudiobookRepository
                   Filter.newBuilder()
                       .addMust(
                           io.qdrant.client.ConditionFactory.matchKeywords(
-                              QdrantAudiobookSchema.BOOK_ID, batch)))
-              .setLimit(100)
-              .setWithPayload(enable(true))
-              .setWithVectors(io.qdrant.client.WithVectorsSelectorFactory.enable(withVectors));
+                              QdrantAudiobookSchema.ID, batch)))
+              .setLimit(batchSize)
+              .setWithPayload(
+                  fullPayload
+                      ? enable(true)
+                      : io.qdrant.client.WithPayloadSelectorFactory.include(
+                          List.of(QdrantAudiobookSchema.ID)))
+              .setWithVectors(
+                  withVectors
+                      ? io.qdrant.client.WithVectorsSelectorFactory.include(
+                          List.of(QdrantPointMapper.DENSE_VECTOR))
+                      : io.qdrant.client.WithVectorsSelectorFactory.enable(false));
       while (true) {
         var page =
             await(client.scrollAsync(request.build()), "resolve catalogue book IDs in Qdrant");
         for (var point : page.getResultList()) {
-          String bookId = point.getPayloadMap().get(QdrantAudiobookSchema.BOOK_ID).getStringValue();
+          String bookId = point.getPayloadMap().get(QdrantAudiobookSchema.ID).getStringValue();
           if (records.putIfAbsent(bookId, point) != null) {
             throw new IOException(
-                "Duplicate bookId in Qdrant collection " + collection + ": " + bookId);
+                "Duplicate catalogue id in Qdrant collection " + collection + ": " + bookId);
           }
         }
         if (!page.hasNextPageOffset()) {
@@ -341,6 +459,14 @@ public class QdrantAudiobookRepository
   /** Creates named dense and sparse vectors plus indexes used by payload filters. */
   public void initialize() throws IOException {
     ensureCollection(true);
+  }
+
+  /** Explicit migration setup also prepares indexes on an existing renamed collection. */
+  public void prepareMigration() throws IOException {
+    initialize();
+    createPayloadIndex(QdrantAudiobookSchema.ID, FieldType.FieldTypeKeyword);
+    createPayloadIndex(QdrantAudiobookSchema.DURATION_MINUTES, FieldType.FieldTypeInteger);
+    createPayloadIndex(QdrantAudiobookSchema.PUBDATE, FieldType.FieldTypeDatetime);
   }
 
   private void requireCollection() throws IOException {

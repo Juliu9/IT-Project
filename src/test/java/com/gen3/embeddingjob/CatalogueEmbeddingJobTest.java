@@ -28,12 +28,14 @@ class CatalogueEmbeddingJobTest {
 
   @Test
   void pagesThroughCatalogueAndWritesNormalizedEmbeddingsToOriginalReferences() throws Exception {
-    when(store.embeddingPage(null, 1))
+    when(store.embeddingPage(null, 1, EmbeddingMode.MISSING_ONLY))
         .thenReturn(new AudiobookEmbeddingStore.Page(List.of(book), "next"));
-    when(store.embeddingPage("next", 1))
+    when(store.embeddingPage("next", 1, EmbeddingMode.MISSING_ONLY))
         .thenReturn(new AudiobookEmbeddingStore.Page(List.of(book), null));
     when(model.embed(anyList())).thenReturn(List.of(new float[] {3, 4}));
-    new CatalogueEmbeddingJob(store, new AudiobookEmbeddingIndexer(model), 1, 0).run();
+    new CatalogueEmbeddingJob(
+            store, new AudiobookEmbeddingIndexer(model), 1, 0, EmbeddingMode.MISSING_ONLY)
+        .run();
     var updates = ArgumentCaptor.forClass(List.class);
     verify(store, times(2)).updateEmbeddings(updates.capture());
     var update = (AudiobookEmbeddingStore.Update) updates.getValue().getFirst();
@@ -46,23 +48,57 @@ class CatalogueEmbeddingJobTest {
   void maximumRecordsCapsTheJobAndBlankRecordsAreNotSentToTheModel() throws Exception {
     var blank =
         new StoredAudiobook(new AudiobookRecord("blank", null, null, List.of(), null), "blank-ref");
-    when(store.embeddingPage(null, 1))
+    when(store.embeddingPage(null, 1, EmbeddingMode.MISSING_ONLY))
         .thenReturn(new AudiobookEmbeddingStore.Page(List.of(blank), "next"));
-    new CatalogueEmbeddingJob(store, new AudiobookEmbeddingIndexer(model), 10, 1).run();
-    verify(store).embeddingPage(null, 1);
+    new CatalogueEmbeddingJob(
+            store, new AudiobookEmbeddingIndexer(model), 10, 1, EmbeddingMode.MISSING_ONLY)
+        .run();
+    verify(store).embeddingPage(null, 1, EmbeddingMode.MISSING_ONLY);
     verifyNoMoreInteractions(store);
     verifyNoInteractions(model);
   }
 
   @Test
   void modelFailureDoesNotWriteThePage() throws Exception {
-    when(store.embeddingPage(null, 1))
+    when(store.embeddingPage(null, 1, EmbeddingMode.MISSING_ONLY))
         .thenReturn(new AudiobookEmbeddingStore.Page(List.of(book), null));
     when(model.embed(anyList())).thenThrow(new IllegalStateException("provider unavailable"));
     assertThatThrownBy(
             () ->
-                new CatalogueEmbeddingJob(store, new AudiobookEmbeddingIndexer(model), 1, 0).run())
+                new CatalogueEmbeddingJob(
+                        store,
+                        new AudiobookEmbeddingIndexer(model),
+                        1,
+                        0,
+                        EmbeddingMode.MISSING_ONLY)
+                    .run())
         .hasMessage("provider unavailable");
     verify(store, never()).updateEmbeddings(anyList());
+  }
+
+  @Test
+  void noMatchingRecordsMakesNoModelOrWriteCalls() throws Exception {
+    when(store.embeddingPage(null, 10, EmbeddingMode.MISSING_ONLY))
+        .thenReturn(new AudiobookEmbeddingStore.Page(List.of(), null));
+    new CatalogueEmbeddingJob(
+            store, new AudiobookEmbeddingIndexer(model), 10, 0, EmbeddingMode.MISSING_ONLY)
+        .run();
+    verifyNoInteractions(model);
+    verify(store, never()).updateEmbeddings(anyList());
+  }
+
+  @Test
+  void rebuildAllPassesItsSelectionToEveryPage() throws Exception {
+    when(store.embeddingPage(null, 1, EmbeddingMode.REBUILD_ALL))
+        .thenReturn(new AudiobookEmbeddingStore.Page(List.of(book), "next"));
+    when(store.embeddingPage("next", 1, EmbeddingMode.REBUILD_ALL))
+        .thenReturn(new AudiobookEmbeddingStore.Page(List.of(book), null));
+    when(model.embed(anyList())).thenReturn(List.of(new float[] {1, 0}));
+    new CatalogueEmbeddingJob(
+            store, new AudiobookEmbeddingIndexer(model), 1, 0, EmbeddingMode.REBUILD_ALL)
+        .run();
+    verify(store).embeddingPage(null, 1, EmbeddingMode.REBUILD_ALL);
+    verify(store).embeddingPage("next", 1, EmbeddingMode.REBUILD_ALL);
+    verify(model, times(2)).embed(anyList());
   }
 }

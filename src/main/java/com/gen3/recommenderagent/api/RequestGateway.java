@@ -8,6 +8,7 @@ import com.gen3.recommenderagent.inputparser.InvalidRequestException;
 import com.gen3.recommenderagent.inputparser.UserIntent;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.gen3.recommenderagent.response.ResponseGenerator;
+import com.gen3.shared.identity.OpaqueIds;
 import java.util.function.BiFunction;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,7 +20,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/recommendations")
 public class RequestGateway {
-  private static final int MAX_ID_CHARACTERS = 256;
 
   private final InputParser inputParser;
   private final SessionTransitionService sessionTransitionService;
@@ -126,9 +126,8 @@ public class RequestGateway {
   }
 
   private static void validateId(String header, String value) {
-    if (value == null || value.isBlank() || value.length() > MAX_ID_CHARACTERS) {
-      throw new InvalidRequestException(
-          header + " must be nonblank and at most " + MAX_ID_CHARACTERS + " characters.");
+    if (!OpaqueIds.isValid(value)) {
+      throw new InvalidRequestException(header + " must be nonblank and at most 256 characters.");
     }
   }
 }

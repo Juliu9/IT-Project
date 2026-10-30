@@ -56,7 +56,7 @@ class LiveRecommendationIntegrationTest {
                     .toList());
     assertThat(recommendations).hasSizeBetween(1, 5);
     assertThat(recommendations)
-        .extracting(Recommendation::getBookId)
+        .extracting(Recommendation::getId)
         .doesNotHaveDuplicates()
         .allSatisfy(id -> assertThat(id).isNotBlank());
     for (var book : recommendations) {

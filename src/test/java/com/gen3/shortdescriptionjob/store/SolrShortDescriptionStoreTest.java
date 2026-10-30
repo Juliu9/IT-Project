@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.gen3.catalogue.model.AudiobookRecord;
 import com.gen3.catalogue.solr.SolrAudiobookRepository;
+import com.gen3.shortdescriptionjob.ShortDescriptionMode;
 import java.util.List;
 import java.util.Map;
 import org.apache.solr.client.solrj.SolrClient;
@@ -22,8 +23,7 @@ class SolrShortDescriptionStoreTest {
   private final SolrClient client = mock(SolrClient.class);
   private final SolrAudiobookRepository catalogue = mock(SolrAudiobookRepository.class);
   private final SolrShortDescriptionStore store =
-      new SolrShortDescriptionStore(
-          client, catalogue, "books", "https://user:secret@example.com/solr");
+      new SolrShortDescriptionStore(client, catalogue, "books");
 
   @Test
   void readsOnlyMissingSummariesAndKeepsStorageReferences() throws Exception {
@@ -38,15 +38,14 @@ class SolrShortDescriptionStoreTest {
             List.of(),
             "en",
             60,
-            2020,
+            "2020-01-01",
             "Existing summary");
     when(catalogue.findAllBooks(null, 500)).thenReturn(List.of(missing, present));
-    assertThat(store.findRecordsWithoutShortDescription(10))
+    assertThat(store.findRecordsForShortDescription(10, ShortDescriptionMode.MISSING_ONLY))
         .hasSize(1)
         .first()
         .extracting(book -> book.storageReference())
         .isEqualTo("one");
-    assertThat(store.datasetIdentity().dataset()).isEqualTo("https://example.com:443/solr/books");
   }
 
   @Test
@@ -55,7 +54,7 @@ class SolrShortDescriptionStoreTest {
     var valid = new AudiobookRecord("valid", "s", "Title", List.of(), "Description");
     when(catalogue.findAllBooks(null, 500)).thenReturn(java.util.Collections.nCopies(500, invalid));
     when(catalogue.findAllBooks("invalid", 500)).thenReturn(List.of(valid));
-    assertThat(store.findRecordsWithoutShortDescription(1))
+    assertThat(store.findRecordsForShortDescription(1, ShortDescriptionMode.MISSING_ONLY))
         .extracting(book -> book.record().id())
         .containsExactly("valid");
   }
@@ -80,7 +79,8 @@ class SolrShortDescriptionStoreTest {
     store.updateShortDescriptions(
         List.of(
             new AudiobookEnrichmentStore.ShortDescriptionUpdate("missing", "Generated"),
-            new AudiobookEnrichmentStore.ShortDescriptionUpdate("present", "Replacement")));
+            new AudiobookEnrichmentStore.ShortDescriptionUpdate("present", "Replacement")),
+        ShortDescriptionMode.MISSING_ONLY);
     var documents = ArgumentCaptor.forClass(java.util.Collection.class);
     verify(client).add(eq("books"), documents.capture());
     assertThat(documents.getValue()).hasSize(1);
@@ -113,7 +113,8 @@ class SolrShortDescriptionStoreTest {
         java.util.stream.IntStream.range(0, 501)
             .mapToObj(
                 i -> new AudiobookEnrichmentStore.ShortDescriptionUpdate("id-" + i, "Summary"))
-            .toList());
+            .toList(),
+        ShortDescriptionMode.MISSING_ONLY);
     var ids = ArgumentCaptor.forClass(java.util.Collection.class);
     verify(client, org.mockito.Mockito.times(2))
         .getById(
@@ -142,8 +143,8 @@ class SolrShortDescriptionStoreTest {
     assertThatThrownBy(
             () ->
                 store.updateShortDescriptions(
-                    List.of(
-                        new AudiobookEnrichmentStore.ShortDescriptionUpdate("id", "Generated"))))
+                    List.of(new AudiobookEnrichmentStore.ShortDescriptionUpdate("id", "Generated")),
+                    ShortDescriptionMode.MISSING_ONLY))
         .isInstanceOf(java.io.IOException.class)
         .hasMessageContaining("_version_");
     verify(client)

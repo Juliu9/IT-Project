@@ -127,7 +127,7 @@ class PreferenceUpdateFlowTest {
     assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
     assertThat(result.isPreferenceClarificationRequired()).isFalse();
     assertThat(result.getRecommendations())
-        .extracting(Recommendation::getBookId)
+        .extracting(Recommendation::getId)
         .containsExactlyElementsOf(
             refill
                 ? List.of("book-18", "book-19", "book-20", "book-21", "book-22")
@@ -280,7 +280,7 @@ class PreferenceUpdateFlowTest {
     var replay = process(request(ConversationAction.REPEAT));
     assertThat(replay.getDecision()).isEqualTo(ConversationDecision.PREFERENCES_RESET);
     assertThat(process(request(ConversationAction.REPEAT_RECOMMENDATIONS)).getRecommendations())
-        .extracting(Recommendation::getBookId)
+        .extracting(Recommendation::getId)
         .containsExactlyElementsOf(Recommendation.bookIds(page.getRecommendations()));
     assertThat(process(request(ConversationAction.MORE_RESULTS)).getRecommendations()).hasSize(5);
     var personalised = request(ConversationAction.RECOMMENDATION);
@@ -457,7 +457,7 @@ class PreferenceUpdateFlowTest {
     var include = new ExactCriteria();
     include.setDuration("under 5 hours");
     search.setMustInclude(include);
-    assertThat(process(search).getRecommendations().getFirst().getBookId()).isEqualTo("book-1");
+    assertThat(process(search).getRecommendations().getFirst().getId()).isEqualTo("book-1");
     var changed = update(tastes("horror"));
     changed.setReplacePreferenceFields(List.of("positiveSemanticQuery.genres"));
     process(changed);
@@ -465,13 +465,13 @@ class PreferenceUpdateFlowTest {
             process(request(ConversationAction.REPEAT_RECOMMENDATIONS))
                 .getRecommendations()
                 .getFirst()
-                .getBookId())
+                .getId())
         .isEqualTo("book-1");
     for (int i = 0; i < 4; i++) {
       var more = process(request(ConversationAction.MORE_RESULTS));
       assertThat(more.getPositiveSemanticQuery().getGenres()).containsExactly("romance");
       assertThat(more.getMustInclude().getDuration()).isEqualTo("under 5 hours");
-      assertThat(more.getRecommendations().getFirst().getBookId()).isEqualTo("book-" + (6 + i * 5));
+      assertThat(more.getRecommendations().getFirst().getId()).isEqualTo("book-" + (6 + i * 5));
     }
     verify(users).findEmbeddingByUserId("user");
     var refine = request(ConversationAction.REFINE);
@@ -499,10 +499,10 @@ class PreferenceUpdateFlowTest {
             process(request(ConversationAction.REPEAT_RECOMMENDATIONS))
                 .getRecommendations()
                 .getFirst()
-                .getBookId())
+                .getId())
         .isEqualTo("book-1");
     var more = process(request(ConversationAction.MORE_RESULTS));
-    assertThat(more.getRecommendations().getFirst().getBookId()).isEqualTo("book-6");
+    assertThat(more.getRecommendations().getFirst().getId()).isEqualTo("book-6");
     assertThat(more.getPositiveSemanticQuery().getGenres()).containsExactly("romance");
     verify(ranker).rank(anyList(), eq(20), any(RankingContext.class));
   }

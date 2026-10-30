@@ -468,11 +468,11 @@ class RedisSessionRepositoryTest {
 
     assertEquals(2, retrievedRecommendations.size());
 
-    assertEquals("book1", retrievedRecommendations.get(0).getBookId());
+    assertEquals("book1", retrievedRecommendations.get(0).getId());
     assertEquals(1, retrievedRecommendations.get(0).getRank());
     assertEquals(10.0, retrievedRecommendations.get(0).getScore());
 
-    assertEquals("book2", retrievedRecommendations.get(1).getBookId());
+    assertEquals("book2", retrievedRecommendations.get(1).getId());
     assertEquals(1, retrievedRecommendations.get(1).getRank());
     assertEquals(20.0, retrievedRecommendations.get(1).getScore());
   }
@@ -866,19 +866,19 @@ class RedisSessionRepositoryTest {
       assertEquals(
           List.of("book-1", "book-2", "book-3", "book-4", "book-5"),
           firstPage.get(5, TimeUnit.SECONDS).getRecommendations().stream()
-              .map(Recommendation::getBookId)
+              .map(Recommendation::getId)
               .toList());
       Session saved = read("cached-pages", USER_ID);
       assertEquals(15, saved.getActiveSearch().getPendingRecommendations().size());
       assertEquals(
-          "book-6", saved.getActiveSearch().getPendingRecommendations().getFirst().getBookId());
+          "book-6", saved.getActiveSearch().getPendingRecommendations().getFirst().getId());
       assertEquals(
           "A short summary.",
           saved.getActiveSearch().getPendingRecommendations().getFirst().getShortDescription());
       assertEquals(
           List.of("book-6", "book-7", "book-8", "book-9", "book-10"),
           second.process("cached-pages", USER_ID, more).getRecommendations().stream()
-              .map(Recommendation::getBookId)
+              .map(Recommendation::getId)
               .toList());
       assertEquals(10, read("cached-pages", USER_ID).getActiveSearch().getShownBookIds().size());
       verifyNoInteractions(workflow);

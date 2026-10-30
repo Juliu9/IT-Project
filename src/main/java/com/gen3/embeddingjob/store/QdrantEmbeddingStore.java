@@ -4,6 +4,7 @@ import static io.qdrant.client.WithPayloadSelectorFactory.enable;
 
 import com.gen3.catalogue.model.StoredAudiobook;
 import com.gen3.catalogue.qdrant.QdrantPointMapper;
+import com.gen3.embeddingjob.EmbeddingMode;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Points.ScrollPoints;
 import java.io.IOException;
@@ -37,13 +38,19 @@ public class QdrantEmbeddingStore implements AudiobookEmbeddingStore {
   }
 
   @Override
-  public Page embeddingPage(String cursor, int limit) throws IOException {
+  public Page embeddingPage(String cursor, int limit, EmbeddingMode mode) throws IOException {
     requireCollection();
     var request =
         ScrollPoints.newBuilder()
             .setCollectionName(collection)
             .setLimit(limit)
             .setWithPayload(enable(true));
+    if (mode == EmbeddingMode.MISSING_ONLY) {
+      request.setFilter(
+          io.qdrant.client.grpc.Common.Filter.newBuilder()
+              .addMustNot(
+                  io.qdrant.client.ConditionFactory.hasVector(QdrantPointMapper.DENSE_VECTOR)));
+    }
     if (cursor != null) {
       request.setOffset(pointId(cursor));
     }

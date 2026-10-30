@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -28,14 +27,15 @@ class UserPreferenceCsvReaderTest {
             + "1005,GCB,book,rnib:book:14186_part1:The title,2026-07-02 12:46:28,NULL\n"
             + "1005,GCB,author,rnib:author:9:Someone,2026-07-02 12:46:28,NULL\n");
 
-    List<UserFavourite> favourites = new UserFavouriteCsvReader().read(csv);
+    var favourites = new java.util.ArrayList<UserFavourite>();
+    new UserFavouriteCsvReader().read(csv, favourites::add);
 
     assertThat(favourites).containsExactly(new UserFavourite("1005", "rnib_14186_part1"));
   }
 
-  /** Keeps the latest timestamp when one user has multiple rows for the same book. */
+  /** Streams every history row; the external merge keeps the latest duplicate later. */
   @Test
-  void keepsLatestHistoryInteraction() throws IOException {
+  void streamsHistoryUsingUpdatedInteractionTime() throws IOException {
     Path csv = temporaryDirectory.resolve("recents.csv");
     Files.writeString(
         csv,
@@ -44,10 +44,13 @@ class UserPreferenceCsvReaderTest {
             + "1001,GCB,book,rnib:book:42:Title,365,2021-01-01 00:00:00,2022-01-01 00:00:00\n"
             + "1001,GCB,author,rnib:author:7:Author,365,2023-01-01 00:00:00,NULL\n");
 
-    List<UserHistory> history = new UserHistoryCsvReader().read(csv);
+    var history = new java.util.ArrayList<UserHistory>();
+    new UserHistoryCsvReader().read(csv, history::add);
 
     assertThat(history)
-        .containsExactly(new UserHistory("1001", "rnib_42", Instant.parse("2022-01-01T00:00:00Z")));
+        .containsExactly(
+            new UserHistory("1001", "rnib_42", Instant.parse("2020-01-01T00:00:00Z")),
+            new UserHistory("1001", "rnib_42", Instant.parse("2022-01-01T00:00:00Z")));
   }
 
   @Test
@@ -58,7 +61,9 @@ class UserPreferenceCsvReaderTest {
         "type,user,item,created_at,updated_at\n"
             + "book,a,b:book:c_d,2026-01-01 00:00:00,NULL\n"
             + "book,a_b,c:book:d,2026-02-01 00:00:00,NULL\n");
-    assertThat(new UserHistoryCsvReader().read(csv))
+    var history = new java.util.ArrayList<UserHistory>();
+    new UserHistoryCsvReader().read(csv, history::add);
+    assertThat(history)
         .containsExactly(
             new UserHistory("a", "b_c_d", Instant.parse("2026-01-01T00:00:00Z")),
             new UserHistory("a_b", "c_d", Instant.parse("2026-02-01T00:00:00Z")));

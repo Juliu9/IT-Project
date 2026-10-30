@@ -8,7 +8,11 @@ These diagrams show responsibilities and execution order rather than every Java 
 | --- | --- | --- |
 | System overview | Request pipeline and replaceable storage adapters | [SVG](system-overview.svg) · [PlantUML](system-overview.puml) |
 | Request sequence | Session locking, cached MORE, REPEAT, retrieval, and commit ordering | [SVG](recommendation-flow.svg) · [PlantUML](recommendation-flow.puml) |
-| Maintenance jobs | Four separate jobs and their shared dependencies | [SVG](maintenance-jobs.svg) · [PlantUML](maintenance-jobs.puml) |
+| Maintenance jobs | Five launchers, snapshot publication/consumption and shared dependencies | [SVG](maintenance-jobs.svg) · [PlantUML](maintenance-jobs.puml) |
+
+Keep these three views as the maintained diagram set. Per-job class/member diagrams are omitted:
+they duplicate source declarations and are easy to leave behind when implementations change.
+Commands and operational guarantees belong to the [job runbooks](../jobs/README.md), not the diagrams.
 
 ## View and edit
 
@@ -22,3 +26,10 @@ execution/plans in `retrieval`, session adapters in `storage.session`, and share
 models/adapters/vector utilities in sibling `catalogue`.
 
 When changing the architecture, update the affected `.puml` source and regenerate its SVG.
+For example, with an installed PlantUML JAR and Java:
+
+```bash
+java -Djava.awt.headless=true -jar /path/to/plantuml.jar -tsvg docs/diagrams/maintenance-jobs.puml
+```
+
+The checked-in rendered views use PlantUML 1.2025.8.

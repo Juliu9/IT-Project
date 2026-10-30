@@ -46,9 +46,7 @@ public class MigrationApplication {
       }
       if (environment.getProperty("user.preferences.import-on-startup", Boolean.class, false)
           || environment.getProperty("audiobook.embedding-index.enabled", Boolean.class, false)
-          || !"disabled"
-              .equals(
-                  environment.getProperty("audiobook.short-description.batch.mode", "disabled"))) {
+          || environment.getProperty("audiobook.short-description.enabled", Boolean.class, false)) {
         throw new IllegalArgumentException("Run maintenance jobs separately");
       }
       if (!"qdrant".equals(environment.getProperty("audiobook.database", "qdrant"))) {

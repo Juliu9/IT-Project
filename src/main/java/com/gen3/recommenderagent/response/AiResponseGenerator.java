@@ -140,8 +140,28 @@ public class AiResponseGenerator {
         return explanationFallback(recommendations);
       }
     }
+    String normalizedResponse = " " + normalizedTitle(text) + " ";
+    if (getTopRecommendations(recommendations).stream()
+        .map(book -> normalizedTitle(book.getTitle()))
+        .anyMatch(title -> title.isBlank() || !normalizedResponse.contains(" " + title + " "))) {
+      LOGGER.warn("Response model omitted a supplied title; using built-in response");
+      RequestTelemetry.responseMode("FALLBACK");
+      return explanation
+          ? explanationFallback(recommendations)
+          : limitNotice + buildHumanReadableResponse(recommendations, currentRequest);
+    }
     RequestTelemetry.responseMode("AI");
     return text;
+  }
+
+  private String normalizedTitle(String text) {
+    return text == null
+        ? ""
+        : java.text.Normalizer.normalize(text.replace("$b", " "), java.text.Normalizer.Form.NFKD)
+            .replaceAll("\\p{M}+", "")
+            .toLowerCase(java.util.Locale.ROOT)
+            .replaceAll("[^\\p{L}\\p{N}]+", " ")
+            .trim();
   }
 
   // Turns structure Java objects into a text prompt
@@ -293,10 +313,9 @@ public class AiResponseGenerator {
       response.append(title);
       if (recommendation.getShortDescription() != null
           && !recommendation.getShortDescription().isBlank()) {
-        response.append(", ").append(recommendation.getShortDescription());
-      }
-      if (recommendation.getBookId() != null && !recommendation.getBookId().isBlank()) {
-        response.append(" (").append(recommendation.getBookId()).append(")");
+        response
+            .append(", ")
+            .append(recommendation.getShortDescription().strip().replaceAll("[.!?]+$", ""));
       }
       response.append(". ");
     }

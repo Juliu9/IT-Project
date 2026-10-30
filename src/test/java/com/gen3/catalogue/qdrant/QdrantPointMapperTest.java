@@ -25,7 +25,7 @@ class QdrantPointMapperTest {
     PointStruct second = mapper.toPoint(new AudiobookEmbedding(book, new float[] {0.6f, 0.8f}));
 
     assertThat(first.getId()).isEqualTo(second.getId());
-    assertThat(first.getPayloadMap().get("bookId").getStringValue()).isEqualTo("book-7");
+    assertThat(first.getPayloadMap().get("id").getStringValue()).isEqualTo("book-7");
     assertThat(first.getPayloadMap()).doesNotContainKey("publicationYear");
     assertThat(
             first

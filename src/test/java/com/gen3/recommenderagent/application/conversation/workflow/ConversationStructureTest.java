@@ -70,12 +70,6 @@ class ConversationStructureTest {
     assertThat(input.has("userPreferenceSnapshot")).isFalse();
   }
 
-  private SessionRequest request(ConversationAction intent) {
-    var request = new SessionRequest();
-    request.setIntent(intent);
-    return request;
-  }
-
   private ConversationHandler replacementHandler() {
     return new ConversationHandler() {
       public Set<ConversationAction> intents() {

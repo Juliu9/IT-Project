@@ -42,13 +42,13 @@ public class RecommendationPager {
               Recommendation item = page.get(index);
               Recommendation displayed =
                   new Recommendation(
-                      item.getBookId(),
+                      item.getId(),
                       index + 1,
                       item.getScore(),
                       item.getTitle(),
                       item.getShortDescription());
               displayed.setDurationMinutes(item.getDurationMinutes());
-              displayed.setPublicationYear(item.getPublicationYear());
+              displayed.setPubdate(item.getPubdate());
               displayed.setReadingPreferencesUsed(item.isReadingPreferencesUsed());
               return displayed;
             })
@@ -66,9 +66,9 @@ public class RecommendationPager {
     while (!pending.isEmpty() && page.size() < limit) {
       Recommendation item = pending.removeFirst();
       if (item != null
-          && item.getBookId() != null
-          && !item.getBookId().isBlank()
-          && seen.add(item.getBookId())) {
+          && item.getId() != null
+          && !item.getId().isBlank()
+          && seen.add(item.getId())) {
         page.add(item);
       }
     }

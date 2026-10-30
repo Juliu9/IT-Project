@@ -29,7 +29,7 @@ class SolrToQdrantMigratorTest {
     when(source.findStoredBooks(null, 2)).thenReturn(List.of(first, second));
     when(source.findStoredBooks("2", 2)).thenReturn(List.of(third));
     new SolrToQdrantMigrator(source, destination, 2, 0).run(null);
-    verify(destination).initialize();
+    verify(destination).prepareMigration();
     verify(destination).importStoredBooks(List.of(first, second));
     verify(destination).importStoredBooks(List.of(third));
     verifyNoMoreInteractions(destination);

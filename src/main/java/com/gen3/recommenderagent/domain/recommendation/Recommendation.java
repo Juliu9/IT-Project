@@ -4,22 +4,28 @@ import java.util.List;
 
 public class Recommendation {
 
-  private String bookId;
+  private String id;
   private Integer rank;
   private Double score;
   private String title;
   private String shortDescription;
   private Integer durationMinutes;
-  private Integer publicationYear;
+  private String pubdate;
 
+  @com.fasterxml.jackson.annotation.JsonIgnore
   public Integer getPublicationYear() {
-    return publicationYear;
+    return com.gen3.catalogue.model.PublicationDate.year(pubdate);
   }
 
-  public void setPublicationYear(Integer value) {
-    publicationYear = value;
+  public String getPubdate() {
+    return pubdate;
   }
 
+  public void setPubdate(String value) {
+    pubdate = com.gen3.catalogue.model.PublicationDate.normalize(value);
+  }
+
+  @com.fasterxml.jackson.annotation.JsonProperty("duration_minutes")
   public Integer getDurationMinutes() {
     return durationMinutes;
   }
@@ -48,7 +54,7 @@ public class Recommendation {
 
   public Recommendation(
       String bookId, Integer rank, Double score, String title, String shortDescription) {
-    this.bookId = bookId;
+    this.id = bookId;
     this.rank = rank;
     this.score = score;
     this.title = title;
@@ -71,12 +77,12 @@ public class Recommendation {
     this.shortDescription = shortDescription;
   }
 
-  public String getBookId() {
-    return bookId;
+  public String getId() {
+    return id;
   }
 
-  public void setBookId(String bookId) {
-    this.bookId = bookId;
+  public void setId(String bookId) {
+    this.id = bookId;
   }
 
   public Integer getRank() {
@@ -98,7 +104,7 @@ public class Recommendation {
   public static List<String> bookIds(List<Recommendation> recommendations) {
     return recommendations.stream()
         .filter(recommendation -> recommendation != null)
-        .map(Recommendation::getBookId)
+        .map(Recommendation::getId)
         .filter(bookId -> bookId != null && !bookId.isBlank())
         .toList();
   }

@@ -16,7 +16,14 @@ participant "RecommendationWorkflow\nEmbedding → retrieval → ranking" as Wor
 participant "ConversationResponseGenerator\nAI narration when needed" as Response
 
 User -> Gateway : Natural-language request
-Gateway -> Parser : Extract stated user intent
+Gateway -> Parser : parseUserIntent(text, lazy context supplier)
+opt AI fallback needs reference context
+  Parser -> Transition : Invoke supplied context callback:\nparserContext(sessionId, userId)
+  Transition -> Sessions : snapshot(sessionId, userId)
+  Sessions --> Transition : Read-only session snapshot
+  Transition -> Transition : SessionContextProjector.project(snapshot)
+  Transition --> Parser : Pending question, last action, displayed book ranks/titles
+end
 Parser --> Gateway : UserIntent
 note over Parser
   Command fast paths do not load session context.
@@ -33,7 +40,7 @@ note over Sessions
 end note
 Sessions -> Transition : Apply change to loaded session
 activate Transition
-Transition -> Transition : Convert intent to SessionRequest\nApply session guardrails
+Transition -> Transition : IntentResolver.resolve(session, text, intent)\nCreate SessionRequest and apply session guardrails
 Transition -> Engine : Resolve, validate and complete the turn
 activate Engine
 

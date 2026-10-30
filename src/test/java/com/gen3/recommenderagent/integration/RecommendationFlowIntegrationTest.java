@@ -97,7 +97,7 @@ class RecommendationFlowIntegrationTest {
 
     Set<String> returnedBookIds =
         recommendations.stream()
-            .map(recommendation -> recommendation.getBookId())
+            .map(recommendation -> recommendation.getId())
             .collect(Collectors.toSet());
 
     Set<String> allowedScienceFictionIds =
@@ -105,7 +105,7 @@ class RecommendationFlowIntegrationTest {
     assertTrue(allowedScienceFictionIds.containsAll(returnedBookIds));
     assertFalse(returnedBookIds.contains("book-404"));
     assertFalse(response.contains("book-404"));
-    returnedBookIds.forEach(bookId -> assertTrue(response.contains(bookId)));
+    recommendations.forEach(book -> assertTrue(response.contains(book.getTitle())));
   }
 
   @Test

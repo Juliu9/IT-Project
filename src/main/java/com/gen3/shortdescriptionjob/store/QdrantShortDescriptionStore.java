@@ -6,6 +6,7 @@ import static io.qdrant.client.WithPayloadSelectorFactory.enable;
 
 import com.gen3.catalogue.model.StoredAudiobook;
 import com.gen3.catalogue.qdrant.QdrantPointMapper;
+import com.gen3.shortdescriptionjob.ShortDescriptionMode;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Common.Filter;
 import io.qdrant.client.grpc.Points.CreateFieldIndexCollection;
@@ -15,12 +16,10 @@ import io.qdrant.client.grpc.Points.PointsUpdateOperation;
 import io.qdrant.client.grpc.Points.ScrollPoints;
 import io.qdrant.client.grpc.Points.ScrollResponse;
 import java.io.IOException;
-import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,30 +43,10 @@ public class QdrantShortDescriptionStore implements AudiobookEnrichmentStore {
     this.collection = collection;
   }
 
-  @Value("${qdrant.url:http://localhost:6333}")
-  private String endpoint = "http://localhost:6333";
-
-  @Value("${qdrant.grpc-port:6334}")
-  private int grpcPort = 6334;
-
-  @Override
-  public DatasetIdentity datasetIdentity() {
-    String url = endpoint.contains("://") ? endpoint.trim() : "http://" + endpoint.trim();
-    URI uri = URI.create(url);
-    return new DatasetIdentity(
-        "qdrant",
-        uri.getScheme().toLowerCase(Locale.ROOT)
-            + "://"
-            + uri.getHost().toLowerCase(Locale.ROOT)
-            + ":"
-            + grpcPort
-            + "/"
-            + collection);
-  }
-
   /** Stores generated short descriptions without recalculating or rewriting the book vectors. */
   @Override
-  public void updateShortDescriptions(List<ShortDescriptionUpdate> updates) throws IOException {
+  public void updateShortDescriptions(
+      List<ShortDescriptionUpdate> updates, ShortDescriptionMode mode) throws IOException {
     if (updates == null || updates.isEmpty()) {
       return;
     }
@@ -76,23 +55,26 @@ public class QdrantShortDescriptionStore implements AudiobookEnrichmentStore {
     for (ShortDescriptionUpdate update : updates) {
       if (update != null && hasText(update.storageReference()) && hasText(update.description())) {
         operations.add(
-            setMissingPayload(
+            setDescriptionPayload(
                 pointId(update.storageReference()),
                 SHORT_DESCRIPTION,
-                io.qdrant.client.ValueFactory.value(update.description())));
+                io.qdrant.client.ValueFactory.value(update.description()),
+                mode));
       }
     }
     updatePayloads(operations);
   }
 
-  private PointsUpdateOperation setMissingPayload(
+  private PointsUpdateOperation setDescriptionPayload(
       io.qdrant.client.grpc.Common.PointId pointId,
       String field,
-      io.qdrant.client.grpc.JsonWithInt.Value value) {
-    PointsSelector selector =
-        PointsSelector.newBuilder()
-            .setFilter(Filter.newBuilder().addMust(hasId(pointId)).addMust(isEmpty(field)))
-            .build();
+      io.qdrant.client.grpc.JsonWithInt.Value value,
+      ShortDescriptionMode mode) {
+    var filter = Filter.newBuilder().addMust(hasId(pointId));
+    if (mode == ShortDescriptionMode.MISSING_ONLY) {
+      filter.addMust(isEmpty(field));
+    }
+    PointsSelector selector = PointsSelector.newBuilder().setFilter(filter).build();
     return PointsUpdateOperation.newBuilder()
         .setSetPayload(
             PointsUpdateOperation.SetPayload.newBuilder()
@@ -101,10 +83,10 @@ public class QdrantShortDescriptionStore implements AudiobookEnrichmentStore {
         .build();
   }
 
-  /** Loads Qdrant records that still need a generated short description. */
+  /** Loads eligible Qdrant records for the requested generation mode. */
   @Override
-  public List<StoredAudiobook> findRecordsWithoutShortDescription(int maximumRecords)
-      throws IOException {
+  public List<StoredAudiobook> findRecordsForShortDescription(
+      int maximumRecords, ShortDescriptionMode mode) throws IOException {
     if (maximumRecords <= 0) {
       return List.of();
     }
@@ -116,9 +98,11 @@ public class QdrantShortDescriptionStore implements AudiobookEnrichmentStore {
       ScrollPoints.Builder request =
           ScrollPoints.newBuilder()
               .setCollectionName(collection)
-              .setFilter(Filter.newBuilder().addMust(isEmpty(SHORT_DESCRIPTION)))
               .setLimit(Math.min(500, maximumRecords - records.size()))
               .setWithPayload(enable(true));
+      if (mode == ShortDescriptionMode.MISSING_ONLY) {
+        request.setFilter(Filter.newBuilder().addMust(isEmpty(SHORT_DESCRIPTION)));
+      }
       if (offset != null) {
         request.setOffset(offset);
       }
@@ -159,7 +143,7 @@ public class QdrantShortDescriptionStore implements AudiobookEnrichmentStore {
       await(client.batchUpdateAsync(collection, batch), "store audiobook short descriptions");
       org.slf4j.LoggerFactory.getLogger(getClass())
           .info(
-              "short.description.import.progress processed={} total={}",
+              "short.description.write.progress processed={} total={}",
               start + batch.size(),
               operations.size());
     }

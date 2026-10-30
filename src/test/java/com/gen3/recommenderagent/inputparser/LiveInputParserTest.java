@@ -237,7 +237,9 @@ class LiveInputParserTest {
   void distinguishesNamedBookFromExplicitSeriesOrMultipleReferences(String text, boolean clarify) {
     var result = parser.parse(text);
     assertThat(result.getIntent()).as(text).isEqualTo(ConversationAction.RECOMMENDATION);
-    assertThat(result.isSimilarToClarificationRequired()).as(text).isEqualTo(clarify);
+    assertThat(result.isSimilarToClarificationRequired())
+        .as("%s -> %s", text, new tools.jackson.databind.ObjectMapper().writeValueAsString(result))
+        .isEqualTo(clarify);
     if (!clarify) {
       assertThat(result.getSimilarToTitle()).as(text).isEqualToIgnoringCase("The Hunger Games");
       assertThat(result.getPositiveSemanticQuery()).as(text).isNull();
