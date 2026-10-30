@@ -10,14 +10,8 @@ These diagrams show responsibilities and execution order rather than every Java 
 | Request sequence | Session locking, cached MORE, REPEAT, retrieval, and commit ordering | [SVG](recommendation-flow.svg) · [PlantUML](recommendation-flow.puml) |
 | Maintenance jobs | Five launchers, snapshot publication/consumption and shared dependencies | [SVG](maintenance-jobs.svg) · [PlantUML](maintenance-jobs.puml) |
 
-Focused class views (PlantUML source; open with the same renderer):
-
-- [Embeddings](embeddingjob-classes.uml)
-- [Snapshots](snapshotjob-classes.uml)
-- [User preferences](userpreferencejob-classes.uml)
-- [Migration](migrationjob-classes.uml)
-- [Short descriptions](shortdescriptionjob-classes.uml)
-
+Keep these three views as the maintained diagram set. Per-job class/member diagrams are omitted:
+they duplicate source declarations and are easy to leave behind when implementations change.
 Commands and operational guarantees belong to the [job runbooks](../jobs/README.md), not the diagrams.
 
 ## View and edit
@@ -38,5 +32,4 @@ For example, with an installed PlantUML JAR and Java:
 java -Djava.awt.headless=true -jar /path/to/plantuml.jar -tsvg docs/diagrams/maintenance-jobs.puml
 ```
 
-The checked-in rendered views use PlantUML 1.2025.8. Class views intentionally show selected
-methods/dependencies rather than serving as generated, exhaustive Java declarations.
+The checked-in rendered views use PlantUML 1.2025.8.
