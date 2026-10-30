@@ -604,6 +604,10 @@ Response generation uses the existing role-specific chat client, with distinct e
 and an honest built-in fallback. Explanations are plain text with a 150-word total limit; oversized
 AI output uses a bounded fallback covering every selected book. Clarification/no-history responses
 need no response-model call.
+Recommendation and explanation narration also undergo a local title-coverage check, ignoring case,
+accents and punctuation. If any supplied title is missing, the built-in response names every book
+with its rank and available short description, without internal book IDs. This check makes no extra
+AI or database calls; it checks title presence, not whether the AI's explanation is factually correct.
 
 ## Configuration and schema
 

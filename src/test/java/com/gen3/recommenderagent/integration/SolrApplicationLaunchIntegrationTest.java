@@ -276,7 +276,9 @@ class SolrApplicationLaunchIntegrationTest {
               .body("Recommend an audiobook")
               .retrieve()
               .body(String.class);
-      assertThat(response).contains("Launch test book", "local_100");
+      assertThat(response)
+          .contains("Launch test book", "A friendship adventure.")
+          .doesNotContain("local_100");
     }
   }
 

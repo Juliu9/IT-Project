@@ -52,6 +52,45 @@ class StreamingUserPreferenceImporterTest {
     }
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.MethodSource("invalidUserRows")
+  void rejectsInvalidIdsInEitherInputBeforeAnyVectorReadsOrWrites(boolean inHistory, String id)
+      throws Exception {
+    var service = importer(1, 10);
+    String header = "type,user,item,created_at,updated_at\n";
+    String valid = "book,valid,r:book:a,2026-01-01 00:00:00,NULL\n";
+    String invalid = "book,\"" + id + "\",r:book:missing,2026-01-01 00:00:00,NULL\n";
+    var favourites = csv("f.csv", header + valid + (inHistory ? "" : invalid));
+    var history = csv("h.csv", header + (inHistory ? invalid : ""));
+    assertThatThrownBy(() -> service.run(favourites, history))
+        .isInstanceOf(java.io.IOException.class)
+        .hasMessageContaining("CSV user must be nonblank and at most 256 characters");
+    verifyNoInteractions(books, users);
+    assertClean();
+  }
+
+  static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> invalidUserRows() {
+    return java.util.stream.Stream.of(false, true)
+        .flatMap(
+            history ->
+                java.util.stream.Stream.of("", "   ", "\u3000", "u".repeat(257))
+                    .map(id -> org.junit.jupiter.params.provider.Arguments.of(history, id)));
+  }
+
+  @Test
+  void acceptsMaximumLengthOpaqueIdWithoutChangingIt() throws Exception {
+    String id = "u".repeat(256);
+    var result =
+        importer(1, 10)
+            .run(
+                csv("f.csv", "type,user,item\nbook," + id + ",r:book:a\n"),
+                csv("h.csv", "type,user,item,created_at,updated_at\n"));
+    assertThat(result.users()).isEqualTo(1);
+    ArgumentCaptor<List<UserPreferenceEmbedding>> saved = ArgumentCaptor.forClass(List.class);
+    org.mockito.Mockito.verify(users).saveAll(saved.capture());
+    assertThat(saved.getValue().getFirst().userId()).isEqualTo(id);
+  }
+
   @Test
   void mergesUnsortedDuplicatesAcrossRunsAndNeverSplitsAUser() throws Exception {
     var favourites =

@@ -34,6 +34,11 @@ public class UserFavouriteCsvReader {
         }
 
         String userId = record.get("user");
+        if (!com.gen3.identity.OpaqueIds.isValid(userId)) {
+          throw new IOException(
+              "CSV user must be nonblank and at most 256 characters; row "
+                  + record.getRecordNumber());
+        }
         String item = record.get("item"); // Correctly targets index mapping now
 
         String bookId = BookIdExtractor.extractAndNormalize(item);

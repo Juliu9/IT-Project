@@ -39,6 +39,11 @@ public class UserHistoryCsvReader {
         }
 
         String userId = record.get("user");
+        if (!com.gen3.identity.OpaqueIds.isValid(userId)) {
+          throw new IOException(
+              "CSV user must be nonblank and at most 256 characters; row "
+                  + record.getRecordNumber());
+        }
         String item = record.get("item");
         String createdAtRaw = record.get("created_at");
         String updatedAtRaw = record.get("updated_at");

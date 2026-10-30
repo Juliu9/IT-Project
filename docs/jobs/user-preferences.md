@@ -79,7 +79,9 @@ type,user,item,created_at,updated_at
 book,demo-user,rnib:book:456,2026-10-01 12:00:00,NULL
 ```
 
-- `user` is the nonblank external user ID; it must match the caller's `X-User-Id` to use that profile.
+- `user` is the nonblank external user ID, at most 256 Java characters; it must match the caller's
+  `X-User-Id` to use that profile. Both CSV readers reject invalid IDs during preparation, before
+  vector lookups or profile saves/clears, in dry-run and write modes alike.
 - `item` follows `provider:book:id[:optional title]`, normalized to `provider_id` with the provider
   lowercased and the ID retained. For example, `rnib:book:123:Title` maps to `rnib_123`.
 - Dates use `yyyy-MM-dd HH:mm:ss` interpreted as UTC. `created_at` is required; a nonblank

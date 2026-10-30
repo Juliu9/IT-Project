@@ -202,6 +202,26 @@ Required by the live server when `SESSION_STORE=redis`; maintenance jobs do not 
 Starting local Docker does not populate either collection. Existing schema and record-identity
 requirements are in [Qdrant schema](architecture.md#qdrant-schema-and-record-identity).
 
+#### Catalogue payload indexes
+
+Prepare these indexes when supplying an existing Qdrant catalogue, especially when strict mode
+rejects filters on unindexed fields. Names and casing must match the stored payload fields.
+
+| Payload fields | Index type | Used for |
+| --- | --- | --- |
+| `bookId` | Keyword | Book identity lookups, vector reads, and migration checks |
+| `authors`, `narrators`, `language`, `source` | Keyword | Exact inclusion/exclusion filters |
+| `durationMinutes`, `publicationYear` | Integer | Numeric range filters |
+| `short_description` | Keyword | Missing-summary selection by the short-description job |
+| `title` | Optional full-text, lowercase | Faster reference-title lookup on larger catalogues |
+
+When the catalogue adapter creates a new collection during an explicit write, it creates the
+standard indexes above except `short_description` and `title`. Normal server startup and reads
+do not create collections or backfill indexes on existing collections. Add missing standard indexes
+to an existing catalogue yourself; the short-description job creates its own `short_description`
+index before selecting records. The optional `title` index is not created automatically.
+Payload indexes are separate from the collection's named `dense` and `keywords` (sparse) vectors.
+
 ### Solr
 
 These settings apply to the recommendation server and jobs when Solr is selected. Solr is not
