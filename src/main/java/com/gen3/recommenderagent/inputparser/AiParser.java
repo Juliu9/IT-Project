@@ -104,8 +104,10 @@ public class AiParser {
                         that author identifies the reference, not a filter on recommended authors.
                         Do not invent themes or embed the title as semantic criteria; only additional requested tastes go in semantic queries.
                         A single named title always goes to catalogue lookup, even if it also names a series; never infer series scope from your knowledge.
+                        Plural recommendation words such as books or audiobooks do not imply multiple references or series scope.
                         similarToClarificationRequired=true ONLY when the user explicitly requests a series/trilogy/saga as a whole or names multiple reference books.
                         "a book similar to the hunger games" -> similarToTitle="The Hunger Games", omit similarToClarificationRequired.
+                        "books similar to The Hunger Games" -> {"intent":"RECOMMENDATION","similarToTitle":"The Hunger Games","similarToClarificationRequired":false}.
                         "books similar to the Hunger Games series" -> {"intent":"RECOMMENDATION","similarToClarificationRequired":true}.
                         "books similar to The Hunger Games and Divergent" -> {"intent":"RECOMMENDATION","similarToClarificationRequired":true}. Omit similarToTitle for multiple references; it is one string, never an array. Return JSON only; the application asks the user to choose one title. A single title containing "and", e.g. War and Peace, stays one reference.
                         Preserve extra constraints and explicit personalisation; a reference alone is not personalised=true.

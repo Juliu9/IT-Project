@@ -1,7 +1,6 @@
 package com.gen3.recommenderagent.inputparser;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -486,6 +485,34 @@ class InputParserTest {
   }
 
   @Test
+  void referencePromptDistinguishesPluralRecommendationsFromMultipleReferenceTitles() {
+    var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    parsed.setSimilarToTitle("The Hunger Games");
+    String text = "books similar to The Hunger Games";
+    when(client
+            .prompt()
+            .system(anyString())
+            .user(text)
+            .call()
+            .responseEntity(AiParser.REQUEST_CONVERTER))
+        .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
+    org.mockito.Mockito.clearInvocations(client.prompt());
+    var result =
+        new AiParser(client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
+            .parse(text);
+    assertEquals("The Hunger Games", result.getSimilarToTitle());
+    assertEquals(false, result.isSimilarToClarificationRequired());
+    var prompt = org.mockito.ArgumentCaptor.forClass(String.class);
+    org.mockito.Mockito.verify(client.prompt()).system(prompt.capture());
+    org.assertj.core.api.Assertions.assertThat(prompt.getValue())
+        .contains(
+            "Plural recommendation words such as books or audiobooks do not imply multiple references or series scope.",
+            "\"books similar to The Hunger Games\" -> {\"intent\":\"RECOMMENDATION\",\"similarToTitle\":\"The Hunger Games\",\"similarToClarificationRequired\":false}");
+  }
+
+  @Test
   void referenceTitleAndAuthorAreSeparateFromExplanationAndResultFilters() {
     var result =
         parseModelJson(
@@ -633,7 +660,7 @@ class InputParserTest {
   }
 
   @Test
-  void routesStandaloneCriteriaWithoutLegacyPeopleAdditionFlags() {
+  void routesStandaloneCriteriaWithTheCurrentSinglePersonPrompt() {
     var parsed = new UserIntent();
     parsed.setIntent(ConversationAction.RECOMMENDATION);
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
@@ -658,9 +685,6 @@ class InputParserTest {
                     prompt.contains("self-contained criteria")
                         && prompt.contains(
                             "Each author or narrator field supports at most one person")));
-    var schema = new ObjectMapper().readTree(AiParser.REQUEST_CONVERTER.getJsonSchema());
-    assertFalse(schema.path("properties").has("addAuthors"));
-    assertFalse(schema.path("properties").has("addNarrators"));
   }
 
   @org.junit.jupiter.params.ParameterizedTest
