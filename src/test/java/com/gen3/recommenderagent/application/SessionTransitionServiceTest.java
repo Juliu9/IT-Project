@@ -45,8 +45,8 @@ class SessionTransitionServiceTest {
             .process("session-1", "user-1", "recommend books", request, Function.identity());
 
     assertEquals(
-        recommendations.stream().map(Recommendation::getBookId).toList(),
-        result.getRecommendations().stream().map(Recommendation::getBookId).toList());
+        recommendations.stream().map(Recommendation::getId).toList(),
+        result.getRecommendations().stream().map(Recommendation::getId).toList());
     assertEquals(ConversationDecision.RECOMMENDATIONS, result.getDecision());
     verify(sessions).update(eq("session-1"), eq("user-1"), any(), any());
     assertNotNull(result.getRequestId());

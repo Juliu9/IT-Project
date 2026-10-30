@@ -68,7 +68,7 @@ class UniversalRulesScorerTest {
         List.of(),
         null,
         durationMinutes,
-        publicationYear);
+        com.gen3.recommenderagent.testsupport.CatalogueDates.atYear(publicationYear));
   }
 
   private RankingScoringProperties properties(double recencyWeight, double durationWeight) {

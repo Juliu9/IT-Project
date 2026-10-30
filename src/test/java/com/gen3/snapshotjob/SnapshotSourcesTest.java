@@ -45,7 +45,7 @@ class SnapshotSourcesTest {
     var next = io.qdrant.client.PointIdFactory.id(123L);
     var point =
         io.qdrant.client.grpc.Points.RetrievedPoint.newBuilder()
-            .putPayload("bookId", io.qdrant.client.ValueFactory.value("book"))
+            .putPayload("id", io.qdrant.client.ValueFactory.value("book"))
             .setVectors(
                 io.qdrant.client.grpc.Points.VectorsOutput.newBuilder()
                     .setVectors(
@@ -73,7 +73,7 @@ class SnapshotSourcesTest {
     verify(client, org.mockito.Mockito.times(2)).scrollAsync(requests.capture());
     assertThat(requests.getAllValues().getLast().getOffset()).isEqualTo(next);
     assertThat(requests.getAllValues().getFirst().getWithPayload())
-        .isEqualTo(io.qdrant.client.WithPayloadSelectorFactory.include(List.of("bookId")));
+        .isEqualTo(io.qdrant.client.WithPayloadSelectorFactory.include(List.of("id")));
     assertThat(requests.getAllValues().getFirst().getWithVectors())
         .isEqualTo(io.qdrant.client.WithVectorsSelectorFactory.include(List.of("dense")));
     verifyNoMoreInteractions(client);

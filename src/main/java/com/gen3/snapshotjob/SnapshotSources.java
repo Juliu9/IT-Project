@@ -30,8 +30,7 @@ final class SnapshotSources {
           io.qdrant.client.grpc.Points.ScrollPoints.newBuilder()
               .setCollectionName(collection)
               .setLimit(limit)
-              .setWithPayload(
-                  io.qdrant.client.WithPayloadSelectorFactory.include(List.of("bookId")))
+              .setWithPayload(io.qdrant.client.WithPayloadSelectorFactory.include(List.of("id")))
               .setWithVectors(
                   io.qdrant.client.WithVectorsSelectorFactory.include(
                       List.of(QdrantPointMapper.DENSE_VECTOR)));
@@ -58,7 +57,7 @@ final class SnapshotSources {
                   point
                       .getPayloadMap()
                       .getOrDefault(
-                          "bookId", io.qdrant.client.grpc.JsonWithInt.Value.getDefaultInstance())
+                          "id", io.qdrant.client.grpc.JsonWithInt.Value.getDefaultInstance())
                       .getStringValue(),
                   vector));
         }

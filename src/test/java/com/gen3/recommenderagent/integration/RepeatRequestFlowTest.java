@@ -73,7 +73,7 @@ class RepeatRequestFlowTest {
     }
     var more = process(request(ConversationAction.MORE_RESULTS));
     assertThat(more.getRecommendations())
-        .extracting(Recommendation::getBookId)
+        .extracting(Recommendation::getId)
         .containsExactly("book-6", "book-7", "book-8", "book-9", "book-10");
     verify(workflow).recommend(any(), any());
   }
@@ -162,7 +162,7 @@ class RepeatRequestFlowTest {
     assertThat(saved().getActiveSearch().getSearch()).isNotNull();
     assertThat(saved().getActiveSearch().getShownBookIds()).hasSize(5);
     assertThat(process(request(ConversationAction.MORE_RESULTS)).getRecommendations())
-        .extracting(Recommendation::getBookId)
+        .extracting(Recommendation::getId)
         .containsExactly("book-6", "book-7", "book-8", "book-9", "book-10");
     verify(workflow).recommend(any(), any());
   }

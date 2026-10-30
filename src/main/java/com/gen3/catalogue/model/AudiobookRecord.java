@@ -11,13 +11,21 @@ public record AudiobookRecord(
     String description,
     List<String> narrators,
     String language,
-    Integer durationMinutes,
-    Integer publicationYear,
+    @com.fasterxml.jackson.annotation.JsonProperty("duration_minutes") Integer durationMinutes,
+    String pubdate,
     String shortDescription) {
 
-  /**
-   * Keeps callers using the catalogue fields from before short descriptions were added compatible.
-   */
+  public AudiobookRecord {
+    pubdate = PublicationDate.normalize(pubdate);
+  }
+
+  /** Derived for year-based policy and ranking, never a stored catalogue field. */
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Integer publicationYear() {
+    return PublicationDate.year(pubdate);
+  }
+
+  /** Catalogue metadata without a generated short description. */
   public AudiobookRecord(
       String id,
       String source,
@@ -27,7 +35,7 @@ public record AudiobookRecord(
       List<String> narrators,
       String language,
       Integer durationMinutes,
-      Integer publicationYear) {
+      String pubdate) {
     this(
         id,
         source,
@@ -37,11 +45,11 @@ public record AudiobookRecord(
         narrators,
         language,
         durationMinutes,
-        publicationYear,
+        pubdate,
         null);
   }
 
-  /** Keeps callers using the metadata fields from before publication year was added compatible. */
+  /** Catalogue metadata without a known publication date or short description. */
   public AudiobookRecord(
       String id,
       String source,
@@ -54,7 +62,7 @@ public record AudiobookRecord(
     this(id, source, title, authors, description, narrators, language, durationMinutes, null, null);
   }
 
-  /** Keeps existing callers compatible while metadata is progressively added to source records. */
+  /** Minimal catalogue text record. */
   public AudiobookRecord(
       String id, String source, String title, List<String> authors, String description) {
     this(id, source, title, authors, description, List.of(), null, null, null, null);

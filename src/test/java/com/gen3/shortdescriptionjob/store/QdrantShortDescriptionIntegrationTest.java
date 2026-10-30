@@ -54,7 +54,7 @@ class QdrantShortDescriptionIntegrationTest {
                       List.of(),
                       "en",
                       60,
-                      2020,
+                      "2020-01-01",
                       "Old summary"),
                   new float[] {0, 1})));
       var ids = List.of(mapper.pointId("missing"), mapper.pointId("present"));

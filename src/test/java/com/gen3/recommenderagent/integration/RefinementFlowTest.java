@@ -83,7 +83,8 @@ class RefinementFlowTest {
             .mapToObj(
                 i -> {
                   var book = new Recommendation("dated-" + i, i + 1, 1.0, "Book " + i);
-                  book.setPublicationYear(years.get(i));
+                  book.setPubdate(
+                      com.gen3.recommenderagent.testsupport.CatalogueDates.atYear(years.get(i)));
                   return book;
                 })
             .toList();
@@ -114,9 +115,9 @@ class RefinementFlowTest {
   @Test
   void moreRecentIgnoresUnknownYearsWhenSomeDisplayedYearsAreKnown() {
     var dated = new Recommendation("dated", 1, 1.0, "Dated");
-    dated.setPublicationYear(2000);
+    dated.setPubdate(com.gen3.recommenderagent.testsupport.CatalogueDates.atYear(2000));
     var second = new Recommendation("second", 2, 1.0, "Second");
-    second.setPublicationYear(2005);
+    second.setPubdate(com.gen3.recommenderagent.testsupport.CatalogueDates.atYear(2005));
     var unknown = new Recommendation("unknown", 3, 1.0, "Unknown");
     when(workflow.recommend(any(), any())).thenReturn(List.of(dated, second, unknown), List.of());
     var original = request(ConversationAction.RECOMMENDATION);
@@ -250,7 +251,7 @@ class RefinementFlowTest {
     assertThat(sessions.getSession("session", "user").getPendingRefinementRequest()).isNull();
     var repeated = process(request(ConversationAction.REPEAT_RECOMMENDATIONS));
     assertThat(repeated.getRecommendations())
-        .extracting(Recommendation::getBookId)
+        .extracting(Recommendation::getId)
         .containsExactly("one");
     verifyNoInteractions(workflow);
   }
@@ -520,9 +521,7 @@ class RefinementFlowTest {
     clearInvocations(workflow);
     var more = process(request(ConversationAction.MORE_RESULTS));
     assertThat(more.getMustInclude().getAuthors()).isNullOrEmpty();
-    assertThat(more.getRecommendations())
-        .extracting(Recommendation::getBookId)
-        .containsExactly("four");
+    assertThat(more.getRecommendations()).extracting(Recommendation::getId).containsExactly("four");
     verifyNoInteractions(workflow);
     var next = request(ConversationAction.REFINE);
     var shorter = new ExactCriteria();
@@ -617,7 +616,9 @@ class RefinementFlowTest {
         .getActiveSearch()
         .getSearch()
         .getRecommendations()
-        .forEach(book -> book.setPublicationYear(2005));
+        .forEach(
+            book ->
+                book.setPubdate(com.gen3.recommenderagent.testsupport.CatalogueDates.atYear(2005)));
     sessions.updateSession(session);
     var pending = Recommendation.bookIds(session.getActiveSearch().getPendingRecommendations());
     var exhausted = service.process("session", "user", command("more recent"));
@@ -625,7 +626,7 @@ class RefinementFlowTest {
     assertThat(process(request(ConversationAction.REPEAT)).getDecision())
         .isEqualTo(ConversationDecision.RECENCY_EXHAUSTED);
     assertThat(process(request(ConversationAction.REPEAT_RECOMMENDATIONS)).getRecommendations())
-        .extracting(Recommendation::getBookId)
+        .extracting(Recommendation::getId)
         .containsExactly("one");
     assertThat(
             Recommendation.bookIds(
@@ -638,7 +639,7 @@ class RefinementFlowTest {
     var more = request(ConversationAction.MORE_RESULTS);
     more.setBookCount(1);
     assertThat(process(more).getRecommendations())
-        .extracting(Recommendation::getBookId)
+        .extracting(Recommendation::getId)
         .containsExactly("two");
     verifyNoInteractions(workflow);
   }
@@ -653,7 +654,9 @@ class RefinementFlowTest {
         .getActiveSearch()
         .getSearch()
         .getRecommendations()
-        .forEach(book -> book.setPublicationYear(2005));
+        .forEach(
+            book ->
+                book.setPubdate(com.gen3.recommenderagent.testsupport.CatalogueDates.atYear(2005)));
     sessions.updateSession(session);
     var result = service.process("session", "user", command("more recent"));
     assertThat(result.getMustInclude().getPublicationYear()).isEqualTo("between 2006 and 2010");

@@ -167,7 +167,10 @@ active search's content and other constraints, and uses `shorter=true` without i
 limit. With no previous search (including cleared/expired/new sessions), it asks what content the
 user wants and performs no retrieval, even when saved preferences exist.
 
-Recommendations retain their catalogue `durationMinutes` through ranking, paging and session storage.
+Recommendations retain their catalogue `duration_minutes` and `pubdate` through ranking, paging and
+session storage. Year-based filters, recency scoring and newer/older comparisons derive years from
+valid publication dates; no `publicationYear` is stored on a book. Search criteria may still express
+`publicationYear` because it is a user-requested year constraint, not catalogue metadata.
 When every displayed duration is known and greater than one minute, a shorter refinement sets the
 new duration filter strictly below the shortest displayed book. The resolved limit is retained for
 More; session preferences are unchanged. If durations are missing, the page is empty, or the shortest
@@ -670,16 +673,18 @@ creating indexes. Explicit repository writes can create an absent collection; th
 maintenance job requires an existing collection. Existing collections are not automatically
 inspected or migrated.
 
-Qdrant catalogue lookups match the payload's `bookId`, independently of whether the point ID is an
-integer or a UUID. Existing points retain their original IDs during explicit writes; migration skips
-existing books. New books keep the deterministic UUID convention. A generated ID already occupied by
-another record is rejected instead of overwritten.
+Qdrant catalogue lookups match the payload's `id`, independently of whether the point ID is an
+integer or a UUID. Existing points retain their original IDs during explicit writes and migration
+repairs. New books keep the deterministic UUID convention. A generated ID already occupied by
+another record is rejected instead of overwritten. Migration checks every source ID and fills only
+missing supported payload fields from same-named Solr fields, preserving populated target data and
+vectors. Missing/invalid source dates are not guessed.
 
-Each `bookId` must identify one point in the selected collection. Lookup, migration, and explicit
+Each payload `id` must identify one point in the selected collection. Lookup, migration, and explicit
 writes reject multiple matches for a requested book ID; writes also reject duplicate IDs within an
 input batch. No duplicate is selected, merged, or deleted automatically. Matching reads are
 paginated with up to 100 requested IDs for metadata and 500 for vector-only reads. Vector-only reads
-select only `bookId` and the named `dense` vector; metadata lookups do not fetch vectors. Keep the `bookId` keyword index on existing strict-mode
+select only `id` and the named `dense` vector; metadata lookups do not fetch vectors. Keep the `id` keyword index on existing strict-mode
 collections. Maintenance writes still require a stable catalogue and one writer; checks do not
 enforce uniqueness against concurrent external writers.
 

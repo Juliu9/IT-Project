@@ -54,7 +54,7 @@ class QdrantAudiobookRepositoryTest {
     for (int i = 0; i < 100; i++) {
       first.addResult(
           RetrievedPoint.newBuilder()
-              .putPayload("bookId", io.qdrant.client.ValueFactory.value("partial-" + i))
+              .putPayload("id", io.qdrant.client.ValueFactory.value("partial-" + i))
               .putPayload(
                   "title",
                   io.qdrant.client.ValueFactory.value("Boundary Reference companion " + i)));
@@ -63,7 +63,7 @@ class QdrantAudiobookRepositoryTest {
     for (String id : List.of("exact-one", "exact-two")) {
       last.addResult(
           RetrievedPoint.newBuilder()
-              .putPayload("bookId", io.qdrant.client.ValueFactory.value(id))
+              .putPayload("id", io.qdrant.client.ValueFactory.value(id))
               .putPayload("title", io.qdrant.client.ValueFactory.value("Boundary Reference")));
     }
     when(client.scrollAsync(any(ScrollPoints.class)))
@@ -173,7 +173,7 @@ class QdrantAudiobookRepositoryTest {
     var point =
         RetrievedPoint.newBuilder()
             .setId(io.qdrant.client.PointIdFactory.id(42))
-            .putPayload("bookId", io.qdrant.client.ValueFactory.value("catalogue-id"))
+            .putPayload("id", io.qdrant.client.ValueFactory.value("catalogue-id"))
             .putPayload("title", io.qdrant.client.ValueFactory.value("Title"))
             .putPayload(
                 "authors",
@@ -190,7 +190,7 @@ class QdrantAudiobookRepositoryTest {
     assertThat(result.getFirst().authors()).containsExactly("Author");
     var request = ArgumentCaptor.forClass(ScrollPoints.class);
     verify(client).scrollAsync(request.capture());
-    assertThat(request.getValue().getFilter().toString()).contains("bookId", "catalogue-id");
+    assertThat(request.getValue().getFilter().toString()).contains("id", "catalogue-id");
     assertThat(request.getValue().getLimit()).isEqualTo(100);
     assertThat(request.getValue().getWithPayload())
         .isEqualTo(io.qdrant.client.WithPayloadSelectorFactory.enable(true));
@@ -311,7 +311,7 @@ class QdrantAudiobookRepositoryTest {
     RetrievedPoint result =
         RetrievedPoint.newBuilder()
             .setId(io.qdrant.client.PointIdFactory.id(98765L))
-            .putPayload("bookId", io.qdrant.client.ValueFactory.value("book-9"))
+            .putPayload("id", io.qdrant.client.ValueFactory.value("book-9"))
             .setVectors(
                 VectorsOutput.newBuilder()
                     .setVectors(
@@ -354,10 +354,9 @@ class QdrantAudiobookRepositoryTest {
         .allSatisfy(
             request -> {
               assertThat(request.getLimit()).isEqualTo(500);
-              assertThat(request.getFilter().getMust(0).getField().getKey()).isEqualTo("bookId");
+              assertThat(request.getFilter().getMust(0).getField().getKey()).isEqualTo("id");
               assertThat(request.getWithPayload())
-                  .isEqualTo(
-                      io.qdrant.client.WithPayloadSelectorFactory.include(List.of("bookId")));
+                  .isEqualTo(io.qdrant.client.WithPayloadSelectorFactory.include(List.of("id")));
               assertThat(request.getWithVectors())
                   .isEqualTo(io.qdrant.client.WithVectorsSelectorFactory.include(List.of("dense")));
             });
@@ -394,7 +393,7 @@ class QdrantAudiobookRepositoryTest {
     var first =
         RetrievedPoint.newBuilder()
             .setId(io.qdrant.client.PointIdFactory.id(1L))
-            .putPayload("bookId", io.qdrant.client.ValueFactory.value("duplicate"))
+            .putPayload("id", io.qdrant.client.ValueFactory.value("duplicate"))
             .build();
     var second = first.toBuilder().setId(io.qdrant.client.PointIdFactory.id(2L)).build();
     when(client.scrollAsync(any(ScrollPoints.class)))
@@ -416,10 +415,10 @@ class QdrantAudiobookRepositoryTest {
             new float[] {1, 0});
     assertThatThrownBy(() -> repository.findEmbeddingByBookId("duplicate"))
         .isInstanceOf(java.io.IOException.class)
-        .hasMessageContaining("Duplicate bookId");
+        .hasMessageContaining("Duplicate catalogue id");
     assertThatThrownBy(() -> repository.importStoredBooks(List.of(record)))
         .isInstanceOf(java.io.IOException.class)
-        .hasMessageContaining("Duplicate bookId");
+        .hasMessageContaining("Duplicate catalogue id");
     verify(client, never()).upsertAsync(anyString(), anyList());
   }
 
@@ -436,7 +435,7 @@ class QdrantAudiobookRepositoryTest {
             new float[] {1, 0});
     assertThatThrownBy(() -> repository.importStoredBooks(List.of(record, record)))
         .isInstanceOf(java.io.IOException.class)
-        .hasMessageContaining("duplicate bookId");
+        .hasMessageContaining("duplicate catalogue id");
     org.mockito.Mockito.verifyNoInteractions(client);
   }
 
@@ -497,7 +496,7 @@ class QdrantAudiobookRepositoryTest {
     verify(client, times(7)).createPayloadIndexAsync(index.capture(), any());
     assertThat(index.getAllValues())
         .extracting(CreateFieldIndexCollection::getFieldName)
-        .contains("bookId")
+        .contains("id")
         .doesNotContain("short_description");
   }
 
@@ -542,7 +541,7 @@ class QdrantAudiobookRepositoryTest {
     assertThat(request.getValue().getFilter().getMustCount()).isEqualTo(3);
     assertThat(request.getValue().getFilter().getMustNotCount()).isEqualTo(4);
     assertThat(request.getValue().getFilter().toString())
-        .contains("language", "English", "source", "NLS", "publicationYear", "French", "Legacy")
-        .contains("bookId", "shown-1", "shown-2");
+        .contains("language", "English", "source", "NLS", "pubdate", "French", "Legacy")
+        .contains("id", "shown-1", "shown-2");
   }
 }

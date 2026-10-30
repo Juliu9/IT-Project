@@ -1,6 +1,7 @@
 package com.gen3.embeddingjob;
 
 import com.gen3.embeddingjob.store.AudiobookEmbeddingStore;
+import com.gen3.shared.jobruntime.JobProgress;
 import java.util.ArrayList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,7 +33,7 @@ public class CatalogueEmbeddingJob {
   }
 
   public void run() throws Exception {
-    try (var progress = new com.gen3.jobruntime.JobProgress("catalogue.embeddings")) {
+    try (var progress = new JobProgress("catalogue.embeddings")) {
       String cursor = null;
       int scanned = 0;
       int indexed = 0;

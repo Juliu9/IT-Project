@@ -288,7 +288,7 @@ class SimilarBookFlowTest {
     var more = service.process("session", "user", request(ConversationAction.MORE_RESULTS, null));
     assertThat(more.getSimilarBook().bookId()).isEqualTo("hunger");
     assertThat(more.getRecommendations())
-        .extracting(Recommendation::getBookId)
+        .extracting(Recommendation::getId)
         .containsExactly("book-6", "book-7", "book-8", "book-9", "book-10");
     var explain =
         service.process(
@@ -413,7 +413,7 @@ class SimilarBookFlowTest {
     assertThat(result.getSimilarBook()).isNull();
     if (intent == ConversationAction.EXPLAIN_RECOMMENDATION) {
       assertThat(result.getRecommendations())
-          .extracting(Recommendation::getBookId)
+          .extracting(Recommendation::getId)
           .containsExactly("book-1");
     } else {
       assertThat(sessions.getSession("session", "user").getBookCount()).isEqualTo(5);
@@ -456,7 +456,7 @@ class SimilarBookFlowTest {
     reply.setExplicitSearch(false);
     var result = service.process("session", "user", reply);
     assertThat(result.getRecommendations())
-        .extracting(Recommendation::getBookId)
+        .extracting(Recommendation::getId)
         .containsExactly("similar-book");
     org.mockito.Mockito.verify(workflow, org.mockito.Mockito.times(2)).recommend(any(), any());
   }
@@ -536,9 +536,7 @@ class SimilarBookFlowTest {
                 .generate(failed.getRecommendations(), failed))
         .contains("can't use that book");
     var more = service.process("session", "user", request(ConversationAction.MORE_RESULTS, null));
-    assertThat(more.getRecommendations())
-        .extracting(Recommendation::getBookId)
-        .startsWith("book-6");
+    assertThat(more.getRecommendations()).extracting(Recommendation::getId).startsWith("book-6");
     assertThat(more.getSimilarBook().bookId()).isEqualTo("hunger");
     verify(workflow).recommend(any(), any());
   }

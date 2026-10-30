@@ -1,4 +1,4 @@
-package com.gen3.jobruntime;
+package com.gen3.shared.jobruntime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;

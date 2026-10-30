@@ -4,7 +4,10 @@ import java.util.List;
 import java.util.Locale;
 
 /** Minimal catalogue metadata for resolving a named reference without downloading vectors. */
-public record AudiobookTitle(String bookId, String title, List<String> authors) {
+public record AudiobookTitle(
+    @com.fasterxml.jackson.annotation.JsonProperty("id") String bookId,
+    String title,
+    List<String> authors) {
   public AudiobookTitle {
     authors = authors == null ? List.of() : List.copyOf(authors);
   }

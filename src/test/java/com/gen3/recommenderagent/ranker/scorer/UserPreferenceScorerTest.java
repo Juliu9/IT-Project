@@ -34,7 +34,7 @@ class UserPreferenceScorerTest {
     var result =
         ranker.rank(List.of(generic, preferred), 2, new RankingContext(preferences, Set.of()));
 
-    assertEquals("preferred", result.getFirst().getBookId());
+    assertEquals("preferred", result.getFirst().getId());
     assertEquals(1.0, result.getFirst().getScore());
   }
 

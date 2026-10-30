@@ -345,7 +345,7 @@ class RecommendationBatchFlowTest {
 
   private void assertIds(ConversationTurn request, int start, int size) {
     assertThat(request.getRecommendations())
-        .extracting(Recommendation::getBookId)
+        .extracting(Recommendation::getId)
         .containsExactlyElementsOf(
             IntStream.range(start, start + size).mapToObj(i -> "book-" + i).toList());
   }

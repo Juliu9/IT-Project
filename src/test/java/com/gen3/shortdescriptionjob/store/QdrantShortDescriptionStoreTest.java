@@ -33,13 +33,13 @@ class QdrantShortDescriptionStoreTest {
     var invalid =
         RetrievedPoint.newBuilder()
             .setId(id(1))
-            .putPayload("bookId", value("invalid"))
+            .putPayload("id", value("invalid"))
             .putPayload("description", value(" "))
             .build();
     var valid =
         RetrievedPoint.newBuilder()
             .setId(id(2))
-            .putPayload("bookId", value("valid"))
+            .putPayload("id", value("valid"))
             .putPayload("description", value("Description"))
             .build();
     when(client.scrollAsync(any(ScrollPoints.class)))

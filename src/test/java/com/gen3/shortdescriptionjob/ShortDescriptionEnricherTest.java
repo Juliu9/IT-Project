@@ -48,7 +48,7 @@ class ShortDescriptionEnricherTest {
                 List.of(),
                 "en",
                 60,
-                2020,
+                "2020-01-01",
                 "Old summary"),
             "opaque-reference");
     when(store.findRecordsForShortDescription(100, ShortDescriptionMode.REBUILD_ALL))
@@ -77,7 +77,7 @@ class ShortDescriptionEnricherTest {
                 List.of(),
                 "en",
                 60,
-                2020,
+                "2020-01-01",
                 "Old summary"),
             "opaque-reference");
     when(store.findRecordsForShortDescription(100, ShortDescriptionMode.MISSING_ONLY))

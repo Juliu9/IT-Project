@@ -1,4 +1,4 @@
-package com.gen3.jobruntime;
+package com.gen3.shared.jobruntime;
 
 import java.time.Duration;
 import java.util.concurrent.Executors;

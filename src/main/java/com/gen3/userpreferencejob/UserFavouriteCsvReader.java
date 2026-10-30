@@ -1,5 +1,6 @@
 package com.gen3.userpreferencejob;
 
+import com.gen3.shared.identity.OpaqueIds;
 import com.gen3.userpreferencejob.model.UserFavourite;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -34,7 +35,7 @@ public class UserFavouriteCsvReader {
         }
 
         String userId = record.get("user");
-        if (!com.gen3.identity.OpaqueIds.isValid(userId)) {
+        if (!OpaqueIds.isValid(userId)) {
           throw new IOException(
               "CSV user must be nonblank and at most 256 characters; row "
                   + record.getRecordNumber());

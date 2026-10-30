@@ -106,6 +106,7 @@ class SolrApplicationLaunchIntegrationTest {
       book.setField("description", "An adventurous story about friendship.");
       book.setField("all", "An adventurous story about friendship.");
       book.setField("client_custom_s", "keep");
+      book.setField("pubdate", "2013-07-03T00:00:00Z");
       client.add(BOOKS, book);
     }
     client.commit(BOOKS);
@@ -169,6 +170,7 @@ class SolrApplicationLaunchIntegrationTest {
         .extracting(record -> record.record().id())
         .containsExactly("local_100", "local_200");
     assertThat(copied.getFirst().vector()).containsExactly(0.6f, 0.8f);
+    assertThat(copied.getFirst().record().pubdate()).isEqualTo("2013-07-03T00:00:00Z");
     assertThat(copied.getFirst().record().shortDescription()).isEqualTo("A friendship adventure.");
     assertThat(copied.getLast().vector()).isNull();
 

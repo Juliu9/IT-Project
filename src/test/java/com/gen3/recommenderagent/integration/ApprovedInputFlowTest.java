@@ -87,7 +87,8 @@ class ApprovedInputFlowTest {
                             new Recommendation(
                                 "book-" + generation + "-" + rank, rank, 1.0, "Book " + rank);
                         book.setDurationMinutes(duration == null ? null : duration + rank);
-                        book.setPublicationYear(year);
+                        book.setPubdate(
+                            com.gen3.recommenderagent.testsupport.CatalogueDates.atYear(year));
                         return book;
                       })
                   .toList();
@@ -198,13 +199,13 @@ class ApprovedInputFlowTest {
             .extracting(Recommendation::getRank)
             .containsExactly(1, 2, 3);
         assertThat(result.getRecommendations())
-            .extracting(Recommendation::getBookId)
+            .extracting(Recommendation::getId)
             .containsExactly("book-1-6", "book-1-7", "book-1-8");
         assertThat(session.getActiveSearch().getPendingRecommendations()).hasSize(12);
       }
       case REPEAT, REPEAT_RECOMMENDATIONS ->
           assertThat(result.getRecommendations())
-              .extracting(Recommendation::getBookId)
+              .extracting(Recommendation::getId)
               .containsExactlyElementsOf(Recommendation.bookIds(page.getRecommendations()));
       case EXPLAIN_RECOMMENDATION ->
           assertThat(result.getRecommendations())
@@ -717,9 +718,9 @@ class ApprovedInputFlowTest {
     assertThat(result.getDecision()).isEqualTo(ConversationDecision.CANCELLED);
     assertThat(session.getPendingQuestion()).isNull();
     assertThat(process("repeat the recommendations").getRecommendations())
-        .extracting(Recommendation::getBookId)
+        .extracting(Recommendation::getId)
         .containsExactlyElementsOf(
-            displayed.getRecommendations().stream().map(Recommendation::getBookId).toList());
+            displayed.getRecommendations().stream().map(Recommendation::getId).toList());
     verifyNoInteractions(ai);
   }
 
@@ -881,9 +882,9 @@ class ApprovedInputFlowTest {
     }
     var result = process(action);
     assertThat(result.getRecommendations())
-        .extracting(Recommendation::getBookId)
+        .extracting(Recommendation::getId)
         .containsExactlyElementsOf(
-            displayed.getRecommendations().stream().map(Recommendation::getBookId).toList());
+            displayed.getRecommendations().stream().map(Recommendation::getId).toList());
     assertThat(responses.generate(result.getRecommendations(), result))
         .doesNotContain("To continue your personalised request");
     assertThat(session.isAwaitingPersonalisedPreferences()).isFalse();

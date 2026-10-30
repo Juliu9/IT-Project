@@ -74,7 +74,7 @@ class ResponseOrderingFlowTest {
                   throw new IllegalStateException(e);
                 }
               }
-              return books.getFirst().getBookId();
+              return books.getFirst().getId();
             });
     var worker = Executors.newSingleThreadExecutor();
     try {
@@ -87,7 +87,7 @@ class ResponseOrderingFlowTest {
                   .turn()
                   .getRecommendations()
                   .getFirst()
-                  .getBookId())
+                  .getId())
           .isEqualTo("book-1");
       assertThatThrownBy(() -> gateway.handleRequest("session", "user", "second"))
           .isInstanceOf(SessionBusyException.class);

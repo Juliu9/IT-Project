@@ -97,7 +97,7 @@ class RecommendationFlowIntegrationTest {
 
     Set<String> returnedBookIds =
         recommendations.stream()
-            .map(recommendation -> recommendation.getBookId())
+            .map(recommendation -> recommendation.getId())
             .collect(Collectors.toSet());
 
     Set<String> allowedScienceFictionIds =

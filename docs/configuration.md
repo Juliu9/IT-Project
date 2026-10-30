@@ -209,9 +209,10 @@ rejects filters on unindexed fields. Names and casing must match the stored payl
 
 | Payload fields | Index type | Used for |
 | --- | --- | --- |
-| `bookId` | Keyword | Book identity lookups, vector reads, and migration checks |
+| `id` | Keyword | Catalogue identity lookups, vector reads, and migration checks; separate from Qdrant point ID |
 | `authors`, `narrators`, `language`, `source` | Keyword | Exact inclusion/exclusion filters |
-| `durationMinutes`, `publicationYear` | Integer | Numeric range filters |
+| `duration_minutes` | Integer | Runtime range filters |
+| `pubdate` | Datetime | Publication-year requests translated to date ranges |
 | `short_description` | Keyword | Missing-summary selection by the short-description job |
 | `title` | Optional full-text, lowercase | Faster reference-title lookup on larger catalogues |
 
@@ -221,6 +222,12 @@ do not create collections or backfill indexes on existing collections. Add missi
 to an existing catalogue yourself; the short-description job creates its own `short_description`
 index before selecting records. The optional `title` index is not created automatically.
 Payload indexes are separate from the collection's named `dense` and `keywords` (sparse) vectors.
+The explicit Solr-to-Qdrant migrator also prepares `id`, `duration_minutes`, and `pubdate` indexes
+on an existing collection. No `publicationYear` payload is stored or read. A valid `pubdate` may be
+date-only (`2013-07-03`) or an ISO timestamp; timestamps are normalized to UTC. Missing/invalid dates
+have no inferred year. For example, year 2013 filters from January 1, 2013 up to January 1, 2014.
+Catalogue JSON and saved recommendation JSON use `id`, `duration_minutes`, and `pubdate` too.
+Clear old development sessions when switching schemas; there are no legacy field aliases.
 
 ### Solr
 
@@ -256,11 +263,14 @@ Prepare the collections before use; reads and normal server startup never create
 - **Catalogue:** Use a string `id` unique key as the book ID. Apply the
   [catalogue vector schema](../solr/vector-field-schema.xml), matching the configured field name and
   dimensions. Generate vectors with the opt-in embedding job if absent. The adapter uses `source`,
-  `title`, `authors`, `description`, `narrators`, `language`, `durationMinutes`, `publicationYear`, and
+  `title`, `authors`, `description`, `narrators`, `language`, `duration_minutes`, `pubdate`, and
   `short_description`. Keyword search, including the keyword part of hybrid retrieval, targets only
   the analyzed `all` field; populate it with the text you want searchable. Explicit query field
   selectors are restricted to `all` too. Exact author/narrator/language/source filters still use their
   dedicated keyword (`string`) fields. Store metadata needed for responses and updates.
+  Publication filtering expects indexed/stored `pubdate` with Solr date type `pdate` (or equivalent).
+  Use a stored/indexed integer field for `duration_minutes`. The adapter does not read the old
+  `durationMinutes` or `publicationYear` fields and does not rename your source records.
 - **User preferences:** Create a separate collection using the
   [preference schema](../solr/user-preference-schema.xml). Its string `id` is the exact external user ID;
   `favouritesVector` and `historyVector` are optional stored vectors of the shared dimension. Use the

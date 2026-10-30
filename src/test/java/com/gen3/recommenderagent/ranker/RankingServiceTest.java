@@ -32,7 +32,7 @@ class RankingServiceTest {
             List.of(),
             "English",
             180,
-            2024,
+            "2024-01-01",
             "Summary");
     var result = rankingService.rank(List.of(new AudiobookCandidate(record, 1.0)), 1);
     assertEquals(180, result.getFirst().getDurationMinutes());
@@ -110,10 +110,10 @@ class RankingServiceTest {
         rankingService.rank(List.of(first, duplicate, missingId, second, third), 2);
 
     assertEquals(2, result.size());
-    assertEquals("book-1", result.get(0).getBookId());
+    assertEquals("book-1", result.get(0).getId());
     assertEquals(1, result.get(0).getRank());
     assertEquals(1.0, result.get(0).getScore());
-    assertEquals("book-2", result.get(1).getBookId());
+    assertEquals("book-2", result.get(1).getId());
     assertEquals(2, result.get(1).getRank());
     assertEquals(0.0, result.get(1).getScore());
   }
@@ -127,7 +127,7 @@ class RankingServiceTest {
             List.of(candidate("book-1", 4.0), candidate("book-2", 3.0)), 2, context);
 
     assertEquals(1, result.size());
-    assertEquals("book-2", result.getFirst().getBookId());
+    assertEquals("book-2", result.getFirst().getId());
   }
 
   @Test
@@ -146,9 +146,9 @@ class RankingServiceTest {
         service.rank(
             List.of(candidate("book-1", 9.0), candidate("book-2", 1.0)), 2, RankingContext.empty());
 
-    assertEquals("book-2", result.getFirst().getBookId());
+    assertEquals("book-2", result.getFirst().getId());
     assertEquals(1.0, result.getFirst().getScore());
-    assertEquals("book-1", result.getLast().getBookId());
+    assertEquals("book-1", result.getLast().getId());
     assertEquals(0.0, result.getLast().getScore());
   }
 
@@ -161,9 +161,9 @@ class RankingServiceTest {
     List<Recommendation> result =
         service.rank(List.of(candidate("low", 2.0), candidate("high", 6.0)), 2);
 
-    assertEquals("high", result.getFirst().getBookId());
+    assertEquals("high", result.getFirst().getId());
     assertEquals(1.0, result.getFirst().getScore());
-    assertEquals("low", result.getLast().getBookId());
+    assertEquals("low", result.getLast().getId());
     assertEquals(0.0, result.getLast().getScore());
   }
 
@@ -173,8 +173,8 @@ class RankingServiceTest {
         IntStream.rangeClosed(1, 25).mapToObj(i -> candidate("book-" + i, 100.0 - i)).toList();
     List<Recommendation> result = rankingService.rank(candidates, 20);
     assertEquals(20, result.size());
-    assertEquals("book-1", result.getFirst().getBookId());
-    assertEquals("book-20", result.getLast().getBookId());
+    assertEquals("book-1", result.getFirst().getId());
+    assertEquals("book-20", result.getLast().getId());
   }
 
   private AudiobookCandidate candidate(String id, Double score) {

@@ -1,12 +1,12 @@
 package com.gen3.catalogue.qdrant;
 
 import static com.gen3.catalogue.qdrant.QdrantAudiobookSchema.AUTHORS;
-import static com.gen3.catalogue.qdrant.QdrantAudiobookSchema.BOOK_ID;
 import static com.gen3.catalogue.qdrant.QdrantAudiobookSchema.DESCRIPTION;
 import static com.gen3.catalogue.qdrant.QdrantAudiobookSchema.DURATION_MINUTES;
+import static com.gen3.catalogue.qdrant.QdrantAudiobookSchema.ID;
 import static com.gen3.catalogue.qdrant.QdrantAudiobookSchema.LANGUAGE;
 import static com.gen3.catalogue.qdrant.QdrantAudiobookSchema.NARRATORS;
-import static com.gen3.catalogue.qdrant.QdrantAudiobookSchema.PUBLICATION_YEAR;
+import static com.gen3.catalogue.qdrant.QdrantAudiobookSchema.PUBDATE;
 import static com.gen3.catalogue.qdrant.QdrantAudiobookSchema.SHORT_DESCRIPTION;
 import static com.gen3.catalogue.qdrant.QdrantAudiobookSchema.SOURCE;
 import static com.gen3.catalogue.qdrant.QdrantAudiobookSchema.TITLE;
@@ -87,7 +87,7 @@ public class QdrantPointMapper {
 
   private AudiobookRecord toRecord(Map<String, Value> payload) {
     return new AudiobookRecord(
-        stringValue(payload, BOOK_ID),
+        stringValue(payload, ID),
         stringValue(payload, SOURCE),
         stringValue(payload, TITLE),
         listValue(payload.get(AUTHORS)),
@@ -95,7 +95,7 @@ public class QdrantPointMapper {
         listValue(payload.get(NARRATORS)),
         stringValue(payload, LANGUAGE),
         integerValue(payload.get(DURATION_MINUTES)),
-        integerValue(payload.get(PUBLICATION_YEAR)),
+        stringValue(payload, PUBDATE),
         stringValue(payload, SHORT_DESCRIPTION));
   }
 
@@ -131,7 +131,7 @@ public class QdrantPointMapper {
   /** Converts catalogue fields into the metadata returned with Qdrant search results. */
   private Map<String, Value> payload(AudiobookRecord record) {
     Map<String, Value> payload = new LinkedHashMap<>();
-    put(payload, BOOK_ID, record.id());
+    put(payload, ID, record.id());
     put(payload, SOURCE, record.source());
     put(payload, TITLE, record.title());
     put(payload, DESCRIPTION, record.description());
@@ -140,9 +140,7 @@ public class QdrantPointMapper {
     if (record.durationMinutes() != null) {
       payload.put(DURATION_MINUTES, value(record.durationMinutes().longValue()));
     }
-    if (record.publicationYear() != null) {
-      payload.put(PUBLICATION_YEAR, value(record.publicationYear().longValue()));
-    }
+    put(payload, PUBDATE, record.pubdate());
     List<Value> authors =
         record.authors() == null
             ? List.of()

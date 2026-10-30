@@ -3,6 +3,7 @@ package com.gen3.migrationjob;
 import com.gen3.catalogue.model.AudiobookEmbedding;
 import com.gen3.catalogue.qdrant.QdrantAudiobookRepository;
 import com.gen3.catalogue.solr.SolrAudiobookRepository;
+import com.gen3.shared.jobruntime.JobProgress;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,12 +37,12 @@ public class SolrToQdrantMigrator implements ApplicationRunner {
     this.maximumRecords = Math.max(maximumRecords, 0);
   }
 
-  /** Reads every Solr page and copies records absent from Qdrant. */
+  /** Reads every Solr ID and inserts or completes the corresponding Qdrant payload. */
   @Override
   public void run(ApplicationArguments arguments) throws Exception {
-    try (var progress = new com.gen3.jobruntime.JobProgress("catalogue.migration")) {
+    try (var progress = new JobProgress("catalogue.migration")) {
       progress.stage("initializing destination");
-      destination.initialize();
+      destination.prepareMigration();
       int scanned = 0;
       String afterId = null;
       int migrated = 0;
@@ -62,13 +63,16 @@ public class SolrToQdrantMigrator implements ApplicationRunner {
         scanned += books.size();
         progress.update(scanned, -1);
         afterId = books.getLast().record().id();
-        LOGGER.info("Migrated {} audiobook records from Solr to Qdrant", migrated);
+        LOGGER.info("Created or filled {} audiobook records from Solr in Qdrant", migrated);
 
         if (books.size() < pageLimit) {
           break;
         }
       }
-      LOGGER.info("Solr-to-Qdrant migration complete: {} records", migrated);
+      LOGGER.info(
+          "Solr-to-Qdrant migration complete: {} records created or filled; {} source records scanned",
+          migrated,
+          scanned);
     }
   }
 }

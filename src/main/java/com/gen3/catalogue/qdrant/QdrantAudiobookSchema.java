@@ -18,7 +18,7 @@ import java.util.Map;
 final class QdrantAudiobookSchema {
   private QdrantAudiobookSchema() {}
 
-  static final String BOOK_ID = "bookId";
+  static final String ID = "id";
   static final String SOURCE = "source";
   static final String TITLE = "title";
   static final String DESCRIPTION = "description";
@@ -26,8 +26,8 @@ final class QdrantAudiobookSchema {
   static final String AUTHORS = "authors";
   static final String NARRATORS = "narrators";
   static final String LANGUAGE = "language";
-  static final String DURATION_MINUTES = "durationMinutes";
-  static final String PUBLICATION_YEAR = "publicationYear";
+  static final String DURATION_MINUTES = "duration_minutes";
+  static final String PUBDATE = "pubdate";
 
   static final Map<String, FieldType> PAYLOAD_INDEXES =
       Map.of(
@@ -35,7 +35,7 @@ final class QdrantAudiobookSchema {
           FieldType.FieldTypeKeyword,
           NARRATORS,
           FieldType.FieldTypeKeyword,
-          BOOK_ID,
+          ID,
           FieldType.FieldTypeKeyword,
           LANGUAGE,
           FieldType.FieldTypeKeyword,
@@ -43,8 +43,8 @@ final class QdrantAudiobookSchema {
           FieldType.FieldTypeKeyword,
           DURATION_MINUTES,
           FieldType.FieldTypeInteger,
-          PUBLICATION_YEAR,
-          FieldType.FieldTypeInteger,
+          PUBDATE,
+          FieldType.FieldTypeDatetime,
           SHORT_DESCRIPTION,
           FieldType.FieldTypeKeyword);
 
@@ -82,7 +82,7 @@ final class QdrantAudiobookSchema {
     addConditions(builder, filters.mustInclude(), false);
     addConditions(builder, filters.mustNotInclude(), true);
     if (!filters.excludedBookIds().isEmpty()) {
-      builder.addMustNot(matchKeywords(BOOK_ID, filters.excludedBookIds()));
+      builder.addMustNot(matchKeywords(ID, filters.excludedBookIds()));
     }
     return builder.getMustCount() == 0 && builder.getMustNotCount() == 0 ? null : builder.build();
   }
@@ -112,12 +112,38 @@ final class QdrantAudiobookSchema {
         conditions.minimumDurationMinutes(),
         conditions.maximumDurationMinutes(),
         excluded);
-    addRangeCondition(
-        builder,
-        PUBLICATION_YEAR,
-        conditions.minimumPublicationYear(),
-        conditions.maximumPublicationYear(),
-        excluded);
+    if (conditions.minimumPublicationYear() != null
+        || conditions.maximumPublicationYear() != null) {
+      var dates = io.qdrant.client.grpc.Common.DatetimeRange.newBuilder();
+      if (conditions.minimumPublicationYear() != null) {
+        dates.setGte(
+            timestamp(
+                com.gen3.catalogue.model.PublicationDate.startOfYear(
+                    conditions.minimumPublicationYear())));
+      }
+      if (conditions.maximumPublicationYear() != null) {
+        // An exclusive upper bound includes every instant in the requested final year.
+        if (conditions.maximumPublicationYear() == 9999) {
+          dates.setLte(timestamp(java.time.Instant.parse("9999-12-31T23:59:59.999999Z")));
+        } else {
+          dates.setLt(
+              timestamp(
+                  com.gen3.catalogue.model.PublicationDate.startOfYear(
+                      conditions.maximumPublicationYear() + 1)));
+        }
+      }
+      addCondition(
+          builder,
+          io.qdrant.client.ConditionFactory.datetimeRange(PUBDATE, dates.build()),
+          excluded);
+    }
+  }
+
+  private static com.google.protobuf.Timestamp timestamp(java.time.Instant instant) {
+    return com.google.protobuf.Timestamp.newBuilder()
+        .setSeconds(instant.getEpochSecond())
+        .setNanos(instant.getNano())
+        .build();
   }
 
   private static void addRangeCondition(

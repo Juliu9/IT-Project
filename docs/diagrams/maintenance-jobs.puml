@@ -48,7 +48,7 @@ Snapshot --> LocalSnapshot : validate then atomically publish
 Summary --> Catalogue : read descriptions / fill missing or rebuild summaries
 Summary --> SummaryModel : generate missing summaries (regular API)
 Migration --> SolrSource : read existing fields and vectors
-Migration --> QdrantTarget : copy books absent by bookId
+Migration --> QdrantTarget : create/fill books matched by payload id
 CSV --> Preferences : user interactions
 Preferences --> LocalSnapshot : validate and load once\nno remote catalogue-vector lookup
 Preferences --> UserStore : explicit write: save or clear taste vectors\ndry-run: validating sink, no writes

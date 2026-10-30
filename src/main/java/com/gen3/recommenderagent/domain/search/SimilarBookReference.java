@@ -4,7 +4,10 @@ import java.util.List;
 
 /** The catalogue book and original vector anchoring one similarity search. */
 public record SimilarBookReference(
-    String bookId, String title, List<String> authors, float[] vector) {
+    @com.fasterxml.jackson.annotation.JsonProperty("id") String bookId,
+    String title,
+    List<String> authors,
+    float[] vector) {
   public SimilarBookReference {
     authors = authors == null ? List.of() : List.copyOf(authors);
     vector = vector == null ? null : vector.clone();

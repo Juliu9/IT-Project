@@ -22,6 +22,37 @@ import org.mockito.ArgumentCaptor;
 class SolrAudiobookRepositoryUnitTest {
 
   @Test
+  void migrationUsesSameNamedSourceFieldsWithoutLegacyFallbacks() throws Exception {
+    var client = mock(SolrClient.class);
+    var response = mock(QueryResponse.class);
+    var documents = new SolrDocumentList();
+    var old = new SolrDocument();
+    old.setField("id", "old");
+    old.setField("durationMinutes", 99);
+    old.setField("publicationYear", 2013);
+    old.setField("pubdate", "not-a-date");
+    documents.add(old);
+    var current = new SolrDocument();
+    current.setField("id", "current");
+    current.setField("duration_minutes", 120);
+    current.setField(
+        "pubdate", java.util.Date.from(java.time.Instant.parse("2013-07-03T00:00:00Z")));
+    documents.add(current);
+    when(response.getResults()).thenReturn(documents);
+    when(client.query(
+            org.mockito.ArgumentMatchers.eq("books"),
+            org.mockito.ArgumentMatchers.any(SolrQuery.class),
+            org.mockito.ArgumentMatchers.eq(SolrRequest.METHOD.POST)))
+        .thenReturn(response);
+    var rows = new SolrAudiobookRepository(client, "books").findStoredBooks(null, 10);
+    assertEquals(null, rows.getFirst().record().durationMinutes());
+    assertEquals(null, rows.getFirst().record().pubdate());
+    assertEquals(null, rows.getFirst().record().publicationYear());
+    assertEquals(120, rows.getLast().record().durationMinutes());
+    assertEquals("2013-07-03T00:00:00Z", rows.getLast().record().pubdate());
+  }
+
+  @Test
   void missingVectorScanKeepsReadPagesBoundedAndResumesAfterTheLastSelectedBook() throws Exception {
     var client = mock(SolrClient.class);
     var responses = new java.util.ArrayList<QueryResponse>();
@@ -282,7 +313,7 @@ class SolrAudiobookRepositoryUnitTest {
     assertEquals("all", query.get("uf"));
     assertEquals(5, query.getRows());
     assertEquals(
-        "id,source,title,authors,description,narrators,language,durationMinutes,publicationYear,short_description,score,embedding",
+        "id,source,title,authors,description,narrators,language,duration_minutes,pubdate,short_description,score,embedding",
         query.getFields());
   }
 
@@ -294,7 +325,7 @@ class SolrAudiobookRepositoryUnitTest {
     SolrDocument document = new SolrDocument();
     document.setField("id", "book-1");
     document.setField("authors", java.util.List.of("Author One", "Author Two"));
-    document.setField("publicationYear", 2024);
+    document.setField("pubdate", "2024-07-03");
     document.setField("short_description", "A brief description.");
     document.setField("score", 2.5f);
     SolrDocumentList documents = new SolrDocumentList();
@@ -389,11 +420,11 @@ class SolrAudiobookRepositoryUnitTest {
         List.of(
             "language:\"English\"",
             "source:\"NLS\"",
-            "durationMinutes:[* TO 600]",
-            "publicationYear:[2020 TO *]",
+            "duration_minutes:[* TO 600]",
+            "pubdate:[2020-01-01T00:00:00Z TO *]",
             "-language:\"French\"",
             "-source:\"Legacy\"",
-            "-publicationYear:[* TO 2000]",
+            "-pubdate:[* TO 2000-12-31T23:59:59.999Z]",
             "-id:(\"shown\\-1\" OR \"shown\\-2\")"),
         List.of(queryCaptor.getValue().getFilterQueries()));
   }

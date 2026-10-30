@@ -1,5 +1,6 @@
 package com.gen3.userpreferencejob;
 
+import com.gen3.shared.jobruntime.JobProgress;
 import java.nio.file.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,7 +40,7 @@ public class UserPreferenceStartupImporter implements ApplicationRunner {
     long started = System.nanoTime();
     LOGGER.info("Starting User Preference Vector Aggregation... mode={}", mode);
     long snapshotLoadMs;
-    try (var progress = new com.gen3.jobruntime.JobProgress("user.import.prepare")) {
+    try (var progress = new JobProgress("user.import.prepare")) {
       progress.stage("validating and loading snapshot");
       snapshot.validate();
       snapshotLoadMs = (System.nanoTime() - started) / 1_000_000;

@@ -142,7 +142,7 @@ class EmbeddingModesIntegrationTest {
                 List.of(),
                 "English",
                 60,
-                2020,
+                "2020-01-01",
                 "Keep summary");
         var point =
             mapper

@@ -221,7 +221,7 @@
         recommendations.style.display = books?.length ? "block" : "none";
         recommendations.open = false;
         for (const book of books ?? []) {
-          const payload = metadata.get(book.bookId);
+          const payload = metadata.get(book.id);
           const card = document.createElement("article");
           card.className = "card recommendation";
           const title = document.createElement("h3");
@@ -229,15 +229,15 @@
           card.append(title);
           const fields = document.createElement("dl");
           const values = [
-            ["Book ID", book.bookId],
+            ["Book ID", book.id],
             ["Catalogue title", payload?.title],
             ["Authors", payload?.authors?.join(", ") || null],
             ["Narrators", payload?.narrators?.join(", ") || null],
             ["Language", payload?.language],
-            ["Publication year", payload?.publicationYear],
+            ["Publication date", payload?.pubdate],
             ["Source", payload?.source],
             ["Score", book.score],
-            ["Runtime", (payload?.durationMinutes ?? book.durationMinutes) == null ? null : `${payload?.durationMinutes ?? book.durationMinutes} minutes`],
+            ["Runtime", (payload?.duration_minutes ?? book.duration_minutes) == null ? null : `${payload?.duration_minutes ?? book.duration_minutes} minutes`],
             ["Reading preferences used", book.readingPreferencesUsed == null ? null : book.readingPreferencesUsed ? "Yes" : "No"]
           ];
           for (const [label, value] of values) {

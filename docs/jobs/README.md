@@ -30,7 +30,7 @@ No scheduler is included; daily execution must be arranged externally.
 | [Embeddings](embeddings.md) | `embeddingjob.EmbeddingIndexApplication` | Fills missing dense vectors by default; explicit `rebuild-all` replaces existing vectors; then publishes a full snapshot; paid embedding calls |
 | [Snapshots](snapshots.md) | `snapshotjob.BookVectorSnapshotApplication` | Local vector file for user imports; catalogue read-only; no AI calls |
 | [User preferences](user-preferences.md) | `userpreferencejob.UserPreferenceApplication` | `dry-run` by default; explicit `write` replaces/clears imported users' taste vectors; no AI calls |
-| [Migration](migration.md) | `migrationjob.MigrationApplication` | Copies absent books from Solr to Qdrant; no AI calls |
+| [Migration](migration.md) | `migrationjob.MigrationApplication` | Creates absent books and fills missing same-named fields from Solr to Qdrant; no AI calls |
 | [Short descriptions](short-descriptions.md) | `shortdescriptionjob.ShortDescriptionApplication` | Paid regular API calls; fills missing summaries by default; explicit `rebuild-all` replaces them |
 
 ## Execution order

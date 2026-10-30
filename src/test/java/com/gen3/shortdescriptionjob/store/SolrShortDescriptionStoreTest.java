@@ -38,7 +38,7 @@ class SolrShortDescriptionStoreTest {
             List.of(),
             "en",
             60,
-            2020,
+            "2020-01-01",
             "Existing summary");
     when(catalogue.findAllBooks(null, 500)).thenReturn(List.of(missing, present));
     assertThat(store.findRecordsForShortDescription(10, ShortDescriptionMode.MISSING_ONLY))

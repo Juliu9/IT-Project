@@ -87,7 +87,7 @@ class SolrBackendIntegrationTest {
               id.equals("book-404")
                   ? List.of(0f, 1f)
                   : id.equals("book-101") ? List.of(0.6f, 0.8f) : List.of(1f, 0f)));
-      document.setField("publicationYear", Map.of("set", 2024));
+      document.setField("pubdate", Map.of("set", "2024-07-03T00:00:00Z"));
       if (id.equals("book-606")) {
         document.setField("title", Map.of("set", "hiddenmatch"));
       }
@@ -196,7 +196,7 @@ class SolrBackendIntegrationTest {
                     .turn()
                     .getRecommendations()
                     .getFirst()
-                    .getBookId())
+                    .getId())
             .isEqualTo("book-404");
       }
     }

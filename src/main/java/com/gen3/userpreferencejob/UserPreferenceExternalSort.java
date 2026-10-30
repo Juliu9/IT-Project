@@ -1,5 +1,6 @@
 package com.gen3.userpreferencejob;
 
+import com.gen3.shared.jobruntime.JobProgress;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
@@ -41,7 +42,7 @@ final class UserPreferenceExternalSort implements AutoCloseable {
     }
   }
 
-  Path finish(com.gen3.jobruntime.JobProgress progress) throws IOException {
+  Path finish(JobProgress progress) throws IOException {
     flush();
     if (runs.isEmpty()) {
       Path empty = Files.createTempFile(directory, "empty-", ".bin");
@@ -87,8 +88,7 @@ final class UserPreferenceExternalSort implements AutoCloseable {
     buffer.clear();
   }
 
-  private void merge(List<Path> sources, Path target, com.gen3.jobruntime.JobProgress progress)
-      throws IOException {
+  private void merge(List<Path> sources, Path target, JobProgress progress) throws IOException {
     var readers = new ArrayList<Reader>();
     var queue =
         new PriorityQueue<Reader>((left, right) -> ORDER.compare(left.current, right.current));
