@@ -5,6 +5,19 @@
 This document owns the request pipeline, conversation rules, and adapter guarantees.
 For setup and commands, start with the [README](../README.md).
 
+## Contents
+
+- [Request pipeline](#request-pipeline) and [terminology](#terminology)
+- [Session guarantees](#session-guarantees-and-replacement)
+- [Search and retrieval rules](#search-and-retrieval-rules)
+- [Server packages](#recommendation-server-packages) and [maintenance modules](#maintenance-modules)
+- [Conversation policy](#conversation-policy) and [input parsing](#input-parsing)
+- [Semantic information and control intents](#semantic-information-and-control-intents)
+- [Explanations and response validation](#explaining-recommendations)
+- [Configuration and schema](#configuration-and-schema)
+- [Database adapters](#database-selection-and-replacement) and [chat models](#chat-models)
+- [Request limits](#request-limits)
+
 ## Request pipeline
 
 1. `RequestGateway` accepts text plus user/session IDs. `InputParser` returns a `UserIntent` through
@@ -411,7 +424,8 @@ migration uses its separate existing-data copy operation.
 Shared audiobook code lives in sibling `com.gen3.catalogue`: `model`, `port`, `solr`,
 `qdrant`, `vector`, and the local `snapshot` implementation. It has no dependency on `recommenderagent`. The server scans both
 packages; maintenance launchers explicitly import the adapters they need. This is a package
-boundary within the existing Maven module, with unchanged database and configuration formats.
+boundary within the existing Maven module. Current database contracts are described under
+[Configuration and schema](#configuration-and-schema).
 
 `ConversationResponseGenerator` handles fixed decision messages and delegates recommendation
 and explanation narration to `AiResponseGenerator`. The AI implementation owns prompts, output
@@ -445,12 +459,14 @@ registration in the recommendation server. Interactive searches continue reading
 `userpreferencejob` validates and loads that snapshot, streams CSVs through bounded external sorting,
 deduplicates favourites/history, and validates every user's distinct-book limit before profile writes.
 It aggregates complete-user batches with one shared time-decay reference instant. Write mode replaces
-imported users' vectors; dry-run substitutes a validating sink. `jobruntime.JobProgress` provides
+imported users' vectors; dry-run substitutes a validating sink. `shared.jobruntime.JobProgress` provides
 periodic reporting shared by all jobs without initiating database operations or retries.
 
 The snapshot is a local derived file, not a database backup or an incremental change feed. Imports
 accept the last compatible snapshot without an age limit; catalogue changes require refresh. Shared
-record schemas stay unchanged. Jobs remain in the same Maven module and reuse catalogue adapters.
+record schemas are not modified by snapshot publication. Jobs remain in the same Maven module and
+reuse catalogue adapters. `shared.identity.OpaqueIds` supplies the same boundary validation for
+HTTP user/session IDs and imported CSV user IDs.
 
 ## Conversation policy
 
@@ -702,10 +718,10 @@ A replacement bean affects only its role; its provider must support the model.
 
 Response-model failure or missing/blank text uses built-in recommendation wording and preserves
 the committed session. Failures are logged locally.
-The prompt asks narration to cover every selected book within 150 words, but ordinary recommendation
-text is not programmatically checked for complete title coverage or that word limit. The structured
-recommendation list/count is the authoritative selection; fluent AI text alone does not prove every
-book was narrated. Explanations have the separate formatting/word-limit fallback described above.
+Both narration paths validate title coverage and use readable built-in wording when a title is
+missing. Explanations also enforce a 150-word limit; ordinary recommendations request that limit in
+the prompt but do not enforce it. Neither check proves the narration is factually correct. See
+[response validation](#explaining-recommendations) for the shared checks and fallbacks.
 
 ## Request limits
 

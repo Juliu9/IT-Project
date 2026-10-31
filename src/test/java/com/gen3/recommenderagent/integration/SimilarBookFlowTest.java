@@ -278,6 +278,85 @@ class SimilarBookFlowTest {
   }
 
   @Test
+  void equivalentTitleAndAuthorRecordsAutoResolveWithoutClarification() throws Exception {
+    when(titles.findBooksByTitle(anyString(), any(), anyInt()))
+        .thenReturn(
+            List.of(
+                new AudiobookTitle("one", "The Fellowship of the Ring", List.of("J R R Tolkien")),
+                new AudiobookTitle(
+                    "two", "The fellowship of the ring,", List.of("Tolkien, J. R. R.")),
+                new AudiobookTitle(
+                    "three", "THE FELLOWSHIP OF THE RING", List.of("J. R. R. Tolkien"))));
+    var result =
+        service.process(
+            "session",
+            "user",
+            request(ConversationAction.RECOMMENDATION, "Lord of the Rings Fellowship of the Ring"));
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
+    assertThat(result.getSimilarBook().bookId()).isEqualTo("one");
+    assertThat(result.getSimilarBookChoices()).isEmpty();
+  }
+
+  @Test
+  void clarificationShowsOnlyDistinctTitlesAndAuthors() throws Exception {
+    when(titles.findBooksByTitle(anyString(), any(), anyInt()))
+        .thenReturn(
+            List.of(
+                new AudiobookTitle("one", "The Fellowship of the Ring", List.of("J R R Tolkien")),
+                new AudiobookTitle(
+                    "two", "The fellowship of the ring,", List.of("Tolkien, J. R. R.")),
+                new AudiobookTitle(
+                    "adaptation",
+                    "The Fellowship of the Ring (Dramatisation)",
+                    List.of("J. R. R. Tolkien"))));
+    var result =
+        service.process(
+            "session",
+            "user",
+            request(ConversationAction.RECOMMENDATION, "Lord of the Rings Fellowship of the Ring"));
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.SIMILAR_BOOK_SELECTION);
+    assertThat(result.getSimilarBookChoices())
+        .extracting(AudiobookTitle::bookId)
+        .containsExactly("one", "adaptation");
+    verifyNoInteractions(workflow, vectors);
+  }
+
+  @Test
+  void differentAuthorsRemainDistinctClarificationChoices() throws Exception {
+    when(titles.findBooksByTitle(anyString(), any(), anyInt()))
+        .thenReturn(
+            List.of(
+                book,
+                new AudiobookTitle("same", "the hunger games", List.of("Collins, Suzanne")),
+                new AudiobookTitle("other", "The Hunger Games", List.of("Other Author"))));
+    var result =
+        service.process(
+            "session", "user", request(ConversationAction.RECOMMENDATION, "The Hunger Games"));
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.SIMILAR_BOOK_SELECTION);
+    assertThat(result.getSimilarBookChoices())
+        .extracting(AudiobookTitle::bookId)
+        .containsExactly("hunger", "other");
+  }
+
+  @Test
+  void truncatedLookupDoesNotAutoResolveOneVisibleIdentity() throws Exception {
+    when(titles.findBooksByTitle(anyString(), any(), anyInt()))
+        .thenReturn(
+            IntStream.range(0, 6)
+                .mapToObj(
+                    i ->
+                        new AudiobookTitle(
+                            "copy-" + i, "The Hunger Games", List.of("Suzanne Collins")))
+                .toList());
+    var result =
+        service.process(
+            "session", "user", request(ConversationAction.RECOMMENDATION, "The Hunger Games"));
+    assertThat(result.getDecision()).isEqualTo(ConversationDecision.SIMILAR_BOOK_SELECTION);
+    assertThat(result.getSimilarBookChoices()).hasSize(1);
+    verifyNoInteractions(workflow, vectors);
+  }
+
+  @Test
   void exactReferenceSurvivesMoreRefineExplainAndSessionSerialization() throws Exception {
     var first =
         service.process(
@@ -343,8 +422,7 @@ class SimilarBookFlowTest {
     when(titles.findBooksByTitle(anyString(), any(), anyInt()))
         .thenReturn(
             List.of(
-                book,
-                new AudiobookTitle("other", "The hunger games", List.of("Collins, Suzanne"))));
+                book, new AudiobookTitle("other", "The hunger games", List.of("Other Author"))));
     service.process("session", "user", request(ConversationAction.RECOMMENDATION, "hunger games"));
     var reply = request(ConversationAction.REPEAT, "1");
     reply.setRawText(text);
@@ -362,8 +440,7 @@ class SimilarBookFlowTest {
     when(titles.findBooksByTitle(anyString(), any(), anyInt()))
         .thenReturn(
             List.of(
-                book,
-                new AudiobookTitle("other", "The hunger games", List.of("Collins, Suzanne"))));
+                book, new AudiobookTitle("other", "The hunger games", List.of("Other Author"))));
     service.process("session", "user", request(ConversationAction.RECOMMENDATION, "hunger games"));
     var client = mock(org.springframework.ai.chat.client.ChatClient.class);
     var parser =

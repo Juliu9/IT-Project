@@ -74,7 +74,7 @@ Submit with the button or Enter; Shift+Enter inserts a new line. Submission is d
 request is pending, preventing accidental duplicate sends from the page.
 
 Below the Session Request, the collapsed Recommendation details section shows each book's
-stored catalogue fields (authors, narrators, language, publication year, source, runtime, and
+stored catalogue fields (authors, narrators, language, publication date, source, runtime, and
 descriptions), alongside its rank and score. Only the dev endpoint performs this metadata lookup;
 it reads the configured Solr or Qdrant catalogue by book ID without loading vectors or changing
 session data. Missing fields display as unavailable; lookup failures leave the response intact.
@@ -228,6 +228,8 @@ date-only (`2013-07-03`) or an ISO timestamp; timestamps are normalized to UTC. 
 have no inferred year. For example, year 2013 filters from January 1, 2013 up to January 1, 2014.
 Catalogue JSON and saved recommendation JSON use `id`, `duration_minutes`, and `pubdate` too.
 Clear old development sessions when switching schemas; there are no legacy field aliases.
+For collections still using the old payload names, follow the
+[one-off schema transition](qdrant-payload-migration.md) before running the agent or jobs.
 
 ### Solr
 

@@ -115,7 +115,9 @@ class RecommendationCountFlowTest {
     assertThat(result.getRecommendations()).isEmpty();
     assertThat(responses.generate(result.getRecommendations(), result))
         .isEqualTo(
-            "Recommendation counts must be whole numbers between 1 and 5. Your setting is still 3.");
+            "Recommendation counts must be whole numbers between 1 and 5. "
+                + "Please try asking again with a number in this range. "
+                + "Your setting is still 3.");
     var next = engine.process(session, parser.parse("2"));
     assertThat(next.getIntent()).isEqualTo(ConversationAction.UNKNOWN);
     assertThat(session.getBookCount()).isEqualTo(3);

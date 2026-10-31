@@ -45,9 +45,9 @@ No scheduler is included; daily execution must be arranged externally.
    made outside the embedding workflow or to retry failed snapshot publication without paying for
    embeddings again.
 4. Run user import in `dry-run`, inspect counts and missing-vector reports, then use explicit `write`
-   only when intended. Daily imports reuse the last compatible snapshot without rebuilding it.
+   only when intended. Daily imports reuse the **last compatible** snapshot without rebuilding it.
 
-Summary generation is a separate generate-and-save workflow using regular API calls. It does not
+*Summary generation is a separate generate-and-save workflow using regular API calls. It does not
 refresh book embeddings or snapshots. The embedding text uses title, authors, narrators, language
 and full description, not `short_description`, so generating summaries alone does not require
 re-embedding. Changes to the

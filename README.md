@@ -32,12 +32,15 @@ Java sources are under `src/main/java/com/gen3/`:
 | `shortdescriptionjob` | Generate missing summaries through regular API calls, or explicitly rebuild them |
 | `migrationjob` | Copy existing supported data from Solr to Qdrant |
 | `userpreferencejob` | Stream CSV favourites/history and aggregate local snapshot vectors |
-| `jobruntime` | Shared periodic job-progress reporting |
+| `shared.identity` | Common validation for caller and imported user IDs |
+| `shared.jobruntime` | Periodic progress reporting shared by maintenance jobs |
 
 Configuration and the dev website live in `src/main/resources/`; Java tests
 are under `src/test/java/`. `compose.yaml` provides local services, `solr/` contains external schema
 snippets, and `.github/workflows/ci.yml` defines CI. Optional log collection uses
 `compose.observability.yaml` and `observability/`.
+The one-off Qdrant payload rename tool and its tests live under
+`scripts/qdrant-payload-migration/`; see the [schema transition guide](docs/qdrant-payload-migration.md).
 
 ## Prerequisites
 
@@ -84,6 +87,7 @@ Reuse both IDs for follow-ups such as “more”, “explain”, or “repeat th
 | Full Maven verification, including eligible live tests | `./mvnw clean verify` |
 | Apply Java formatting | `./mvnw spotless:apply` |
 | Opt into live parser evaluations | `RUN_LIVE_PARSER_TESTS=true ./mvnw test -Dtest=LiveInputParserTest` |
+| One-off payload tool tests; no remote writes | `python3 -m unittest discover -s scripts/qdrant-payload-migration -v` |
 
 See [test prerequisites](docs/configuration.md#verification-and-live-test-prerequisites) for Docker,
 environment gates, API charges, and CI behaviour.
