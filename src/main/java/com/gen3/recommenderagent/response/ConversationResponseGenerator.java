@@ -178,7 +178,8 @@ public class ConversationResponseGenerator implements ResponseGenerator {
       case COUNT_UNCHANGED ->
           "Recommendation counts must be whole numbers between 1 and "
               + MAX_BOOK_COUNT
-              + ". Your setting is still "
+              + ". Please try asking again with a number in this range. "
+              + "Your setting is still "
               + currentRequest.getBookCount()
               + ".";
       case COUNT_CHANGED -> {

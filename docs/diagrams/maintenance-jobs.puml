@@ -56,7 +56,7 @@ Preferences --> UserStore : explicit write: save or clear taste vectors\ndry-run
 note bottom of Shared
   Embedding and snapshot launchers share one publisher.
   Daily user import consumes the last compatible snapshot.
-  All jobs use jobruntime.JobProgress for periodic reporting.
+  All jobs use shared.jobruntime.JobProgress for periodic reporting.
   recommenderagent does not depend on the jobs.
   Catalogue code has no dependency on recommenderagent.
   User-preference storage remains in recommenderagent.storage.user.
