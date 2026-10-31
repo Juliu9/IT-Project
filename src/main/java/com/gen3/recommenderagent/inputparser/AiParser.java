@@ -111,7 +111,9 @@ public class AiParser {
                         "books similar to the Hunger Games series" -> {"intent":"RECOMMENDATION","similarToClarificationRequired":true}.
                         "books similar to The Hunger Games and Divergent" -> {"intent":"RECOMMENDATION","similarToClarificationRequired":true}. Omit similarToTitle for multiple references; it is one string, never an array. Return JSON only; the application asks the user to choose one title. A single title containing "and", e.g. War and Peace, stays one reference.
                         Preserve extra constraints and explicit personalisation; a reference alone is not personalised=true.
-                        Only RECOMMENDATION/REFINE allow positiveSemanticQuery/negativeSemanticQuery or personalised=true.
+                        Only RECOMMENDATION/REFINE use top-level positiveSemanticQuery/negativeSemanticQuery.
+                        UPDATE_PREFERENCES may use these fields inside preferenceUpdates/preferenceRemovals.
+                        For UPDATE_PREFERENCES, preserve all explicitly stated fields in one request, including exact constraints (e.g. language) and semantic preferences (e.g. genres).
                         Genres, moods, plots and character traits belong in semantic genres/topics/keywords, never author/narrator fields.
                         Author/narrator fields contain only names explicitly identified as writers/narrators; a protagonist is a story character.
                         "I want a book by Suzanne Collins" -> mustInclude.authors=["Suzanne Collins"] (mandatory author).
@@ -133,6 +135,9 @@ public class AiParser {
                         explicitSearch=true for explicit new-search commands; bare taste replies like "horror" are RECOMMENDATION/REFINE with explicitSearch=false, never UPDATE_PREFERENCES.
                         "Only three at a time" / "3 per page" / "change count to three books" -> CHANGE_COUNT, bookCount=3, never UPDATE_PREFERENCES.
                         Omit bookCount unless a recommendation count is requested ("2 more" -> MORE_RESULTS, bookCount=2).
+                        For CHANGE_COUNT without an explicitly specified number, set bookCount=null and invalidBookCount=true.
+                        Never infer bookCount from the session, previous requests, or the default count.
+                        For CHANGE_COUNT with a valid explicit number, set bookCount to that number and invalidBookCount=false.
 
                         Explanation targets (EXPLAIN_RECOMMENDATION only):
                         Explanation ordinals select ONE book: "the second one’s reason" -> referenceRank=2; "why the sixth book" -> referenceRank=6; intent=EXPLAIN_RECOMMENDATION, omit bookCount.
@@ -173,6 +178,8 @@ public class AiParser {
                         "Remove X from my preferences" -> UPDATE_PREFERENCES, preferenceRemovalTerms=["X"]. "I no longer like X" also sets positivePreferenceRemovalOnly=true; never remove negative preferences for this phrase.
                         "I dislike X" adds negative preferences; removing a like does not invent a dislike.
                         UPDATE_PREFERENCES uses preferenceUpdates/preferenceRemovals (SessionPreferences), not search fields.
+                        "Please update my preferences to English-language and science fiction. Do not recommend anything yet."
+                        -> {"intent":"UPDATE_PREFERENCES","preferenceUpdates":{"mustInclude":{"language":"English"},"positiveSemanticQuery":{"genres":["science fiction"]}}}
                         Likes add positives; dislikes/avoidances add negatives and remove matching positives.
                         Explicit replacement/clearing uses replacePreferenceFields paths, e.g. positiveSemanticQuery.genres or mustInclude.authors;
                         replace only named fields; clearing adds no values. Empty commands leave edits empty.
