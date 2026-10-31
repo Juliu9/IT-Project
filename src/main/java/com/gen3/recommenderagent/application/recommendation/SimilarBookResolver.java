@@ -13,7 +13,9 @@ import com.gen3.recommenderagent.domain.session.PendingQuestion;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.retrieval.CandidateRetrievalException;
 import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -91,31 +93,49 @@ public class SimilarBookResolver {
                               value -> PersonNameNormalizer.comparisonKey(value).equals(author)))
               .toList();
     }
+    // Prefer exact-title results, but keep fuzzy matches when no exact title exists.
     var exact =
         matches.stream()
             .filter(
                 book ->
                     AudiobookTitle.normalize(book.title()).equals(AudiobookTitle.normalize(title)))
             .toList();
-    if (!truncated && exact.size() == 1) {
-      loadVector(session, request, exact.getFirst());
+    var candidates =
+        java.util.stream.Stream.concat(exact.stream(), matches.stream()).distinct().toList();
+    var unique = distinctTitleAndAuthors(candidates);
+
+    if (matches.isEmpty()) {
+      clarify(session, request, ConversationDecision.SIMILAR_BOOK_NOT_FOUND, List.of());
+    } else if (!truncated && unique.size() == 1) {
+      loadVector(session, request, unique.getFirst());
       if (request.getDecision() == ConversationDecision.SIMILAR_BOOK_UNAVAILABLE) {
         request.setSearchClarificationRequired(true);
       } else {
         session.setPendingQuestion(null);
       }
-    } else if (matches.isEmpty()) {
-      clarify(session, request, ConversationDecision.SIMILAR_BOOK_NOT_FOUND, List.of());
     } else {
       clarify(
           session,
           request,
           ConversationDecision.SIMILAR_BOOK_SELECTION,
-          java.util.stream.Stream.concat(exact.stream(), matches.stream())
-              .distinct()
-              .limit(MAX_CHOICES)
-              .toList());
+          unique.stream().limit(MAX_CHOICES).toList());
     }
+  }
+
+  /** Keep the first catalogue record for each normalised title + author-set identity. */
+  private static List<AudiobookTitle> distinctTitleAndAuthors(List<AudiobookTitle> candidates) {
+    var unique = new LinkedHashMap<String, AudiobookTitle>();
+    for (var book : candidates) {
+      String authors =
+          book.authors().stream()
+              .map(PersonNameNormalizer::comparisonKey)
+              .distinct()
+              .sorted()
+              .collect(Collectors.joining("\u0000"));
+      String key = AudiobookTitle.normalize(book.title()) + "\u0000" + authors;
+      unique.putIfAbsent(key, book);
+    }
+    return List.copyOf(unique.values());
   }
 
   private void loadVector(Session session, ConversationDraft request, AudiobookTitle book) {
