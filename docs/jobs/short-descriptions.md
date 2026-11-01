@@ -52,8 +52,6 @@ The workflow is **select → generate → save**; it does not use the Batch API 
 missing-only again to continue with remaining books. **There is no dry-run: this command incurs API
 charges and writes to the selected database.**
 
-If a legacy OpenAI batch is still running, reconcile it first to avoid duplicate charges.
-
 ## Regenerate existing descriptions
 
 Set `AUDIOBOOK_SHORT_DESCRIPTION_MODE=rebuild-all` explicitly to select both missing and existing

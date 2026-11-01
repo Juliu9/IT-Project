@@ -24,5 +24,26 @@ public interface UserPreferenceVectorRepository {
     }
   }
 
+  /** Updates supplied vector sides while retaining an existing side omitted by the import. */
+  default void saveAllPreservingMissing(List<UserPreferenceEmbedding> embeddings)
+      throws IOException {
+    for (var embedding : embeddings) {
+      var existing = findEmbeddingByUserId(embedding.userId()).orElse(null);
+      float[] favourites =
+          hasVector(embedding.favouritesVector())
+              ? embedding.favouritesVector()
+              : existing == null ? null : existing.favouritesVector();
+      float[] history =
+          hasVector(embedding.historyVector())
+              ? embedding.historyVector()
+              : existing == null ? null : existing.historyVector();
+      save(new UserPreferenceEmbedding(embedding.userId(), favourites, history));
+    }
+  }
+
+  private static boolean hasVector(float[] vector) {
+    return vector != null && vector.length > 0;
+  }
+
   Optional<UserPreferenceEmbedding> findEmbeddingByUserId(String userId) throws IOException;
 }

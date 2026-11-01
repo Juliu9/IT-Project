@@ -31,6 +31,7 @@ public final class BookVectorSnapshot implements AudiobookVectorRepository {
   private final String model;
   private final int dimensions;
   private Map<String, float[]> loaded;
+  private String loadedCreatedAt;
 
   public BookVectorSnapshot(
       Path file, String backend, String collection, String model, int dimensions) {
@@ -167,6 +168,9 @@ public final class BookVectorSnapshot implements AudiobookVectorRepository {
         throw new IOException("Incompatible book-vector snapshot: " + path);
       }
       String createdAt = input.readUTF();
+      if (retain) {
+        loadedCreatedAt = createdAt;
+      }
       var vectorBytes = java.nio.ByteBuffer.allocate(Math.multiplyExact(dimensions, Float.BYTES));
       while (input.readBoolean()) {
         String id = input.readUTF();
@@ -234,6 +238,35 @@ public final class BookVectorSnapshot implements AudiobookVectorRepository {
       throw new IllegalStateException("SHA-256 unavailable", exception);
     }
   }
+
+  public synchronized Identity identity() throws IOException {
+    validate();
+    var digest = sha256();
+    try (var input = Files.newInputStream(file)) {
+      byte[] buffer = new byte[8192];
+      int read;
+      while ((read = input.read(buffer)) != -1) {
+        digest.update(buffer, 0, read);
+      }
+    }
+    return new Identity(
+        file.toAbsolutePath().normalize().toString(),
+        backend,
+        collection,
+        model,
+        dimensions,
+        loadedCreatedAt,
+        java.util.HexFormat.of().formatHex(digest.digest()));
+  }
+
+  public record Identity(
+      String file,
+      String backend,
+      String collection,
+      String model,
+      int dimensions,
+      String createdAt,
+      String sha256) {}
 
   public interface Source {
     Page page(String cursor, int limit) throws IOException;

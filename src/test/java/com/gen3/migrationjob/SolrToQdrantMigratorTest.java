@@ -14,6 +14,18 @@ import org.junit.jupiter.api.Test;
 
 class SolrToQdrantMigratorTest {
   @Test
+  void rejectsNegativeLimitsAndNonPositiveBatchesBeforeUse() {
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> new SolrToQdrantMigrator(null, null, 100, -1))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("cannot be negative");
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> new SolrToQdrantMigrator(null, null, 0, 1))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("must be positive");
+  }
+
+  @Test
   void copiesStoredVectorsAndRecordsWithoutVectorsAcrossPages() throws Exception {
     var source = mock(SolrAudiobookRepository.class);
     var destination = mock(QdrantAudiobookRepository.class);

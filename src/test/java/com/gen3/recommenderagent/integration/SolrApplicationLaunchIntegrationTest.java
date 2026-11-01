@@ -200,6 +200,21 @@ class SolrApplicationLaunchIntegrationTest {
                 "user.preferences.import-on-startup",
                 "true",
                 "user.preferences.import.mode",
+                "dry-run",
+                "user.preferences.favourites-csv-path",
+                favourites.toString(),
+                "user.preferences.history-csv-path",
+                history.toString()))) {
+      assertJobIsolation(context);
+    }
+    try (var context =
+        launch(
+            UserPreferenceApplication.class,
+            null,
+            Map.of(
+                "user.preferences.import-on-startup",
+                "true",
+                "user.preferences.import.mode",
                 "write",
                 "user.preferences.favourites-csv-path",
                 favourites.toString(),
@@ -303,6 +318,11 @@ class SolrApplicationLaunchIntegrationTest {
     settings.put("solr.password", "");
     settings.put("embedding.dimensions", "2");
     settings.put("book.vector-snapshot.directory", directory.resolve("snapshots").toString());
+    settings.put(
+        "user.preferences.import.work-directory", directory.resolve("import-work").toString());
+    settings.put(
+        "user.preferences.import.manifest-path",
+        directory.resolve("approved.properties").toString());
     settings.put("spring.ai.model.embedding", "none");
     settings.put("spring.ai.model.chat", "none");
     settings.put("spring.ai.openai.api-key", "local-test");

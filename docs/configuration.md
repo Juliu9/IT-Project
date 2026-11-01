@@ -299,8 +299,9 @@ Prepare the collections before use; reads and normal server startup never create
 - **User preferences:** Create a separate collection using the
   [preference schema](../solr/user-preference-schema.xml). Its string `id` is the exact external user ID;
   `favouritesVector` and `historyVector` are optional stored vectors of the shared dimension. Use the
-  preference import job to populate them. Saving replaces both vector fields, clears a missing side,
-  and preserves other user fields through atomic updates. Retain `_version_` and make non-copy fields
+  preference import job to populate them. The importer replaces mapped vector sides, preserves an
+  absent or completely unmapped side, and preserves other user fields through atomic updates. Retain
+  `_version_` and make non-copy fields
   stored or backed by docValues as required for Solr atomic updates.
 
 The catalogue and preference collections must have different names to prevent ID collisions. Unknown
@@ -367,12 +368,14 @@ requirements and replacement semantics.
 | Property under `user.preferences.` | Environment variable | Default / purpose |
 | --- | --- | --- |
 | `import-on-startup` | `USER_PREFERENCES_IMPORT_ON_STARTUP` | `false`; opt-in for the dedicated launcher |
-| `import.mode` | `USER_PREFERENCES_IMPORT_MODE` | `dry-run`; read and calculate without writes; explicit `write` allows saves and clears |
+| `import.mode` | `USER_PREFERENCES_IMPORT_MODE` | `dry-run`; read and calculate without writes; explicit approved `write` allows mapped-side updates |
 | `favourites-csv-path` | `USER_PREFERENCES_FAVOURITES_CSV_PATH` | empty; favourites input path |
 | `history-csv-path` | `USER_PREFERENCES_HISTORY_CSV_PATH` | empty; history input path |
 | `import.max-book-ids-per-group` | `USER_PREFERENCES_IMPORT_MAX_BOOK_IDS_PER_GROUP` | `100000`; maximum distinct books referenced per aggregation group and per user; does not limit the full snapshot cache |
 | `import.max-records-in-memory` | `USER_PREFERENCES_IMPORT_MAX_RECORDS_IN_MEMORY` | `100000`; sort-run and whole-user batch target |
 | `import.work-directory` | `USER_PREFERENCES_IMPORT_WORK_DIRECTORY` | `./data/user-import-work`; temporary external-sort files |
+| `import.max-unmapped-user-ratio` | `USER_PREFERENCES_IMPORT_MAX_UNMAPPED_USER_RATIO` | `0.10`; write-mode abort threshold after full preflight |
+| `import.manifest-path` | `USER_PREFERENCES_IMPORT_MANIFEST_PATH` | `./data/user-import-work/approved.properties`; exact dry-run approval manifest |
 
 ### Local book-vector snapshots
 

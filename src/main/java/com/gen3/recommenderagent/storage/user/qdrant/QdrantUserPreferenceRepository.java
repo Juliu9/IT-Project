@@ -29,7 +29,15 @@ public class QdrantUserPreferenceRepository implements UserPreferenceVectorRepos
       QdrantClient client,
       QdrantUserPreferenceMapper mapper,
       @Value("${qdrant.user-preference-collection:user}") String collection,
-      @Value("${qdrant.embedding-dimension:1536}") int vectorDimension) {
+      @Value("${qdrant.embedding-dimension:1536}") int vectorDimension,
+      @Value("${qdrant.collection:audiobooks_hybrid}") String catalogueCollection) {
+    if (collection == null
+        || collection.isBlank()
+        || collection.equals(catalogueCollection)
+        || vectorDimension < 1) {
+      throw new IllegalArgumentException(
+          "Qdrant preferences need a separate collection and a positive vector dimension");
+    }
     this.client = client;
     this.mapper = mapper;
     this.collection = collection;

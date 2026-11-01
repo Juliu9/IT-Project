@@ -18,11 +18,22 @@ import org.junit.jupiter.api.Test;
 class QdrantUserPreferenceRepositoryTest {
 
   @Test
+  void rejectsCatalogueAsPreferenceCollectionBeforeConnecting() {
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () ->
+                new QdrantUserPreferenceRepository(
+                    null, new QdrantUserPreferenceMapper(), "shared", 2, "shared"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("separate collection");
+  }
+
+  @Test
   void doesNotCreateMissingCollectionWhenReadingPreferences() throws Exception {
     QdrantClient client = mock(QdrantClient.class);
     when(client.collectionExistsAsync("user")).thenReturn(Futures.immediateFuture(false));
     QdrantUserPreferenceRepository repository =
-        new QdrantUserPreferenceRepository(client, new QdrantUserPreferenceMapper(), "user", 2);
+        new QdrantUserPreferenceRepository(
+            client, new QdrantUserPreferenceMapper(), "user", 2, "catalogue");
 
     assertThat(repository.findEmbeddingByUserId("user-1")).isEmpty();
 

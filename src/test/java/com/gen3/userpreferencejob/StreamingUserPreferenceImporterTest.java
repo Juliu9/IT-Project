@@ -39,7 +39,9 @@ class StreamingUserPreferenceImporterTest {
         new UserPreferenceAggregatorService(books, users, bookLimit),
         directory.resolve("work"),
         rows,
-        bookLimit);
+        bookLimit,
+        0.10,
+        "write");
   }
 
   private Path csv(String file, String contents) throws Exception {
@@ -87,7 +89,7 @@ class StreamingUserPreferenceImporterTest {
                 csv("h.csv", "type,user,item,created_at,updated_at\n"));
     assertThat(result.users()).isEqualTo(1);
     ArgumentCaptor<List<UserPreferenceEmbedding>> saved = ArgumentCaptor.forClass(List.class);
-    org.mockito.Mockito.verify(users).saveAll(saved.capture());
+    org.mockito.Mockito.verify(users).saveAllPreservingMissing(saved.capture());
     assertThat(saved.getValue().getFirst().userId()).isEqualTo(id);
   }
 
@@ -107,7 +109,8 @@ class StreamingUserPreferenceImporterTest {
     assertThat(result.users()).isEqualTo(2);
     assertThat(result.uniqueRecords()).isEqualTo(5);
     ArgumentCaptor<List<UserPreferenceEmbedding>> saved = ArgumentCaptor.forClass(List.class);
-    org.mockito.Mockito.verify(users, org.mockito.Mockito.times(2)).saveAll(saved.capture());
+    org.mockito.Mockito.verify(users, org.mockito.Mockito.times(2))
+        .saveAllPreservingMissing(saved.capture());
     var profiles = saved.getAllValues().stream().flatMap(List::stream).toList();
     assertThat(profiles).extracting(UserPreferenceEmbedding::userId).containsExactly("a,one", "z");
     org.junit.jupiter.api.Assertions.assertArrayEquals(
@@ -131,7 +134,8 @@ class StreamingUserPreferenceImporterTest {
     assertThat(result.users()).isEqualTo(70);
     assertThat(result.uniqueRecords()).isEqualTo(70);
     ArgumentCaptor<List<UserPreferenceEmbedding>> saved = ArgumentCaptor.forClass(List.class);
-    org.mockito.Mockito.verify(users, org.mockito.Mockito.times(70)).saveAll(saved.capture());
+    org.mockito.Mockito.verify(users, org.mockito.Mockito.times(70))
+        .saveAllPreservingMissing(saved.capture());
     assertThat(
             saved.getAllValues().stream()
                 .flatMap(List::stream)

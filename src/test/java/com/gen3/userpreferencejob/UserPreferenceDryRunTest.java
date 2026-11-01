@@ -102,8 +102,8 @@ class UserPreferenceDryRunTest {
             "csvReadMs=",
             "aggregationMs=",
             "totalMs=",
-            missing ? "missingVectorUsers=1 clears=0" : "generatedProfiles=1 writes=0",
-            "No user preference vectors were saved or cleared.")
+            missing ? "unmappedUsers=1" : "partialUpdates=1",
+            "No user preference vectors were changed.")
         .doesNotContain("Successfully aggregated and saved");
   }
 

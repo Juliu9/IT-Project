@@ -47,8 +47,9 @@ Daily imports accept the last compatible snapshot regardless of age. They reject
 corrupt, dimension/model/backend/collection-incompatible snapshots before any user-profile writes.
 Freshness is not inferred from a checksum: new/changed/deleted catalogue books require an explicit
 refresh, including changes made outside the embedding job. Books absent from an older snapshot are
-treated as unavailable; users with no available evidence can have profiles cleared in explicit write
-mode. The snapshot never modifies the Solr/Qdrant record schemas.
+treated as unavailable. The importer preserves an existing side when none of that side's books map
+to vectors and skips users with no mapped vectors; it does not clear profiles. The snapshot never
+modifies the Solr/Qdrant record schemas.
 
 ## Confirm completion and recover
 

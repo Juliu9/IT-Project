@@ -201,7 +201,8 @@ class QdrantShownBookExclusionTest {
               client,
               new com.gen3.recommenderagent.storage.user.qdrant.QdrantUserPreferenceMapper(),
               "clear-preferences",
-              2);
+              2,
+              "catalogue");
       users.save(
           new com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding(
               "user", new float[] {1, 0}, new float[] {0, 1}));

@@ -82,7 +82,7 @@ If no Qdrant book matches, the job creates one using the available supported fie
   make them available to vector search.
 - The record limit counts source rows read, including skipped destination books. Configure
   `audiobook.qdrant.migration.batch-size` and `audiobook.qdrant.migration.max-records`; zero maximum
-  means the full catalogue.
+  means the full catalogue. **Negative limits are rejected**, not converted into an unlimited run.
 - Keep the source stable and avoid other destination writers during migration.
 
 Migration copies data only; use `AUDIOBOOK_DATABASE` to select the recommendation backend.
@@ -96,9 +96,9 @@ reports `created`, `updated`, `skipped`, `unavailableFields` (counts by field na
 A failure can leave earlier batches applied; rerunning starts the source scan again and fills only
 what is still missing. Conflicting duplicate catalogue IDs require reconciliation, not repeated retries.
 **There is no collection-wide transaction; stop all catalogue writers while migrating.**
-Unlike the Python rename tool, this launcher has no backup-based `--resume` option and no automatic
-job-level retry. On a network error, fix connectivity and rerun the launcher; already-filled data is
-preserved. Take a database backup before a shared-database run.
+The launcher has no checkpoint/resume option or automatic job-level retry. On a network error, fix
+connectivity and rerun it; already-filled data is preserved. Take a database backup before a
+shared-database run.
 
 Migration does not refresh the destination snapshot. Before user imports, run the
 [snapshot job](snapshots.md) against Qdrant; generate missing embeddings first if needed.

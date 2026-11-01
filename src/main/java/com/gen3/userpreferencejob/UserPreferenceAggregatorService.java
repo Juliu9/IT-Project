@@ -55,13 +55,28 @@ public class UserPreferenceAggregatorService {
 
   public void aggregateAndSave(
       List<UserFavourite> favourites, List<UserHistory> history, Instant asOf) throws IOException {
+    aggregate(favourites, history, asOf, true);
+  }
+
+  public Result preflight(List<UserFavourite> favourites, List<UserHistory> history, Instant asOf)
+      throws IOException {
+    return aggregate(favourites, history, asOf, false);
+  }
+
+  private Result aggregate(
+      List<UserFavourite> favourites, List<UserHistory> history, Instant asOf, boolean write)
+      throws IOException {
     try (var progress = new JobProgress("user.import.aggregate")) {
-      aggregateAndSave(favourites, history, progress, asOf);
+      return aggregate(favourites, history, progress, asOf, write);
     }
   }
 
-  private void aggregateAndSave(
-      List<UserFavourite> favourites, List<UserHistory> history, JobProgress progress, Instant now)
+  private Result aggregate(
+      List<UserFavourite> favourites,
+      List<UserHistory> history,
+      JobProgress progress,
+      Instant now,
+      boolean write)
       throws IOException {
     progress.stage("grouping input records");
     // Group by User ID
@@ -98,6 +113,7 @@ public class UserPreferenceAggregatorService {
     List<String> group = new ArrayList<>();
     Set<String> groupBooks = new LinkedHashSet<>();
     int processed = 0;
+    Result result = Result.empty();
     for (String userId : allUserIds) {
       progress.stage("forming user groups");
       Set<String> ids =
@@ -106,8 +122,18 @@ public class UserPreferenceAggregatorService {
               histByUser.getOrDefault(userId, List.of()));
       long additions = ids.stream().filter(id -> !groupBooks.contains(id)).count();
       if (!group.isEmpty() && groupBooks.size() + additions > maximumBookIds) {
-        aggregateGroup(
-            group, groupBooks, favsByUser, histByUser, now, progress, processed, allUserIds.size());
+        result =
+            result.plus(
+                aggregateGroup(
+                    group,
+                    groupBooks,
+                    favsByUser,
+                    histByUser,
+                    now,
+                    progress,
+                    processed,
+                    allUserIds.size(),
+                    write));
         processed += group.size();
         group.clear();
         groupBooks.clear();
@@ -116,12 +142,23 @@ public class UserPreferenceAggregatorService {
       groupBooks.addAll(ids);
     }
     if (!group.isEmpty()) {
-      aggregateGroup(
-          group, groupBooks, favsByUser, histByUser, now, progress, processed, allUserIds.size());
+      result =
+          result.plus(
+              aggregateGroup(
+                  group,
+                  groupBooks,
+                  favsByUser,
+                  histByUser,
+                  now,
+                  progress,
+                  processed,
+                  allUserIds.size(),
+                  write));
     }
+    return result;
   }
 
-  private void aggregateGroup(
+  private Result aggregateGroup(
       List<String> userIds,
       Set<String> bookIds,
       Map<String, List<UserFavourite>> favsByUser,
@@ -129,12 +166,15 @@ public class UserPreferenceAggregatorService {
       Instant now,
       JobProgress progress,
       int processed,
-      int total)
+      int total,
+      boolean write)
       throws IOException {
     progress.stage("looking up local book vectors");
     Map<String, float[]> vectors = audiobookVectorRepository.findEmbeddingsByBookIds(bookIds);
     List<UserPreferenceEmbedding> pending = new ArrayList<>();
-    List<String> usersToClear = new ArrayList<>();
+    List<String> unmappedUsers = new ArrayList<>();
+    long full = 0;
+    long partial = 0;
     for (int index = 0; index < userIds.size(); index++) {
       String userId = userIds.get(index);
       progress.stage("calculating user vectors");
@@ -167,30 +207,33 @@ public class UserPreferenceAggregatorService {
       float[] aggregatedHist = VectorMath.weightedAverage(histVectors, histWeights);
 
       if (aggregatedFavs.length == 0 && aggregatedHist.length == 0) {
-        usersToClear.add(userId);
-        if (usersToClear.size() == 500) {
-          progress.stage("clearing user profiles");
-          userPreferenceVectorRepository.clearAll(List.copyOf(usersToClear));
-          usersToClear.clear();
-        }
+        unmappedUsers.add(userId);
         continue;
+      }
+      boolean favouritesMapped = aggregatedFavs.length > 0;
+      boolean historyMapped = aggregatedHist.length > 0;
+      boolean favouritesSupplied = !favsByUser.getOrDefault(userId, List.of()).isEmpty();
+      boolean historySupplied = !histByUser.getOrDefault(userId, List.of()).isEmpty();
+      if (favouritesSupplied && historySupplied && favouritesMapped && historyMapped) {
+        full++;
+      } else {
+        partial++;
       }
       pending.add(new UserPreferenceEmbedding(userId, aggregatedFavs, aggregatedHist));
       if (pending.size() == 500) {
-        progress.stage("saving user profiles");
-        userPreferenceVectorRepository.saveAll(List.copyOf(pending));
+        if (write) {
+          progress.stage("saving user profiles");
+          userPreferenceVectorRepository.saveAllPreservingMissing(List.copyOf(pending));
+        }
         pending.clear();
       }
     }
     progress.update(processed + userIds.size(), total);
-    if (!usersToClear.isEmpty()) {
-      progress.stage("clearing user profiles");
-      userPreferenceVectorRepository.clearAll(List.copyOf(usersToClear));
-    }
-    if (!pending.isEmpty()) {
+    if (write && !pending.isEmpty()) {
       progress.stage("saving user profiles");
-      userPreferenceVectorRepository.saveAll(List.copyOf(pending));
+      userPreferenceVectorRepository.saveAllPreservingMissing(List.copyOf(pending));
     }
+    return new Result(full, partial, List.copyOf(unmappedUsers));
   }
 
   private Set<String> bookIds(List<UserFavourite> favourites, List<UserHistory> history) {
@@ -204,6 +247,21 @@ public class UserPreferenceAggregatorService {
   private void addVector(List<float[]> vectors, float[] vector) {
     if (vector != null && vector.length > 0) {
       vectors.add(vector);
+    }
+  }
+
+  public record Result(long fullUpdates, long partialUpdates, List<String> unmappedUsers) {
+    static Result empty() {
+      return new Result(0, 0, List.of());
+    }
+
+    Result plus(Result other) {
+      var unmapped = new ArrayList<String>(unmappedUsers);
+      unmapped.addAll(other.unmappedUsers);
+      return new Result(
+          fullUpdates + other.fullUpdates,
+          partialUpdates + other.partialUpdates,
+          List.copyOf(unmapped));
     }
   }
 }

@@ -15,7 +15,7 @@ snapshot. The job makes no AI calls.
 - A valid local book-vector snapshot matching the selected backend, catalogue, declared model,
   and dimensions. Build it with the [snapshot job](snapshots.md) before running this import.
 - `AUDIOBOOK_DATABASE=solr` or `qdrant`, with the connection settings for the selected user store.
-  In write mode, provide permission to save and clear imported users' taste vectors. For Solr,
+  In write mode, provide permission to read and update imported users' taste vectors. For Solr,
   prepare the separate preference collection and schema in [Solr setup](../configuration.md#solr).
 - Enough heap for the full snapshot and writable temporary disk space comparable to the CSV inputs;
   see the processing details below.
@@ -41,9 +41,16 @@ supported. Duplicate favourites collapse; duplicate history keeps the latest int
 | Snapshot memory | Full snapshot retained in RAM; 200,000 × 1,536 vectors are about 1.14 GiB before overhead |
 
 Use sufficient heap (`-Xmx3g` for the documented demo). Favourites use a normalized average;
-history weights halve every 180 days before normalization. Included users with no usable evidence
-have both vectors cleared in write mode; users absent from both files are unchanged. Database failure
-can leave earlier batches saved.
+history weights halve every 180 days before normalization. **A missing input side or a side whose
+book IDs have no vectors preserves that user's existing stored vector.** Included users with no
+mapped vectors are skipped, not cleared; users absent from both files are unchanged.
+
+Before write mode, the job calculates the complete outcome. It aborts before any database write when
+the proportion of users with no mapped vectors exceeds
+`user.preferences.import.max-unmapped-user-ratio` (default `0.10`, or 10%). Their IDs are written to
+`unmapped-users.txt` in the work directory with owner-only permissions where supported; normal logs
+contain counts only. Database failure can still leave earlier idempotent batches saved; rerun the
+same approved import to converge.
 
 ## CSV input contract
 
@@ -67,7 +74,7 @@ book,demo-user,rnib:book:456,2026-10-01 12:00:00,NULL
 
 - `user` is the nonblank external user ID, at most 256 Java characters; it must match the caller's
   `X-User-Id` to use that profile. Both CSV readers reject invalid IDs during preparation, before
-  vector lookups or profile saves/clears, in dry-run and write modes alike.
+  vector lookups or profile updates, in dry-run and write modes alike.
 - `item` follows `provider:book:id[:optional title]`, normalized to `provider_id` with the provider
   lowercased and the ID retained. For example, `rnib:book:123:Title` maps to `rnib_123`.
 - Dates use `yyyy-MM-dd HH:mm:ss` interpreted as UTC. `created_at` is required; a nonblank
@@ -76,11 +83,10 @@ book,demo-user,rnib:book:456,2026-10-01 12:00:00,NULL
 - Rows can be unordered. Duplicate favourites count once per user/book. No history is truncated to
   meet limits. Malformed input stops preparation before any profile writes.
 
-**This is a full replacement import for each included user, not an incremental append.** Supply all
-evidence intended for that user's new profile. A missing side removes that taste vector in write
-mode; no usable evidence removes both vectors. Users absent from both inputs are unchanged.
-Missing snapshot books are skipped, so inspect dry-run reports before authorizing writes.
-The sink reports users with no usable vectors, not a per-record missing-book rate; partial evidence
+Each mapped side replaces that side's previous vector; an absent or completely unmapped side is
+preserved. Users absent from both inputs are unchanged. Missing snapshot books are skipped, so
+inspect the dry-run outcome and restricted unmapped-user report before authorizing writes.
+The job reports users with no usable vectors, not a per-record missing-book rate; partial evidence
 can still produce a profile without a missing-user warning. Check snapshot coverage/freshness too.
 
 ## Write mode
@@ -95,14 +101,18 @@ AUDIOBOOK_DATABASE=solr USER_PREFERENCES_IMPORT_ON_STARTUP=true ./mvnw spring-bo
   -Dspring-boot.run.arguments="--user.preferences.import.mode=write --user.preferences.favourites-csv-path=/path/favourites.csv --user.preferences.history-csv-path=/path/history.csv"
 ```
 
-**Write mode replaces or clears vectors for included users. Run the dry-run first with the same
-files and snapshot.** Run the importer separately from the server and other maintenance jobs.
+**Write mode requires a successful dry run with the exact same files and snapshot.** Dry run writes
+an owner-only approval manifest (default `./data/user-import-work/approved.properties`) containing
+the CSV and snapshot SHA-256 hashes, snapshot identity, and projected outcome counts. Write mode
+recomputes every value after preflight and refuses to write if anything differs. Review the manifest
+and logged counts before changing the mode to `write`. Run the importer separately from the server
+and other maintenance jobs.
 
 ## Read-only dry run (Solr or Qdrant)
 
 `user.preferences.import.mode` defaults to `dry-run`: use the real CSV readers, local snapshot,
-group limits and aggregation without saving or clearing user profiles. Only explicit
-`write` mode permits persistence, as in the command above. Any other value fails startup.
+group limits and aggregation without changing user profiles. Only explicit `write` mode with a
+matching approval manifest permits persistence, as in the command above. Any other value fails startup.
 `import-on-startup=true` is still required to launch the job; it does not authorize writes by itself.
 
 With database connection settings configured, run from the repository root:
@@ -118,13 +128,14 @@ AUDIOBOOK_DATABASE=qdrant USER_PREFERENCES_IMPORT_ON_STARTUP=true \
 
 Use `AUDIOBOOK_DATABASE=solr` for Solr. IDs in the CSVs must exist with compatible vectors in that
 backend; IDs exported from Qdrant are not guaranteed to exist in a different Solr catalogue.
-Build a snapshot first using the [snapshot runbook](snapshots.md). The dry-run storage sink validates
-generated vectors and logs generated-profile and missing-vector
-counts instead of database writes. Missing vectors are reported as would-be clears, never performed.
+Build a snapshot first using the [snapshot runbook](snapshots.md). Dry-run completes the same full
+preflight and aggregation as write mode, reports projected full/partial/unmapped outcomes, writes the
+approval manifest and restricted unmapped-user report, and makes no profile writes. Missing vectors
+are reported as preserved/skipped, never cleared.
 Completion logs include `mode=dry-run`, `snapshotLoadMs`, `csvReadMs` (parsing and spilling),
 `sortMs` (merging and validation), `aggregationMs`, and `totalMs`, plus user and unique-row counts.
 These dry-run timings exclude application startup and real profile persistence; write-mode timings
-include actual saves/clears. No AI calls or remote catalogue-vector
+include actual mapped-side updates. No AI calls or remote catalogue-vector
 lookups occur during daily imports. Snapshot rebuilds do read the catalogue.
 
 Each launch writes `logs/user-import/<epoch-milliseconds>-<uuid>.log` while retaining console output.
@@ -133,8 +144,8 @@ Override it with `--logging.file.name=/path/to/import.log`. Maven output before 
 ## Completion, failures and retries
 
 Look for `user.preferences.import.completed mode=dry-run|write`, the final acknowledgement,
-`BUILD SUCCESS` and a zero exit status. Dry-run reports `writes=0` and `clears=0` instead of calling
-the database writer. Clients may still contact the selected database during startup, such as Qdrant's
+`BUILD SUCCESS` and a zero exit status. Dry run reports projected full, partial, and unmapped counts
+instead of calling the database writer. Clients may still contact the selected database during startup, such as Qdrant's
 compatibility check; dry-run means no record mutations, not necessarily no network traffic.
 
 Completion reports raw valid favourite/history row counts, deduplicated `uniqueRecords`, and distinct

@@ -133,6 +133,11 @@ user likes before retrieval. Exact constraints alone do not substitute for posit
 user vectors and session preferences are frozen in the search snapshot so `MORE_RESULTS` remains
 consistent; new searches and refinements load current preferences again.
 
+Saved session preferences are bounded before an update commits: each value is at most 256 Java
+characters, each semantic field holds at most 20 values, the whole preference set holds at most 100
+values, and its JSON representation is at most 32 KiB. **An oversized update is rejected atomically;
+existing preferences are neither truncated nor partially changed.**
+
 ### Paging, refinements, and replay
 
 Retrieval excludes recently shown IDs and returns candidates for ranking. Ranking removes duplicates,
