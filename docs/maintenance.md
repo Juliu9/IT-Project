@@ -51,6 +51,15 @@ The reporter stops automatically on success or failure. Use the job's existing c
 `BUILD SUCCESS` as confirmation of success. Already-running jobs must finish or be restarted before
 they can use new reporting code; updating files does not instrument a running JVM.
 
+## Local log files
+
+Every maintenance launcher keeps console output and also writes the application's output to a
+unique `logs/<job>/<epoch-milliseconds>-<uuid>.log` file. The job directories are `embeddings`,
+`short-descriptions`, `migration`, `snapshot`, and `user-import`. Logs are retained until manually
+removed and are ignored by Git. Override the destination for any launch with
+`--logging.file.name=/path/to/job.log`. Maven output produced before the application starts is not
+included.
+
 ## Catalogue embeddings
 
 See [Catalogue embeddings](jobs/embeddings.md).

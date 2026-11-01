@@ -44,6 +44,8 @@ public class ShortDescriptionApplication {
     try (var context =
         new SpringApplicationBuilder(ShortDescriptionApplication.class)
             .web(WebApplicationType.NONE)
+            .properties(
+                com.gen3.shared.jobruntime.MaintenanceLogFile.property("short-descriptions"))
             .run(args)) {
       // Release database clients after the maintenance runner completes.
     }

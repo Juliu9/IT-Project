@@ -41,6 +41,7 @@ public class EmbeddingIndexApplication {
     try (var context =
         new SpringApplicationBuilder(EmbeddingIndexApplication.class)
             .web(WebApplicationType.NONE)
+            .properties(com.gen3.shared.jobruntime.MaintenanceLogFile.property("embeddings"))
             .run(args)) {
       // Closing the dedicated process releases database clients after the runner completes.
     }

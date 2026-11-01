@@ -33,6 +33,7 @@ public class BookVectorSnapshotApplication {
     try (var context =
         new SpringApplicationBuilder(BookVectorSnapshotApplication.class)
             .web(WebApplicationType.NONE)
+            .properties(com.gen3.shared.jobruntime.MaintenanceLogFile.property("snapshot"))
             .run(args)) {
       // Release catalogue clients after publishing the snapshot.
     }

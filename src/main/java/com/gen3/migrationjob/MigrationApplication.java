@@ -32,6 +32,7 @@ public class MigrationApplication {
     try (var context =
         new SpringApplicationBuilder(MigrationApplication.class)
             .web(WebApplicationType.NONE)
+            .properties(com.gen3.shared.jobruntime.MaintenanceLogFile.property("migration"))
             .run(args)) {
       // Close database clients when the maintenance runner finishes.
     }
