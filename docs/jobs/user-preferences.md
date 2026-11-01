@@ -4,12 +4,8 @@
 
 ## Purpose
 
-Turn users' favourites and listening history into stored taste vectors so personalised requests
-can reuse those preferences without re-aggregating entire histories during each conversation.
-Without this import, equivalent profiles would need another producer, or recommendations would
-have to rely on the user's current request rather than imported listening evidence.
-
-The job aggregates existing book vectors from a local snapshot without AI calls.
+Aggregate favourites and listening history into stored taste vectors using a local book-vector
+snapshot. The job makes no AI calls.
 
 ## Prerequisites
 
@@ -32,32 +28,22 @@ startup clients can contact the selected database even though profiles are not w
 Solr writes at most 500 user updates per batch and commits once per batch; earlier batches remain
 saved if a later batch fails. Write mode targets the selected backend's user collection.
 
-The importer uses the last valid local book-vector snapshot, not remote catalogue lookups. It loads
-and verifies that snapshot before reading CSVs or writing any profiles. There is no age-based expiry
-and no fallback to remote reads. Each process pins its loaded snapshot even if a new one is published.
-It groups at most 100,000 distinct book IDs by default, regardless of user count. Each user stays
-whole. Profile saves and clears are batched
-at 500 users. The book-ID limit is configurable under `user.preferences.import`
-(see [configuration](../configuration.md#user-preference-import)).
-Before any profile writes, every user is checked against the book-ID limit. An oversized user
-stops the job with their ID and limit; no history is truncated. CSVs are streamed into sorted binary
-runs, merged on disk, and fully validated before profile writes. Unordered inputs are supported;
-duplicate favourites collapse and duplicate history retains the latest interaction. Whole-user
-batches target 100,000 rows (`user.preferences.import.max-records-in-memory`); a single larger
-user remains whole, bounded by the distinct-book limit. Temporary files live under
-`user.preferences.import.work-directory` (default `./data/user-import-work`) and are cleaned on
-success or failure. Allow temporary disk space comparable to the input files; a killed process
-may leave its uniquely named work directory behind. The full snapshot resides in RAM and is
-reused across groups. At 1,536 dimensions,
-200,000 vectors alone occupy about 1.14 GiB, before ID maps, CSVs, clients and runtime overhead.
-The group limit does not bound this cache. Give the dedicated importer enough heap (for example,
-`-Dspring-boot.run.jvmArguments="-Xmx3g"` for the demo) and monitor actual memory use.
-Database failures can leave earlier groups saved; reruns recompute and overwrite preferences.
-Favourite rows are deduplicated by user and normalized book ID before averaging. Users present in
-the import with no usable book vectors have both stored taste vectors cleared; users absent from
-the input are unchanged. Solr batches these clears with one write and commit per group, checking
-existing profiles first to avoid creating empty records. Favourites use a normalized average; history
-weights halve every 180 days before the result is normalized.
+The importer validates and pins the last compatible snapshot before reading CSVs; it has no remote
+vector fallback or age check. CSVs are streamed through sorted temporary runs, so unordered input is
+supported. Duplicate favourites collapse; duplicate history keeps the latest interaction.
+
+| Limit or resource | Default behavior |
+| --- | --- |
+| Distinct books per user/group | 100,000; oversized users fail before writes |
+| In-memory input group | About 100,000 rows; users are never split |
+| Profile write batch | 500 users |
+| Temporary disk | Comparable to input CSV size under `./data/user-import-work` |
+| Snapshot memory | Full snapshot retained in RAM; 200,000 × 1,536 vectors are about 1.14 GiB before overhead |
+
+Use sufficient heap (`-Xmx3g` for the documented demo). Favourites use a normalized average;
+history weights halve every 180 days before normalization. Included users with no usable evidence
+have both vectors cleared in write mode; users absent from both files are unchanged. Database failure
+can leave earlier batches saved.
 
 ## CSV input contract
 
@@ -109,8 +95,8 @@ AUDIOBOOK_DATABASE=solr USER_PREFERENCES_IMPORT_ON_STARTUP=true ./mvnw spring-bo
   -Dspring-boot.run.arguments="--user.preferences.import.mode=write --user.preferences.favourites-csv-path=/path/favourites.csv --user.preferences.history-csv-path=/path/history.csv"
 ```
 
-CSV records and aggregation live in `com.gen3.userpreferencejob`. Run this separately from the server
-and other maintenance jobs.
+**Write mode replaces or clears vectors for included users. Run the dry-run first with the same
+files and snapshot.** Run the importer separately from the server and other maintenance jobs.
 
 ## Read-only dry run (Solr or Qdrant)
 
@@ -141,12 +127,8 @@ These dry-run timings exclude application startup and real profile persistence; 
 include actual saves/clears. No AI calls or remote catalogue-vector
 lookups occur during daily imports. Snapshot rebuilds do read the catalogue.
 
-Every launch of `UserPreferenceApplication` also saves application output to a unique
-`logs/user-import/<epoch-milliseconds>-<uuid>.log` file, including startup errors, import progress
-and completion timings. Console output is unchanged. This applies to both backends and both modes;
-no extra command flags are needed. Logs are ignored by Git and retained until manually removed.
-Override the destination with `--logging.file.name=/path/to/import.log` if needed. Maven output
-before the application starts is not included.
+Each launch writes `logs/user-import/<epoch-milliseconds>-<uuid>.log` while retaining console output.
+Override it with `--logging.file.name=/path/to/import.log`. Maven output before startup is excluded.
 
 ## Completion, failures and retries
 
@@ -160,7 +142,7 @@ users. `csvReadMs` includes parsing and sorted-run spilling; `sortMs` includes m
 validation; `aggregationMs` includes prepared-file reading, vector calculations and the selected sink.
 `totalMs` also includes snapshot loading and temporary-file cleanup. Merge counters restart per group;
 the user-progress counter tracks prepared users and can advance ahead of the current batch's save.
-Only the completion event confirms the entire import finished.
+**Only the completion event, zero exit status, and `BUILD SUCCESS` confirm the import finished.**
 
 Missing/corrupt/incompatible snapshots, malformed CSVs and oversized users fail before profile writes.
 Database failures during explicit write mode can leave earlier batches saved; the import is not one
@@ -168,17 +150,129 @@ transaction. Fix the cause and rerun with complete intended user evidence. An ab
 leave a uniquely named `user-import-*` directory; remove only a confirmed abandoned directory, not
 the work parent or another running job's files. Snapshot cache memory is independent of CSV batch size.
 
-## Local benchmark reference
+## Local benchmark datasets
 
-On the demo machine, using the existing Qdrant snapshot and a 3 GB heap on 2026-10-29:
+The interaction files under `data/import-benchmarks/` use synthetic, scenario-specific user IDs
+and a pool of **200,000 unique book IDs** exported from remote Qdrant with existing dense vectors.
+The pool contains the first compatible unique IDs in scroll order, not a random catalogue sample.
+Exporting the IDs was read-only. User/book assignments are seeded samples without replacement
+within each user; books can repeat across users.
 
-| Dataset | Dry-run import time |
-| --- | --- |
-| 100,000 users × 100 records (10 million rows) | 3m 32s |
-| 50,000 users, 100–10,000 records each (20 million rows total; mean 400) | 6m 52s |
+The pool is not a snapshot-size limit: snapshot export scans the full configured catalogue and may
+include additional books. Benchmark inputs contain interactions, not vector copies; the compatible
+local snapshot supplies their vectors. Qdrant IDs are not guaranteed to exist in a different Solr
+catalogue or snapshot.
 
-These are measurements, not guarantees: they include snapshot load and disk sorting, exclude
-application startup and real writes, and use a synthetic 200,000-book pool. The variable dataset is
-skewed, not uniform or derived from real usage. Generated benchmark files under `data/import-benchmarks`
-and timing logs under `logs/user-import` are ignored by Git and are not included in a fresh clone.
+| Dataset directory | Users | Records per user | Total records |
+| --- | ---: | ---: | ---: |
+| `100-users-100-records` | 100 | 100 | 10,000 |
+| `1000-users-100-records` | 1,000 | 100 | 100,000 |
+| `10000-users-100-records` | 10,000 | 100 | 1,000,000 |
+| `100-users-1000-records` | 100 | 1,000 | 100,000 |
+| `1000-users-1000-records` | 1,000 | 1,000 | 1,000,000 |
+| `100-users-10000-records` | 100 | 10,000 | 1,000,000 |
+| `100000-users-100-records` | 100,000 | 100 | 10,000,000 |
+| `50000-users-20million-records` | 50,000 | 100–10,000; mean 400 | 20,000,000 |
+
+The eight scenarios contain **33,210,000 records in total**. Each contains `favourites.csv` and
+`history.csv`. Per user, favourites are `floor(recordCount / 5)` and history contains the remainder.
+No book repeats for that user across the two files. This deliberately avoids repeated-book caching
+within one user's evidence; it is not a claim that real users never revisit books.
+
+The original six scenarios use seed `20261029` and UTC history dates within two years ending
+2026-10-28. The two large scenarios use seed `29102026` and the fixed history timestamp
+2026-10-01 00:00:00 UTC. The manifest records exact favourite/history and distinct-book counts.
+
+### 50,000-user distribution
+
+The variable scenario contains exactly 20 million records. Its per-user counts use scaled,
+capped exponential-cubed random weights, a 100-record minimum and a 10,000-record maximum,
+with final adjustments to meet the exact total. It is intentionally skewed toward lighter users,
+not uniformly distributed between the bounds or calibrated to real usage.
+
+| Records per user | Users | Percentage of users |
+| --- | ---: | ---: |
+| 100–199 | 35,253 | 70.506% |
+| 200–499 | 7,558 | 15.116% |
+| 500–999 | 3,246 | 6.492% |
+| 1,000–1,999 | 2,048 | 4.096% |
+| 2,000–4,999 | 1,333 | 2.666% |
+| 5,000–10,000 | 562 | 1.124% |
+| **Total** | **50,000** | **100.000%** |
+
+Local supporting files are `manifest.json` and `book-ids.txt` at the benchmark root, plus
+`user-record-counts.csv` in each large scenario. The variable scenario also has
+`user-record-distribution.csv`. These datasets, snapshots and timing logs are ignored by Git;
+they are not automatically generated or downloaded when cloning or running tests.
+
+### Three-run benchmark procedure
+
+Requirements:
+
+- Java 21, the eight local datasets, 3 GB heap, and temporary disk comparable to the inputs;
+- the same machine, Git revision, configuration, and compatible snapshot for every run;
+- no competing maintenance jobs;
+- Qdrant containing the benchmark IDs, or Solr containing those same IDs and compatible vectors.
+
+The supplied IDs were exported from Qdrant, so **do not report Solr results unless all benchmark IDs
+exist in the selected Solr catalogue and its snapshot**. The command below benchmarks Qdrant. Run all
+scenarios sequentially in `dry-run`; each invocation starts a fresh JVM and reloads the snapshot.
+
+```bash
+mkdir -p logs/user-import
+datasets=(
+  100-users-100-records
+  1000-users-100-records
+  10000-users-100-records
+  100-users-1000-records
+  1000-users-1000-records
+  100-users-10000-records
+  100000-users-100-records
+  50000-users-20million-records
+)
+
+for run in 1 2 3; do
+  for dataset in "${datasets[@]}"; do
+    AUDIOBOOK_DATABASE=qdrant USER_PREFERENCES_IMPORT_ON_STARTUP=true \
+    ./mvnw spring-boot:run \
+      -Dspring-boot.run.profiles=dev \
+      -Dspring-boot.run.jvmArguments="-Xmx3g" \
+      -Dapplication.main-class=com.gen3.userpreferencejob.UserPreferenceApplication \
+      -Dspring-boot.run.arguments="--user.preferences.import.mode=dry-run --user.preferences.favourites-csv-path=data/import-benchmarks/${dataset}/favourites.csv --user.preferences.history-csv-path=data/import-benchmarks/${dataset}/history.csv --logging.file.name=logs/user-import/benchmark-${dataset}-run-${run}.log" \
+      || exit 1
+  done
+done
+```
+
+**Do not use `write` for benchmark users.** Dry-run timings include
+snapshot loading, CSV parsing and spilling, disk merge and validation, and vector aggregation. They
+exclude application startup and real database writes. After all 24 successful runs, collect the
+completion and snapshot identity lines:
+
+```bash
+rg "user.preferences.import.completed|book.vector.snapshot.loaded" \
+  logs/user-import/benchmark-*.log
+```
+
+Use `totalMs` from `user.preferences.import.completed` for each run and calculate the arithmetic
+mean of the three values. Keep `snapshotLoadMs`, `csvReadMs`, `sortMs`, and `aggregationMs` so stage
+differences can be investigated rather than hidden by the average.
+
+### Three-run results
+
+| Dataset | Run 1 `totalMs` | Run 2 `totalMs` | Run 3 `totalMs` | Average `totalMs` |
+| --- | ---: | ---: | ---: | ---: |
+| `100-users-100-records` | — | — | — | — |
+| `1000-users-100-records` | — | — | — | — |
+| `10000-users-100-records` | — | — | — | — |
+| `100-users-1000-records` | — | — | — | — |
+| `1000-users-1000-records` | — | — | — | — |
+| `100-users-10000-records` | — | — | — | — |
+| `100000-users-100-records` | — | — | — | — |
+| `50000-users-20million-records` | — | — | — | — |
+
+Earlier single-run reference measurements on the demo machine with a 3 GB heap on 2026-10-29 were
+3m 32s for 100,000 users × 100 records and 6m 52s for the variable 50,000-user dataset. These are
+not substitutes for the controlled three-run averages. Generated datasets and benchmark logs are
+ignored by Git and are not included in a fresh clone.
 

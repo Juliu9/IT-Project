@@ -4,13 +4,9 @@
 
 ## Purpose
 
-Make catalogue books usable for semantic retrieval and vector-based user preferences by generating
-normalized dense vectors. Without this job, another tool would need to generate and load compatible
-book vectors before those features could use them.
-
-Fill missing vectors by default, or explicitly rebuild all vectors.
-For books being embedded, Qdrant also builds sparse keyword vectors. The selected database supplies
-both reads and writes; existing dense vectors are skipped in the default mode.
+Generate normalized catalogue vectors for semantic retrieval and user preferences. The default fills
+missing dense vectors; `rebuild-all` replaces them. Qdrant also creates sparse vectors for processed
+books.
 
 ## Prerequisites
 
@@ -23,7 +19,7 @@ both reads and writes; existing dense vectors are skipped in the default mode.
 - A stable catalogue and no concurrent migration or summary writers. Redis and user-preference
   adapters are not required.
 
-This job has no dry-run mode: selected books incur embedding charges and receive vectors.
+**There is no dry-run: selected books incur embedding charges and receive vectors.**
 
 ## Run
 
@@ -43,18 +39,13 @@ AUDIOBOOK_EMBEDDING_INDEX_ENABLED=true AUDIOBOOK_DATABASE=solr \
 | `audiobook.embedding-index.page-size` | `100` | Records read per page |
 | `audiobook.embedding-index.maximum-records` | `0` | Maximum records scanned in the selected mode; zero processes all matching records |
 
-The record limit bounds embedding generation, not the subsequent snapshot export: snapshot export
-scans the entire catalogue. Keep all vectors compatible before publishing, especially after a model
-or dimension change. Input text uses title, authors, narrators, language and full description.
+**The record limit bounds embedding generation only; the subsequent snapshot scans the full
+catalogue.** Input text uses title, authors, narrators, language, and full description.
 
-Missing-only tests existence of the configured Solr vector field or Qdrant's named `dense` vector,
-not whether any vector exists. A Qdrant book with only a sparse keyword vector is still missing its
-dense vector. Existing dense vectors are not re-embedded to repair missing sparse vectors. If no
-matching books exist, no generation or vector updates occur; the full snapshot export still runs.
-Qdrant performs presence filtering at the database without returning existing vectors. Solr 9.6
-requires a bounded scan of stored vector fields to handle segments with no indexed vectors safely;
-even a no-op can therefore read the full catalogue. Neither mode is a free database scan, but
-missing-only avoids embedding charges for books that already have dense vectors.
+Missing-only checks the configured Solr field or Qdrant `dense` vector. Sparse-only Qdrant records
+still qualify; existing dense vectors are not rebuilt merely to add sparse vectors. A no-op still
+exports the snapshot, and Solr may scan stored vector fields. Missing-only avoids generation charges
+for existing dense vectors, not database reads.
 
 To deliberately regenerate the complete catalogue:
 
@@ -66,18 +57,13 @@ AUDIOBOOK_EMBEDDING_INDEX_ENABLED=true AUDIOBOOK_DATABASE=qdrant \
   -Dspring-boot.run.arguments="--audiobook.embedding-index.mode=rebuild-all --audiobook.embedding-index.maximum-records=0"
 ```
 
-This replaces vectors and incurs generation charges for eligible books again. Mode values other
-than `missing-only` and `rebuild-all` fail startup instead of silently selecting a write policy.
+**This replaces vectors and incurs generation charges again.** Invalid modes fail startup.
 
 ### Edited books and model changes
 
-Missing-only does not detect changed text or verify the provenance of existing vectors. Use an
-intentional rebuild after changing embedding input text, model, dimensions or text construction.
-Database records do not store a model identifier or text hash, so this job cannot automatically
-prove that existing vectors match the configured model. Do not use missing-only to switch models.
-Prepare a compatible target schema/collection and complete an unbounded rebuild before publishing
-or serving the changed model. A record-limited model rebuild can leave incompatible mixed vectors;
-coordinate serving and import jobs during that operation.
+Missing-only cannot detect changed text or model provenance because records store no model ID or text
+hash. **After changing text construction, model, or dimensions, prepare a compatible target and run
+an unbounded rebuild.** A limited rebuild can leave incompatible mixed vectors.
 
 ## Writes and retry behaviour
 
@@ -94,15 +80,12 @@ coordinate serving and import jobs during that operation.
   catalogue reindex before publishing; existing records have no stored model identifier to verify.
 - The process closes its clients when finished. It cannot run alongside migration or summary generation.
 
-Implementation lives in `com.gen3.embeddingjob`; shared catalogue records and persistence live in
-`com.gen3.catalogue`. Adding a backend requires an `AudiobookEmbeddingStore` adapter and snapshot
-source/identity wiring; the current snapshot configuration accepts only Solr and Qdrant.
-Live search-query embeddings are independent of this job.
+Live query embeddings are independent of this job.
 
 ## Confirm completion
 
 Expect `catalogue.embedding.completed`, then `book.vector.snapshot.published`, and finally
-`BUILD SUCCESS` with a zero exit status. The first event alone does not mean the launcher succeeded.
+`BUILD SUCCESS` with a zero exit status. **The embedding event alone is not launcher success.**
 Embedding events report `mode=MISSING_ONLY|REBUILD_ALL`, `scanned` and `indexed`. `scanned` counts
 records returned by the selected mode, including unusable text; it is not always the catalogue total.
 If only snapshot publication failed, use the standalone snapshot command rather than restarting

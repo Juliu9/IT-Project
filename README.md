@@ -2,10 +2,8 @@
 
 ## Purpose
 
-A Spring Boot backend for conversational audiobook recommendations. It supports new searches,
-refinements, more results, explanations, and replay using Qdrant or Solr, with Redis session storage.
-It gives callers one conversational API instead of requiring them to coordinate search filters,
-ranking, follow-up state, and response generation themselves.
+A Spring Boot API for conversational audiobook recommendations using Qdrant or Solr, with Redis
+session storage. It owns search, ranking, follow-up state, explanations, and response generation.
 
 ## How it works
 
@@ -14,9 +12,8 @@ ranking, follow-up state, and response generation themselves.
 3. Retrieve and rank eligible books when a cached page cannot satisfy the request.
 4. Save the session, then return a concise response using stored book descriptions.
 
-Catalogue embeddings, snapshot exports, short descriptions, migration, and preference imports use
-dedicated maintenance launchers. Embedding generation also refreshes the local snapshot;
-daily preference imports stream CSV records against that snapshot.
+Catalogue embeddings, snapshots, summaries, migration, and preference imports run as separate
+maintenance jobs. Embedding generation also refreshes the snapshot used by preference imports.
 For detailed behaviour, see [Architecture](docs/architecture.md).
 
 ## Repository structure
@@ -35,23 +32,33 @@ Java sources are under `src/main/java/com/gen3/`:
 | `shared.identity` | Common validation for caller and imported user IDs |
 | `shared.jobruntime` | Periodic progress reporting shared by maintenance jobs |
 
-Configuration and the dev website live in `src/main/resources/`; Java tests
-are under `src/test/java/`. `compose.yaml` provides local services, `solr/` contains external schema
-snippets, and `.github/workflows/ci.yml` defines CI. Optional log collection uses
-`compose.observability.yaml` and `observability/`.
-The one-off Qdrant payload rename tool and its tests live under
-`scripts/qdrant-payload-migration/`; see the [schema transition guide](docs/qdrant-payload-migration.md).
+Configuration and the dev page live in `src/main/resources/`; tests are under `src/test/java/`.
+Local services use `compose.yaml`, Solr schemas live in `solr/`, and CI is in `.github/workflows/`.
 
 ## Prerequisites
 
-- **Java 21** and Docker for the documented local setup and container tests.
-- OpenAI credentials and connection settings supplied through the environment or optional dev `.env`.
-- A populated Solr or Qdrant catalogue with the expected schema and compatible book vectors;
-  starting Docker does not create audiobook data. See the [job runbooks](docs/jobs/README.md) to prepare it.
+- **[Java 21](https://adoptium.net/temurin/releases/)** and
+  **[Docker with Compose](https://docs.docker.com/get-started/)** for the documented local setup and
+  container tests. The checked-in `./mvnw` wrapper downloads the pinned Maven version; a separate
+  Maven installation is not required.
+- [OpenAI API access](https://platform.openai.com/docs/quickstart) and connection settings supplied
+  through the environment or optional dev `.env`.
+- A populated Solr or Qdrant catalogue with compatible vectors. **Starting Docker does not create
+  audiobook data.** See the [job runbooks](docs/jobs/README.md).
 - Reachable Redis for conversation sessions. Imported user profiles are optional for non-personalised
   requests; the local vector snapshot is needed for user imports, not the recommendation server.
 
 See [Configuration](docs/configuration.md#local-env-and-terminal-exports) for credentials and connections.
+
+On macOS, select an installed Java 21 for the current terminal before running Maven:
+
+```bash
+export JAVA_HOME=$(/usr/libexec/java_home -v 21)
+export PATH="$JAVA_HOME/bin:$PATH"
+java -version
+```
+
+These exports apply only to that terminal session. The final command should report Java 21.
 
 ## Run locally
 
@@ -87,7 +94,6 @@ Reuse both IDs for follow-ups such as “more”, “explain”, or “repeat th
 | Full Maven verification, including eligible live tests | `./mvnw clean verify` |
 | Apply Java formatting | `./mvnw spotless:apply` |
 | Opt into live parser evaluations | `RUN_LIVE_PARSER_TESTS=true ./mvnw test -Dtest=LiveInputParserTest` |
-| One-off payload tool tests; no remote writes | `python3 -m unittest discover -s scripts/qdrant-payload-migration -v` |
 
 See [test prerequisites](docs/configuration.md#verification-and-live-test-prerequisites) for Docker,
 environment gates, API charges, and CI behaviour.
@@ -95,10 +101,9 @@ environment gates, API charges, and CI behaviour.
 ## Important notes
 
 - Select the database with `AUDIOBOOK_DATABASE`; this does not migrate existing data.
-- Keep the dev profile disabled in production. User/session headers are not authentication.
-- Maintenance jobs can write data: inspect the [job runbook](docs/jobs/README.md) first. Snapshot
-  export is database-read-only; user import defaults to dry-run.
-- Keep credentials, local logs, and generated maintenance data out of Git.
+- **Keep the dev profile disabled in production. User/session headers are not authentication.**
+- **Maintenance jobs can write data or incur AI charges.** Read the [job runbook](docs/jobs/README.md).
+- **Never commit credentials, local logs, snapshots, or generated maintenance data.**
 
 ## Documentation
 
@@ -109,5 +114,6 @@ environment gates, API charges, and CI behaviour.
 | [Job runbooks](docs/jobs/README.md) | One guide per job, execution order, commands, writes and recovery |
 | [Maintenance operations](docs/maintenance.md) | Shared safety rules, progress reporting and launcher verification |
 | [Observability](docs/observability.md) | Local timings, AI usage and optional Grafana export |
+| [Deployment and future work](docs/deployment-and-future-work.md) | Production safeguards, scaling guidance and suggested improvements |
 | [Diagrams](docs/diagrams/README.md) | System overview and execution sequences |
 | [Contributing](docs/CONTRIBUTING.md) | Development workflow, checks and documentation ownership |

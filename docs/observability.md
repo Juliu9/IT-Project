@@ -2,8 +2,8 @@
 
 [README](../README.md) · [Setup](#setup) · [Queries](#queries) · [Interpreting results](#interpreting-results)
 
-The optional Alloy collector exports only structured `recommendation.completed` summaries.
-Request text, session contents, and other application log lines remain local.
+The optional Alloy collector exports **only** structured `recommendation.completed` summaries.
+**Request text, session contents, and other application log lines remain local.**
 Maintenance heartbeats and import timing logs are not shipped by this collector. See
 [job progress](maintenance.md#automatic-progress-reporting) and
 [import logs/timings](jobs/user-preferences.md#read-only-dry-run-solr-or-qdrant).
@@ -12,8 +12,10 @@ Maintenance heartbeats and import timing logs are not shipped by this collector.
 
 ### 1. Set Grafana credentials
 
-Create a Grafana Cloud access-policy token with `logs:write`. Put these values in the repository's
-`.env` file, which Docker Compose reads. Never commit this file.
+Follow Grafana's [send logs](https://grafana.com/docs/grafana-cloud/send-data/logs/) and
+[Alloy setup](https://grafana.com/docs/grafana-cloud/send-data/alloy/set-up/) documentation, then
+create a Grafana Cloud access-policy token with `logs:write`. Put these values in the root `.env`,
+which Docker Compose reads. **Never commit this file or token.**
 
 ```dotenv
 GRAFANA_LOKI_URL=https://<loki-host>/loki/api/v1/push
@@ -38,7 +40,7 @@ docker compose -f compose.yaml -f compose.observability.yaml up -d
 docker compose -f compose.yaml -f compose.observability.yaml logs -f alloy
 ```
 
-Alloy retains its file position and resumes shipping events written while it was stopped.
+Alloy retains its file position and resumes after restart.
 
 ## Queries
 
@@ -66,8 +68,8 @@ Show failed requests:
 | `ai.inputTokens` / `ai.outputTokens` | Reported token usage; incomplete when usage is unavailable |
 | `outcome` / `responseMode` | Request success/failure and how the response was produced |
 
-A successful built-in response after model failure can have outcome `SUCCESS`. Token totals are
-reported usage, not a complete billing total when an operation's usage is unavailable.
+A built-in fallback after model failure can still have outcome `SUCCESS`. **Token totals are not a
+complete billing total when provider usage is unavailable.**
 
 ## Local parser timing
 

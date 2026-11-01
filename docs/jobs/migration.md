@@ -4,15 +4,11 @@
 
 ## Purpose
 
-Move an existing Solr catalogue into Qdrant without paying to regenerate its stored embeddings or
-summaries. Without this job, the supported fields and vectors would need a separate export/import
-process or the destination catalogue would need rebuilding from source data.
+Backfill supported Solr catalogue fields and existing dense vectors into Qdrant without regenerating
+embeddings or summaries.
 
-This is the only job connecting to two databases. It copies supported catalogue fields,
-short descriptions, publication dates, and existing dense vectors. Every source ID is checked against
-the destination payload `id`, including books already present; missing fields are filled rather than
-skipping the whole book. This is a missing-data backfill, not a synchronization job: populated
-Qdrant values win even when Solr has different values.
+This is the only job connecting to two databases. It matches Solr `id` to Qdrant payload `id` and
+fills missing values. **It is not synchronization: populated Qdrant values always win.**
 
 ## Prerequisites
 
@@ -22,12 +18,11 @@ Qdrant values win even when Solr has different values.
   may be initialized by the migration.
 - Source vectors compatible with the configured destination dimensions and schema. Retain the
   existing Qdrant schema when reusing a collection.
-- Existing destination books must already use payload `id` and `duration_minutes`, not the old
-  field names. If needed, complete the [one-off payload rename](../qdrant-payload-migration.md)
-  first. This job does not guess aliases or delete old payload keys.
+- Existing destination books must already use payload `id` and `duration_minutes`. **Migrate old
+  payload names first; this job does not guess aliases or delete old keys.**
 - Read access to Solr, write access to Qdrant, and no other catalogue writers during migration.
 
-Redis and AI credentials are unnecessary. This job has no dry-run mode.
+Redis and AI credentials are unnecessary. **This job has no dry-run mode.**
 
 ## Run
 
@@ -39,9 +34,8 @@ QDRANT_MIGRATION_ENABLED=true QDRANT_MIGRATION_MAX_RECORDS=0 QDRANT_TIMEOUT=180s
   -Dspring-boot.run.arguments="--audiobook.database=qdrant"
 ```
 
-This command writes to Qdrant and scans every Solr record. The 180-second timeout applies to each
-Qdrant call, not the whole job. On macOS, prefix the command with `caffeinate -i env` to prevent
-idle sleep; keep the lid open. On other platforms, use the command as shown.
+**This command writes to Qdrant and scans every Solr record.** The timeout applies to each Qdrant
+call, not the whole job.
 
 ## Field selection and conflict rules
 
@@ -61,8 +55,7 @@ Solr `id` to Qdrant payload `id`, independently of the Qdrant point ID.
 | Missing or unusable | Populated | Preserve Qdrant |
 | Missing or unusable | Missing or unusable | Leave unfilled and report unavailable |
 
-A missing source field does not fail the record. Unlisted fields such as `all`, `rt_authors`,
-`format`, `size`, `title_string`, `title_sort`, `rt_title`, `type`, and `_version_` are not copied.
+A missing source field does not fail the record. Unlisted fields are not copied.
 If no Qdrant book matches, the job creates one using the available supported fields.
 
 ### Dates, vectors, and indexes
@@ -102,7 +95,7 @@ reports `created`, `updated`, `skipped`, `unavailableFields` (counts by field na
 `sourceMissingOrInvalidPubdate`.
 A failure can leave earlier batches applied; rerunning starts the source scan again and fills only
 what is still missing. Conflicting duplicate catalogue IDs require reconciliation, not repeated retries.
-There is no collection-wide transaction; keep all catalogue writers stopped while migrating.
+**There is no collection-wide transaction; stop all catalogue writers while migrating.**
 Unlike the Python rename tool, this launcher has no backup-based `--resume` option and no automatic
 job-level retry. On a network error, fix connectivity and rerun the launcher; already-filled data is
 preserved. Take a database backup before a shared-database run.

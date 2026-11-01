@@ -2,23 +2,15 @@
 
 [README](../README.md) · [Architecture](architecture.md) · [Job runbooks](jobs/README.md)
 
-[`application.properties`](../src/main/resources/application.properties) defines shared rules,
-backend selection, provider connections, and job defaults. Settings are grouped by responsibility:
-universal rules apply across adapters; technology sections configure a particular implementation.
-This reference covers the repository's settings, rather than every property supported by Spring Boot.
-
-The properties file has five numbered areas: shared backend selection, shared AI/vector settings,
-recommendation-server settings, database connections, and maintenance jobs. The maintenance area
-has one subsection for each launcher; summary model settings live with the summary job,
-while interactive chat defaults and shared embedding compatibility remain in the shared AI area.
-Section headings are organisational only; they do not change which properties a launcher can read.
+[`application.properties`](../src/main/resources/application.properties) is the source for shared
+rules, backend selection, provider connections, and job defaults. This guide documents project
+settings—not every Spring Boot property.
 
 ## Loading and overriding settings
 
-For local runs, command-line application arguments override environment variables, which override
-values in the packaged properties files. For example, `--server.port=8081` overrides `server.port=8080`.
-An expression such as `${QDRANT_TIMEOUT:15s}` reads the named variable and uses `15s` when absent.
-An empty default (`${QDRANT_API_KEY:}`) means optional configuration, not a generated credential.
+Precedence is **application arguments → environment variables → packaged defaults**. For example,
+`--server.port=8081` wins over `SERVER_PORT` and the checked-in default. `${NAME:value}` supplies a
+fallback; an empty fallback means optional, not a generated credential.
 
 | Source | Purpose |
 | --- | --- |
@@ -42,6 +34,8 @@ populated local Qdrant catalogue, the minimum is:
 OPENAI_API_KEY=your-key
 ```
 
+Create credentials by following the [OpenAI API quickstart](https://platform.openai.com/docs/quickstart).
+
 For remote services, add the connection/authentication values from [Technology connections](#technology-connections).
 Grafana credentials are only needed for [optional log shipping](observability.md#setup).
 Environment variables override imported `.env` values. The checked-in dev properties file contains
@@ -61,57 +55,49 @@ Keep credentials out of Git, logs, and command-line arguments; `.env` is ignored
 
 ### Development website
 
-The `dev` profile serves `/` and `/index.html`, and enables `POST /api/v1/recommendations/demo`.
-Without it the server is backend-only; both the page and demo endpoint are unavailable.
-Keep the profile disabled in production. Launch commands are in the [README](../README.md#run-locally).
+Enable the `dev` profile to serve the local page at `/` and the diagnostic endpoint at
+`POST /api/v1/recommendations/demo`. Without that profile, the server exposes only the normal API.
+Keep `dev` disabled in production. See [Run locally](../README.md#run-locally).
 
-The page shows response text, resolved request, stage timings, and AI usage including query
-embeddings. It provides editable User ID and Session ID fields, initially generated for the tab.
-Submitted IDs persist across reloads through session storage and appear in response details.
-Use an imported user's ID to test stored reading preferences; generated IDs have no imported profile.
-Reuse the same user/session pair for follow-ups; change the session ID for a separate conversation.
-Submit with the button or Enter; Shift+Enter inserts a new line. Submission is disabled while a
-request is pending, preventing accidental duplicate sends from the page.
+| Page feature | Behavior |
+| --- | --- |
+| User and Session IDs | Generated for the tab, editable, and retained across reloads |
+| Conversation | Reuse both IDs for follow-ups; change the Session ID to start separately |
+| Imported preferences | Enter an imported User ID; generated IDs have no stored profile |
+| Diagnostics | Shows the resolved request, stage timings, and available AI usage |
+| Recommendation details | Shows rank, score, and stored catalogue metadata in a collapsed section |
 
-Below the Session Request, the collapsed Recommendation details section shows each book's
-stored catalogue fields (authors, narrators, language, publication date, source, runtime, and
-descriptions), alongside its rank and score. Only the dev endpoint performs this metadata lookup;
-it reads the configured Solr or Qdrant catalogue by book ID without loading vectors or changing
-session data. Missing fields display as unavailable; lookup failures leave the response intact.
-The extra lookup time is outside the recommendation pipeline timings shown above.
+The details lookup reads the selected Solr or Qdrant catalogue by book ID. It does not load vectors,
+change the session, or affect the displayed pipeline timings. Missing metadata is shown as unavailable;
+a lookup failure does not discard the recommendation response. The demo does not estimate cost.
 
-The demo collects per-operation metrics; the standard endpoint still returns plain text.
-Both use the same recommendation flow. The page reports the whole recommendation stage and
-distinguishes no AI call from unavailable usage. Costs are not estimated.
+Press Enter or use the button to submit; Shift+Enter adds a line. Only one request can be pending.
 
-User/session headers identify a conversation; they are not authentication. Establish a verified
-identity boundary before exposing the service to untrusted clients. Local Compose publishes its
-service ports on `127.0.0.1` only; this does not authenticate the HTTP API.
-Both endpoints require nonblank `X-User-Id` and `X-Session-Id` headers of at most 256 Java characters
-each. Invalid IDs return `400` before parsing or session access. IDs remain opaque and are passed
-through unchanged; UUID formatting is not required.
+User and session IDs identify conversation state; they are **not authentication**. Both endpoints
+require nonblank `X-User-Id` and `X-Session-Id` values of at most 256 Java characters. Invalid values
+return `400` before parsing or session access. Add a verified identity boundary before exposing the
+service to untrusted clients. Binding local services to `127.0.0.1` is not authentication.
 
 ### Verification and live-test prerequisites
 
-Commands are listed once in [README: Verification commands](../README.md#verification-commands).
-Local verification includes Maven validation, Spotless, Checkstyle, unit tests, and disposable
-container integration tests; Docker must be running.
+Run commands from [README: Verification commands](../README.md#verification-commands).
 
-The live recommendation test requires exported, nonempty `OPENAI_API_KEY`, `QDRANT_URL`, and
-`QDRANT_API_KEY`, an accessible populated Qdrant catalogue, and Redis. This environment gate applies
-even though local Qdrant can run without authentication. A dev `.env` import does not satisfy it.
-The test requires actual saved recommendations and their titles in the response; a nonblank fallback
-alone does not pass. Without the required variables, it is skipped.
+| Suite | Requirements | External effects |
+| --- | --- | --- |
+| Local verification | Java 21; Docker running for container tests | Uses disposable containers; no live AI |
+| Live recommendation | Exported `OPENAI_API_KEY`, `QDRANT_URL`, and `QDRANT_API_KEY`; populated Qdrant; Redis | Calls OpenAI and live services; may incur charges |
+| Live parser evaluation | Exported `OPENAI_API_KEY` and `RUN_LIVE_PARSER_TESTS=true` | Calls the configured parser model; may incur charges |
 
-Live parser evaluations additionally require `RUN_LIVE_PARSER_TESTS=true` and exported
-`OPENAI_API_KEY`. They send synthetic text to the configured parser model, without catalogue or
-Redis access. Cases cover natural phrases outside the fast path, ranks versus counts, repeat
-variants, and duration extraction. Mocked tests check mappings and prompt contracts; these live
-cases measure model recognition. Both kinds of live test incur provider charges.
+The live-test variables must be exported to the process. Loading `.env` through the `dev` Spring
+profile does not expose them to Maven. Missing variables skip the corresponding live suite.
 
-CI checks local tests on PRs and pushes to `staging` and `main`. Trusted PRs to `main`, pushes to
-`main`, and manual runs on `main` also run the secret-backed suite; fork PRs use local tests only.
-The workflow does not opt into the separate live parser evaluations.
+The recommendation test must return saved books and their titles; a nonblank fallback is not enough.
+Parser evaluations use synthetic text and require neither a catalogue nor Redis. Mocked tests cover
+mapping and prompt contracts; live cases measure actual model recognition.
+
+CI runs local checks for pull requests and pushes to `staging` and `main`. Secret-backed tests run
+only for trusted `main` events and manual `main` runs. Fork pull requests run local checks only. CI
+does not enable the separate live parser evaluation.
 
 ## Application and backend selection
 
@@ -174,11 +160,38 @@ are normalized per result set. Exact filters remain mandatory regardless of rank
 | `universal-rules.recency-weight` | `RANKING_SCORING_UNIVERSAL_RECENCY_WEIGHT` | `0.7` |
 | `universal-rules.duration-plausibility-weight` | `RANKING_SCORING_UNIVERSAL_DURATION_PLAUSIBILITY_WEIGHT` | `0.3` |
 
+## Supported and tested versions
+
+`Required` is a build or runtime constraint enforced by the project. `Tested` identifies the
+version used by the checked-in local environment or integration tests; other server versions may
+work but are not verified by this repository. Build dependency versions describe the application,
+not a separately installed prerequisite.
+
+| Component | Version | Status | Source of truth |
+| --- | --- | --- | --- |
+| Java | `21` (`[21,22)`) | Required | [Maven build](../pom.xml) |
+| Maven | `3.9.16` wrapper; `3.9+` enforced | Required | [Maven wrapper](../.mvn/wrapper/maven-wrapper.properties) and [build enforcement](../pom.xml) |
+| Spring Boot | `4.1.0` | Build dependency | [Maven parent](../pom.xml) |
+| Spring AI | `2.0.1` | Build dependency | [Maven dependency management](../pom.xml) |
+| Solr server | `9.6.0` | Tested | [Solr container test support](../src/test/java/com/gen3/recommenderagent/testsupport/SolrContainerTestSupport.java) |
+| SolrJ client | `9.6.0` | Build dependency | [Maven dependency](../pom.xml) |
+| Qdrant server | `1.19.1` | Tested/local default | [Local Compose services](../compose.yaml) |
+| Qdrant Java client | `1.18.0` | Build dependency | [Maven dependency](../pom.xml) |
+| Redis server | `7-alpine` | Tested/local default | [Local Compose services](../compose.yaml) |
+| Grafana Alloy | `1.20.0` | Optional local observability | [Observability Compose services](../compose.observability.yaml) |
+
+The `redis:7-alpine` image is a moving major-version tag rather than an exact patch release. Pin it
+to a patch tag or image digest if byte-for-byte environment reproducibility is required. When a
+version changes, update its executable source above first, run the relevant integration tests, and
+then update this summary table in the same change.
+
 ## Technology connections
 
 ### Redis
 
 Required by the live server when `SESSION_STORE=redis`; maintenance jobs do not need sessions.
+The local Compose stack starts Redis automatically. For a separate installation, use the
+[official Redis installation guide](https://redis.io/docs/latest/operate/oss_and_stack/install/archive/install-redis/).
 
 | Property under `spring.data.redis.` | Environment variable | Default / purpose |
 | --- | --- | --- |
@@ -188,6 +201,9 @@ Required by the live server when `SESSION_STORE=redis`; maintenance jobs do not 
 | `password` | `REDIS_PASSWORD` | empty; set when authentication requires it |
 
 ### Qdrant
+
+The local Compose stack starts Qdrant automatically. For other local or self-hosted deployments,
+follow the [Qdrant quickstart](https://qdrant.tech/documentation/quickstart/).
 
 | Property under `qdrant.` | Environment variable | Default / purpose |
 | --- | --- | --- |
@@ -201,6 +217,12 @@ Required by the live server when `SESSION_STORE=redis`; maintenance jobs do not 
 
 Starting local Docker does not populate either collection. Existing schema and record-identity
 requirements are in [Qdrant schema](architecture.md#qdrant-schema-and-record-identity).
+
+> **Data-quality warning:** the current demonstration Qdrant catalogue contains fake/placeholder
+> values for some `narrators`, `language`, `duration_minutes`, and publication-date metadata. Do not
+> treat those fields as authoritative or migrate them into production unchanged. Replace them with
+> sourced metadata and update the schema, mappings, indexes, tests, and documentation if the real
+> dataset uses different fields.
 
 #### Catalogue payload indexes
 
@@ -228,13 +250,14 @@ date-only (`2013-07-03`) or an ISO timestamp; timestamps are normalized to UTC. 
 have no inferred year. For example, year 2013 filters from January 1, 2013 up to January 1, 2014.
 Catalogue JSON and saved recommendation JSON use `id`, `duration_minutes`, and `pubdate` too.
 Clear old development sessions when switching schemas; there are no legacy field aliases.
-For collections still using the old payload names, follow the
-[one-off schema transition](qdrant-payload-migration.md) before running the agent or jobs.
+Collections using old payload names must be migrated to the documented schema before running the
+agent or maintenance jobs.
 
 ### Solr
 
 These settings apply to the recommendation server and jobs when Solr is selected. Solr is not
-included in the local Compose stack; Redis is still the session store.
+included in the local Compose stack; install and operate it using the
+[official Solr guide](https://solr.apache.org/guide/solr/latest/). Redis is still the session store.
 
 | Property under `solr.` | Environment variable | Default / purpose |
 | --- | --- | --- |
@@ -291,11 +314,10 @@ Expect ranking differences between databases even with equivalent catalogue cont
 
 ## Maintenance jobs: explicit opt-in
 
-Use the dedicated launcher as well as the corresponding opt-in setting. Normal server startup
-rejects enabled maintenance flags. Run jobs individually against the intended database and dataset;
-they can write records and generate provider charges. Commands, prerequisites, and recovery steps
-belong in the [individual job runbooks](jobs/README.md). Shared safety/progress instructions are in
-[Maintenance operations](maintenance.md). Jobs are not scheduled automatically.
+Use the dedicated launcher and its opt-in setting. Normal server startup rejects maintenance flags.
+**Jobs can write records or incur provider charges and are not scheduled automatically.** Commands,
+prerequisites, and recovery live in the [job runbooks](jobs/README.md); shared progress and safety
+rules are in [Maintenance operations](maintenance.md).
 
 ### Catalogue embedding generation
 
@@ -331,10 +353,8 @@ with explicit enablement.
 | `openai.model` | `OPENAI_SHORT_DESCRIPTION_MODEL` | `gpt-4o-mini`; summary model |
 
 The job uses `OPENAI_API_KEY` independently of interactive Spring AI chat clients.
-It groups up to ten books per request and saves each completed request. Rerun after failure to
-fill remaining missing summaries in the default mode; rebuild-all starts again and can recharge
-already processed books. The cap applies to either mode; raise it to cover the whole catalogue for
-a full rebuild. No manifests or separate import step are used.
+It groups up to ten books per request and saves incrementally. Missing-only can resume by selecting
+remaining books. **Rebuild-all restarts selection and can overwrite/recharge processed books.**
 See the [short-description runbook](jobs/short-descriptions.md).
 
 ### User-preference import
@@ -363,7 +383,7 @@ requirements and replacement semantics.
 
 Snapshots are separated by backend and catalogue collection. Compatibility uses the backend,
 collection, configured `spring.ai.openai.embedding.options.model`, and `embedding.dimensions`.
-The model identifier is a declared contract: existing database records do not store model provenance.
+**The model identifier is a declared contract; database records do not store model provenance.**
 Changing servers while retaining the same backend/collection name requires a manual snapshot rebuild.
 The [snapshot launcher](jobs/snapshots.md) needs no enable flag. Imports accept a compatible snapshot
 regardless of age; refresh it explicitly after catalogue changes. The embedding launcher refreshes
