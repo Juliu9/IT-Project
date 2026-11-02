@@ -124,6 +124,6 @@ environment gates, API charges, and CI behaviour.
 | [Job runbooks](docs/jobs/README.md) | One guide per job, execution order, commands, writes and recovery |
 | [Maintenance operations](docs/maintenance.md) | Shared safety rules, progress reporting and launcher verification |
 | [Observability](docs/observability.md) | Local timings, AI usage and optional Grafana export |
-| [Deployment and future work](docs/deployment-and-future-work.md) | Production safeguards, scaling guidance and suggested improvements |
+| [Deployment and future work](docs/deployment-and-considerations.md) | Production safeguards, scaling guidance and suggested improvements |
 | [Diagrams](docs/diagrams/README.md) | System overview and execution sequences |
 | [Contributing](docs/CONTRIBUTING.md) | Development workflow, checks and documentation ownership |

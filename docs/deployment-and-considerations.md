@@ -45,6 +45,16 @@ catalogue state is external. Redis locking serializes concurrent changes to the 
 | **Outbound connections and network** | AI, Redis, and catalogue calls all depend on finite sockets, connection pools, DNS, and network bandwidth. | Connection-acquisition delays, intermittent timeouts, or synchronized failures during traffic bursts | Set explicit connection and request limits, reuse clients, monitor pool/network metrics, and apply bounded backpressure |
 | **Maintenance jobs** | Snapshot scans, embedding/summary writes, migration, and preference imports consume catalogue throughput; some also consume AI quota and substantial local memory/disk. | Slower live searches, provider throttling, database write pressure, or job failure from resource exhaustion | Run one writer at a time, isolate or schedule heavy jobs, cap job resources, and monitor live-service latency during execution |
 
+Where the selected retrieval engine supports it, vector quantisation or a comparable compressed
+representation can reduce RAM use and may make comparisons faster. This applies to capacity planning
+for Qdrant, Solr, and future retrieval backends rather than being an application-level guarantee.
+Benchmark recall, recommendation quality, memory, and latency with the chosen engine and catalogue
+before selecting a representation. **Provision enough database RAM for the active indexes, vectors,
+payload indexes, and working set:** memory pressure forces more disk reads and can turn a fast
+retrieval into a multi-second request, including 10 seconds or more on an undersized or slow storage
+deployment. Monitor memory and disk I/O, then size from measured peak traffic rather than catalogue
+size alone.
+
 **The first scaling target should be the measured bottleneck, not the application replica count.**
 Adding replicas can increase pressure on AI providers, Redis, and the catalogue without increasing
 end-to-end throughput.
@@ -111,6 +121,7 @@ and idempotent partitions before attempting parallel execution. See
 | High | More reliable hard filters | Initials, punctuation, ordering, aliases, and transliteration can represent the same author or narrator. The current conservative normalization cannot cover every identity variation. | Store canonical contributor IDs or aliases during ingestion; resolve input to an identity before applying exact filters |
 | Medium | Multiple authors and narrators in session preferences | Each positive, negative, required, or excluded preference currently accepts at most one author and one narrator. Users cannot save requests such as “I like books by either author A or author B” or exclude several narrators. | Define whether multiple names mean `any` or `all`; update `SessionPreferences`, parser validation, exact-filter planning, database queries, conflict handling, response wording, limits, and behavior tests |
 | Medium | Navigate recommendation history | The current repeat action replays the retained current page, not any earlier recommendation page. | Session history model, previous/next intent handling, bounded retention, conversation handlers, and tests |
+| Medium | Explain recommendation details | There is no `DETAILS` intent for users to ask what catalogue payload information is available for a recommendation, such as author, narrator, language, duration, publication date, source, or description. | Intent parsing, recommendation selection by rank/title, safe payload-field mapping, response generation, missing-data wording, and behavior tests |
 | Medium | Acknowledge slow requests after five seconds | The current HTTP endpoint returns one synchronous final response, so a slow AI or database call can leave the user without visible feedback. | Add a client-side five-second timer and a transport that supports progress separately from the final result, such as an asynchronous request plus polling, Server-Sent Events, or WebSocket messages. Cancel the timer when the final response arrives and do not present the acknowledgement as completion. |
 | Medium | User-controlled data deletion | Users need a clear way to remove their sessions and imported preference profile. | Authenticated API, session repository, user-preference repository, audit behavior, and retention documentation |
 | Medium | Resilience controls | Provider retries exist, but production traffic also needs circuit breakers, concurrency limits, and explicit overload responses. | AI clients, catalogue adapters, API error mapping, configuration, and telemetry |

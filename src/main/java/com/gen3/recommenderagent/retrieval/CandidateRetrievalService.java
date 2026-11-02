@@ -53,7 +53,6 @@ public class CandidateRetrievalService implements CandidateRetriever {
           personalised
               ? retrieveSemantic(plan, vectors)
               : switch (plan.mode()) {
-                case SEMANTIC -> retrieveSemantic(plan, vectors);
                 case KEYWORD ->
                     candidateSearch.searchKeyword(plan.keywordText(), plan.filters(), plan.limit());
                 case HYBRID -> retrieveHybrid(plan, vectors);

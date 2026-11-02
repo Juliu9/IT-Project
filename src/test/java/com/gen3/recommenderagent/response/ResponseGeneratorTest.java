@@ -116,9 +116,8 @@ class ResponseGeneratorTest {
             .generate(books, ConversationDraft.toTurn(request));
     org.assertj.core.api.Assertions.assertThat(result.split("\\s+")).hasSizeLessThanOrEqualTo(150);
     if (action == ConversationAction.HELP) {
-      for (int rank = 1; rank <= 5; rank++) {
-        assertTrue(result.contains(rank + ". Title " + rank));
-      }
+      assertFalse(result.contains("I shared"));
+      assertFalse(result.contains("Which one would you like me to explain?"));
     }
     assertEquals("Title 1" + " long ".repeat(60), books.getFirst().getTitle());
   }
@@ -448,5 +447,22 @@ class ResponseGeneratorTest {
     assertTrue(response.toLowerCase().contains("adjust your search"));
     assertTrue(response.toLowerCase().contains("explore more books"));
     assertTrue(response.toLowerCase().contains("clear"));
+  }
+
+  @Test
+  void helpDoesNotAppendAStaleExplanationQuestion() {
+    var generator = new ConversationResponseGenerator(new AiResponseGenerator(null));
+    var request = new ConversationDraft();
+    request.setIntent(ConversationAction.HELP);
+    request.setPendingQuestion(ConversationQuestion.EXPLANATION_TARGET_CLARIFICATION);
+
+    String response =
+        generator.generate(
+            List.of(new Recommendation("1", 1, 1.0, "Previously shown")),
+            ConversationDraft.toTurn(request));
+
+    assertTrue(response.startsWith("I can help you find audiobooks"));
+    assertFalse(response.contains("I shared"));
+    assertFalse(response.contains("Which one would you like me to explain?"));
   }
 }

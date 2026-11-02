@@ -68,7 +68,7 @@ When changing behaviour, update the corresponding documentation in the same chan
 - [Job runbooks](jobs/README.md): per-job commands, prerequisites, writes, completion and recovery.
 - [Maintenance operations](maintenance.md): shared job execution and progress rules.
 - [Observability](observability.md): telemetry fields and log export.
-- [Deployment and future work](deployment-and-future-work.md): production safeguards, scaling guidance and roadmap items.
+- [Deployment and future work](deployment-and-considerations.md): production safeguards, scaling guidance and roadmap items.
 - [Diagrams](diagrams/README.md): update sources and regenerate affected SVGs.
 
 Keep each operational instruction in one owning guide and link to it elsewhere. Examples must say

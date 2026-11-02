@@ -249,6 +249,10 @@ follow the [Qdrant quickstart](https://qdrant.tech/documentation/quickstart/).
 Starting local Docker does not populate either collection. Existing schema and record-identity
 requirements are in [Qdrant schema](architecture.md#qdrant-schema-and-record-identity).
 
+The current demonstration Qdrant catalogue has 8-bit scalar quantisation enabled for its vectors.
+Treat that as part of the deployed collection configuration rather than an application default: the
+server does not enable quantisation when it connects to an existing collection.
+
 > **Data-quality warning:** the current demonstration Qdrant catalogue contains fake/placeholder
 > values for some `narrators`, `language`, `duration_minutes`, and publication-date metadata. Do not
 > treat those fields as authoritative or migrate them into production unchanged. Replace them with

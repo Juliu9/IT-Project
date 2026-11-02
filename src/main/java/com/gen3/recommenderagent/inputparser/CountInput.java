@@ -6,6 +6,8 @@ import java.util.regex.Pattern;
 /** Checks explicit count wording before a model can round it or reinterpret zero as replay. */
 final class CountInput {
   private static final String WORD = "zero|one|two|three|four|five|six|seven|eight|nine|ten";
+  private static final String GENRE =
+      "romance|horror|fantasy|mystery|crime|comedy|science fiction|thrillers?";
   private static final String NUMBER =
       "(?:minus\\s+(?:"
           + WORD
@@ -42,6 +44,9 @@ final class CountInput {
       // rewriting.
       if (group == 2
           && number.equals("zero")
+          && !text.substring(match.end(group), match.end())
+              .strip()
+              .matches("(?i)(?:" + GENRE + ") (?:books?|audiobooks?)")
           && !text.substring(match.end(group), match.end())
               .strip()
               .matches(

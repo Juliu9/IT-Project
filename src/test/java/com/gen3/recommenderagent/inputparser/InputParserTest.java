@@ -24,6 +24,58 @@ import tools.jackson.databind.ObjectMapper;
 
 class InputParserTest {
   @Test
+  void explicitPositiveGenreSurvivesSparseAiOutput() {
+    String text = "Recommend fantasy audiobooks with a strong female protagonist.";
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    var query = new SemanticQuery();
+    query.setKeywords(List.of("strong female protagonist"));
+    parsed.setPositiveSemanticQuery(query);
+    var ai = mock(AiParser.class);
+    when(ai.parse(text)).thenReturn(parsed);
+
+    var result = new InputParser(new CommandParser(), ai).parse(text);
+
+    assertEquals(List.of("fantasy"), result.getPositiveSemanticQuery().getGenres());
+  }
+
+  @Test
+  void explicitlyExcludedGenreIsNotPromotedToPositiveSearch() {
+    String text = "Recommend audiobooks without fantasy but with a strong female protagonist.";
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    var positive = new SemanticQuery();
+    positive.setKeywords(List.of("strong female protagonist"));
+    parsed.setPositiveSemanticQuery(positive);
+    var negative = new SemanticQuery();
+    negative.setGenres(List.of("fantasy"));
+    parsed.setNegativeSemanticQuery(negative);
+    var ai = mock(AiParser.class);
+    when(ai.parse(text)).thenReturn(parsed);
+
+    var result = new InputParser(new CommandParser(), ai).parse(text);
+
+    assertEquals(null, result.getPositiveSemanticQuery().getGenres());
+    assertEquals(List.of("fantasy"), result.getNegativeSemanticQuery().getGenres());
+  }
+
+  @Test
+  void explicitReferenceToPreviousLikesForcesPersonalisation() {
+    String text = "Give me something similar to what I liked previously, but with more humour.";
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.REFINE);
+    var query = new SemanticQuery();
+    query.setKeywords(List.of("humour"));
+    parsed.setPositiveSemanticQuery(query);
+    var ai = mock(AiParser.class);
+    when(ai.parse(text)).thenReturn(parsed);
+
+    var result = new InputParser(new CommandParser(), ai).parse(text);
+
+    assertEquals(true, result.isPersonalised());
+  }
+
+  @Test
   void aiReceivesExplicitPageRanksSeparatelyFromTheLatestAction() {
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     var parsed = new UserIntent();
@@ -139,7 +191,7 @@ class InputParserTest {
   }
 
   @Test
-  void ambiguousWordCountsCanStillBeRejectedByAiWithoutLosingCriteria() {
+  void genreRequestsWithZeroCountsAreRewrittenWithoutLosingCriteria() {
     var ai = mock(AiParser.class);
     var parsed = new UserIntent();
     parsed.setIntent(ConversationAction.RECOMMENDATION);
@@ -147,10 +199,11 @@ class InputParserTest {
     var query = new SemanticQuery();
     query.setGenres(List.of("mystery"));
     parsed.setPositiveSemanticQuery(query);
-    when(ai.parse("Give me zero mystery books")).thenReturn(parsed);
+    when(ai.parse("Give me some mystery books")).thenReturn(parsed);
     var result = new InputParser(new CommandParser(), ai).parse("Give me zero mystery books");
     assertEquals(true, result.isInvalidBookCount());
     assertEquals(List.of("mystery"), result.getPositiveSemanticQuery().getGenres());
+    org.mockito.Mockito.verify(ai).parse("Give me some mystery books");
   }
 
   @org.junit.jupiter.params.ParameterizedTest

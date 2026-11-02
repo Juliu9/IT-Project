@@ -87,7 +87,7 @@ class AudiobookRetrievalPlannerTest {
     SemanticQuery query = new SemanticQuery();
     query.setTopics(List.of("horror"));
     semanticOnly.setPositiveSemanticQuery(query);
-    assertThat(planner.plan(10, semanticOnly, Set.of()).mode()).isEqualTo(RetrievalMode.SEMANTIC);
+    assertThat(planner.plan(10, semanticOnly, Set.of()).mode()).isEqualTo(RetrievalMode.HYBRID);
 
     ConversationDraft filterOnly = new ConversationDraft();
     ExactCriteria duration = new ExactCriteria();
@@ -103,7 +103,7 @@ class AudiobookRetrievalPlannerTest {
     negativeAuthor.setAuthors(List.of("Unwanted Author"));
     negativeAuthorOnly.setNegativeSemanticQuery(negativeAuthor);
     assertThat(planner.plan(10, negativeAuthorOnly, Set.of()).mode())
-        .isEqualTo(RetrievalMode.SEMANTIC);
+        .isEqualTo(RetrievalMode.HYBRID);
   }
 
   @Test
@@ -118,7 +118,7 @@ class AudiobookRetrievalPlannerTest {
       ConversationDraft request = new ConversationDraft();
       request.setPositiveSemanticQuery(query);
       assertThat(new AudiobookRetrievalPlanner().plan(50, request, Set.of()).mode())
-          .isEqualTo(RetrievalMode.SEMANTIC);
+          .isEqualTo(RetrievalMode.HYBRID);
     }
   }
 

@@ -90,7 +90,10 @@ public class ConversationResponseGenerator implements ResponseGenerator {
             ? generateActionResponse(action, currentRequest)
             : generateOutcomeResponse(outcome, currentRequest);
     if (fixedResponse != null) {
-      if ((action == ConversationAction.HELP || action == ConversationAction.UNKNOWN)
+      if ((action == ConversationAction.UNKNOWN
+              || (action == ConversationAction.HELP
+                  && (pending != ConversationQuestion.EXPLANATION_TARGET_CLARIFICATION
+                      || currentRequest.getExplanationSelection() != null)))
           && pending != null) {
         String question = generateQuestionResponse(pending, currentRequest, labelWords);
         if (question != null) {

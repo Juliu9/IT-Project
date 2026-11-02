@@ -542,13 +542,13 @@ class PersonalisedRecommendationFlowTest {
     var taste = new SemanticQuery();
     taste.setGenres(List.of("horror"));
     answer.setPositiveSemanticQuery(taste);
-    when(books.searchSemantic(any(), any(), eq(50))).thenReturn(List.of());
+    when(books.searchHybrid(any(), eq("horror"), any(), eq(50))).thenReturn(List.of());
     var result = process(answer);
     assertThat(result.isPersonalised()).isFalse();
     assertThat(
             result.getMustInclude() == null || result.getMustInclude().getPublicationYear() == null)
         .isTrue();
-    verify(books).searchSemantic(any(), eq(AudiobookFilters.empty()), eq(50));
+    verify(books).searchHybrid(any(), eq("horror"), eq(AudiobookFilters.empty()), eq(50));
   }
 
   @org.junit.jupiter.params.ParameterizedTest

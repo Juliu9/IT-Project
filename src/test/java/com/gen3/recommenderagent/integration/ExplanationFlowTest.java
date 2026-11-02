@@ -172,7 +172,7 @@ class ExplanationFlowTest {
     explain(6, null);
     var help = process(ConversationAction.HELP);
     assertThat(responses.generate(help.getRecommendations(), help))
-        .contains("Which one would you like me to explain?");
+        .doesNotContain("Which one would you like me to explain?");
     var repeated = process(ConversationAction.REPEAT);
     assertThat(responses.generate(repeated.getRecommendations(), repeated))
         .isEqualTo(responses.generate(help.getRecommendations(), help));

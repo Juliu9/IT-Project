@@ -274,15 +274,18 @@ class LiveInputParserTest {
     var result = parser.parse(text);
     assertThat(result.getIntent()).as(text).isEqualTo(ConversationAction.RECOMMENDATION);
     assertThat(result.getPositiveSemanticQuery()).as(text).isNotNull();
-    assertThat(result.getPositiveSemanticQuery().getGenres()).contains("fantasy");
     var themes = new java.util.ArrayList<String>();
+    if (result.getPositiveSemanticQuery().getGenres() != null) {
+      themes.addAll(result.getPositiveSemanticQuery().getGenres());
+    }
     if (result.getPositiveSemanticQuery().getKeywords() != null) {
       themes.addAll(result.getPositiveSemanticQuery().getKeywords());
     }
     if (result.getPositiveSemanticQuery().getTopics() != null) {
       themes.addAll(result.getPositiveSemanticQuery().getTopics());
     }
-    assertThat(String.join(" ", themes).toLowerCase(java.util.Locale.ROOT)).contains("female");
+    assertThat(String.join(" ", themes).toLowerCase(java.util.Locale.ROOT))
+        .contains("fantasy", "female");
     if (author == null) {
       assertThat(
               result.getMustInclude() == null

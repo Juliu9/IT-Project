@@ -43,11 +43,8 @@ public class AudiobookRetrievalPlanner {
   RetrievalMode modeFor(SemanticQuery positive, SemanticQuery negative, AudiobookFilters filters) {
     boolean hasSemantic = hasSemanticContent(positive) || hasSemanticContent(negative);
     boolean hasFilters = filters != null && filters.hasConditions();
-    if (hasSemantic && hasFilters) {
-      return RetrievalMode.HYBRID;
-    }
     if (hasSemantic) {
-      return RetrievalMode.SEMANTIC;
+      return RetrievalMode.HYBRID;
     }
     if (hasFilters) {
       return RetrievalMode.FILTER_ONLY;

@@ -114,7 +114,7 @@ class CandidateRetrievalServiceTest {
     AudiobookRecord book =
         new AudiobookRecord("42", "catalogue", "Book", List.of("Writer"), "Description");
     when(embeddingIndexer.combineSemanticQueries(vectors)).thenReturn(vector);
-    when(candidateSearch.searchSemantic(vector, AudiobookFilters.empty(), 5))
+    when(candidateSearch.searchHybrid(vector, "space", AudiobookFilters.empty(), 5))
         .thenReturn(List.of(new AudiobookCandidate(book, 0.91)));
 
     List<AudiobookCandidate> candidates =
@@ -135,7 +135,7 @@ class CandidateRetrievalServiceTest {
     float[] vector = {0.6f, 0.8f};
     SemanticQueryVectors vectors = new SemanticQueryVectors(List.of(vector), List.of());
     when(embeddingIndexer.combineSemanticQueries(vectors)).thenReturn(vector);
-    when(candidateSearch.searchSemantic(vector, AudiobookFilters.empty(), 5))
+    when(candidateSearch.searchHybrid(vector, "space", AudiobookFilters.empty(), 5))
         .thenThrow(new IOException("timed out"));
 
     assertThatThrownBy(
