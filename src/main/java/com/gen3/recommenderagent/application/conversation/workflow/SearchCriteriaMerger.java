@@ -153,7 +153,7 @@ public final class SearchCriteriaMerger {
       copy.setSimilarToClarificationRequired(source.isSimilarToClarificationRequired());
     }
     if (source instanceof ConversationDraft draft) {
-      copy.setDecision(draft.getDecision());
+      copy.setOutcome(draft.getOutcome());
       copy.setPendingQuestion(draft.getPendingQuestion());
       copy.setPreferenceAnswer(draft.isPreferenceAnswer());
       copy.setSearchClarificationRequired(draft.isSearchClarificationRequired());

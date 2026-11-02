@@ -1,6 +1,8 @@
 package com.gen3.recommenderagent.application.conversation;
 
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.conversation.ConversationOutcome;
+import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
@@ -39,12 +41,13 @@ public class ConversationDraft extends SessionRequest {
     turn.setRawText(draft.getRawText());
     turn.setCreatedAt(draft.getCreatedAt());
     turn.setIntent(draft.getIntent());
+    turn.setResponseAction(draft.getResponseAction());
     turn.setExplanationSelection(draft.getExplanationSelection());
     turn.setReferenceRank(draft.getReferenceRank());
     turn.setReferenceTitle(draft.getReferenceTitle());
     turn.setBookCount(draft.getBookCount());
     turn.setInvalidBookCount(draft.isInvalidBookCount());
-    turn.setDecision(draft.getDecision());
+    turn.setOutcome(draft.getOutcome());
     turn.setPendingQuestion(draft.getPendingQuestion());
     turn.setPreferenceClarificationRequired(draft.isPreferenceClarificationRequired());
     turn.setSearchClarificationRequired(draft.isSearchClarificationRequired());
@@ -61,12 +64,13 @@ public class ConversationDraft extends SessionRequest {
     draft.setRawText(turn.getRawText());
     draft.setCreatedAt(turn.getCreatedAt());
     draft.setIntent(turn.getIntent());
+    draft.setResponseAction(turn.getResponseAction());
     draft.setExplanationSelection(turn.getExplanationSelection());
     draft.setReferenceRank(turn.getReferenceRank());
     draft.setReferenceTitle(turn.getReferenceTitle());
     draft.setBookCount(turn.getBookCount());
     draft.setInvalidBookCount(turn.isInvalidBookCount());
-    draft.setDecision(turn.getDecision());
+    draft.setOutcome(turn.getOutcome());
     draft.setPendingQuestion(turn.getPendingQuestion());
     draft.setPreferenceClarificationRequired(turn.isPreferenceClarificationRequired());
     draft.setSearchClarificationRequired(turn.isSearchClarificationRequired());
@@ -85,13 +89,13 @@ public class ConversationDraft extends SessionRequest {
     preferenceAnswer = value;
   }
 
-  private ConversationDecision pendingQuestion;
+  private ConversationQuestion pendingQuestion;
 
-  public ConversationDecision getPendingQuestion() {
+  public ConversationQuestion getPendingQuestion() {
     return pendingQuestion;
   }
 
-  public void setPendingQuestion(ConversationDecision value) {
+  public void setPendingQuestion(ConversationQuestion value) {
     pendingQuestion = value;
   }
 
@@ -117,7 +121,8 @@ public class ConversationDraft extends SessionRequest {
     searchContext.setReplaceSearchFields(value);
   }
 
-  private ConversationDecision decision;
+  private ConversationOutcome outcome;
+  private ConversationAction responseAction;
   private boolean preferenceClarificationRequired;
   private boolean searchClarificationRequired;
   private boolean noMoreRecommendations;
@@ -131,12 +136,20 @@ public class ConversationDraft extends SessionRequest {
     searchContext = value;
   }
 
-  public ConversationDecision getDecision() {
-    return decision;
+  public ConversationOutcome getOutcome() {
+    return outcome;
   }
 
-  public void setDecision(ConversationDecision value) {
-    decision = value;
+  public void setOutcome(ConversationOutcome value) {
+    outcome = value;
+  }
+
+  public ConversationAction getResponseAction() {
+    return responseAction;
+  }
+
+  public void setResponseAction(ConversationAction value) {
+    responseAction = value;
   }
 
   public boolean isPreferenceClarificationRequired() {

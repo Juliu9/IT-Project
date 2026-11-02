@@ -6,7 +6,7 @@ import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.application.conversation.SessionRequest;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.PendingQuestion;
 import com.gen3.recommenderagent.domain.session.Session;
@@ -60,7 +60,6 @@ class PendingQuestionTest {
     var selected = resolver.resolve(session, input(ConversationAction.UNKNOWN, "the second one"));
     assertThat(selected.getSearchContext().getSimilarBook().bookId()).isEqualTo("2");
     if (intent == ConversationAction.UNKNOWN) {
-      result.setDecision(ConversationDecision.UNKNOWN);
       var response =
           new ConversationResponseGenerator(null)
               .generate(List.of(), ConversationDraft.toTurn(result));
@@ -90,7 +89,6 @@ class PendingQuestionTest {
     }
     var result = resolver.resolve(session, action);
     if (intent == ConversationAction.CANCEL) {
-      result.setDecision(ConversationDecision.CANCELLED);
       resolver.complete(session, result);
     }
     assertThat(session.getPendingQuestion()).isNull();
@@ -112,7 +110,7 @@ class PendingQuestionTest {
 
   @ParameterizedTest
   @EnumSource(
-      value = ConversationDecision.class,
+      value = ConversationQuestion.class,
       names = {
         "PREFERENCE_CLARIFICATION",
         "PREFERENCE_UPDATE_CLARIFICATION",
@@ -130,9 +128,9 @@ class PendingQuestionTest {
         "SIMILAR_BOOK_NOT_FOUND",
         "SIMILAR_BOOK_UNAVAILABLE"
       })
-  void unknownReasksEveryQuestionTypeAcrossReload(ConversationDecision decision) {
+  void unknownReasksEveryQuestionTypeAcrossReload(ConversationQuestion decision) {
     var session = new Session();
-    session.setPendingDecision(decision);
+    session.setPendingQuestionKind(decision);
     if (session.getPendingQuestion() instanceof PendingQuestion.SimilarBook book) {
       book.setRequest(ConversationDraft.toTurn(new ConversationDraft()));
     }
@@ -145,9 +143,8 @@ class PendingQuestionTest {
     session = reload(session);
     var unknown = resolver.resolve(session, input(ConversationAction.UNKNOWN, "gobbledygook"));
     assertThat(unknown.getIntent()).isEqualTo(ConversationAction.UNKNOWN);
-    unknown.setDecision(ConversationDecision.UNKNOWN);
     resolver.complete(session, unknown);
-    assertThat(session.getPendingDecision()).isEqualTo(decision);
+    assertThat(session.getPendingQuestionKind()).isEqualTo(decision);
     var response =
         new ConversationResponseGenerator(null)
             .generate(List.of(), ConversationDraft.toTurn(unknown));
@@ -163,7 +160,7 @@ class PendingQuestionTest {
             new AudiobookTitle("1", "Harry Potter one", List.of("J. K. Rowling")),
             new AudiobookTitle("2", "Harry Potter two", List.of("J. K. Rowling"))));
     var pending = new PendingQuestion.SimilarBook();
-    pending.setDecision(ConversationDecision.SIMILAR_BOOK_SELECTION);
+    pending.setKind(ConversationQuestion.SIMILAR_BOOK_SELECTION);
     pending.setRequest(ConversationDraft.toTurn(search));
     session.setPendingQuestion(pending);
     return session;

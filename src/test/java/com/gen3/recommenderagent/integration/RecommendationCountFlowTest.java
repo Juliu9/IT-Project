@@ -14,7 +14,6 @@ import com.gen3.recommenderagent.application.recommendation.RecommendationPager;
 import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
 import com.gen3.recommenderagent.application.recommendation.SimilarBookResolver;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
@@ -88,7 +87,7 @@ class RecommendationCountFlowTest {
   void invalidSearchCountUsesSavedCountImmediatelyAndPreservesCriteria(String text) {
     when(ai.parse(anyString())).thenReturn(fantasy());
     var result = engine.process(session, parser.parse(text));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getRecommendations()).hasSize(3);
     assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
     assertThat(session.getBookCount()).isEqualTo(3);
@@ -111,7 +110,7 @@ class RecommendationCountFlowTest {
     intent.setIntent(ConversationAction.CHANGE_COUNT);
     when(ai.parse(anyString())).thenReturn(intent);
     var result = engine.process(session, parser.parse(text));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.COUNT_UNCHANGED);
+    assertThat(result.getOutcome()).isNull();
     assertThat(session.getBookCount()).isEqualTo(3);
     assertThat(session.getPendingQuestion()).isNull();
     assertThat(result.getRecommendations()).isEmpty();
@@ -240,7 +239,7 @@ class RecommendationCountFlowTest {
     when(workflow.recommend(any(), any())).thenReturn(List.of());
     engine.process(session, parser.parse("Recommend fantasy books"));
     var result = engine.process(session, parser.parse("0 more"));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.NO_MORE_RESULTS);
+    assertThat(result.getOutcome()).isNull();
     assertThat(responses.generate(result.getRecommendations(), result))
         .startsWith("Recommendation counts must be whole numbers between 1 and 5.");
   }

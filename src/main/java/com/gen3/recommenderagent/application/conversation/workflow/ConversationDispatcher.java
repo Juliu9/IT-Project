@@ -71,9 +71,6 @@ public final class ConversationDispatcher {
     var handler = handler(request);
     handler.finish(session, request, original);
     ConversationHistory.complete(request);
-    if (request.getDecision() == null) {
-      request.setDecision(ConversationRules.decisionFor(request.getRecommendations(), request));
-    }
     clarification.complete(session, request);
     if (handler.retainsHistory()
         && !request.isSearchClarificationRequired()

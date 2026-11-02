@@ -8,7 +8,7 @@ import com.gen3.recommenderagent.application.conversation.workflow.Clarification
 import com.gen3.recommenderagent.application.conversation.workflow.SearchContextResolver;
 import com.gen3.recommenderagent.application.conversation.workflow.SearchCriteriaMerger;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.Session;
@@ -32,7 +32,7 @@ class DurationBoundsTest {
   void durationAnswersPreserveUnchangedBoundsAndConfirmExtensions(
       String duration, boolean confirmation, Integer minimum, Integer maximum) {
     var session = new Session();
-    session.setPendingDecision(ConversationDecision.SHORTER_DURATION_CLARIFICATION);
+    session.setPendingQuestionKind(ConversationQuestion.SHORTER_DURATION_CLARIFICATION);
     var pending = new ConversationDraft();
     pending.setIntent(ConversationAction.REFINE);
     var old = new ExactCriteria();
@@ -48,7 +48,8 @@ class DurationBoundsTest {
     policy.validateTransition(answer, answer, session);
     assertThat(answer.isSearchClarificationRequired()).isEqualTo(confirmation);
     if (confirmation) {
-      assertThat(answer.getDecision()).isEqualTo(ConversationDecision.DURATION_RANGE_CONFIRMATION);
+      assertThat(answer.getPendingQuestion())
+          .isEqualTo(ConversationQuestion.DURATION_RANGE_CONFIRMATION);
       var resolver = new ClarificationResolver();
       resolver.complete(session, answer);
       var yes = new ConversationDraft();
@@ -86,7 +87,8 @@ class DurationBoundsTest {
     policy.validateTransition(result, incoming, session);
     assertThat(result.isSearchClarificationRequired()).isEqualTo(confirm);
     if (confirm) {
-      assertThat(result.getDecision()).isEqualTo(ConversationDecision.DURATION_RANGE_CONFIRMATION);
+      assertThat(result.getPendingQuestion())
+          .isEqualTo(ConversationQuestion.DURATION_RANGE_CONFIRMATION);
       var clarification = new ClarificationResolver();
       clarification.complete(session, result);
       var answer = new ConversationDraft();

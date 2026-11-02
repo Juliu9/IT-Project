@@ -18,7 +18,6 @@ import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
@@ -74,7 +73,7 @@ class RecommendationBatchFlowTest {
       ConversationTurn repeat = process(request(ConversationAction.REPEAT));
       assertThat(repeat.getRecommendations()).isEmpty();
       assertThat(repeat.isNoMoreRecommendations()).isFalse();
-      assertThat(repeat.getDecision()).isEqualTo(ConversationDecision.HELP);
+      assertThat(repeat.getOutcome()).isNull();
     }
     verify(ranker, times(3)).rank(anyList(), eq(20), any(RankingContext.class));
   }
@@ -140,7 +139,7 @@ class RecommendationBatchFlowTest {
     for (int i = 0; i < 2; i++) {
       ConversationTurn repeat = process(request(ConversationAction.REPEAT));
       assertThat(repeat.getRecommendations()).isEmpty();
-      assertThat(repeat.getDecision()).isEqualTo(ConversationDecision.HELP);
+      assertThat(repeat.getOutcome()).isNull();
     }
     assertThat(sessions.getSession("session", "user").getActiveSearch().getShownBookIds())
         .hasSize(5);

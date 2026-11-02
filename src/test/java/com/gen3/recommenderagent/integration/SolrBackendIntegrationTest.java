@@ -9,7 +9,7 @@ import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.ranker.RankingService;
@@ -204,12 +204,12 @@ class SolrBackendIntegrationTest {
     var explain = new ConversationDraft();
     explain.setIntent(ConversationAction.EXPLAIN_RECOMMENDATION);
     var explanation = service.process("session", user, explain);
-    assertThat(explanation.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(explanation.getOutcome()).isNull();
     assertThat(explanation.getRecommendations()).hasSize(2);
     var fresh = new ConversationDraft();
     fresh.setIntent(ConversationAction.RECOMMENDATION);
-    assertThat(service.process("new-session", "new-user", fresh).getDecision())
-        .isEqualTo(ConversationDecision.PREFERENCE_CLARIFICATION);
+    assertThat(service.process("new-session", "new-user", fresh).getPendingQuestion())
+        .isEqualTo(ConversationQuestion.PREFERENCE_CLARIFICATION);
     verifyNoInteractions(model);
   }
 

@@ -18,7 +18,7 @@ import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
@@ -59,10 +59,10 @@ class PreferenceUpdateFlowTest {
     var ai = mock(AiParser.class);
     var parser = new InputParser(new CommandParser(), ai);
     var first = service.process("session", "user", parser.parse(command));
-    assertThat(first.getDecision()).isEqualTo(ConversationDecision.COUNT_CHANGED);
+    assertThat(first.getOutcome()).isNull();
     assertThat(sessions.getSession("session", "user").getBookCount()).isEqualTo(3);
     var second = service.process("session", "user", parser.parse("4 books at a time"));
-    assertThat(second.getDecision()).isEqualTo(ConversationDecision.COUNT_CHANGED);
+    assertThat(second.getOutcome()).isNull();
     assertThat(sessions.getSession("session", "user").getBookCount()).isEqualTo(4);
     assertThat(
             sessions
@@ -124,7 +124,7 @@ class PreferenceUpdateFlowTest {
       process(request(ConversationAction.MORE_RESULTS));
     }
     var result = process(request(ConversationAction.MORE_RESULTS));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.isPreferenceClarificationRequired()).isFalse();
     assertThat(result.getRecommendations())
         .extracting(Recommendation::getId)
@@ -145,12 +145,12 @@ class PreferenceUpdateFlowTest {
     search.setPersonalised(true);
     search.setStartsNewSearch(true);
     search.setPositiveSemanticQuery(tastes("horror").getPositiveSemanticQuery());
-    assertThat(process(search).getDecision())
-        .isEqualTo(ConversationDecision.PREFERENCE_CLARIFICATION);
+    assertThat(process(search).getPendingQuestion())
+        .isEqualTo(ConversationQuestion.PREFERENCE_CLARIFICATION);
     org.mockito.Mockito.clearInvocations(vectors, retriever, ranker);
     var parser = new InputParser(new CommandParser(), mock(AiParser.class));
     var result = service.process("session", "user", parser.parse(text));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.SEARCH_CLARIFICATION);
+    assertThat(result.getPendingQuestion()).isEqualTo(ConversationQuestion.SEARCH_CLARIFICATION);
     assertThat(result.getRecommendations()).isEmpty();
     assertThat(sessions.getSession("session", "user").isAwaitingPersonalisedPreferences())
         .isFalse();
@@ -206,7 +206,7 @@ class PreferenceUpdateFlowTest {
     process(request(ConversationAction.HELP));
     var result = process(update(tastes("horror")));
     assertThat(result.getRecommendations()).isEmpty();
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.PREFERENCES_UPDATED);
+    assertThat(result.getOutcome()).isNull();
     assertThat(
             sessions
                 .getSession("session", "user")
@@ -214,7 +214,7 @@ class PreferenceUpdateFlowTest {
                 .getPositiveSemanticQuery()
                 .getGenres())
         .containsExactly("horror");
-    assertThat(sessions.getSession("session", "user").getPendingDecision()).isNull();
+    assertThat(sessions.getSession("session", "user").getPendingQuestionKind()).isNull();
   }
 
   @Test
@@ -226,7 +226,7 @@ class PreferenceUpdateFlowTest {
     count.setBookCount(2);
     process(count);
     process(request(ConversationAction.HELP));
-    assertThat(sessions.getSession("session", "user").getPendingDecision()).isNull();
+    assertThat(sessions.getSession("session", "user").getPendingQuestionKind()).isNull();
     var reply = request(ConversationAction.RECOMMENDATION);
     reply.setPositiveSemanticQuery(tastes("horror").getPositiveSemanticQuery());
     assertThat(process(reply).getRecommendations()).hasSize(2);
@@ -242,8 +242,8 @@ class PreferenceUpdateFlowTest {
     filter.setLanguage("English");
     filterPreferences.setMustInclude(filter);
     var result = process(update(filterPreferences));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.PREFERENCES_UPDATED);
-    assertThat(sessions.getSession("session", "user").getPendingDecision()).isNull();
+    assertThat(result.getOutcome()).isNull();
+    assertThat(sessions.getSession("session", "user").getPendingQuestionKind()).isNull();
     var answer = request(ConversationAction.RECOMMENDATION);
     answer.setPositiveSemanticQuery(tastes("horror").getPositiveSemanticQuery());
     assertThat(process(answer).getRecommendations()).hasSize(5);
@@ -267,7 +267,7 @@ class PreferenceUpdateFlowTest {
     var reset = service.process("session", "user", parser.parse("reset my preferences"));
     session = sessions.getSession("session", "user");
     assertThat(reset.getIntent()).isEqualTo(ConversationAction.RESET_PREFERENCES);
-    assertThat(reset.getDecision()).isEqualTo(ConversationDecision.PREFERENCES_RESET);
+    assertThat(reset.getOutcome()).isNull();
     assertThat(session.getPreferences()).isNull();
     assertThat(session.getBookCount()).isEqualTo(5);
     assertThat(session.getActiveSearch().getPendingRecommendations())
@@ -278,7 +278,7 @@ class PreferenceUpdateFlowTest {
     var response = new ConversationResponseGenerator(new AiResponseGenerator(null));
     assertThat(response.generate(reset.getRecommendations(), reset)).contains("reset", "5");
     var replay = process(request(ConversationAction.REPEAT));
-    assertThat(replay.getDecision()).isEqualTo(ConversationDecision.PREFERENCES_RESET);
+    assertThat(replay.getOutcome()).isNull();
     assertThat(process(request(ConversationAction.REPEAT_RECOMMENDATIONS)).getRecommendations())
         .extracting(Recommendation::getId)
         .containsExactlyElementsOf(Recommendation.bookIds(page.getRecommendations()));
@@ -366,8 +366,8 @@ class PreferenceUpdateFlowTest {
   @Test
   void asksForMissingDetailsAndShortReplyCompletesUpdateWithoutBooks() {
     var question = process(update(null));
-    assertThat(question.getDecision())
-        .isEqualTo(ConversationDecision.PREFERENCE_UPDATE_CLARIFICATION);
+    assertThat(question.getPendingQuestion())
+        .isEqualTo(ConversationQuestion.PREFERENCE_UPDATE_CLARIFICATION);
     assertThat(
             new ConversationResponseGenerator(new AiResponseGenerator(null))
                 .generate(question.getRecommendations(), question))
@@ -380,10 +380,9 @@ class PreferenceUpdateFlowTest {
     assertThat(result.getPositiveSemanticQuery()).isNull();
     assertThat(result.getRecommendations()).isEmpty();
     assertThat(saved().getPositiveSemanticQuery().getGenres()).containsExactly("horror");
-    assertThat(process(request(ConversationAction.REPEAT)).getDecision())
-        .isEqualTo(ConversationDecision.PREFERENCES_UPDATED);
-    assertThat(process(request(ConversationAction.MORE_RESULTS)).getDecision())
-        .isEqualTo(ConversationDecision.SEARCH_CLARIFICATION);
+    assertThat(process(request(ConversationAction.REPEAT)).getOutcome()).isNull();
+    assertThat(process(request(ConversationAction.MORE_RESULTS)).getPendingQuestion())
+        .isEqualTo(ConversationQuestion.SEARCH_CLARIFICATION);
     verifyNoInteractions(vectors, retriever, ranker, users);
   }
 
@@ -428,7 +427,7 @@ class PreferenceUpdateFlowTest {
     var request = parser.parse(raw);
     assertThat(request.getPreferenceUpdates()).isNull();
     var result = service.process("session", "user", request);
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.PREFERENCES_UPDATED);
+    assertThat(result.getOutcome()).isNull();
     assertThat(saved().getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
     assertThat(saved().getNegativeSemanticQuery().getGenres()).containsExactly("romance");
     assertThat(saved().getMustInclude().getLanguage()).isEqualTo("English");
@@ -531,21 +530,20 @@ class PreferenceUpdateFlowTest {
     process(update(null));
     var explain = request(ConversationAction.EXPLAIN_RECOMMENDATION);
     explain.setReferenceRank(6);
-    assertThat(process(explain).getDecision())
-        .isEqualTo(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+    assertThat(process(explain).getPendingQuestion())
+        .isEqualTo(ConversationQuestion.EXPLANATION_TARGET_CLARIFICATION);
     var selection = request(ConversationAction.UNKNOWN);
     selection.setRawText("1");
-    assertThat(process(selection).getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
-    assertThat(process(request(ConversationAction.CHANGE_COUNT)).getDecision())
-        .isEqualTo(ConversationDecision.COUNT_UNCHANGED);
+    assertThat(process(selection).getOutcome()).isNull();
+    assertThat(process(request(ConversationAction.CHANGE_COUNT)).getOutcome()).isNull();
     var count = request(ConversationAction.UNKNOWN);
     count.setRawText("2");
-    assertThat(process(count).getDecision()).isEqualTo(ConversationDecision.UNKNOWN);
+    assertThat(process(count).getOutcome()).isNull();
     assertThat(sessions.getSession("session", "user").getPendingQuestion()).isNull();
     count.setIntent(ConversationAction.CHANGE_COUNT);
     count.setRawText("set count to 2");
     count.setBookCount(2);
-    assertThat(process(count).getDecision()).isEqualTo(ConversationDecision.COUNT_CHANGED);
+    assertThat(process(count).getOutcome()).isNull();
   }
 
   @Test

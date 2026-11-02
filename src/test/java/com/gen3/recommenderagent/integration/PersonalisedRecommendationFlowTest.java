@@ -15,7 +15,7 @@ import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
@@ -277,7 +277,7 @@ class PersonalisedRecommendationFlowTest {
     cancel.setIntent(ConversationAction.UNKNOWN);
     cancel.setRawText("never mind");
     var result = process(cancel);
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.CANCELLED);
+    assertThat(result.getOutcome()).isNull();
     assertThat(responseGenerator.generate(result.getRecommendations(), result))
         .contains("cancelled");
     assertThat(sessions.getSession("session", "user").isAwaitingPersonalisedPreferences())
@@ -391,7 +391,7 @@ class PersonalisedRecommendationFlowTest {
     session.getPreferences().setPositiveSemanticQuery(earlier);
     ConversationDraft pending = personalisedRequest();
     pending.setPreferenceClarificationRequired(true);
-    session.setPendingDecision(ConversationDecision.PREFERENCE_CLARIFICATION);
+    session.setPendingQuestionKind(ConversationQuestion.PREFERENCE_CLARIFICATION);
     ((com.gen3.recommenderagent.domain.session.PendingQuestion.Preference)
             session.getPendingQuestion())
         .setRequest(ConversationDraft.toTurn(pending));

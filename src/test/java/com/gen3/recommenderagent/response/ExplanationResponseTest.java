@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
@@ -157,7 +156,6 @@ class ExplanationResponseTest {
   private ConversationDraft request() {
     var request = new ConversationDraft();
     request.setIntent(ConversationAction.EXPLAIN_RECOMMENDATION);
-    request.setDecision(ConversationDecision.EXPLANATION);
     request.setRawText("Why this book?");
     var query = new SemanticQuery();
     query.setGenres(List.of("fantasy"));

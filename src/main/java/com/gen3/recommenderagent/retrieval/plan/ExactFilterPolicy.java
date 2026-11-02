@@ -5,7 +5,8 @@ import com.gen3.recommenderagent.application.conversation.PreferenceRequestMappe
 import com.gen3.recommenderagent.application.conversation.SessionRequest;
 import com.gen3.recommenderagent.application.conversation.workflow.ConversationHistory;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationOutcome;
+import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.domain.search.DurationRange;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.Session;
@@ -348,7 +349,7 @@ public class ExactFilterPolicy {
     boolean relative = ConversationText.isYearRefinement(expression);
     boolean answeringYear =
         session != null
-            && session.getPendingDecision() == ConversationDecision.RECENCY_YEAR_CLARIFICATION;
+            && session.getPendingQuestionKind() == ConversationQuestion.RECENCY_YEAR_CLARIFICATION;
     if (!relative && !answeringYear) {
       return;
     }
@@ -373,12 +374,12 @@ public class ExactFilterPolicy {
   private void resolveOlderRefinement(
       ConversationDraft request, Session session, ConversationDraft previous, List<Integer> years) {
     if (years.isEmpty()) {
-      awaitRefinement(request, session, ConversationDecision.RECENCY_YEAR_CLARIFICATION);
+      awaitRefinement(request, session, ConversationQuestion.RECENCY_YEAR_CLARIFICATION);
       return;
     }
     int upper = years.stream().mapToInt(Integer::intValue).sum() / years.size() - 1;
     if (upper < 1) {
-      request.setDecision(ConversationDecision.RECENCY_EXHAUSTED);
+      request.setOutcome(ConversationOutcome.RECENCY_EXHAUSTED);
       request.setSearchClarificationRequired(true);
       return;
     }
@@ -393,7 +394,7 @@ public class ExactFilterPolicy {
         conflict || lower == null ? "before " + (upper + 1) : "between " + lower + " and " + upper;
     setYear(request, bounded);
     if (conflict) {
-      awaitRefinement(request, session, ConversationDecision.RECENCY_RANGE_CONFIRMATION);
+      awaitRefinement(request, session, ConversationQuestion.RECENCY_RANGE_CONFIRMATION);
     }
   }
 
@@ -414,7 +415,7 @@ public class ExactFilterPolicy {
       return;
     }
     if (lower == null) {
-      awaitRefinement(request, session, ConversationDecision.RECENCY_YEAR_CLARIFICATION);
+      awaitRefinement(request, session, ConversationQuestion.RECENCY_YEAR_CLARIFICATION);
       return;
     }
     var previousBounds =
@@ -428,9 +429,9 @@ public class ExactFilterPolicy {
     }
     if (lower > 9999 || (upper != null && lower > upper)) {
       if (relative) {
-        request.setDecision(ConversationDecision.RECENCY_EXHAUSTED);
+        request.setOutcome(ConversationOutcome.RECENCY_EXHAUSTED);
       } else {
-        request.setDecision(ConversationDecision.RECENCY_RANGE_CONFIRMATION);
+        request.setPendingQuestion(ConversationQuestion.RECENCY_RANGE_CONFIRMATION);
         session.setPendingRefinementRequest(ConversationDraft.toStoredTurn(request));
       }
       request.setSearchClarificationRequired(true);
@@ -447,8 +448,8 @@ public class ExactFilterPolicy {
   }
 
   private void awaitRefinement(
-      ConversationDraft request, Session session, ConversationDecision question) {
-    request.setDecision(question);
+      ConversationDraft request, Session session, ConversationQuestion question) {
+    request.setPendingQuestion(question);
     request.setSearchClarificationRequired(true);
     session.setPendingRefinementRequest(ConversationDraft.toStoredTurn(request));
   }
@@ -468,8 +469,9 @@ public class ExactFilterPolicy {
         || request.getIntent() != ConversationAction.REFINE
         || request.getMustInclude() == null
         || request.getMustInclude().getDuration() == null
-        || (session.getPendingDecision() != ConversationDecision.SHORTER_DURATION_CLARIFICATION
-            && session.getPendingDecision() != ConversationDecision.LONGER_DURATION_CLARIFICATION)
+        || (session.getPendingQuestionKind() != ConversationQuestion.SHORTER_DURATION_CLARIFICATION
+            && session.getPendingQuestionKind()
+                != ConversationQuestion.LONGER_DURATION_CLARIFICATION)
         || session.getPendingRefinementRequest() == null) {
       return;
     }
@@ -494,7 +496,7 @@ public class ExactFilterPolicy {
     }
     if ((old.minimum() != null && (minimum == null || minimum < old.minimum()))
         || (old.maximum() != null && (maximum == null || maximum > old.maximum()))) {
-      awaitRefinement(request, session, ConversationDecision.DURATION_RANGE_CONFIRMATION);
+      awaitRefinement(request, session, ConversationQuestion.DURATION_RANGE_CONFIRMATION);
     }
   }
 
@@ -527,8 +529,8 @@ public class ExactFilterPolicy {
           request,
           session,
           longer
-              ? ConversationDecision.LONGER_DURATION_CLARIFICATION
-              : ConversationDecision.SHORTER_DURATION_CLARIFICATION);
+              ? ConversationQuestion.LONGER_DURATION_CLARIFICATION
+              : ConversationQuestion.SHORTER_DURATION_CLARIFICATION);
       return;
     }
     int boundary =
@@ -558,14 +560,14 @@ public class ExactFilterPolicy {
     request.setShorter(false);
     request.setLonger(false);
     if (conflict) {
-      awaitRefinement(request, session, ConversationDecision.DURATION_RANGE_CONFIRMATION);
+      awaitRefinement(request, session, ConversationQuestion.DURATION_RANGE_CONFIRMATION);
     }
   }
 
   public void validateTransition(
       ConversationDraft resolved, SessionRequest original, Session session) {
     if (resolved.getIntent() == ConversationAction.UPDATE_PREFERENCES) {
-      if (resolved.getDecision() == ConversationDecision.PREFERENCE_UPDATE_CLARIFICATION) {
+      if (resolved.getPendingQuestion() == ConversationQuestion.PREFERENCE_UPDATE_CLARIFICATION) {
         return;
       }
       var proposed = PreferenceRequestMapper.toRequest(resolved.getPreferenceUpdates());

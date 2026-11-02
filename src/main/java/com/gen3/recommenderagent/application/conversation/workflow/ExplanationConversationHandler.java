@@ -5,7 +5,8 @@ import static com.gen3.recommenderagent.application.conversation.workflow.Search
 
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationOutcome;
+import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.domain.conversation.ExplanationSelection;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
@@ -21,7 +22,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
 
   public ConversationDraft resolve(Session session, ConversationDraft input) {
     if (session == null) {
-      input.setDecision(ConversationDecision.NOTHING_TO_EXPLAIN);
+      input.setOutcome(ConversationOutcome.NOTHING_TO_EXPLAIN);
       return input;
     }
     resolveExplanation(input, session);
@@ -36,7 +37,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
     target.setBookCount(null);
     ConversationDraft previous = latestDisplayedSearch(session);
     if (previous == null) {
-      target.setDecision(ConversationDecision.NOTHING_TO_EXPLAIN);
+      target.setOutcome(ConversationOutcome.NOTHING_TO_EXPLAIN);
       return;
     }
     merge(previous, target);
@@ -48,7 +49,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
                 .toList();
     target.setRecommendations(page);
     if (page.isEmpty()) {
-      target.setDecision(ConversationDecision.EMPTY_EXPLANATION_PAGE);
+      target.setOutcome(ConversationOutcome.EMPTY_EXPLANATION_PAGE);
       return;
     }
     if (target.getExplanationSelection() != null) {
@@ -68,14 +69,13 @@ public final class ExplanationConversationHandler implements ConversationHandler
             && !target.getReferenceTitle().isBlank())
         || (!title.isEmpty() && matches.size() != 1)
         || (rank != null && matches.stream().noneMatch(book -> rank.equals(book.getRank())))) {
-      target.setDecision(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+      target.setPendingQuestion(ConversationQuestion.EXPLANATION_TARGET_CLARIFICATION);
       return;
     }
     if (rank != null) {
       matches = matches.stream().filter(book -> rank.equals(book.getRank())).toList();
     }
     target.setRecommendations(matches);
-    target.setDecision(ConversationDecision.EXPLANATION);
   }
 
   private void resolveSubset(ConversationDraft target, Session session, List<Recommendation> page) {
@@ -86,7 +86,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
     target.setExplanationSelection(normalized);
     if (firstUnresolved(normalized, page) != null) {
       session.setPendingExplanation(normalized);
-      target.setDecision(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+      target.setPendingQuestion(ConversationQuestion.EXPLANATION_TARGET_CLARIFICATION);
       return;
     }
     var included = include.stream().map(Integer::valueOf).toList();
@@ -100,10 +100,9 @@ public final class ExplanationConversationHandler implements ConversationHandler
             .toList();
     session.setPendingExplanation(null);
     target.setRecommendations(selected);
-    target.setDecision(
-        selected.isEmpty()
-            ? ConversationDecision.EMPTY_EXPLANATION_SELECTION
-            : ConversationDecision.EXPLANATION);
+    if (selected.isEmpty()) {
+      target.setOutcome(ConversationOutcome.EMPTY_EXPLANATION_SELECTION);
+    }
   }
 
   private static List<String> resolveSelectors(List<String> selectors, List<Recommendation> page) {
