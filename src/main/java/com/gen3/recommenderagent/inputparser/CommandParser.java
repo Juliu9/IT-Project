@@ -171,7 +171,7 @@ public class CommandParser {
         Pattern.compile("^(?:the same but )?less (violent|dark|scary|romantic)$").matcher(command);
     var without =
         Pattern.compile(
-                "^(?:only )?(?:books|audiobooks) without (romance|horror|fantasy|mystery|crime|comedy|science fiction|thrillers?)$")
+                "^(?:only )?(?:books|audiobooks) without (" + ConversationText.GENRE_PATTERN + ")$")
             .matcher(command);
     if (negative.matches() || without.matches()) {
       var parsed =

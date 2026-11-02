@@ -24,42 +24,6 @@ import tools.jackson.databind.ObjectMapper;
 
 class InputParserTest {
   @Test
-  void explicitPositiveGenreSurvivesSparseAiOutput() {
-    String text = "Recommend fantasy audiobooks with a strong female protagonist.";
-    var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.RECOMMENDATION);
-    var query = new SemanticQuery();
-    query.setKeywords(List.of("strong female protagonist"));
-    parsed.setPositiveSemanticQuery(query);
-    var ai = mock(AiParser.class);
-    when(ai.parse(text)).thenReturn(parsed);
-
-    var result = new InputParser(new CommandParser(), ai).parse(text);
-
-    assertEquals(List.of("fantasy"), result.getPositiveSemanticQuery().getGenres());
-  }
-
-  @Test
-  void explicitlyExcludedGenreIsNotPromotedToPositiveSearch() {
-    String text = "Recommend audiobooks without fantasy but with a strong female protagonist.";
-    var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.RECOMMENDATION);
-    var positive = new SemanticQuery();
-    positive.setKeywords(List.of("strong female protagonist"));
-    parsed.setPositiveSemanticQuery(positive);
-    var negative = new SemanticQuery();
-    negative.setGenres(List.of("fantasy"));
-    parsed.setNegativeSemanticQuery(negative);
-    var ai = mock(AiParser.class);
-    when(ai.parse(text)).thenReturn(parsed);
-
-    var result = new InputParser(new CommandParser(), ai).parse(text);
-
-    assertEquals(null, result.getPositiveSemanticQuery().getGenres());
-    assertEquals(List.of("fantasy"), result.getNegativeSemanticQuery().getGenres());
-  }
-
-  @Test
   void explicitReferenceToPreviousLikesForcesPersonalisation() {
     String text = "Give me something similar to what I liked previously, but with more humour.";
     var parsed = new UserIntent();

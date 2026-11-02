@@ -100,6 +100,7 @@ public class AiParser {
                         "Find an audiobook based on my reading preferences by Agatha Christie under six hours" -> personalised=true, mustInclude.authors=["Agatha Christie"], mustInclude.duration="under 6 hours", with no invented semantic tastes.
 
                         Criteria and people:
+                        Before returning, check every clause in the user's request: each stated genre, theme, character trait, exact constraint, and exclusion must appear in its own appropriate field. A later clause never replaces or makes an earlier clause implicit.
                         Only RECOMMENDATION and REFINE use top-level positiveSemanticQuery, negativeSemanticQuery, mustInclude, and mustNotInclude. Semantic tastes and exact filters are independent; retain both.
                         Put genres, moods, plots, and character traits in semantic genres/topics/keywords. Author/narrator fields contain only people explicitly identified as writers or narrators; a protagonist is not an author.
                         Put mandatory author/narrator/language/duration/publication-year/source constraints in mustInclude or mustNotInclude.

@@ -6,9 +6,7 @@ import com.gen3.recommenderagent.domain.conversation.ConversationAction;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import java.math.BigInteger;
 import java.security.SecureRandom;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
@@ -120,7 +118,6 @@ public class InputParser {
             "I couldn't determine what you'd like to do. Could you rephrase that?");
       }
 
-      retainExplicitPositiveGenres(rawText, parsed);
       parsed.setInvalidBookCount(normalizeCount(rawText, countInput, parsed));
 
       outcome = "SUCCESS";
@@ -132,50 +129,6 @@ public class InputParser {
           outcome,
           TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
     }
-  }
-
-  private void retainExplicitPositiveGenres(String rawText, UserIntent parsed) {
-    if (parsed.getIntent() != ConversationAction.RECOMMENDATION
-        && parsed.getIntent() != ConversationAction.REFINE) {
-      return;
-    }
-    String text = rawText.toLowerCase(Locale.ROOT);
-    var genres = new ArrayList<String>();
-    if (parsed.getPositiveSemanticQuery() != null
-        && parsed.getPositiveSemanticQuery().getGenres() != null) {
-      genres.addAll(parsed.getPositiveSemanticQuery().getGenres());
-    }
-    if (!genres.isEmpty()) {
-      return;
-    }
-    for (String genre :
-        List.of(
-            "romance",
-            "horror",
-            "fantasy",
-            "mystery",
-            "crime",
-            "comedy",
-            "science fiction",
-            "thriller")) {
-      String plural = genre.equals("thriller") ? "s?" : "";
-      if (text.matches(".*\\b" + genre + plural + "\\b.*")
-          && !text.matches(
-              ".*\\b(?:without|avoid(?:ing)?|exclud(?:e|ing)|no|not)\\b[^.!?,;]{0,40}\\b"
-                  + genre
-                  + plural
-                  + "\\b.*")
-          && genres.stream().noneMatch(genre::equalsIgnoreCase)) {
-        genres.add(genre);
-      }
-    }
-    if (genres.isEmpty()) {
-      return;
-    }
-    if (parsed.getPositiveSemanticQuery() == null) {
-      parsed.setPositiveSemanticQuery(new com.gen3.recommenderagent.domain.search.SemanticQuery());
-    }
-    parsed.getPositiveSemanticQuery().setGenres(List.copyOf(genres));
   }
 
   /** Converts validated user meaning into the request consumed by conversation policy. */

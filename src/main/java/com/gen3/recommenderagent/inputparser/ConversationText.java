@@ -5,6 +5,9 @@ import java.util.regex.Pattern;
 
 /** Shared courtesy normalization for complete commands and short selection replies. */
 public final class ConversationText {
+  static final String GENRE_PATTERN =
+      "romance|horror|fantasy|mystery|crime|comedy|science fiction|thrillers?";
+
   private static final Pattern SELECTION_REPLY =
       Pattern.compile(
           "(?i)^(?:(?:choose|pick|select)\\s+)?(?:the\\s+)?(?:(?:book|audiobook)\\s+)?(?:number\\s+)?([0-9]+(?:st|nd|rd|th)?|one|two|three|four|five|six|seven|eight|nine|ten|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)(?:\\s+(?:one|book|audiobook|recommendation))?(?:\\s+please)?[.!?]?$");
