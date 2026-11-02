@@ -234,8 +234,9 @@ check verifies title coverage, not factual accuracy.
 | `storage.user` / `storage.session` | User-preference and session contracts/adapters |
 | `ai` / `observability` | Provider error translation, timing, and usage telemetry |
 
-Shared catalogue code lives under `com.gen3.shared.audiobookcatalogue` and does not depend on the recommendation
-server. It owns audiobook models, database ports/adapters, vector utilities, and local snapshots.
+Shared catalogue code lives under `com.gen3.shared.audiobookcatalogue` and does not depend on the
+recommendation server. It owns audiobook models, database ports/adapters, and local snapshots;
+shared vector mathematics lives under `com.gen3.shared.vector`.
 
 ### Maintenance modules
 
@@ -342,9 +343,9 @@ ranking code must remain independent of database-specific types.
 ### Solr schema and record identity
 
 Solr uses the catalogue's unique string `id` and a separate user-preference collection keyed by the
-exact external user ID. Reads never create collections or schemas. Preference saves replace both
-taste vectors, remove an absent side, and preserve unrelated fields through atomic updates. Stored
-vectors must be finite, nonzero, and match the configured dimension.
+exact external user ID. Reads never create collections or schemas. Import saves replace mapped
+vector sides, preserve absent or unmapped sides, and retain unrelated fields through atomic updates.
+Stored vectors must be finite, nonzero, and match the configured dimension.
 
 Solr is wired only when selected, except when it is the explicit migration source. See
 [Solr configuration](configuration.md#solr) for fields, schemas, collections, and connections.

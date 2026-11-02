@@ -93,5 +93,5 @@ These tests do not call paid AI providers or use the remote benchmark catalogue.
 test writes only its disposable test collection. The standard non-live suite also includes them.
 
 Synthetic interaction datasets and import-speed measurements belong to the consumer of this
-snapshot. See the [user-preference benchmark](user-preferences.md#local-benchmark-datasets).
+snapshot. See the [user-preference benchmark](user-preferences.md#benchmark-datasets-and-results).
 

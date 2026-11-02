@@ -29,4 +29,4 @@ completion checks and recovery. The recommendation server does not read this loc
 Automated tests use small temporary vectors and a disposable Qdrant container; see the
 [snapshot test-data instructions](../../../../../../docs/jobs/snapshots.md#test-data).
 User interaction datasets and performance measurements are documented by the
-[user-preference benchmark](../../../../../../docs/jobs/user-preferences.md#local-benchmark-datasets).
+[user-preference benchmark](../../../../../../docs/jobs/user-preferences.md#benchmark-datasets-and-results).

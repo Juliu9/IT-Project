@@ -4,9 +4,15 @@
 
 ## Purpose
 
-Keep started/read books out of new recommendations. CSV history updates an independent PostgreSQL
-table; requests load only the current user's IDs, never all users' history at startup. Without this
-store, preference vectors describe taste but cannot identify which individual books to exclude.
+This job is **only a utility for populating the read-history database from a CSV**. Recommendation
+exclusion does not depend on this importer: it works as long as the configured database contains
+the user's read book IDs and its adapter implements the documented read contract.
+
+The supplied importer is one way to populate that database and will likely not be used in
+production. A production system would normally write read IDs from its existing listening-history
+or event pipeline instead. Requests load only the current user's IDs, never all users' history at
+startup. Without this store, preference vectors describe taste but cannot identify which individual
+books to exclude.
 
 Every valid history row counts as read, including a just-started book. Exclusion matches the exact
 catalogue ID, not other editions of the same work. Favourites alone do not mark books as read.
@@ -49,6 +55,9 @@ The data volume persists across container restarts. Do not delete it to restart 
 The development account owns the database; use separate read-only/import roles in deployments.
 
 ## Import (writes history)
+
+**This optional CSV import is a population tool, not a required part of the production request
+path.**
 
 Run from the repository root:
 
