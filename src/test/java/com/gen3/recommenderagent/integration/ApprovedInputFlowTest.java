@@ -8,9 +8,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.catalogue.model.AudiobookTitle;
-import com.gen3.catalogue.port.AudiobookTitleLookup;
-import com.gen3.catalogue.port.AudiobookVectorRepository;
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationEngine;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
@@ -33,6 +30,9 @@ import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
 import com.gen3.recommenderagent.response.ConversationResponseGenerator;
 import com.gen3.recommenderagent.retrieval.plan.ExactFilterPolicy;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookTitle;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookTitleLookup;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookVectorRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.IntStream;
@@ -52,7 +52,10 @@ class ApprovedInputFlowTest {
   private final ConversationEngine engine =
       new ConversationEngine(
           ConversationTestSupport.dispatcher(),
-          new RecommendationPager(workflow),
+          new RecommendationPager(
+              workflow,
+              new com.gen3.recommenderagent.application.recommendation.ReadHistoryExclusions(
+                  java.util.Optional.empty(), 10000)),
           new ExactFilterPolicy(),
           new SimilarBookResolver(titles, vectors));
   private final AiResponseGenerator narration =

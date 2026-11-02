@@ -7,9 +7,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.catalogue.model.AudiobookEmbedding;
-import com.gen3.catalogue.model.AudiobookRecord;
-import com.gen3.catalogue.solr.SolrAudiobookRepository;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookEmbedding;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookRecord;
+import com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository;
 import com.google.common.util.concurrent.Futures;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Points.ScrollPoints;

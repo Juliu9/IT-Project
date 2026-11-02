@@ -8,7 +8,7 @@ belong in behavior tests rather than this overview.
 
 ## System at a glance
 
-The repository contains one interactive recommendation server and five independently launched
+The repository contains one interactive recommendation server and six independently launched
 maintenance jobs. They share catalogue models and database adapters but have separate entry points.
 
 ```text
@@ -21,7 +21,7 @@ HTTP request
   → generate response text
 
 Maintenance launchers
-  → embeddings | snapshots | short descriptions | migration | user preferences
+  → embeddings | snapshots | short descriptions | migration | user preferences | read history
 ```
 
 The server supports either Qdrant or Solr. Redis stores interactive sessions. Maintenance jobs do
@@ -234,7 +234,7 @@ check verifies title coverage, not factual accuracy.
 | `storage.user` / `storage.session` | User-preference and session contracts/adapters |
 | `ai` / `observability` | Provider error translation, timing, and usage telemetry |
 
-Shared catalogue code lives under `com.gen3.catalogue` and does not depend on the recommendation
+Shared catalogue code lives under `com.gen3.shared.audiobookcatalogue` and does not depend on the recommendation
 server. It owns audiobook models, database ports/adapters, vector utilities, and local snapshots.
 
 ### Maintenance modules
@@ -246,11 +246,35 @@ server. It owns audiobook models, database ports/adapters, vector utilities, and
 | `shortdescriptionjob` | Generate and store missing or rebuilt summaries |
 | `migrationjob` | Copy supported Solr catalogue data to Qdrant |
 | `userpreferencejob` | Stream CSV interactions and aggregate user vectors |
+| `shared.readhistory` | Bounded history contracts under `port`, PostgreSQL adapter/configuration under `postgres` |
+| `shared.csv` | Reusable CSV readers, normalization and input records under `model` |
+| `readhistoryjob` | Independent additive CSV history importer and launcher |
 | `shared.jobruntime` | Periodic progress reporting and per-run log naming |
 
 Jobs reuse catalogue adapters but have dedicated launchers and safety flags. The snapshot is a
 derived cache, not a backup or change feed. See the [job runbooks](jobs/README.md) for writes,
 prerequisites, and recovery.
+
+### Read-book eligibility
+
+`shared.readhistory.port.ReadHistoryRepository` is a replaceable bounded read contract. Its PostgreSQL adapter
+uses an indexed user/book table and an explicit connection pool; schema setup is manual. The
+independent importer reuses CSV normalization and adds pairs without altering preference vectors
+or book payloads. Starting a book counts as read; exclusion matches exact catalogue IDs only.
+
+Shared CSV readers and their input records live under `shared.csv`, so neither import job depends
+on the other job's implementation. The recommendation application explicitly imports the shared
+PostgreSQL configuration; it does not component-scan every shared helper or start import jobs.
+
+When configured, `ReadHistoryExclusions` loads one current-user snapshot in `RecommendationPager`.
+`ConversationDraft` holds those IDs for this request only; stored turns/sessions omit them. The
+workflow merges them into retrieval/ranking exclusions and the pager checks cached/refilled books.
+Repeat/explain preserve their original selection without history lookup. Solr uses term-set
+exclusions rather than a large OR query; every retrieval mode shares the same filter.
+
+Lookup failures and histories over the configured limit log a structured warning and fail open;
+session shown-ID exclusions still apply. No unread-only guarantee applies in those cases. Successful
+lookups never relax exclusions to fill a page. See [read history](jobs/read-history.md) for operations.
 
 ## Technology replacement guide
 
@@ -269,7 +293,7 @@ Difficulty describes the contract and data-migration risk, not merely the number
 | Replace the chat provider | Medium | [`ChatClientConfiguration`](../src/main/java/com/gen3/recommenderagent/application/ChatClientConfiguration.java), `inputparser`, `response`, `ai` | Supply both role-specific clients and preserve parser schema, retries, provider-error translation, usage telemetry, title coverage, and response fallbacks. |
 | Change the embedding model or dimensions | High | [`application.properties`](../src/main/resources/application.properties), `embeddingjob`, database vector schemas, `snapshotjob`, `userpreferencejob` | **Requires compatible schemas, a complete catalogue reindex, a new snapshot, and regenerated user vectors.** A property-only change can mix incompatible vectors. |
 | Replace the short-description provider | Medium | [`ShortDescriptionGenerator`](../src/main/java/com/gen3/shortdescriptionjob/provider/ShortDescriptionGenerator.java), `shortdescriptionjob.provider`, provider tests | Preserve ten-book grouping, bounded concurrency, ID/response validation, word limits, retries, timeouts, and incremental writes. |
-| Add a catalogue database | High | [`catalogue.port`](../src/main/java/com/gen3/catalogue/port), backend configuration, `storage.user`, maintenance store interfaces, integration tests | Implement search modes, exact filters, title/details/vector lookup, identity and write guarantees, user preferences, and the maintenance operations the backend supports. Document schema and migration. |
+| Add a catalogue database | High | [`shared.audiobookcatalogue.port`](../src/main/java/com/gen3/shared/audiobookcatalogue/port), backend configuration, `storage.user`, maintenance store interfaces, integration tests | Implement search modes, exact filters, title/details/vector lookup, identity and write guarantees, user preferences, and the maintenance operations the backend supports. Document schema and migration. |
 | Replace Redis session storage | High | [`SessionRepository`](../src/main/java/com/gen3/recommenderagent/storage/session/SessionRepository.java), `storage.session`, session configuration and concurrency tests | Preserve distributed exclusion, lease renewal, versioned atomic commit, sliding expiry, error mapping, and the post-commit response callback. A basic key/value adapter is insufficient. |
 | Upgrade Solr, Qdrant, or Redis | Medium–High | [`compose.yaml`](../compose.yaml), [`pom.xml`](../pom.xml), schemas, container integration tests, [version table](configuration.md#supported-and-tested-versions) | Verify client/server compatibility and existing stored data. Major upgrades may require schema or data migration and a rollback backup. |
 | Replace Alloy/Grafana | Low–Medium | [`compose.observability.yaml`](../compose.observability.yaml), [`observability/`](../observability), [observability guide](observability.md) | Keep application telemetry unchanged when the replacement can consume the same structured logs; otherwise update the export allowlist and field documentation. |

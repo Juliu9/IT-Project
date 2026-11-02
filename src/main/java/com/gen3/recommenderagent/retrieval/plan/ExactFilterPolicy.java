@@ -1,8 +1,5 @@
 package com.gen3.recommenderagent.retrieval.plan;
 
-import com.gen3.catalogue.model.AudiobookFilterConditions;
-import com.gen3.catalogue.model.AudiobookFilters;
-import com.gen3.catalogue.model.PersonNameNormalizer;
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.PreferenceRequestMapper;
 import com.gen3.recommenderagent.application.conversation.SessionRequest;
@@ -15,6 +12,9 @@ import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.inputparser.ConversationText;
 import com.gen3.recommenderagent.inputparser.DurationParser;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookFilterConditions;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookFilters;
+import com.gen3.shared.audiobookcatalogue.model.PersonNameNormalizer;
 import java.time.Clock;
 import java.time.Year;
 import java.util.ArrayList;

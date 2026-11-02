@@ -1,9 +1,9 @@
 package com.gen3.recommenderagent.ranker.scorer;
 
-import com.gen3.catalogue.model.AudiobookCandidate;
-import com.gen3.catalogue.vector.VectorMath;
 import com.gen3.recommenderagent.ranker.RankingContext;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookCandidate;
+import com.gen3.shared.vector.VectorMath;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Component;

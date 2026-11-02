@@ -1,10 +1,10 @@
 package com.gen3.shortdescriptionjob;
 
-import com.gen3.catalogue.qdrant.Bm25SparseTextEncoder;
-import com.gen3.catalogue.qdrant.QdrantConfig;
-import com.gen3.catalogue.qdrant.QdrantPointMapper;
-import com.gen3.catalogue.solr.SolrAudiobookRepository;
-import com.gen3.catalogue.solr.SolrConfig;
+import com.gen3.shared.audiobookcatalogue.qdrant.Bm25SparseTextEncoder;
+import com.gen3.shared.audiobookcatalogue.qdrant.QdrantConfig;
+import com.gen3.shared.audiobookcatalogue.qdrant.QdrantPointMapper;
+import com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository;
+import com.gen3.shared.audiobookcatalogue.solr.SolrConfig;
 import com.gen3.shortdescriptionjob.provider.OpenAiShortDescriptionGenerator;
 import com.gen3.shortdescriptionjob.store.QdrantShortDescriptionStore;
 import com.gen3.shortdescriptionjob.store.SolrShortDescriptionStore;
@@ -54,6 +54,10 @@ public class ShortDescriptionApplication {
   @Bean
   static BeanFactoryPostProcessor validateJob(Environment environment) {
     return factory -> {
+      if (environment.getProperty("read-history.import.enabled", Boolean.class, false)) {
+        throw new IllegalArgumentException(
+            "Run read-history import separately with ReadHistoryApplication");
+      }
       if (environment.getProperty("user.preferences.import-on-startup", Boolean.class, false)) {
         throw new IllegalArgumentException("Run user-preference import separately");
       }

@@ -1,8 +1,8 @@
 package com.gen3.snapshotjob;
 
-import com.gen3.catalogue.qdrant.QdrantPointMapper;
-import com.gen3.catalogue.snapshot.BookVectorSnapshot;
-import com.gen3.catalogue.solr.SolrAudiobookRepository;
+import com.gen3.shared.audiobookcatalogue.qdrant.QdrantPointMapper;
+import com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot;
+import com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository;
 import io.qdrant.client.QdrantClient;
 import java.io.IOException;
 import java.util.Base64;

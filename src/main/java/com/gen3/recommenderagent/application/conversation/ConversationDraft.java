@@ -12,6 +12,18 @@ import java.util.List;
 
 /** Private-to-conversation working state; never used as a persisted turn or response contract. */
 public class ConversationDraft extends SessionRequest {
+  private java.util.Set<String> readBookIds = java.util.Set.of();
+
+  /** Request-local eligibility snapshot; deliberately not copied into stored turns or sessions. */
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public java.util.Set<String> getReadBookIds() {
+    return readBookIds;
+  }
+
+  public void setReadBookIds(java.util.Set<String> value) {
+    readBookIds = java.util.Set.copyOf(value);
+  }
+
   /** Retains structured context without persisting the user's original message. */
   public static ConversationTurn toStoredTurn(ConversationDraft draft) {
     var turn = toTurn(draft);
@@ -83,13 +95,15 @@ public class ConversationDraft extends SessionRequest {
     pendingQuestion = value;
   }
 
-  private List<com.gen3.catalogue.model.AudiobookTitle> similarBookChoices = List.of();
+  private List<com.gen3.shared.audiobookcatalogue.model.AudiobookTitle> similarBookChoices =
+      List.of();
 
-  public List<com.gen3.catalogue.model.AudiobookTitle> getSimilarBookChoices() {
+  public List<com.gen3.shared.audiobookcatalogue.model.AudiobookTitle> getSimilarBookChoices() {
     return similarBookChoices;
   }
 
-  public void setSimilarBookChoices(List<com.gen3.catalogue.model.AudiobookTitle> value) {
+  public void setSimilarBookChoices(
+      List<com.gen3.shared.audiobookcatalogue.model.AudiobookTitle> value) {
     similarBookChoices = value;
   }
 

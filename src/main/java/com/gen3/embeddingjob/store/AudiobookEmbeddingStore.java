@@ -1,8 +1,8 @@
 package com.gen3.embeddingjob.store;
 
-import com.gen3.catalogue.model.AudiobookEmbedding;
-import com.gen3.catalogue.model.StoredAudiobook;
 import com.gen3.embeddingjob.EmbeddingMode;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookEmbedding;
+import com.gen3.shared.audiobookcatalogue.model.StoredAudiobook;
 import java.io.IOException;
 import java.util.List;
 

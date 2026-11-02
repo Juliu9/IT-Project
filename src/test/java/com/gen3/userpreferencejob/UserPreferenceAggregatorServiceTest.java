@@ -6,11 +6,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.catalogue.port.AudiobookVectorRepository;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
-import com.gen3.userpreferencejob.model.UserFavourite;
-import com.gen3.userpreferencejob.model.UserHistory;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookVectorRepository;
+import com.gen3.shared.csv.model.UserFavourite;
+import com.gen3.shared.csv.model.UserHistory;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;

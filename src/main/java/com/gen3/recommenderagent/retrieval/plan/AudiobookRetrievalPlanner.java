@@ -1,8 +1,8 @@
 package com.gen3.recommenderagent.retrieval.plan;
 
-import com.gen3.catalogue.model.AudiobookFilters;
 import com.gen3.recommenderagent.application.conversation.SessionRequest;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookFilters;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;

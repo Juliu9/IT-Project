@@ -1,6 +1,6 @@
 package com.gen3.shortdescriptionjob;
 
-import com.gen3.catalogue.model.StoredAudiobook;
+import com.gen3.shared.audiobookcatalogue.model.StoredAudiobook;
 import com.gen3.shared.jobruntime.JobProgress;
 import com.gen3.shortdescriptionjob.provider.ShortDescriptionGenerator;
 import com.gen3.shortdescriptionjob.store.AudiobookEnrichmentStore;

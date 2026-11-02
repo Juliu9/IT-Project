@@ -10,8 +10,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.gen3.catalogue.qdrant.Bm25SparseTextEncoder;
-import com.gen3.catalogue.qdrant.QdrantPointMapper;
+import com.gen3.shared.audiobookcatalogue.qdrant.Bm25SparseTextEncoder;
+import com.gen3.shared.audiobookcatalogue.qdrant.QdrantPointMapper;
 import com.gen3.shortdescriptionjob.ShortDescriptionMode;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Points.CreateFieldIndexCollection;

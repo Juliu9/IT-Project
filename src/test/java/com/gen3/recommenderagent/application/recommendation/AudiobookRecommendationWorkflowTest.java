@@ -9,7 +9,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.gen3.catalogue.model.AudiobookCandidate;
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
@@ -21,6 +20,7 @@ import com.gen3.recommenderagent.ranker.RankingContext;
 import com.gen3.recommenderagent.retrieval.CandidateRetriever;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookCandidate;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -31,7 +31,7 @@ class AudiobookRecommendationWorkflowTest {
 
   @Test
   void referenceVectorIsUsedExcludedAndReusedForMoreWithoutReadingStoredTastes() throws Exception {
-    var search = mock(com.gen3.catalogue.port.AudiobookCandidateSearch.class);
+    var search = mock(com.gen3.shared.audiobookcatalogue.port.AudiobookCandidateSearch.class);
     var model = mock(org.springframework.ai.embedding.EmbeddingModel.class);
     var queries = new com.gen3.recommenderagent.embedding.QueryEmbeddingService(model);
     var retriever =
@@ -47,6 +47,7 @@ class AudiobookRecommendationWorkflowTest {
         new AudiobookRecommendationWorkflow(
             retriever, ranker, new SemanticQueryVectorService(queries), users);
     var request = new ConversationDraft();
+    request.setReadBookIds(Set.of("previously-read"));
     request.setIntent(ConversationAction.RECOMMENDATION);
     request
         .getSearchContext()
@@ -62,13 +63,14 @@ class AudiobookRecommendationWorkflowTest {
     request.setIntent(ConversationAction.MORE_RESULTS);
     workflow.recommend(request, session);
     var vector = ArgumentCaptor.forClass(float[].class);
-    var filters = ArgumentCaptor.forClass(com.gen3.catalogue.model.AudiobookFilters.class);
+    var filters =
+        ArgumentCaptor.forClass(com.gen3.shared.audiobookcatalogue.model.AudiobookFilters.class);
     org.mockito.Mockito.verify(search, org.mockito.Mockito.times(2))
         .searchSemantic(vector.capture(), filters.capture(), eq(50));
     org.assertj.core.api.Assertions.assertThat(vector.getAllValues())
         .allSatisfy(v -> org.assertj.core.api.Assertions.assertThat(v).containsExactly(1f, 0f));
     org.assertj.core.api.Assertions.assertThat(filters.getValue().excludedBookIds())
-        .contains("hunger");
+        .contains("hunger", "previously-read");
     org.assertj.core.api.Assertions.assertThat(
             filters.getValue().mustInclude().maximumDurationMinutes())
         .isNotNull();
@@ -96,7 +98,7 @@ class AudiobookRecommendationWorkflowTest {
         .thenReturn(
             new SemanticQueryVectors(List.of(new float[] {0, 1}), List.of(new float[] {-1, 0})));
     workflow.recommend(request, new Session());
-    float[] expected = com.gen3.catalogue.vector.VectorMath.normalize(new float[] {1.5f, .5f});
+    float[] expected = com.gen3.shared.vector.VectorMath.normalize(new float[] {1.5f, .5f});
     org.assertj.core.api.Assertions.assertThat(
             request.getSearchContext().getSimilarityQueryVector())
         .containsExactly(expected);
@@ -137,7 +139,7 @@ class AudiobookRecommendationWorkflowTest {
     var vectors = ArgumentCaptor.forClass(SemanticQueryVectors.class);
     verify(retriever).getCandidates(eq(request), vectors.capture(), eq(50), any());
     float[] combined =
-        com.gen3.catalogue.vector.VectorMath.directionalAverage(
+        com.gen3.shared.vector.VectorMath.directionalAverage(
             vectors.getValue().positive(), vectors.getValue().negative());
     org.junit.jupiter.api.Assertions.assertArrayEquals(
         withReference ? new float[] {.8944272f, .4472136f} : new float[] {.70710677f, .70710677f},

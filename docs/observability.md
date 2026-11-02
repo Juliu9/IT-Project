@@ -73,6 +73,11 @@ complete billing total when provider usage is unavailable.**
 
 ## Local parser timing
 
+When read-history lookup is enabled, request stage timings also include `historyLoadMs`, including
+cached “More” pages. `read.history.exclusion.skipped` warnings identify a request and either
+`STORE_UNAVAILABLE` or `HISTORY_LIMIT_EXCEEDED`. They stay local; the Alloy collector exports only
+the existing request-summary schema. History import has its own progress and completion logs.
+
 Every parser invocation emits `parser.completed` with `durationMs`, `outcome=SUCCESS|FAILURE`,
 and `mode=FAST_PATH|AI`. Inputs rejected before either path use `mode=VALIDATION`.
 The request summary retains `stages.parseMs` even when the parser skips AI or completes in zero

@@ -1,12 +1,12 @@
 package com.gen3.userpreferencejob;
 
-import com.gen3.catalogue.port.AudiobookVectorRepository;
-import com.gen3.catalogue.vector.VectorMath;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookVectorRepository;
+import com.gen3.shared.csv.model.UserFavourite;
+import com.gen3.shared.csv.model.UserHistory;
 import com.gen3.shared.jobruntime.JobProgress;
-import com.gen3.userpreferencejob.model.UserFavourite;
-import com.gen3.userpreferencejob.model.UserHistory;
+import com.gen3.shared.vector.VectorMath;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;

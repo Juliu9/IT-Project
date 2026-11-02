@@ -3,11 +3,13 @@ package com.gen3.userpreferencejob;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.gen3.catalogue.port.AudiobookVectorRepository;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
-import com.gen3.userpreferencejob.model.UserFavourite;
-import com.gen3.userpreferencejob.model.UserHistory;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookVectorRepository;
+import com.gen3.shared.csv.UserFavouriteCsvReader;
+import com.gen3.shared.csv.UserHistoryCsvReader;
+import com.gen3.shared.csv.model.UserFavourite;
+import com.gen3.shared.csv.model.UserHistory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;

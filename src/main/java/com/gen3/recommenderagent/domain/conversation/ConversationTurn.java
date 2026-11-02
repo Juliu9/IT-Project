@@ -34,13 +34,15 @@ public class ConversationTurn {
     pendingQuestion = value;
   }
 
-  private List<com.gen3.catalogue.model.AudiobookTitle> similarBookChoices = List.of();
+  private List<com.gen3.shared.audiobookcatalogue.model.AudiobookTitle> similarBookChoices =
+      List.of();
 
-  public List<com.gen3.catalogue.model.AudiobookTitle> getSimilarBookChoices() {
+  public List<com.gen3.shared.audiobookcatalogue.model.AudiobookTitle> getSimilarBookChoices() {
     return similarBookChoices;
   }
 
-  public void setSimilarBookChoices(List<com.gen3.catalogue.model.AudiobookTitle> value) {
+  public void setSimilarBookChoices(
+      List<com.gen3.shared.audiobookcatalogue.model.AudiobookTitle> value) {
     similarBookChoices = value;
   }
 

@@ -23,12 +23,16 @@ Java sources are under `src/main/java/com/gen3/`:
 | Package | Responsibility |
 | --- | --- |
 | `recommenderagent` | HTTP API, conversation, retrieval, ranking, responses, session/user storage and telemetry |
-| `catalogue` | Shared audiobook models, database contracts/adapters and vector utilities |
+| `shared.audiobookcatalogue` | Audiobook models, database contracts/adapters and snapshots |
+| `shared.vector` | Vector mathematics shared by catalogue, preference and recommendation code |
 | `embeddingjob` | Fill missing catalogue vectors (or explicitly rebuild all), then refresh the snapshot |
 | `snapshotjob` | Export existing Solr/Qdrant vectors without generating embeddings |
 | `shortdescriptionjob` | Generate missing summaries through regular API calls, or explicitly rebuild them |
 | `migrationjob` | Copy existing supported data from Solr to Qdrant |
 | `userpreferencejob` | Stream CSV favourites/history and aggregate local snapshot vectors |
+| `shared.readhistory` | Read/write contracts and replaceable history storage adapters |
+| `shared.csv` | Streaming CSV readers, input records and book-ID normalization shared by import jobs |
+| `readhistoryjob` | Standalone additive history import for read-book exclusion |
 | `shared.identity` | Common validation for caller and imported user IDs |
 | `shared.jobruntime` | Periodic progress reporting shared by maintenance jobs |
 
@@ -36,6 +40,10 @@ Configuration and the dev page live in `src/main/resources/`; tests are under `s
 Local services use `compose.yaml`, Solr schemas live in `solr/`, and CI is in `.github/workflows/`.
 
 ## Prerequisites
+
+Read-book exclusion is optional: prepare the separate PostgreSQL history database and enable
+`READ_HISTORY_ENABLED` to use it. See [read-history setup and import](docs/jobs/read-history.md).
+The default local Compose stack does not start PostgreSQL; `compose.history.yaml` is a separate opt-in.
 
 - **[Java 21](https://adoptium.net/temurin/releases/)** and
   **[Docker with Compose](https://docs.docker.com/get-started/)** for the documented local setup and
@@ -65,6 +73,7 @@ These exports apply only to that terminal session. The final command should repo
 After meeting the prerequisites, start the local services and recommendation server:
 
 ```bash
+set -a && source .env && set +a
 docker compose up -d
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ```

@@ -17,7 +17,7 @@ public class UserPreferenceStartupImporter implements ApplicationRunner {
   private static final Logger LOGGER = LoggerFactory.getLogger(UserPreferenceStartupImporter.class);
 
   private final StreamingUserPreferenceImporter importer;
-  private final com.gen3.catalogue.snapshot.BookVectorSnapshot snapshot;
+  private final com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot snapshot;
 
   @Value("${user.preferences.favourites-csv-path}")
   private String favouritesCsvPath;
@@ -33,7 +33,7 @@ public class UserPreferenceStartupImporter implements ApplicationRunner {
 
   public UserPreferenceStartupImporter(
       StreamingUserPreferenceImporter importer,
-      com.gen3.catalogue.snapshot.BookVectorSnapshot snapshot) {
+      com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot snapshot) {
     this.importer = importer;
     this.snapshot = snapshot;
   }

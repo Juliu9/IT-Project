@@ -1,7 +1,5 @@
 package com.gen3.recommenderagent.application.conversation.workflow;
 
-import com.gen3.catalogue.model.AudiobookTitle;
-import com.gen3.catalogue.model.PersonNameNormalizer;
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
 import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
@@ -10,6 +8,8 @@ import com.gen3.recommenderagent.domain.search.SimilarBookReference;
 import com.gen3.recommenderagent.domain.session.PendingQuestion;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.inputparser.ConversationText;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookTitle;
+import com.gen3.shared.audiobookcatalogue.model.PersonNameNormalizer;
 import java.util.List;
 
 /** Resolves a reply to a pending similar-book choice or replacement request. */

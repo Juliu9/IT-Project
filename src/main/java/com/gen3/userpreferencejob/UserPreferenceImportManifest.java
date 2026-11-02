@@ -1,6 +1,6 @@
 package com.gen3.userpreferencejob;
 
-import com.gen3.catalogue.snapshot.BookVectorSnapshot;
+import com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;

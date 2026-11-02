@@ -3,7 +3,6 @@ package com.gen3.recommenderagent.application.conversation.workflow;
 import static com.gen3.recommenderagent.application.conversation.workflow.ConversationHistory.latestDisplayedSearch;
 import static com.gen3.recommenderagent.application.conversation.workflow.SearchCriteriaMerger.merge;
 
-import com.gen3.catalogue.model.AudiobookTitle;
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
 import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
@@ -11,6 +10,7 @@ import com.gen3.recommenderagent.domain.conversation.ExplanationSelection;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.inputparser.ConversationText;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookTitle;
 import java.util.List;
 
 /** Resolves explanation targets exclusively against the displayed recommendation page. */

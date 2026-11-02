@@ -23,11 +23,15 @@ embedding generation and summary-provider operations need AI credentials or incu
 The snapshot launcher's main class is its opt-in. **Only user import has a dry-run mode; treat every
 other job as a real operation.**
 
+The [read-history importer](jobs/read-history.md) writes additive user/book pairs to PostgreSQL.
+It needs no catalogue, preference vectors, Redis, or AI credentials and can run during serving.
+
 ## Automatic progress reporting
 
 Maintenance jobs print `maintenance.progress` immediately and every 10 seconds while running.
 This covers snapshot export/validation/loading, embedding generation, catalogue migration,
 user-import preparation/aggregation, and short-description selection/generation/writes.
+Read-history import reports its processed CSV rows after each committed batch.
 
 ```text
 maintenance.progress job=book.snapshot.rebuild stage=reading catalogue and writing snapshot processed=12500 total=unknown elapsedMs=60000 sinceProgressMs=1500
@@ -42,7 +46,7 @@ completion event, zero exit status, and `BUILD SUCCESS` confirm success.**
 
 Every maintenance launcher keeps console output and also writes the application's output to a
 unique `logs/<job>/<epoch-milliseconds>-<uuid>.log` file. The job directories are `embeddings`,
-`short-descriptions`, `migration`, `snapshot`, and `user-import`. Logs are retained until manually
+`short-descriptions`, `migration`, `snapshot`, `user-import`, and `read-history`. Logs are retained until manually
 removed and are ignored by Git. Override the destination for any launch with
 `--logging.file.name=/path/to/job.log`. Maven output produced before the application starts is not
 included.

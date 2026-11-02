@@ -784,7 +784,8 @@ class ExplanationFlowTest {
         org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(
                 gateway,
                 new com.gen3.recommenderagent.api.DemoWebsite(
-                    gateway, mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
+                    gateway,
+                    mock(com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class)))
             .build();
     String body =
         mvc.perform(

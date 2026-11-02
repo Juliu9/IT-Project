@@ -54,6 +54,9 @@ same approved import to converge.
 
 ## CSV input contract
 
+CSV readers, normalization and input records live in `com.gen3.shared.csv` and are reused by the
+independent read-history importer. Preference aggregation remains in `userpreferencejob`.
+
 Supply both files with headers. An empty side still needs its header row. Files are read as UTF-8;
 standard CSV quoting is supported, extra columns are ignored, and rows whose `type` is not `book`
 (case-insensitive) are skipped.
@@ -271,16 +274,26 @@ differences can be investigated rather than hidden by the average.
 
 ### Three-run results
 
-| Dataset | Run 1 `totalMs` | Run 2 `totalMs` | Run 3 `totalMs` | Average `totalMs` |
+Recorded on **2 November 2026**, on the demo machine with the Qdrant snapshot and a 3 GB heap.
+Values use the last successful `user.preferences.import.completed` entry dated `2026-11-02`
+in each `logs/user-import/benchmark-<dataset>-run-<1|2|3>.log` file. The files contain appended
+earlier executions, which are excluded here. All timings are seconds, rounded to two decimal places.
+Averages are arithmetic means calculated from the original millisecond values before rounding.
+
+| Dataset | Run 1 (s) | Run 2 (s) | Run 3 (s) | Average (s) |
 | --- | ---: | ---: | ---: | ---: |
-| `100-users-100-records` | — | — | — | — |
-| `1000-users-100-records` | — | — | — | — |
-| `10000-users-100-records` | — | — | — | — |
-| `100-users-1000-records` | — | — | — | — |
-| `1000-users-1000-records` | — | — | — | — |
-| `100-users-10000-records` | — | — | — | — |
-| `100000-users-100-records` | — | — | — | — |
-| `50000-users-20million-records` | — | — | — | — |
+| `100-users-100-records` | 44.48 | 33.74 | 34.84 | 37.69 |
+| `1000-users-100-records` | 35.93 | 34.85 | 34.60 | 35.12 |
+| `10000-users-100-records` | 56.23 | 49.18 | 49.96 | 51.79 |
+| `100-users-1000-records` | 34.82 | 35.38 | 34.37 | 34.86 |
+| `1000-users-1000-records` | 50.74 | 49.90 | 48.11 | 49.58 |
+| `100-users-10000-records` | 50.00 | 48.86 | 52.39 | 50.41 |
+| `100000-users-100-records` | 225.53 | 301.31 | 234.20 | 253.68 |
+| `50000-users-20million-records` | 456.81 | 444.81 | 444.95 | 448.86 |
+
+These dry-run means include snapshot loading, CSV parsing/spilling, merge/validation, aggregation,
+and cleanup. They exclude application startup and actual database writes; they are not write-mode
+or production-capacity measurements. Stage-level timings remain in the source logs.
 
 Earlier single-run reference measurements on the demo machine with a 3 GB heap on 2026-10-29 were
 3m 32s for 100,000 users × 100 records and 6m 52s for the variable 50,000-user dataset. These are

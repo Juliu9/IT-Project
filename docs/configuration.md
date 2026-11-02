@@ -177,6 +177,8 @@ not a separately installed prerequisite.
 | SolrJ client | `9.6.0` | Build dependency | [Maven dependency](../pom.xml) |
 | Qdrant server | `1.19.1` | Tested/local default | [Local Compose services](../compose.yaml) |
 | Qdrant Java client | `1.18.0` | Build dependency | [Maven dependency](../pom.xml) |
+| PostgreSQL history server | `17-alpine` | Optional/tested | [Separate local history service](../compose.history.yaml) |
+| PostgreSQL JDBC / HikariCP | `42.7.11` / `7.0.2` | Build dependencies, managed by Boot | [Maven dependency management](../pom.xml) |
 | Redis server | `7-alpine` | Tested/local default | [Local Compose services](../compose.yaml) |
 | Grafana Alloy | `1.20.0` | Optional local observability | [Observability Compose services](../compose.observability.yaml) |
 
@@ -199,6 +201,29 @@ The local Compose stack starts Redis automatically. For a separate installation,
 | `port` | `REDIS_PORT` | `6379` |
 | `username` | `REDIS_USERNAME` | empty; set when authentication requires it |
 | `password` | `REDIS_PASSWORD` | empty; set when authentication requires it |
+
+### Read-history storage
+
+Optional PostgreSQL storage is independent of Solr/Qdrant, preference vectors, and Redis sessions.
+Follow the [read-history runbook](jobs/read-history.md) for explicit schema setup, CSV import,
+failure semantics, and replacement adapters. Enable only after preparing the database.
+
+| Property under `read-history.` | Environment variable | Default / purpose |
+| --- | --- | --- |
+| `enabled` | `READ_HISTORY_ENABLED` | `false`; enables the PostgreSQL reader on the server |
+| `maximum-books-per-user` | `READ_HISTORY_MAXIMUM_BOOKS_PER_USER` | `10000`; oversized histories fail open with a warning, never silently truncate |
+| `jdbc-url` | `READ_HISTORY_JDBC_URL` | `jdbc:postgresql://localhost:5432/read_history`; independent history database |
+| `username` | `READ_HISTORY_USERNAME` | empty; use a read-only role for the server |
+| `password` | `READ_HISTORY_PASSWORD` | empty; supply through environment/dev `.env` |
+| `pool-size` | `READ_HISTORY_POOL_SIZE` | `5`; maximum history connections per process |
+| `import.enabled` | `READ_HISTORY_IMPORT_ENABLED` | `false`; opt-in for the dedicated importer |
+| `import.csv-path` | `READ_HISTORY_IMPORT_CSV_PATH` | empty; existing-format history CSV |
+| `import.batch-size` | `READ_HISTORY_IMPORT_BATCH_SIZE` | `1000`; transactional CSV-row batch, allowed range 1–100000 |
+
+No history is loaded at startup or cached in Redis. Lookup requests at most the per-user limit plus
+one. Pool acquisition is bounded to two seconds, JDBC query timeout to five seconds, and driver
+socket timeout to ten seconds; these are operation bounds, not a total request deadline. Failed
+lookups log and continue without history exclusions, not with a claim that history was empty.
 
 ### Qdrant
 

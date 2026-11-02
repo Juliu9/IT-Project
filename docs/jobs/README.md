@@ -4,7 +4,7 @@
 
 ## Purpose
 
-Five dedicated jobs keep scans, AI generation, and bulk writes outside the recommendation server.
+Six dedicated jobs keep scans, AI generation, and bulk writes outside the recommendation server.
 They share catalogue code but run independently. **No scheduler is included.**
 
 ## Prerequisites
@@ -27,6 +27,7 @@ They share catalogue code but run independently. **No scheduler is included.**
 | [User preferences](user-preferences.md) | `userpreferencejob.UserPreferenceApplication` | `dry-run` by default; explicit `write` replaces mapped sides, preserves absent/unmapped sides, and skips users with no mapped vectors; no AI calls |
 | [Migration](migration.md) | `migrationjob.MigrationApplication` | Creates absent books and fills missing same-named fields from Solr to Qdrant; no AI calls |
 | [Short descriptions](short-descriptions.md) | `shortdescriptionjob.ShortDescriptionApplication` | Paid regular API calls; fills missing summaries by default; explicit `rebuild-all` replaces them |
+| [Read history](read-history.md) | `readhistoryjob.ReadHistoryApplication` | Adds unique user/book pairs to PostgreSQL; no AI or catalogue access |
 
 ## Execution order
 
@@ -42,6 +43,10 @@ They share catalogue code but run independently. **No scheduler is included.**
 
 Summary generation is independent and does not refresh embeddings or snapshots. Summaries are not
 part of embedding text. **Do not overlap catalogue writers with snapshot export.**
+
+Read-history import is independent of those steps. Prepare its PostgreSQL schema explicitly, import
+the history CSV, then enable `READ_HISTORY_ENABLED` on the server. It can run while recommendations
+are active; completed batches become visible to later history lookups.
 
 Snapshot failure does not undo successfully written embeddings. The previous published snapshot
 remains available. Distinguish embedding completion from completion of the whole launcher.

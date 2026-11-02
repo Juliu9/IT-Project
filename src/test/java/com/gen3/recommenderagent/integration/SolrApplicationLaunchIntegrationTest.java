@@ -6,11 +6,11 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.gen3.catalogue.solr.SolrAudiobookRepository;
 import com.gen3.embeddingjob.EmbeddingIndexApplication;
 import com.gen3.recommenderagent.RecommenderAgentApplication;
 import com.gen3.recommenderagent.storage.user.solr.SolrUserPreferenceRepository;
 import com.gen3.recommenderagent.testsupport.SolrContainerTestSupport;
+import com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository;
 import com.gen3.shortdescriptionjob.ShortDescriptionApplication;
 import com.gen3.shortdescriptionjob.provider.ShortDescriptionGenerator;
 import com.gen3.userpreferencejob.UserPreferenceApplication;
@@ -155,12 +155,15 @@ class SolrApplicationLaunchIntegrationTest {
         .isEqualTo("A friendship adventure.");
     assertThat(client.getById(BOOKS, "local_200").getFieldValue("short_description")).isNull();
 
-    var copied = new java.util.ArrayList<com.gen3.catalogue.model.AudiobookEmbedding>();
-    var destination = mock(com.gen3.catalogue.qdrant.QdrantAudiobookRepository.class);
+    var copied =
+        new java.util.ArrayList<com.gen3.shared.audiobookcatalogue.model.AudiobookEmbedding>();
+    var destination =
+        mock(com.gen3.shared.audiobookcatalogue.qdrant.QdrantAudiobookRepository.class);
     when(destination.importStoredBooks(anyList()))
         .thenAnswer(
             invocation -> {
-              List<com.gen3.catalogue.model.AudiobookEmbedding> records = invocation.getArgument(0);
+              List<com.gen3.shared.audiobookcatalogue.model.AudiobookEmbedding> records =
+                  invocation.getArgument(0);
               copied.addAll(records);
               return records.size();
             });
@@ -180,7 +183,7 @@ class SolrApplicationLaunchIntegrationTest {
       assertThat(context.getBeansOfType(EmbeddingModel.class)).isEmpty();
       assertThat(
               context
-                  .getBean(com.gen3.catalogue.snapshot.BookVectorSnapshot.class)
+                  .getBean(com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot.class)
                   .findEmbeddingByBookId("local_100")
                   .orElseThrow())
           .containsExactly(0.6f, 0.8f);

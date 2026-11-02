@@ -19,12 +19,12 @@ import org.springframework.core.env.Environment;
       org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration.class
     })
 @Import({
-  com.gen3.catalogue.qdrant.QdrantConfig.class,
-  com.gen3.catalogue.qdrant.QdrantPointMapper.class,
-  com.gen3.catalogue.qdrant.Bm25SparseTextEncoder.class,
-  com.gen3.catalogue.qdrant.QdrantAudiobookRepository.class,
-  com.gen3.catalogue.solr.SolrConfig.class,
-  com.gen3.catalogue.solr.SolrAudiobookRepository.class,
+  com.gen3.shared.audiobookcatalogue.qdrant.QdrantConfig.class,
+  com.gen3.shared.audiobookcatalogue.qdrant.QdrantPointMapper.class,
+  com.gen3.shared.audiobookcatalogue.qdrant.Bm25SparseTextEncoder.class,
+  com.gen3.shared.audiobookcatalogue.qdrant.QdrantAudiobookRepository.class,
+  com.gen3.shared.audiobookcatalogue.solr.SolrConfig.class,
+  com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository.class,
   com.gen3.migrationjob.SolrToQdrantMigrator.class
 })
 public class MigrationApplication {
@@ -41,6 +41,10 @@ public class MigrationApplication {
   @Bean
   static BeanFactoryPostProcessor validateJob(Environment environment) {
     return factory -> {
+      if (environment.getProperty("read-history.import.enabled", Boolean.class, false)) {
+        throw new IllegalArgumentException(
+            "Run read-history import separately with ReadHistoryApplication");
+      }
       if (!environment.getProperty("audiobook.qdrant.migration.enabled", Boolean.class, false)) {
         throw new IllegalArgumentException(
             "Explicitly enable audiobook.qdrant.migration.enabled to run this job");

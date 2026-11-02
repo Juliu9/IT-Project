@@ -1,10 +1,5 @@
 package com.gen3.recommenderagent.application.recommendation;
 
-import com.gen3.catalogue.model.AudiobookTitle;
-import com.gen3.catalogue.model.PersonNameNormalizer;
-import com.gen3.catalogue.port.AudiobookTitleLookup;
-import com.gen3.catalogue.port.AudiobookVectorRepository;
-import com.gen3.catalogue.vector.VectorMath;
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
 import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
@@ -12,6 +7,11 @@ import com.gen3.recommenderagent.domain.search.SimilarBookReference;
 import com.gen3.recommenderagent.domain.session.PendingQuestion;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.retrieval.CandidateRetrievalException;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookTitle;
+import com.gen3.shared.audiobookcatalogue.model.PersonNameNormalizer;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookTitleLookup;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookVectorRepository;
+import com.gen3.shared.vector.VectorMath;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;

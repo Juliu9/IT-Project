@@ -3,7 +3,7 @@ package com.gen3.shortdescriptionjob.provider;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.gen3.catalogue.model.AudiobookRecord;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookRecord;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.net.http.HttpClient;

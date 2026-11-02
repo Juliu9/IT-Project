@@ -1,8 +1,8 @@
 package com.gen3.migrationjob;
 
-import com.gen3.catalogue.model.AudiobookEmbedding;
-import com.gen3.catalogue.qdrant.QdrantAudiobookRepository;
-import com.gen3.catalogue.solr.SolrAudiobookRepository;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookEmbedding;
+import com.gen3.shared.audiobookcatalogue.qdrant.QdrantAudiobookRepository;
+import com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository;
 import com.gen3.shared.jobruntime.JobProgress;
 import java.util.List;
 import org.slf4j.Logger;

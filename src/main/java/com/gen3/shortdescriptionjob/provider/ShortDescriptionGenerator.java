@@ -1,6 +1,6 @@
 package com.gen3.shortdescriptionjob.provider;
 
-import com.gen3.catalogue.model.AudiobookRecord;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookRecord;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;

@@ -1,9 +1,11 @@
 package com.gen3.userpreferencejob;
 
+import com.gen3.shared.csv.UserFavouriteCsvReader;
+import com.gen3.shared.csv.UserHistoryCsvReader;
+import com.gen3.shared.csv.model.UserFavourite;
+import com.gen3.shared.csv.model.UserHistory;
 import com.gen3.shared.jobruntime.JobProgress;
 import com.gen3.userpreferencejob.UserPreferenceExternalSort.Row;
-import com.gen3.userpreferencejob.model.UserFavourite;
-import com.gen3.userpreferencejob.model.UserHistory;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

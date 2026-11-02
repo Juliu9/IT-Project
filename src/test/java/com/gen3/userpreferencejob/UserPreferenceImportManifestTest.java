@@ -2,7 +2,7 @@ package com.gen3.userpreferencejob;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.gen3.catalogue.snapshot.BookVectorSnapshot;
+import com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;

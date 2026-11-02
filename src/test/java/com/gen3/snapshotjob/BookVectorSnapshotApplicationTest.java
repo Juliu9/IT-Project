@@ -3,7 +3,7 @@ package com.gen3.snapshotjob;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import com.gen3.catalogue.snapshot.BookVectorSnapshot;
+import com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot;
 import io.qdrant.client.QdrantClient;
 import java.nio.file.Path;
 import java.util.List;

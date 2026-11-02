@@ -11,8 +11,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.catalogue.model.AudiobookRecord;
-import com.gen3.catalogue.model.StoredAudiobook;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookRecord;
+import com.gen3.shared.audiobookcatalogue.model.StoredAudiobook;
 import com.gen3.shortdescriptionjob.provider.ShortDescriptionGenerator;
 import com.gen3.shortdescriptionjob.store.AudiobookEnrichmentStore;
 import java.io.IOException;

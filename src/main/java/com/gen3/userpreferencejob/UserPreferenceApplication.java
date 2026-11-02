@@ -19,21 +19,22 @@ import org.springframework.core.env.Environment;
       org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration.class
     })
 @Import({
-  com.gen3.catalogue.qdrant.QdrantConfig.class,
+  com.gen3.shared.audiobookcatalogue.qdrant.QdrantConfig.class,
   com.gen3.recommenderagent.storage.user.qdrant.QdrantUserPreferenceRepository.class,
   com.gen3.recommenderagent.storage.user.qdrant.QdrantUserPreferenceMapper.class,
-  com.gen3.catalogue.solr.SolrConfig.class,
+  com.gen3.shared.audiobookcatalogue.solr.SolrConfig.class,
   com.gen3.recommenderagent.storage.user.solr.SolrUserPreferenceRepository.class,
   com.gen3.userpreferencejob.UserPreferenceStartupImporter.class,
   com.gen3.userpreferencejob.StreamingUserPreferenceImporter.class,
   com.gen3.userpreferencejob.DryRunUserPreferenceRepository.class,
   com.gen3.userpreferencejob.UserPreferenceAggregatorService.class,
-  com.gen3.userpreferencejob.UserFavouriteCsvReader.class,
-  com.gen3.userpreferencejob.UserHistoryCsvReader.class
+  com.gen3.shared.csv.UserFavouriteCsvReader.class,
+  com.gen3.shared.csv.UserHistoryCsvReader.class
 })
 public class UserPreferenceApplication {
   @Bean
-  com.gen3.catalogue.snapshot.BookVectorSnapshot bookVectorSnapshot(Environment environment) {
+  com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot bookVectorSnapshot(
+      Environment environment) {
     return com.gen3.snapshotjob.SnapshotConfiguration.snapshot(environment);
   }
 
@@ -50,6 +51,10 @@ public class UserPreferenceApplication {
   @Bean
   static BeanFactoryPostProcessor validateJob(Environment environment) {
     return factory -> {
+      if (environment.getProperty("read-history.import.enabled", Boolean.class, false)) {
+        throw new IllegalArgumentException(
+            "Run read-history import separately with ReadHistoryApplication");
+      }
       String mode = environment.getProperty("user.preferences.import.mode", "dry-run");
       if (!"dry-run".equals(mode) && !"write".equals(mode)) {
         throw new IllegalArgumentException("user.preferences.import.mode must be dry-run or write");

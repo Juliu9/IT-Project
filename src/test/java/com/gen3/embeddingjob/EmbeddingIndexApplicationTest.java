@@ -3,9 +3,9 @@ package com.gen3.embeddingjob;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import com.gen3.catalogue.solr.SolrAudiobookRepository;
 import com.gen3.embeddingjob.store.AudiobookEmbeddingStore;
 import com.gen3.embeddingjob.store.QdrantEmbeddingStore;
+import com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository;
 import io.qdrant.client.QdrantClient;
 import org.apache.solr.client.solrj.SolrClient;
 import org.junit.jupiter.api.Test;
@@ -17,8 +17,8 @@ class EmbeddingIndexApplicationTest {
   void publishesSnapshotOnlyAfterSuccessfulEmbeddingPass() throws Exception {
     var store = mock(AudiobookEmbeddingStore.class);
     var model = mock(EmbeddingModel.class);
-    var snapshot = mock(com.gen3.catalogue.snapshot.BookVectorSnapshot.class);
-    var source = mock(com.gen3.catalogue.snapshot.BookVectorSnapshot.Source.class);
+    var snapshot = mock(com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot.class);
+    var source = mock(com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot.Source.class);
     org.mockito.Mockito.when(store.embeddingPage(null, 10, EmbeddingMode.MISSING_ONLY))
         .thenReturn(new AudiobookEmbeddingStore.Page(java.util.List.of(), null));
     new EmbeddingIndexApplication()

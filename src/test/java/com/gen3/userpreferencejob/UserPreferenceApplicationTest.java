@@ -61,7 +61,8 @@ class UserPreferenceApplicationTest {
             context ->
                 assertThat(context)
                     .hasNotFailed()
-                    .hasSingleBean(com.gen3.catalogue.port.AudiobookVectorRepository.class)
+                    .hasSingleBean(
+                        com.gen3.shared.audiobookcatalogue.port.AudiobookVectorRepository.class)
                     .hasSingleBean(
                         com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository
                             .class)

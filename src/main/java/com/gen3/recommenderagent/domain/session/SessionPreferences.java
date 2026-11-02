@@ -1,9 +1,9 @@
 package com.gen3.recommenderagent.domain.session;
 
-import com.gen3.catalogue.model.PersonNameNormalizer;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
+import com.gen3.shared.audiobookcatalogue.model.PersonNameNormalizer;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;

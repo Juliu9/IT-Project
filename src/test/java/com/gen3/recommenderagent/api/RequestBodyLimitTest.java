@@ -59,7 +59,8 @@ class RequestBodyLimitTest {
                 gateway,
                 new DemoWebsite(
                     gateway,
-                    org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
+                    org.mockito.Mockito.mock(
+                        com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class)))
             .setControllerAdvice(new RequestBodyLimit(), new RequestExceptionHandler())
             .build();
     var request =

@@ -1,6 +1,6 @@
 package com.gen3.snapshotjob;
 
-import com.gen3.catalogue.snapshot.BookVectorSnapshot;
+import com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot;
 import java.nio.file.Path;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
@@ -46,7 +46,7 @@ public class SnapshotConfiguration {
   @Bean
   BookVectorSnapshot.Source snapshotSource(
       Environment environment,
-      ObjectProvider<com.gen3.catalogue.solr.SolrAudiobookRepository> solr,
+      ObjectProvider<com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository> solr,
       ObjectProvider<io.qdrant.client.QdrantClient> qdrant) {
     return environment.getProperty("audiobook.database", "qdrant").equals("solr")
         ? SnapshotSources.solr(solr.getObject())

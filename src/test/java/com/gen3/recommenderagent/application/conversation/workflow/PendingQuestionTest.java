@@ -2,7 +2,6 @@ package com.gen3.recommenderagent.application.conversation.workflow;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.gen3.catalogue.model.AudiobookTitle;
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.application.conversation.SessionRequest;
@@ -12,6 +11,7 @@ import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.PendingQuestion;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.response.ConversationResponseGenerator;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookTitle;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;

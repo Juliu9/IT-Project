@@ -7,9 +7,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.catalogue.port.AudiobookVectorRepository;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookVectorRepository;
+import com.gen3.shared.csv.UserFavouriteCsvReader;
+import com.gen3.shared.csv.UserHistoryCsvReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -168,7 +170,9 @@ class StreamingUserPreferenceImporterTest {
     var history =
         csv("h.csv", "type,user,item,created_at,updated_at\nbook,z,r:book:a,not-a-date,NULL\n");
     assertThatThrownBy(() -> service.run(favourites, history))
-        .isInstanceOf(java.time.format.DateTimeParseException.class);
+        .isInstanceOf(java.io.IOException.class)
+        .hasMessageContaining("history CSV value at row 1")
+        .hasCauseInstanceOf(java.time.format.DateTimeParseException.class);
     verifyNoInteractions(books, users);
     assertClean();
   }

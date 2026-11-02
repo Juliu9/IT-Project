@@ -10,8 +10,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.catalogue.model.AudiobookFilters;
-import com.gen3.catalogue.qdrant.QdrantAudiobookRepository;
 import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
@@ -34,6 +32,8 @@ import com.gen3.recommenderagent.retrieval.CandidateRetrievalService;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookFilters;
+import com.gen3.shared.audiobookcatalogue.qdrant.QdrantAudiobookRepository;
 import java.io.IOException;
 import java.util.List;
 import java.util.Optional;

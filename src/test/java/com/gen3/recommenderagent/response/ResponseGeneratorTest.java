@@ -96,7 +96,7 @@ class ResponseGeneratorTest {
         java.util.stream.IntStream.rangeClosed(1, 5)
             .mapToObj(
                 rank ->
-                    new com.gen3.catalogue.model.AudiobookTitle(
+                    new com.gen3.shared.audiobookcatalogue.model.AudiobookTitle(
                         "id-" + rank,
                         books.get(rank - 1).getTitle(),
                         List.of("author ".repeat(100))))
