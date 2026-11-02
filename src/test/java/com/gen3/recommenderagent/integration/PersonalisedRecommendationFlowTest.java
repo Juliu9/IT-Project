@@ -100,7 +100,7 @@ class PersonalisedRecommendationFlowTest {
   void firstPersonalisedRequestNeedsSavedTasteEvenWhenCurrentRequestHasCriteria(String criteria)
       throws Exception {
     var request = personalisedRequest();
-    request.setExplicitSearch(true);
+    request.setStartsNewSearch(true);
     if (criteria.equals("constraints") || criteria.equals("both")) {
       var include = new ExactCriteria();
       include.setAuthors(List.of("Suzanne Collins"));
@@ -199,7 +199,7 @@ class PersonalisedRecommendationFlowTest {
             List.of(new Recommendation("remaining", 2, 0.8, "Remaining fantasy")));
     sessions.updateSession(session);
     var personalised = personalisedRequest();
-    personalised.setExplicitSearch(true);
+    personalised.setStartsNewSearch(true);
     assertThat(process(personalised).isPreferenceClarificationRequired()).isTrue();
     var cancel = new ConversationDraft();
     cancel.setIntent(
@@ -224,7 +224,7 @@ class PersonalisedRecommendationFlowTest {
   @org.junit.jupiter.params.provider.ValueSource(strings = {"horror", "romance"})
   void tasteReplyPreservesTheRequestedAuthorWithoutChangingTheSuppliedGenre(String genre) {
     var request = personalisedRequest();
-    request.setExplicitSearch(true);
+    request.setStartsNewSearch(true);
     request.setRawText("personalised book by jk rowling");
     var include = new ExactCriteria();
     include.setAuthors(List.of("jk rowling"));
@@ -530,7 +530,7 @@ class PersonalisedRecommendationFlowTest {
   }
 
   @Test
-  void explicitSearchAbandonsPendingPersonalisationAndConstraints() throws Exception {
+  void startsNewSearchAbandonsPendingPersonalisationAndConstraints() throws Exception {
     var request = personalisedRequest();
     var include = new ExactCriteria();
     include.setPublicationYear("recent");
@@ -538,7 +538,7 @@ class PersonalisedRecommendationFlowTest {
     process(request);
     var answer = new ConversationDraft();
     answer.setIntent(ConversationAction.RECOMMENDATION);
-    answer.setExplicitSearch(true);
+    answer.setStartsNewSearch(true);
     var taste = new SemanticQuery();
     taste.setGenres(List.of("horror"));
     answer.setPositiveSemanticQuery(taste);

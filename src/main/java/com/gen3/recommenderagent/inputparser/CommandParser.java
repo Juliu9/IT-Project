@@ -130,7 +130,6 @@ public class CommandParser {
       var parsed = new UserIntent();
       parsed.setIntent(ConversationAction.REFINE);
       parsed.setLonger(true);
-      parsed.setExplicitSearch(true);
       return parsed;
     }
     return null;
@@ -146,7 +145,6 @@ public class CommandParser {
       var parsed = new UserIntent();
       parsed.setIntent(ConversationAction.RECOMMENDATION);
       parsed.setPersonalised(true);
-      parsed.setExplicitSearch(true);
       return parsed;
     }
     return null;
@@ -156,7 +154,6 @@ public class CommandParser {
     if (ConversationText.isRecencyRefinement(command)) {
       var parsed = new UserIntent();
       parsed.setIntent(ConversationAction.REFINE);
-      parsed.setExplicitSearch(true);
       var criteria = new ExactCriteria();
       criteria.setPublicationYear("more recent");
       parsed.setMustInclude(criteria);
@@ -197,7 +194,6 @@ public class CommandParser {
         query.setGenres(java.util.List.of(without.group(1)));
       }
       parsed.setNegativeSemanticQuery(query);
-      parsed.setExplicitSearch(true);
       return parsed;
     }
     return null;
@@ -208,7 +204,6 @@ public class CommandParser {
     if (approximateYear.matches()) {
       var parsed = new UserIntent();
       parsed.setIntent(ConversationAction.RECOMMENDATION);
-      parsed.setExplicitSearch(true);
       var criteria = new ExactCriteria();
       criteria.setPublicationYear(approximateYear.group(1));
       parsed.setMustInclude(criteria);
@@ -217,7 +212,6 @@ public class CommandParser {
     if (ConversationText.isOlderRefinement(command)) {
       var parsed = new UserIntent();
       parsed.setIntent(ConversationAction.REFINE);
-      parsed.setExplicitSearch(true);
       var criteria = new ExactCriteria();
       criteria.setPublicationYear("older");
       parsed.setMustInclude(criteria);
@@ -287,7 +281,6 @@ public class CommandParser {
       var parsed = new UserIntent();
       parsed.setIntent(ConversationAction.REFINE);
       parsed.setShorter(true);
-      parsed.setExplicitSearch(true);
       return parsed;
     }
     return null;

@@ -289,7 +289,7 @@ class ApprovedInputFlowTest {
         duration = null;
         year = null;
         search();
-        input.setExplicitSearch(true);
+        input.setStartsNewSearch(true);
         input.setShorter(decision == ConversationDecision.SHORTER_DURATION_CLARIFICATION);
         input.setLonger(decision == ConversationDecision.LONGER_DURATION_CLARIFICATION);
         if (decision == ConversationDecision.RECENCY_YEAR_CLARIFICATION) {
@@ -666,7 +666,7 @@ class ApprovedInputFlowTest {
     when(vectors.findEmbeddingByBookId(anyString())).thenReturn(Optional.of(new float[] {1, 0}));
     var search = request(ConversationAction.RECOMMENDATION, "similar to Reference");
     search.setSimilarToTitle("Reference");
-    search.setExplicitSearch(true);
+    search.setStartsNewSearch(true);
     engine.process(session, search);
     var invalid = request(ConversationAction.CHANGE_COUNT, "set count to zero");
     invalid.setInvalidBookCount(true);
@@ -691,7 +691,7 @@ class ApprovedInputFlowTest {
     var input = request(ConversationAction.RECOMMENDATION, "similar to Reference under two hours");
     input.setSimilarToTitle("Reference");
     input.setBookCount(2);
-    input.setExplicitSearch(true);
+    input.setStartsNewSearch(true);
     var criteria = new ExactCriteria();
     criteria.setDuration("under 2 hours");
     input.setMustInclude(criteria);
@@ -870,7 +870,7 @@ class ApprovedInputFlowTest {
     var displayed = search();
     var personalised = request(ConversationAction.RECOMMENDATION, "personalised for me");
     personalised.setPersonalised(true);
-    personalised.setExplicitSearch(true);
+    personalised.setStartsNewSearch(true);
     var question = engine.process(session, personalised);
     assertThat(question.isPreferenceClarificationRequired()).isTrue();
     reload();

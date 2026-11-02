@@ -125,7 +125,7 @@ public final class SearchCriteriaMerger {
             ? null
             : new ArrayList<>(source.getReplacePreferenceFields()));
     copy.setReplaceSearchFields(source.getReplaceSearchFields());
-    copy.setExplicitSearch(source.isExplicitSearch());
+    copy.setStartsNewSearch(source.startsNewSearch());
     copy.setInvalidBookCount(source.isInvalidBookCount());
     copy.setPreferenceRemovalTerms(source.getPreferenceRemovalTerms());
     copy.setPositivePreferenceRemovalOnly(source.isPositivePreferenceRemovalOnly());

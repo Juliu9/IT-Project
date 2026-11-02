@@ -599,10 +599,10 @@ public class ExactFilterPolicy {
     boolean awaitingTaste = session != null && session.isAwaitingPersonalisedPreferences();
     var previousSearch =
         original != null
-                && !(awaitingTaste && original.isExplicitSearch())
+                && !(awaitingTaste && original.startsNewSearch())
                 && (original.getIntent() == ConversationAction.REFINE
                     || original.getIntent() == ConversationAction.MORE_RESULTS
-                    || (awaitingTaste && !original.isExplicitSearch()))
+                    || (awaitingTaste && !original.startsNewSearch()))
             ? ConversationHistory.latestSearch(session)
             : null;
     SessionRequest previous =

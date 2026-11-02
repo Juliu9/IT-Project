@@ -33,7 +33,7 @@ final class SimilarBookPendingQuestionHandler
       return input;
     }
     var choices = pending.getRequest().getSimilarBookChoices();
-    if (!input.isExplicitSearch() && input.getSimilarToTitle() != null) {
+    if (!input.startsNewSearch() && input.getSimilarToTitle() != null) {
       var named = anotherReference(pending.getRequest(), input);
       named.setSimilarToTitle(input.getSimilarToTitle());
       named.setSimilarToAuthor(input.getSimilarToAuthor());
@@ -57,7 +57,7 @@ final class SimilarBookPendingQuestionHandler
       selection = ConversationText.relativeSelectionReply(reply, choices.size());
     }
     if (selection == null
-        && (input.isExplicitSearch()
+        && (input.startsNewSearch()
             || input.getSimilarToTitle() != null
             || input.isSimilarToClarificationRequired())) {
       return input;
@@ -74,7 +74,7 @@ final class SimilarBookPendingQuestionHandler
     }
     var resumed = ClarificationResolver.restoreSearchCriteria(pending.getRequest(), input);
     resumed.setIntent(ConversationAction.RECOMMENDATION);
-    resumed.setExplicitSearch(true);
+    resumed.setStartsNewSearch(true);
     resumed.setSearchClarificationRequired(false);
     resumed.setDecision(null);
     resumed.setSimilarBookChoices(List.of());
@@ -130,7 +130,7 @@ final class SimilarBookPendingQuestionHandler
       var tastes = SearchCriteriaMerger.copyOf(input);
       SearchCriteriaMerger.merge(ClarificationResolver.restoreSearchCriteria(pending), tastes);
       tastes.setIntent(ConversationAction.RECOMMENDATION);
-      tastes.setExplicitSearch(true);
+      tastes.setStartsNewSearch(true);
       session.setPendingQuestion(null);
       return tastes;
     }
@@ -140,7 +140,7 @@ final class SimilarBookPendingQuestionHandler
   private ConversationDraft anotherReference(ConversationTurn pending, ConversationDraft input) {
     var another = ClarificationResolver.restoreSearchCriteria(pending, input);
     another.setIntent(ConversationAction.RECOMMENDATION);
-    another.setExplicitSearch(true);
+    another.setStartsNewSearch(true);
     another.setSimilarToTitle(null);
     another.setSimilarToAuthor(null);
     another.setSimilarToClarificationRequired(true);

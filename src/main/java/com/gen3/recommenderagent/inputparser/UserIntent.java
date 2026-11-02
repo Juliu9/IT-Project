@@ -126,7 +126,6 @@ public class UserIntent {
   private SessionPreferences preferenceUpdates;
   private SessionPreferences preferenceRemovals;
   private List<String> replacePreferenceFields;
-  private boolean explicitSearch;
 
   public SessionPreferences getPreferenceUpdates() {
     return preferenceUpdates;
@@ -150,14 +149,6 @@ public class UserIntent {
 
   public void setReplacePreferenceFields(List<String> value) {
     replacePreferenceFields = value;
-  }
-
-  public boolean isExplicitSearch() {
-    return explicitSearch;
-  }
-
-  public void setExplicitSearch(boolean value) {
-    explicitSearch = value;
   }
 
   private ConversationAction intent;

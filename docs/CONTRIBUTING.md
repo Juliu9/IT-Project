@@ -32,11 +32,31 @@ the reason is not obvious.
 
 Add or update tests with behavior changes. We use JUnit 5, Mockito, and Testcontainers.
 
+Test the stable application contract separately from each technology adapter:
+
+- Domain, workflow and service tests depend on ports or Spring AI interfaces, not OpenAI, PostgreSQL,
+  Redis, Solr or Qdrant classes.
+- Every adapter has its own unit or Testcontainers integration tests for mapping, queries, failures and
+  configuration. A replacement adapter must pass the same port behaviour and add tests for its own
+  technology-specific details; keep the old adapter tests while that adapter remains supported.
+- Live AI and end-to-end tests assert outcomes, not provider wording, token counts or implementation
+  details. They run only through explicit `RUN_LIVE_*` gates and use whichever providers and adapters
+  the environment configures.
+- Shared fixtures contain domain records. Provider request/response payloads belong only in that
+  provider adapter's tests.
+
+Changing a technology should therefore add or replace adapter tests, not rewrite domain and workflow
+tests. Do not rename an adapter-specific test to make it look generic.
+
 Before you open a pull request, run this:
 
 ```bash
 OPENAI_API_KEY=ci-placeholder ./mvnw clean verify -DexcludedGroups=external
 ```
+
+`OPENAI_API_KEY=ci-placeholder` is required only by the currently installed OpenAI Spring AI starter
+during context creation; it does not make the local suite call OpenAI. Replace this bootstrap variable
+when the installed starter changes.
 
 ## Pull requests
 

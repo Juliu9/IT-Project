@@ -39,9 +39,9 @@ public final class ConversationRules {
         || (request.getMustInclude() != null
             && ConversationText.isYearRefinement(request.getMustInclude().getPublicationYear()))) {
       request.setIntent(ConversationAction.REFINE);
-      request.setExplicitSearch(true);
+      request.setStartsNewSearch(true);
     } else if (hasText(request.getSimilarToTitle()) || request.isSimilarToClarificationRequired()) {
-      request.setExplicitSearch(true);
+      request.setStartsNewSearch(true);
     }
     if (request.getIntent() != ConversationAction.EXPLAIN_RECOMMENDATION) {
       request.setExplanationSelection(null);

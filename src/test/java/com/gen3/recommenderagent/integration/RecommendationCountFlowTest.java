@@ -73,7 +73,6 @@ class RecommendationCountFlowTest {
   private UserIntent fantasy() {
     var intent = new UserIntent();
     intent.setIntent(ConversationAction.RECOMMENDATION);
-    intent.setExplicitSearch(true);
     var query = new SemanticQuery();
     query.setGenres(List.of("fantasy"));
     intent.setPositiveSemanticQuery(query);

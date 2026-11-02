@@ -77,7 +77,7 @@ class SimilarBookFlowTest {
     var request = new ConversationDraft();
     request.setIntent(intent);
     request.setSimilarToTitle(title);
-    request.setExplicitSearch(true);
+    request.setStartsNewSearch(true);
     request.setRawText(title == null ? intent.name() : "books similar to " + title);
     return request;
   }
@@ -235,7 +235,7 @@ class SimilarBookFlowTest {
     service.process("session", "user", request(ConversationAction.RECOMMENDATION, "hunger games"));
     var reply = request(ConversationAction.UNKNOWN, null);
     reply.setRawText("Suzanne Collins");
-    reply.setExplicitSearch(false);
+    reply.setStartsNewSearch(false);
     assertThat(service.process("session", "user", reply).getSimilarBook().bookId())
         .isEqualTo("hunger");
   }
@@ -255,7 +255,7 @@ class SimilarBookFlowTest {
             List.of(new AudiobookTitle("hunger", "Another Book", List.of("Another Author"))));
     var named = request(ConversationAction.RECOMMENDATION, "Another Book");
     named.setRawText("Another Book");
-    named.setExplicitSearch(false);
+    named.setStartsNewSearch(false);
     var resumed = service.process("session", "user", named);
     assertThat(resumed.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
     assertThat(resumed.getSimilarBook().title()).isEqualTo("Another Book");
@@ -407,12 +407,12 @@ class SimilarBookFlowTest {
     verifyNoInteractions(workflow, vectors);
     var invalid = request(ConversationAction.UNKNOWN, null);
     invalid.setRawText("999999999999999999999th");
-    invalid.setExplicitSearch(false);
+    invalid.setStartsNewSearch(false);
     assertThat(service.process("session", "user", invalid).getDecision())
         .isEqualTo(ConversationDecision.SIMILAR_BOOK_SELECTION);
     var reply = request(ConversationAction.UNKNOWN, null);
     reply.setRawText("the second one");
-    reply.setExplicitSearch(false);
+    reply.setStartsNewSearch(false);
     var result = service.process("session", "user", reply);
     assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
     assertThat(result.getSimilarBook().bookId()).isEqualTo("edition");
@@ -429,7 +429,7 @@ class SimilarBookFlowTest {
     service.process("session", "user", request(ConversationAction.RECOMMENDATION, "hunger games"));
     var reply = request(ConversationAction.REPEAT, "1");
     reply.setRawText(text);
-    reply.setExplicitSearch(true);
+    reply.setStartsNewSearch(true);
     reply.setSimilarToClarificationRequired(true);
     var result = service.process("session", "user", reply);
     assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
@@ -483,7 +483,7 @@ class SimilarBookFlowTest {
         .thenThrow(new java.io.IOException("unrelated catalogue unavailable"));
     var reply = request(ConversationAction.UNKNOWN, null);
     reply.setRawText("1");
-    reply.setExplicitSearch(false);
+    reply.setStartsNewSearch(false);
     var result = service.process("session", "user", reply);
     assertThat(result.getDecision())
         .isEqualTo(
@@ -533,7 +533,7 @@ class SimilarBookFlowTest {
     service.process("session", "user", request(ConversationAction.RECOMMENDATION, "hunger games"));
     var reply = request(ConversationAction.UNKNOWN, null);
     reply.setRawText("1");
-    reply.setExplicitSearch(false);
+    reply.setStartsNewSearch(false);
     var result = service.process("session", "user", reply);
     assertThat(result.getRecommendations())
         .extracting(Recommendation::getId)
@@ -595,7 +595,7 @@ class SimilarBookFlowTest {
         .thenReturn(List.of(new AudiobookTitle("other", "Another Title", List.of("Writer"))));
     var reply = request(ConversationAction.RECOMMENDATION, "Another Title");
     reply.setRawText("Another Title");
-    reply.setExplicitSearch(false);
+    reply.setStartsNewSearch(false);
     var result = service.process("session", "user", reply);
     assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
     assertThat(result.getSimilarBook().bookId()).isEqualTo("other");
@@ -632,7 +632,7 @@ class SimilarBookFlowTest {
     session.getActiveSearch().setSearch(previous);
     sessions.updateSession(session);
     var search = request(ConversationAction.RECOMMENDATION, "The Hunger Games");
-    search.setExplicitSearch(false);
+    search.setStartsNewSearch(false);
     com.gen3.recommenderagent.application.conversation.workflow.ConversationRules.normalizeInput(
         search);
     var result = service.process("waiting", "user", search);
@@ -671,7 +671,7 @@ class SimilarBookFlowTest {
     search.setMustInclude(exact);
     service.process("session", "user", search);
     var reply = request(ConversationAction.REFINE, null);
-    reply.setExplicitSearch(false);
+    reply.setStartsNewSearch(false);
     var tastes = new com.gen3.recommenderagent.domain.search.SemanticQuery();
     tastes.setGenres(List.of("fantasy"));
     reply.setPositiveSemanticQuery(tastes);
@@ -702,7 +702,7 @@ class SimilarBookFlowTest {
     service.process("session", "user", request(ConversationAction.CANCEL, null));
     var reply = request(ConversationAction.UNKNOWN, null);
     reply.setRawText("2");
-    reply.setExplicitSearch(false);
+    reply.setStartsNewSearch(false);
     assertThat(service.process("session", "user", reply).getDecision())
         .isEqualTo(ConversationDecision.UNKNOWN);
   }

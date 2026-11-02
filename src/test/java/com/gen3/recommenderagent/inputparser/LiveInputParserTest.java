@@ -21,7 +21,6 @@ import org.springframework.test.context.ActiveProfiles;
 /** Opt-in recognition checks using synthetic text and the configured parser model; no catalogue. */
 @Tag("external")
 @EnabledIfEnvironmentVariable(named = "RUN_LIVE_PARSER_TESTS", matches = "true")
-@EnabledIfEnvironmentVariable(named = "OPENAI_API_KEY", matches = ".+")
 @ActiveProfiles("live-parser-evaluation")
 @SpringBootTest(
     classes = LiveInputParserTest.Config.class,
@@ -316,7 +315,7 @@ class LiveInputParserTest {
     var result = parser.parse("horror");
     assertThat(result.getIntent())
         .isIn(ConversationAction.RECOMMENDATION, ConversationAction.REFINE);
-    assertThat(result.isExplicitSearch()).isFalse();
+    assertThat(result.startsNewSearch()).isFalse();
     assertThat(result.getPositiveSemanticQuery()).isNotNull();
     assertThat(result.getPositiveSemanticQuery().getGenres()).contains("horror");
   }

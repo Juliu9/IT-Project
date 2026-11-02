@@ -325,7 +325,7 @@ class RefinementFlowTest {
     service.process("session", "user", command("2010"));
     var fresh = yearReply("between 2020 and 2025");
     fresh.setIntent(ConversationAction.RECOMMENDATION);
-    fresh.setExplicitSearch(true);
+    fresh.setStartsNewSearch(true);
     var query = new SemanticQuery();
     query.setGenres(List.of("horror"));
     fresh.setPositiveSemanticQuery(query);
@@ -537,7 +537,7 @@ class RefinementFlowTest {
     var genre = new SemanticQuery();
     genre.setGenres(List.of("mystery"));
     fresh.setPositiveSemanticQuery(genre);
-    fresh.setExplicitSearch(true);
+    fresh.setStartsNewSearch(true);
     assertThat(process(fresh).getMustInclude().getAuthors()).containsExactly("Saved Writer");
   }
 
@@ -779,7 +779,7 @@ class RefinementFlowTest {
     sessions.updateSession(session);
     var reply = request(ConversationAction.RECOMMENDATION);
     reply.setRawText(text);
-    reply.setExplicitSearch(true);
+    reply.setStartsNewSearch(true);
     reply.setBookCount(5);
     var invented = new SemanticQuery();
     invented.setGenres(List.of("mystery"));
@@ -810,7 +810,7 @@ class RefinementFlowTest {
     clearInvocations(workflow);
     var reply = request(ConversationAction.RECOMMENDATION);
     reply.setRawText(text);
-    reply.setExplicitSearch(true);
+    reply.setStartsNewSearch(true);
     var limit = new ExactCriteria();
     limit.setDuration("2 hours");
     reply.setMustInclude(limit);
@@ -837,7 +837,7 @@ class RefinementFlowTest {
         .isTrue();
     verifyNoInteractions(workflow);
     var reply = request(ConversationAction.RECOMMENDATION);
-    reply.setExplicitSearch(false);
+    reply.setStartsNewSearch(false);
     var limit = new ExactCriteria();
     limit.setDuration("under 2 hours");
     reply.setMustInclude(limit);

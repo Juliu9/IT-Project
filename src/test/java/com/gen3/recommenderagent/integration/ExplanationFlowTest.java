@@ -239,7 +239,7 @@ class ExplanationFlowTest {
     var request = new ConversationDraft();
     request.setIntent(action);
     if (action == ConversationAction.RECOMMENDATION || action == ConversationAction.REFINE) {
-      request.setExplicitSearch(true);
+      request.setStartsNewSearch(true);
       var query = new SemanticQuery();
       query.setGenres(List.of("horror"));
       request.setPositiveSemanticQuery(query);
@@ -465,13 +465,13 @@ class ExplanationFlowTest {
   }
 
   @Test
-  void explicitSearchByTitleCanStartANewSearchDuringClarification() {
+  void startsNewSearchByTitleCanStartANewSearchDuringClarification() {
     search();
     explain(null, "Harry Potter");
     var reply = new ConversationDraft();
     reply.setIntent(ConversationAction.RECOMMENDATION);
     reply.setRawText("Recommend Harry Potter 1");
-    reply.setExplicitSearch(true);
+    reply.setStartsNewSearch(true);
     var criteria = new SemanticQuery();
     criteria.setKeywords(List.of("Harry Potter 1"));
     reply.setPositiveSemanticQuery(criteria);
@@ -554,7 +554,7 @@ class ExplanationFlowTest {
     var reply = new ConversationDraft();
     reply.setIntent(ConversationAction.RECOMMENDATION);
     reply.setRawText("recommend 2 books");
-    reply.setExplicitSearch(true);
+    reply.setStartsNewSearch(true);
     reply.setBookCount(2);
     var result = service.process("session", "user", reply);
     assertThat(result.getIntent()).isEqualTo(ConversationAction.RECOMMENDATION);

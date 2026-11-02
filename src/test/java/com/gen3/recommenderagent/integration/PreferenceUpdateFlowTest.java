@@ -143,7 +143,7 @@ class PreferenceUpdateFlowTest {
   void moreAbandonsTheUnfinishedPersonalisedSearchAndAsksForCriteria(String text) {
     var search = request(ConversationAction.RECOMMENDATION);
     search.setPersonalised(true);
-    search.setExplicitSearch(true);
+    search.setStartsNewSearch(true);
     search.setPositiveSemanticQuery(tastes("horror").getPositiveSemanticQuery());
     assertThat(process(search).getDecision())
         .isEqualTo(ConversationDecision.PREFERENCE_CLARIFICATION);
@@ -170,7 +170,7 @@ class PreferenceUpdateFlowTest {
   void tasteReplyDoesNotPromotePendingSearchConstraintsOrSemanticsToSavedPreferences() {
     var search = request(ConversationAction.RECOMMENDATION);
     search.setPersonalised(true);
-    search.setExplicitSearch(true);
+    search.setStartsNewSearch(true);
     var filter = new ExactCriteria();
     filter.setAuthors(List.of("Suzanne Collins"));
     filter.setDuration("under 3 hours");
@@ -187,7 +187,7 @@ class PreferenceUpdateFlowTest {
     assertThat(saved.getMustInclude().getAuthors()).isNullOrEmpty();
     assertThat(saved.getMustInclude().getDuration()).isNull();
     var next = request(ConversationAction.RECOMMENDATION);
-    next.setExplicitSearch(true);
+    next.setStartsNewSearch(true);
     next.setPositiveSemanticQuery(tastes("adventure").getPositiveSemanticQuery());
     var result = process(next);
     assertThat(result.getMustInclude().getAuthors()).isNullOrEmpty();
@@ -437,10 +437,10 @@ class PreferenceUpdateFlowTest {
   }
 
   @Test
-  void explicitSearchAndCancelExitThePendingUpdate() {
+  void startsNewSearchAndCancelExitThePendingUpdate() {
     process(update(null));
     var search = request(ConversationAction.RECOMMENDATION);
-    search.setExplicitSearch(true);
+    search.setStartsNewSearch(true);
     search.setPositiveSemanticQuery(tastes("fantasy").getPositiveSemanticQuery());
     assertThat(process(search).getIntent()).isEqualTo(ConversationAction.RECOMMENDATION);
     assertThat(sessions.getSession("session", "user").isAwaitingPreferenceUpdate()).isFalse();
@@ -508,7 +508,7 @@ class PreferenceUpdateFlowTest {
   }
 
   @Test
-  void updatedTastesDoNotEraseExplicitSearchCriteria() {
+  void updatedTastesDoNotEraseStartsNewSearchCriteria() {
     process(update(tastes("romance")));
     var search = request(ConversationAction.RECOMMENDATION);
     search.setPositiveSemanticQuery(tastes("fantasy").getPositiveSemanticQuery());

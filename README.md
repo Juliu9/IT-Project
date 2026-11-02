@@ -100,9 +100,10 @@ Reuse both IDs for follow-ups such as “more”, “explain”, or “repeat th
 | Purpose | Command |
 | --- | --- |
 | Local checks, unit and container tests; no live AI | `OPENAI_API_KEY=ci-placeholder ./mvnw clean verify -DexcludedGroups=external` |
-| Full Maven verification, including eligible live tests | `./mvnw clean verify` |
+| Full Maven verification; external tests remain opt-in | `./mvnw clean verify` |
 | Apply Java formatting | `./mvnw spotless:apply` |
 | Opt into live parser evaluations | `RUN_LIVE_PARSER_TESTS=true ./mvnw test -Dtest=LiveInputParserTest` |
+| Opt into the configured live request path | `RUN_LIVE_RECOMMENDATION_TESTS=true ./mvnw test -Dtest=LiveRecommendationIntegrationTest` |
 
 See [test prerequisites](docs/configuration.md#verification-and-live-test-prerequisites) for Docker,
 environment gates, API charges, and CI behaviour.

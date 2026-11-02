@@ -85,15 +85,21 @@ Run commands from [README: Verification commands](../README.md#verification-comm
 | Suite | Requirements | External effects |
 | --- | --- | --- |
 | Local verification | Java 21; Docker running for container tests | Uses disposable containers; no live AI |
-| Live recommendation | Exported `OPENAI_API_KEY`, `QDRANT_URL`, and `QDRANT_API_KEY`; populated Qdrant; Redis | Calls OpenAI and live services; may incur charges |
-| Live parser evaluation | Exported `OPENAI_API_KEY` and `RUN_LIVE_PARSER_TESTS=true` | Calls the configured parser model; may incur charges |
+| Live recommendation | `RUN_LIVE_RECOMMENDATION_TESTS=true`; credentials and populated services required by the configured AI, catalogue, session and history adapters | Calls configured live services; may write session data and incur charges |
+| Live parser evaluation | `RUN_LIVE_PARSER_TESTS=true` and credentials required by the configured chat provider | Calls the configured parser model; may incur charges |
 
-The live-test variables must be exported to the process. Loading `.env` through the `dev` Spring
-profile does not expose them to Maven. Missing variables skip the corresponding live suite.
+The live-test variables and adapter credentials must be exported to the process. Loading `.env`
+through the `dev` Spring profile does not expose them to Maven. External suites are skipped unless
+their explicit `RUN_LIVE_*` gate is `true`; once enabled, missing credentials are test failures rather
+than silent skips.
 
 The recommendation test must return saved books and their titles; a nonblank fallback is not enough.
 Parser evaluations use synthetic text and require neither a catalogue nor Redis. Mocked tests cover
 mapping and prompt contracts; live cases measure actual model recognition.
+
+Tests follow the replaceable boundaries described in [Contributing](CONTRIBUTING.md#tests). Core tests
+mock ports and Spring AI interfaces; PostgreSQL, Redis, Solr, Qdrant and provider-specific tests verify
+only their adapters. A new technology must add an adapter suite that exercises the same port contract.
 
 CI runs local checks for pull requests and pushes to `staging` and `main`. Secret-backed tests run
 only for trusted `main` events and manual `main` runs. Fork pull requests run local checks only. CI
