@@ -684,7 +684,9 @@ class InputParserTest {
                 prompt ->
                     prompt.contains("self-contained criteria")
                         && prompt.contains(
-                            "Each author or narrator field supports at most one person")));
+                            "Each author or narrator field supports at most one person")
+                        && prompt.contains("Decide intent and explicitSearch independently")
+                        && prompt.contains("\"horror\" -> RECOMMENDATION, explicitSearch=false")));
   }
 
   @org.junit.jupiter.params.ParameterizedTest
