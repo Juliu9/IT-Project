@@ -146,6 +146,10 @@ Saved session preferences are bounded before an update commits: each value is at
 characters, each semantic field holds at most 10 values, the whole preference set holds at most 100
 values, and its JSON representation is at most 32 KiB. **An oversized update is rejected atomically;
 existing preferences are neither truncated nor partially changed.**
+Category overflow during a preference edit returns a normal conversational response explaining the
+10-value limit, rather than an HTTP client error. The previous preferences and pending question
+remain intact, and `REPEAT` can replay that explanation. Other invalid requests retain their
+existing error handling.
 
 ### Paging, refinements, and replay
 

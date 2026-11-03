@@ -13,7 +13,7 @@ import java.util.function.Function;
 public class SessionPreferences {
 
   static final int MAX_TERM_CHARACTERS = 256;
-  static final int MAX_TERMS_PER_SEMANTIC_FIELD = 10;
+  public static final int MAX_TERMS_PER_SEMANTIC_FIELD = 10;
   static final int MAX_TOTAL_TERMS = 100;
   static final int MAX_SERIALIZED_BYTES = 32 * 1024;
 
@@ -331,7 +331,7 @@ public class SessionPreferences {
               safe(query.getAuthors()),
               safe(query.getNarrators()))) {
         if (field.size() > MAX_TERMS_PER_SEMANTIC_FIELD) {
-          throw new InvalidRequestException(
+          throw new PreferenceLimitException(
               "Please keep each preference category to "
                   + MAX_TERMS_PER_SEMANTIC_FIELD
                   + " values or fewer.");

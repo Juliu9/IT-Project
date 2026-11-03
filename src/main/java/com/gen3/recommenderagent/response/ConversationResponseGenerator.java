@@ -172,6 +172,12 @@ public class ConversationResponseGenerator implements ResponseGenerator {
           "I didn't find any books in the latest search to explain. Would you like to try a different search?";
       case NOTHING_TO_REPEAT ->
           "I don't have an earlier request to repeat yet. Would you like recommendations or help getting started?";
+      case PREFERENCE_LIMIT_EXCEEDED ->
+          "I can save up to "
+              + com.gen3.recommenderagent.domain.session.SessionPreferences
+                  .MAX_TERMS_PER_SEMANTIC_FIELD
+              + " values in each preference category. I haven't changed your preferences. "
+              + "Please remove a saved preference or replace that category.";
       case UNAVAILABLE -> PROCESSING_FALLBACK;
     };
   }

@@ -4,13 +4,19 @@ import com.gen3.recommenderagent.application.conversation.ConversationEngine;
 import com.gen3.recommenderagent.application.conversation.IntentResolver;
 import com.gen3.recommenderagent.application.conversation.SessionContextProjector;
 import com.gen3.recommenderagent.application.conversation.SessionRequest;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.conversation.ConversationOutcome;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
+import com.gen3.recommenderagent.domain.session.LastOutcome;
+import com.gen3.recommenderagent.domain.session.PendingQuestion;
+import com.gen3.recommenderagent.domain.session.PreferenceLimitException;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.inputparser.SessionContext;
 import com.gen3.recommenderagent.inputparser.UserIntent;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.gen3.recommenderagent.storage.session.SessionRepository;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
 /** Owns the single ordered load, transition and commit boundary for each session request. */
@@ -38,7 +44,8 @@ public class SessionTransitionService {
   }
 
   public ConversationTurn process(String sessionId, String userId, SessionRequest request) {
-    return sessions.update(sessionId, userId, session -> conversation.process(session, request));
+    return sessions.update(
+        sessionId, userId, session -> transition(session, request.getIntent(), () -> request));
   }
 
   public <T> T process(
@@ -50,11 +57,35 @@ public class SessionTransitionService {
     return sessions.update(
         sessionId,
         userId,
-        session -> {
-          SessionRequest request = intentResolver.resolve(session, rawText, intent);
-          return RequestTelemetry.measure(
-              "recommendMs", () -> conversation.process(session, request));
-        },
+        session ->
+            transition(
+                session,
+                intent.getIntent(),
+                () -> intentResolver.resolve(session, rawText, intent)),
         afterCommit);
+  }
+
+  private ConversationTurn transition(
+      Session session, ConversationAction action, Supplier<SessionRequest> input) {
+    var pending = session.getPendingQuestion();
+    try {
+      var request = input.get();
+      return RequestTelemetry.measure("recommendMs", () -> conversation.process(session, request));
+    } catch (PreferenceLimitException exception) {
+      if (action != ConversationAction.UPDATE_PREFERENCES
+          && !(pending instanceof PendingQuestion.Preference)) {
+        throw exception;
+      }
+      // Validation rejects the entire edit; keep its previous clarification as well.
+      session.setPendingQuestion(pending);
+      var rejected = new ConversationTurn();
+      rejected.setIntent(ConversationAction.UPDATE_PREFERENCES);
+      rejected.setOutcome(ConversationOutcome.PREFERENCE_LIMIT_EXCEEDED);
+      rejected.setRecommendations(java.util.List.of());
+      rejected.setRequestId(java.util.UUID.randomUUID().toString());
+      rejected.setCreatedAt(java.time.Instant.now());
+      session.setLastOutcome(new LastOutcome(rejected, rejected.getOutcome()));
+      return rejected;
+    }
   }
 }
