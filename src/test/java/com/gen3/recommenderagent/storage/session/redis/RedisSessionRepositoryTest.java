@@ -334,13 +334,11 @@ class RedisSessionRepositoryTest {
 
     SemanticQuery semanticQuery = new SemanticQuery();
 
-    semanticQuery.setTopics(List.of("WWI", "history"));
+    semanticQuery.setTopics(List.of("WWI", "history", "war", "Europe"));
 
     semanticQuery.setGenres(List.of("historical"));
 
     semanticQuery.setAuthors(List.of("Author One"));
-
-    semanticQuery.setKeywords(List.of("war", "Europe"));
 
     ConversationDraft request = new ConversationDraft();
 
@@ -357,13 +355,11 @@ class RedisSessionRepositoryTest {
 
     assertNotNull(retrievedSemanticQuery);
 
-    assertEquals(List.of("WWI", "history"), retrievedSemanticQuery.getTopics());
+    assertEquals(List.of("WWI", "history", "war", "Europe"), retrievedSemanticQuery.getTopics());
 
     assertEquals(List.of("historical"), retrievedSemanticQuery.getGenres());
 
     assertEquals(List.of("Author One"), retrievedSemanticQuery.getAuthors());
-
-    assertEquals(List.of("war", "Europe"), retrievedSemanticQuery.getKeywords());
   }
 
   // ============================================================

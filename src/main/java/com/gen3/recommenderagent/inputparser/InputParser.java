@@ -60,7 +60,6 @@ public class InputParser {
             case "narrators" -> query.getNarrators();
             case "genres" -> query.getGenres();
             case "topics" -> query.getTopics();
-            case "keywords" -> query.getKeywords();
             default -> null;
           };
     }

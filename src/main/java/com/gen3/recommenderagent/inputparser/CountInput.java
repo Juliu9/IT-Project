@@ -73,10 +73,7 @@ final class CountInput {
     return java.util.stream.Stream.of(
             parsed.getPositiveSemanticQuery(), parsed.getNegativeSemanticQuery())
         .filter(java.util.Objects::nonNull)
-        .flatMap(
-            query ->
-                java.util.stream.Stream.of(
-                    query.getTopics(), query.getGenres(), query.getKeywords()))
+        .flatMap(query -> java.util.stream.Stream.of(query.getTopics(), query.getGenres()))
         .filter(java.util.Objects::nonNull)
         .flatMap(java.util.Collection::stream)
         .filter(java.util.Objects::nonNull)

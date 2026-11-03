@@ -122,6 +122,15 @@ The session retains the original reference vector and effective query vector. Ca
 refills reuse them without repeating title lookup or embedding. A new standalone search replaces the
 reference; clarification and cancellation follow the normal pending-question rules.
 
+### Semantic query fields
+
+Semantic queries use `genres`, `topics`, `authors`, and `narrators`. Topics retain complete
+phrases describing subject matter, themes, moods, settings, plots, and character traits, such as
+“strong female protagonist” or “documentary-style account of penguins”. The separate `keywords`
+preference field has been removed; these descriptions now belong in `topics` for both positive
+and negative preferences. Sparse keyword retrieval and its catalogue vector name are separate
+from preference fields.
+
 ### Personalisation
 
 Personalised retrieval combines the current positive semantic vector with the stored user-taste
@@ -134,7 +143,7 @@ user vectors and session preferences are frozen in the search snapshot so `MORE_
 consistent; new searches and refinements load current preferences again.
 
 Saved session preferences are bounded before an update commits: each value is at most 256 Java
-characters, each semantic field holds at most 20 values, the whole preference set holds at most 100
+characters, each semantic field holds at most 10 values, the whole preference set holds at most 100
 values, and its JSON representation is at most 32 KiB. **An oversized update is rejected atomically;
 existing preferences are neither truncated nor partially changed.**
 
@@ -151,6 +160,7 @@ embedding, retrieval, and ranking. The session retains at most 500 shown IDs.
 | `REPEAT` | Replays the last completed action without applying it again |
 | `REPEAT_RECOMMENDATIONS` | Replays the retained recommendation page without consuming the queue |
 | `CLEAR_HISTORY` | Removes active search, shown IDs, queue, and clarification state; keeps preferences |
+| `EXPLAIN_PREFERENCES` | Reports saved preferences and count; preserves search and pending questions |
 | `RESET_PREFERENCES` | Clears session preferences and resets the page count; keeps search history |
 
 Comparative refinements such as shorter, longer, newer, and older derive a boundary from the latest
@@ -158,11 +168,21 @@ displayed page. If required metadata is missing or a new range would conflict wi
 the system asks for clarification without consuming the page or queue. Explicit search-field
 replacement can clear or replace a named inherited field; ordinary additions preserve other fields.
 
+### Viewing session preferences
+
+`EXPLAIN_PREFERENCES` reports saved session preferences and the current recommendation count
+using a fixed template without AI narration or retrieval. Empty fields are skipped; an empty
+preference set is stated explicitly. Reports stay within 150 words, preserve whole saved values,
+and end with “Additional preferences omitted.” when necessary. This read-only action preserves
+pending clarifications and the active recommendation batch. `REPEAT` replays the saved report
+snapshot. The semantic category maximum is 10; the existing one-author/one-narrator rule
+also applies. Existing session data is not migrated.
+
 ### Pending questions
 
 The session stores at most one typed pending question. Short replies such as a number, title, taste,
-or duration resolve that question before ordinary intent dispatch. `HELP`, `REPEAT`, `UNKNOWN`, and
-cache reloads preserve it. Another explicit action abandons it and may create a new question; there
+or duration resolve that question before ordinary intent dispatch. `HELP`, `EXPLAIN_PREFERENCES`,
+`REPEAT`, `UNKNOWN`, and cache reloads preserve it. Another explicit action abandons it and may create a new question; there
 is no hidden question stack.
 
 Pending and completed state use structured snapshots, not raw user messages or final response text.
@@ -179,7 +199,8 @@ Supported intents are:
 | Search | Navigation and replay | Preferences and session | Other |
 | --- | --- | --- | --- |
 | `RECOMMENDATION` | `MORE_RESULTS` | `UPDATE_PREFERENCES` | `EXPLAIN_RECOMMENDATION` |
-| `REFINE` | `REPEAT` | `RESET_PREFERENCES` | `HELP` |
+| `REFINE` | `REPEAT` | `EXPLAIN_PREFERENCES` | Reports saved preferences and count; preserves search and pending questions |
+| `RESET_PREFERENCES` | `HELP` |
 |  | `REPEAT_RECOMMENDATIONS` | `CHANGE_COUNT` | `CANCEL` |
 |  |  | `CLEAR_HISTORY` | `UNKNOWN` |
 

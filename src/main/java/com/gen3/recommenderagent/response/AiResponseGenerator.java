@@ -251,12 +251,8 @@ public class AiResponseGenerator {
     return query == null
         ? "none"
         : String.format(
-            "topics=%s, genres=%s, keywords=%s, authors=%s, narrators=%s",
-            query.getTopics(),
-            query.getGenres(),
-            query.getKeywords(),
-            query.getAuthors(),
-            query.getNarrators());
+            "topics=%s, genres=%s, authors=%s, narrators=%s",
+            query.getTopics(), query.getGenres(), query.getAuthors(), query.getNarrators());
   }
 
   // Turns one Reccomendation object into a readable text fragment

@@ -195,6 +195,7 @@ public class ConversationResponseGenerator implements ResponseGenerator {
                   + " recommendation"
                   + (currentRequest.getBookCount() == 1 ? "" : "s")
                   + " at a time.";
+      case EXPLAIN_PREFERENCES -> PreferenceResponse.render(currentRequest);
       case UPDATE_PREFERENCES -> "Thanks, I've updated your preferences for this session.";
       case RESET_PREFERENCES ->
           "All set, I've reset your preferences for this session and will show "
@@ -205,7 +206,7 @@ public class ConversationResponseGenerator implements ResponseGenerator {
       case HELP ->
           "I can help you find audiobooks, adjust your search, or explore more books. You can ask me to "
               + "repeat my last reply or the last book list, explain a recommendation, or change how many books I show. "
-              + "You can also update or reset your preferences, cancel a request, or clear this session's history.";
+              + "You can also view, update or reset your preferences, cancel a request, or clear this session's history.";
       case UNKNOWN ->
           "I'm not quite sure what you'd like to do. You can ask for audiobook recommendations or "
               + "say help to hear what I can do.";
@@ -232,6 +233,7 @@ public class ConversationResponseGenerator implements ResponseGenerator {
     return switch (action) {
       case CHANGE_COUNT,
           UPDATE_PREFERENCES,
+          EXPLAIN_PREFERENCES,
           RESET_PREFERENCES,
           CLEAR_HISTORY,
           HELP,

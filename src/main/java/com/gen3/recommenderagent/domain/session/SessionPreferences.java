@@ -13,7 +13,7 @@ import java.util.function.Function;
 public class SessionPreferences {
 
   static final int MAX_TERM_CHARACTERS = 256;
-  static final int MAX_TERMS_PER_SEMANTIC_FIELD = 20;
+  static final int MAX_TERMS_PER_SEMANTIC_FIELD = 10;
   static final int MAX_TOTAL_TERMS = 100;
   static final int MAX_SERIALIZED_BYTES = 32 * 1024;
 
@@ -66,7 +66,6 @@ public class SessionPreferences {
       query.setNarrators(terms);
       query.setGenres(terms);
       query.setTopics(terms);
-      query.setKeywords(terms);
       var exact = new ExactCriteria();
       exact.setAuthors(terms);
       exact.setNarrators(terms);
@@ -134,7 +133,7 @@ public class SessionPreferences {
       if (parts.length != 2
           || !(switch (parts[0]) {
             case "positiveSemanticQuery", "negativeSemanticQuery" ->
-                List.of("genres", "topics", "keywords", "authors", "narrators").contains(parts[1]);
+                List.of("genres", "topics", "authors", "narrators").contains(parts[1]);
             case "mustInclude", "mustNotInclude" ->
                 List.of("authors", "narrators", "language", "source", "duration", "publicationYear")
                     .contains(parts[1]);
@@ -245,12 +244,6 @@ public class SessionPreferences {
             get(additions, SemanticQuery::getTopics),
             get(removals, SemanticQuery::getTopics),
             replace.contains(prefix + ".topics")));
-    result.setKeywords(
-        terms(
-            get(base, SemanticQuery::getKeywords),
-            get(additions, SemanticQuery::getKeywords),
-            get(removals, SemanticQuery::getKeywords),
-            replace.contains(prefix + ".keywords")));
     result.setAuthors(
         personTerms(
             get(base, SemanticQuery::getAuthors),
@@ -335,7 +328,6 @@ public class SessionPreferences {
           java.util.List.of(
               safe(query.getGenres()),
               safe(query.getTopics()),
-              safe(query.getKeywords()),
               safe(query.getAuthors()),
               safe(query.getNarrators()))) {
         if (field.size() > MAX_TERMS_PER_SEMANTIC_FIELD) {

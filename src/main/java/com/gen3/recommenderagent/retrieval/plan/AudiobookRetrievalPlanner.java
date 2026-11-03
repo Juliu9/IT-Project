@@ -60,7 +60,6 @@ public class AudiobookRetrievalPlanner {
     List<String> terms = new ArrayList<>();
     add(terms, semanticQuery.getTopics());
     add(terms, semanticQuery.getGenres());
-    add(terms, semanticQuery.getKeywords());
     return terms.isEmpty() ? fallback : String.join(" ", terms);
   }
 
@@ -75,7 +74,6 @@ public class AudiobookRetrievalPlanner {
     return query != null
         && (hasValues(query.getTopics())
             || hasValues(query.getGenres())
-            || hasValues(query.getKeywords())
             || hasValues(query.getAuthors())
             || hasValues(query.getNarrators()));
   }

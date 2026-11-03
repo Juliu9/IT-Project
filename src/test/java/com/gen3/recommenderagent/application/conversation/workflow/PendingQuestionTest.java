@@ -48,7 +48,7 @@ class PendingQuestionTest {
   @ParameterizedTest
   @EnumSource(
       value = ConversationAction.class,
-      names = {"HELP", "REPEAT", "UNKNOWN"})
+      names = {"HELP", "EXPLAIN_PREFERENCES", "REPEAT", "UNKNOWN"})
   void supportingActionsPreserveSelectionsAcrossReload(ConversationAction intent) {
     var session = selection();
     var action =

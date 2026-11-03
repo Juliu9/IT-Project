@@ -70,10 +70,6 @@ public final class SearchCriteriaMerger {
         person(
             values(base, SemanticQuery::getNarrators),
             values(override, SemanticQuery::getNarrators)));
-    merged.setKeywords(
-        union(
-            values(base, SemanticQuery::getKeywords),
-            values(override, SemanticQuery::getKeywords)));
     return merged;
   }
 

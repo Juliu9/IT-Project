@@ -31,7 +31,8 @@ public final class ClarificationResolver {
     String reply = effective.getRawText() == null ? "" : effective.getRawText().strip();
     resolveInvalidSelection(session, effective, reply);
     boolean contextual = isContextualReply(session, effective, reply);
-    if (effective.getIntent() == ConversationAction.HELP
+    if (effective.getIntent() == ConversationAction.EXPLAIN_PREFERENCES
+        || effective.getIntent() == ConversationAction.HELP
         || (effective.getIntent() == ConversationAction.REPEAT && !contextual)) {
       return effective;
     }
@@ -511,7 +512,7 @@ public final class ClarificationResolver {
 
   public void complete(Session session, ConversationDraft request) {
     ConversationAction intent = request.getIntent();
-    if (intent == ConversationAction.REPEAT) {
+    if (intent == ConversationAction.REPEAT || intent == ConversationAction.EXPLAIN_PREFERENCES) {
       return;
     }
     if (intent == ConversationAction.HELP || intent == ConversationAction.UNKNOWN) {

@@ -8,10 +8,9 @@ public class SemanticQuery {
   private List<String> genres;
   private List<String> authors;
   private List<String> narrators;
-  private List<String> keywords;
 
   public boolean hasValues() {
-    return java.util.stream.Stream.of(topics, genres, authors, narrators, keywords)
+    return java.util.stream.Stream.of(topics, genres, authors, narrators)
         .filter(java.util.Objects::nonNull)
         .flatMap(List::stream)
         .anyMatch(value -> value != null && !value.isBlank());
@@ -51,13 +50,5 @@ public class SemanticQuery {
   /** Stores narrator names extracted from the user's request. */
   public void setNarrators(List<String> narrators) {
     this.narrators = narrators;
-  }
-
-  public List<String> getKeywords() {
-    return keywords;
-  }
-
-  public void setKeywords(List<String> keywords) {
-    this.keywords = keywords;
   }
 }

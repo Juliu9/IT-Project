@@ -478,7 +478,7 @@ class ExplanationFlowTest {
     reply.setRawText("Recommend Harry Potter 1");
     reply.setStartsNewSearch(true);
     var criteria = new SemanticQuery();
-    criteria.setKeywords(List.of("Harry Potter 1"));
+    criteria.setTopics(List.of("Harry Potter 1"));
     reply.setPositiveSemanticQuery(criteria);
     assertThat(service.process("session", "user", reply).getIntent())
         .isEqualTo(ConversationAction.RECOMMENDATION);

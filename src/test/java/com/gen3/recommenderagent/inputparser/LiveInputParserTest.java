@@ -40,7 +40,7 @@ class LiveInputParserTest {
     assertThat(result.getPositiveSemanticQuery()).isNotNull();
     var query = result.getPositiveSemanticQuery();
     var terms =
-        java.util.stream.Stream.of(query.getTopics(), query.getGenres(), query.getKeywords())
+        java.util.stream.Stream.of(query.getTopics(), query.getGenres())
             .filter(java.util.Objects::nonNull)
             .flatMap(java.util.Collection::stream)
             .collect(java.util.stream.Collectors.joining(" "));
@@ -287,9 +287,6 @@ class LiveInputParserTest {
         .as("%s -> %s", text, new tools.jackson.databind.ObjectMapper().writeValueAsString(result))
         .contains(genre);
     var themes = new java.util.ArrayList<String>();
-    if (result.getPositiveSemanticQuery().getKeywords() != null) {
-      themes.addAll(result.getPositiveSemanticQuery().getKeywords());
-    }
     if (result.getPositiveSemanticQuery().getTopics() != null) {
       themes.addAll(result.getPositiveSemanticQuery().getTopics());
     }
@@ -420,8 +417,7 @@ class LiveInputParserTest {
     assertThat(result.getNegativeSemanticQuery()).isNotNull();
     var negative = result.getNegativeSemanticQuery();
     var terms =
-        java.util.stream.Stream.of(
-                negative.getGenres(), negative.getTopics(), negative.getKeywords())
+        java.util.stream.Stream.of(negative.getGenres(), negative.getTopics())
             .filter(java.util.Objects::nonNull)
             .flatMap(java.util.Collection::stream)
             .toList();

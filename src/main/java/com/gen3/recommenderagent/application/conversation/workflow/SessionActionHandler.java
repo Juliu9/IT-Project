@@ -14,6 +14,7 @@ public final class SessionActionHandler implements ConversationHandler {
         ConversationAction.RESET_PREFERENCES,
         ConversationAction.CLEAR_HISTORY,
         ConversationAction.HELP,
+        ConversationAction.EXPLAIN_PREFERENCES,
         ConversationAction.CANCEL,
         ConversationAction.UNKNOWN);
   }
@@ -36,6 +37,11 @@ public final class SessionActionHandler implements ConversationHandler {
   public void finish(Session session, ConversationDraft request, SessionRequest original) {
     request.setRecommendations(List.of());
     switch (request.getIntent()) {
+      case EXPLAIN_PREFERENCES -> {
+        request.setSessionPreferenceSnapshot(
+            session.getPreferences() == null ? null : session.getPreferences().copy());
+        request.setBookCount(session.getBookCount());
+      }
       case CHANGE_COUNT -> {
         if (!request.isInvalidBookCount() && request.getBookCount() != null) {
           session.setBookCount(request.getBookCount());

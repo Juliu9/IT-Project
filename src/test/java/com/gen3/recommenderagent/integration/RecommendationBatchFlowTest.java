@@ -105,7 +105,7 @@ class RecommendationBatchFlowTest {
     ConversationDraft search = request(ConversationAction.RECOMMENDATION);
     search.getPositiveSemanticQuery().setTopics(List.of("expeditions"));
     SemanticQuery avoid = new SemanticQuery();
-    avoid.setKeywords(List.of("violence"));
+    avoid.setTopics(List.of("violence"));
     search.setNegativeSemanticQuery(avoid);
     ExactCriteria include = new ExactCriteria();
     include.setLanguage("English");
@@ -115,7 +115,7 @@ class RecommendationBatchFlowTest {
     ConversationTurn repeat = process(request(ConversationAction.REPEAT));
     for (ConversationTurn result : List.of(more, repeat)) {
       assertThat(result.getPositiveSemanticQuery().getTopics()).containsExactly("expeditions");
-      assertThat(result.getNegativeSemanticQuery().getKeywords()).containsExactly("violence");
+      assertThat(result.getNegativeSemanticQuery().getTopics()).containsExactly("violence");
       assertThat(result.getMustInclude().getLanguage()).isEqualTo("English");
       assertIds(result, 6, 5);
     }

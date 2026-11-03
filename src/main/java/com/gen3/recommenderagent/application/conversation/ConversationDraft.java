@@ -45,6 +45,10 @@ public class ConversationDraft extends SessionRequest {
     turn.setExplanationSelection(draft.getExplanationSelection());
     turn.setReferenceRank(draft.getReferenceRank());
     turn.setReferenceTitle(draft.getReferenceTitle());
+    turn.setSessionPreferenceSnapshot(
+        draft.getSessionPreferenceSnapshot() == null
+            ? null
+            : draft.getSessionPreferenceSnapshot().copy());
     turn.setBookCount(draft.getBookCount());
     turn.setInvalidBookCount(draft.isInvalidBookCount());
     turn.setOutcome(draft.getOutcome());
@@ -68,6 +72,10 @@ public class ConversationDraft extends SessionRequest {
     draft.setExplanationSelection(turn.getExplanationSelection());
     draft.setReferenceRank(turn.getReferenceRank());
     draft.setReferenceTitle(turn.getReferenceTitle());
+    draft.setSessionPreferenceSnapshot(
+        turn.getSessionPreferenceSnapshot() == null
+            ? null
+            : turn.getSessionPreferenceSnapshot().copy());
     draft.setBookCount(turn.getBookCount());
     draft.setInvalidBookCount(turn.isInvalidBookCount());
     draft.setOutcome(turn.getOutcome());
@@ -77,6 +85,16 @@ public class ConversationDraft extends SessionRequest {
     draft.setNoMoreRecommendations(turn.isNoMoreRecommendations());
     draft.setRecommendations(turn.getRecommendations());
     return draft;
+  }
+
+  private SessionPreferences sessionPreferenceSnapshot;
+
+  public SessionPreferences getSessionPreferenceSnapshot() {
+    return sessionPreferenceSnapshot;
+  }
+
+  public void setSessionPreferenceSnapshot(SessionPreferences value) {
+    sessionPreferenceSnapshot = value;
   }
 
   private boolean preferenceAnswer;

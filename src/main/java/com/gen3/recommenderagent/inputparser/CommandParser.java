@@ -48,6 +48,20 @@ public class CommandParser {
     if (ConversationText.isCancellationReply(command)) {
       return intent(ConversationAction.CANCEL);
     }
+    if (java.util.Set.of(
+            "what are my current session preferences",
+            "what are my session preferences",
+            "what are my current preferences",
+            "what are my preferences",
+            "show my preferences",
+            "show my session preferences",
+            "explain my preferences",
+            "explain preferences",
+            "show preferences",
+            "list my preferences")
+        .contains(command)) {
+      return intent(ConversationAction.EXPLAIN_PREFERENCES);
+    }
     var temporaryCount = TEMPORARY_MORE_COUNT.matcher(command);
     if (temporaryCount.matches()) {
       var action = parse(temporaryCount.group(1));
@@ -179,7 +193,7 @@ public class CommandParser {
               negative.matches() ? ConversationAction.REFINE : ConversationAction.RECOMMENDATION);
       var query = new com.gen3.recommenderagent.domain.search.SemanticQuery();
       if (negative.matches()) {
-        query.setKeywords(java.util.List.of(negative.group(1)));
+        query.setTopics(java.util.List.of(negative.group(1)));
       } else {
         query.setGenres(java.util.List.of(without.group(1)));
       }
