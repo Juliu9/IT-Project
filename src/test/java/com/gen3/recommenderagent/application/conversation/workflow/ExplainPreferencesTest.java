@@ -46,7 +46,7 @@ class ExplainPreferencesTest {
         .containsExactly("fantasy");
     var generator = new ConversationResponseGenerator(null);
     String report = generator.generate(List.of(), ConversationDraft.toTurn(result));
-    assertThat(report).contains("fantasy", "Recommendation count: 3");
+    assertThat(report).contains("fantasy", "I'll give you 3 recommendations at a time");
     var json = JsonMapper.builder().build();
     session = json.readValue(json.writeValueAsString(session), Session.class);
     session.setPreferences(null);

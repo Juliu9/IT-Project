@@ -173,7 +173,7 @@ replacement can clear or replace a named inherited field; ordinary additions pre
 `EXPLAIN_PREFERENCES` reports saved session preferences and the current recommendation count
 using a fixed template without AI narration or retrieval. Empty fields are skipped; an empty
 preference set is stated explicitly. Reports stay within 150 words, preserve whole saved values,
-and end with “Additional preferences omitted.” when necessary. This read-only action preserves
+and end with a brief omission notice when necessary. This read-only action preserves
 pending clarifications and the active recommendation batch. `REPEAT` replays the saved report
 snapshot. The semantic category maximum is 10; the existing one-author/one-narrator rule
 also applies. Existing session data is not migrated.

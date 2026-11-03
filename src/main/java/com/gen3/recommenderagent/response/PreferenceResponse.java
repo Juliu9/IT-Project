@@ -9,7 +9,7 @@ import java.util.Map;
 
 /** Fixed session-preference report, bounded without splitting saved values. */
 final class PreferenceResponse {
-  private static final String OMITTED = " Additional preferences omitted.";
+  private static final String OMITTED = " I left out a few more preferences to keep this brief.";
 
   private PreferenceResponse() {}
 
@@ -24,21 +24,20 @@ final class PreferenceResponse {
     }
     String response =
         fields.isEmpty()
-            ? "You have no saved session preferences."
-            : "Your current session preferences:";
-    response += " Recommendation count: " + turn.getBookCount() + ".";
+            ? "You haven't saved any preferences for this session yet."
+            : "Here are your preferences for this session.";
+    response += " I'll give you " + turn.getBookCount() + " recommendations at a time.";
     String complete =
         response
             + fields.entrySet().stream()
                 .map(
-                    field ->
-                        " " + field.getKey() + ": " + String.join(", ", field.getValue()) + ".")
+                    field -> " " + field.getKey() + " " + String.join(", ", field.getValue()) + ".")
                 .collect(java.util.stream.Collectors.joining());
     if (ResponseBudget.wordCount(complete) <= ResponseBudget.MAX_WORDS) {
       return complete;
     }
     for (var field : fields.entrySet()) {
-      String prefix = " " + field.getKey() + ": ";
+      String prefix = " " + field.getKey() + " ";
       String values = "";
       String beforeField = response;
       for (String value : field.getValue()) {
@@ -59,10 +58,11 @@ final class PreferenceResponse {
     if (query == null) {
       return;
     }
-    add(fields, label + " genres", query.getGenres());
-    add(fields, label + " topics", query.getTopics());
-    add(fields, label + " author styles", query.getAuthors());
-    add(fields, label + " narrator styles", query.getNarrators());
+    String lead = label.equals("Preferred") ? "You enjoy" : "You'd rather avoid";
+    add(fields, lead + " genres like", query.getGenres());
+    add(fields, lead + " stories about", query.getTopics());
+    add(fields, lead + " author styles like", query.getAuthors());
+    add(fields, lead + " narrator styles like", query.getNarrators());
   }
 
   private static void exact(
@@ -70,12 +70,13 @@ final class PreferenceResponse {
     if (criteria == null) {
       return;
     }
-    add(fields, label + " authors", criteria.getAuthors());
-    add(fields, label + " narrators", criteria.getNarrators());
-    add(fields, label + " language", criteria.getLanguage());
-    add(fields, label + " duration", criteria.getDuration());
-    add(fields, label + " publication year", criteria.getPublicationYear());
-    add(fields, label + " source", criteria.getSource());
+    String lead = label.equals("Required") ? "You want" : "You don't want";
+    add(fields, lead + " books by", criteria.getAuthors());
+    add(fields, lead + " books narrated by", criteria.getNarrators());
+    add(fields, lead + " books in", criteria.getLanguage());
+    add(fields, lead + " books that are", criteria.getDuration());
+    add(fields, lead + " books published", criteria.getPublicationYear());
+    add(fields, lead + " books from", criteria.getSource());
   }
 
   private static void add(Map<String, List<String>> fields, String label, String value) {

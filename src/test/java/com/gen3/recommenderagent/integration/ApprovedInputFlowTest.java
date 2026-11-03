@@ -219,7 +219,8 @@ class ApprovedInputFlowTest {
       case EXPLAIN_PREFERENCES -> {
         assertThat(result.getRecommendations()).isEmpty();
         assertThat(responses.generate(result.getRecommendations(), result))
-            .contains("Preferred topics: adventure.", "Recommendation count: 3.");
+            .contains(
+                "You enjoy stories about adventure.", "I'll give you 3 recommendations at a time.");
       }
       case HELP, CANCEL, UNKNOWN -> assertThat(result.getRecommendations()).isEmpty();
       default -> throw new AssertionError("Missing intent assertions: " + action);

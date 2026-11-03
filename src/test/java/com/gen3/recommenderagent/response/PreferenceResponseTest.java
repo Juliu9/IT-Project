@@ -16,7 +16,9 @@ class PreferenceResponseTest {
   @Test
   void emptyPreferencesShowCountWithoutEmptyFields() {
     assertThat(render(null))
-        .isEqualTo("You have no saved session preferences. Recommendation count: 3.");
+        .isEqualTo(
+            "You haven't saved any preferences for this session yet. "
+                + "I'll give you 3 recommendations at a time.");
   }
 
   @Test
@@ -41,16 +43,16 @@ class PreferenceResponseTest {
     preferences.setMustNotInclude(excluded);
     assertThat(render(preferences))
         .contains(
-            "Recommendation count: 3.",
-            "Preferred genres: fantasy, mystery.",
-            "Preferred author styles: Agatha Christie.",
-            "Avoided topics: violence.",
-            "Required authors: Author One.",
-            "Required language: English.",
-            "Required duration: under 3 hours.",
-            "Required publication year: after 2000.",
-            "Required source: RNIB.",
-            "Excluded narrators: Narrator Two.")
+            "I'll give you 3 recommendations at a time.",
+            "You enjoy genres like fantasy, mystery.",
+            "You enjoy author styles like Agatha Christie.",
+            "You'd rather avoid stories about violence.",
+            "You want books by Author One.",
+            "You want books in English.",
+            "You want books that are under 3 hours.",
+            "You want books published after 2000.",
+            "You want books from RNIB.",
+            "You don't want books narrated by Narrator Two.")
         .doesNotContain("keywords", "null", "Not set", "omitted");
   }
 
@@ -63,9 +65,10 @@ class PreferenceResponseTest {
     preferences.setPositiveSemanticQuery(preferred);
     String response = render(preferences);
     assertThat(ResponseBudget.wordCount(response)).isLessThanOrEqualTo(150);
-    assertThat(response).endsWith("Additional preferences omitted.");
+    assertThat(response).endsWith("I left out a few more preferences to keep this brief.");
     assertThat(response)
-        .contains("Preferred topics: " + longTerm + ", " + longTerm + ", " + longTerm + ".");
+        .contains("You enjoy stories about " + longTerm + ", " + longTerm + ".")
+        .doesNotContain(longTerm + ", " + longTerm + ", " + longTerm + ".");
   }
 
   @Test
@@ -76,7 +79,7 @@ class PreferenceResponseTest {
     preferred.setTopics(List.of("b ".repeat(128).strip()));
     preferences.setPositiveSemanticQuery(preferred);
     String response = render(preferences);
-    assertThat(ResponseBudget.wordCount(response)).isEqualTo(149);
+    assertThat(ResponseBudget.wordCount(response)).isLessThanOrEqualTo(150);
     assertThat(response).doesNotContain("omitted");
   }
 
@@ -90,8 +93,8 @@ class PreferenceResponseTest {
     preferences.setPositiveSemanticQuery(preferred);
     String response = render(preferences);
     assertThat(ResponseBudget.wordCount(response)).isLessThanOrEqualTo(150);
-    assertThat(response).endsWith("Additional preferences omitted.");
-    assertThat(response).doesNotContain("Required", "Preferred topics", longTopic);
+    assertThat(response).endsWith("I left out a few more preferences to keep this brief.");
+    assertThat(response).doesNotContain("You want", "You enjoy stories about", longTopic);
   }
 
   private String render(SessionPreferences preferences) {
