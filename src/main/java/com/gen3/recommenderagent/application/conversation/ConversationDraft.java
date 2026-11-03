@@ -212,6 +212,11 @@ public class ConversationDraft extends SessionRequest {
     return searchContext.isPersonalised();
   }
 
+  @Override
+  public boolean requiresSemanticRetrieval() {
+    return isPersonalised() || searchContext.getSimilarBook() != null;
+  }
+
   public void setPersonalised(boolean value) {
     searchContext.setPersonalised(value);
   }

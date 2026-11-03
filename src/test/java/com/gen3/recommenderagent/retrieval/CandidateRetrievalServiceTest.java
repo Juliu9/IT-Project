@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
+import com.gen3.recommenderagent.domain.search.SimilarBookReference;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectors;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
@@ -89,6 +90,24 @@ class CandidateRetrievalServiceTest {
 
     assertThat(result).isEmpty();
     verify(embeddingIndexer, never()).combineSemanticQueries(SemanticQueryVectors.empty());
+  }
+
+  @Test
+  void retrievesSimilarBooksThroughTheRequestContract() throws Exception {
+    AudiobookCandidateSearch candidateSearch = mock(AudiobookCandidateSearch.class);
+    QueryEmbeddingService embeddingIndexer = mock(QueryEmbeddingService.class);
+    ConversationDraft request = new ConversationDraft();
+    request
+        .getSearchContext()
+        .setSimilarBook(new SimilarBookReference("42", "Reference", List.of(), new float[] {1}));
+    float[] vector = {0.6f, 0.8f};
+    SemanticQueryVectors vectors = new SemanticQueryVectors(List.of(vector), List.of());
+    when(embeddingIndexer.combineSemanticQueries(vectors)).thenReturn(vector);
+
+    service("qdrant", candidateSearch, embeddingIndexer)
+        .getCandidates(request, vectors, 5, Set.of());
+
+    verify(candidateSearch).searchSemantic(vector, AudiobookFilters.empty(), 5);
   }
 
   @Test

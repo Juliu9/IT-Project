@@ -246,6 +246,11 @@ public class SessionRequest {
     return personalised;
   }
 
+  /** Whether this request must use its resolved semantic vectors for retrieval. */
+  public boolean requiresSemanticRetrieval() {
+    return isPersonalised();
+  }
+
   public void setPersonalised(boolean value) {
     personalised = value;
   }

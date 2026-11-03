@@ -40,17 +40,13 @@ public class CandidateRetrievalService implements CandidateRetriever {
     try {
       RequestTelemetry.retrievalBackend(backend);
       AudiobookRetrievalPlan plan = retrievalPlanner.plan(limit, request, excludedBookIds);
-      boolean personalised =
+      boolean semanticRetrieval =
           request != null
-              && (request.isPersonalised()
-                  || (request
-                          instanceof
-                          com.gen3.recommenderagent.application.conversation.ConversationDraft draft
-                      && draft.getSearchContext().getSimilarBook() != null))
+              && request.requiresSemanticRetrieval()
               && vectors != null
               && !vectors.isEmpty();
       List<AudiobookCandidate> candidates =
-          personalised
+          semanticRetrieval
               ? retrieveSemantic(plan, vectors)
               : switch (plan.mode()) {
                 case KEYWORD ->
@@ -59,7 +55,8 @@ public class CandidateRetrievalService implements CandidateRetriever {
                 case FILTER_ONLY -> candidateSearch.searchByFilters(plan.filters(), plan.limit());
                 case NONE -> List.of();
               };
-      RequestTelemetry.retrieval(personalised ? "SEMANTIC" : plan.mode().name(), candidates.size());
+      RequestTelemetry.retrieval(
+          semanticRetrieval ? "SEMANTIC" : plan.mode().name(), candidates.size());
       return candidates;
     } catch (IOException exception) {
       throw new CandidateRetrievalException(backend, exception);
