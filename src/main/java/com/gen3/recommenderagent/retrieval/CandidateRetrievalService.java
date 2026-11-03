@@ -1,13 +1,13 @@
 package com.gen3.recommenderagent.retrieval;
 
-import com.gen3.catalogue.model.AudiobookCandidate;
-import com.gen3.catalogue.port.AudiobookCandidateSearch;
 import com.gen3.recommenderagent.application.conversation.SessionRequest;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectors;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlan;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookCandidate;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookCandidateSearch;
 import java.io.IOException;
 import java.util.List;
 import java.util.Set;
@@ -40,27 +40,23 @@ public class CandidateRetrievalService implements CandidateRetriever {
     try {
       RequestTelemetry.retrievalBackend(backend);
       AudiobookRetrievalPlan plan = retrievalPlanner.plan(limit, request, excludedBookIds);
-      boolean personalised =
+      boolean semanticRetrieval =
           request != null
-              && (request.isPersonalised()
-                  || (request
-                          instanceof
-                          com.gen3.recommenderagent.application.conversation.ConversationDraft draft
-                      && draft.getSearchContext().getSimilarBook() != null))
+              && request.requiresSemanticRetrieval()
               && vectors != null
               && !vectors.isEmpty();
       List<AudiobookCandidate> candidates =
-          personalised
+          semanticRetrieval
               ? retrieveSemantic(plan, vectors)
               : switch (plan.mode()) {
-                case SEMANTIC -> retrieveSemantic(plan, vectors);
                 case KEYWORD ->
                     candidateSearch.searchKeyword(plan.keywordText(), plan.filters(), plan.limit());
                 case HYBRID -> retrieveHybrid(plan, vectors);
                 case FILTER_ONLY -> candidateSearch.searchByFilters(plan.filters(), plan.limit());
                 case NONE -> List.of();
               };
-      RequestTelemetry.retrieval(personalised ? "SEMANTIC" : plan.mode().name(), candidates.size());
+      RequestTelemetry.retrieval(
+          semanticRetrieval ? "SEMANTIC" : plan.mode().name(), candidates.size());
       return candidates;
     } catch (IOException exception) {
       throw new CandidateRetrievalException(backend, exception);

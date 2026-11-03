@@ -2,12 +2,12 @@ package com.gen3.snapshotjob;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.gen3.catalogue.model.AudiobookEmbedding;
-import com.gen3.catalogue.model.AudiobookRecord;
-import com.gen3.catalogue.qdrant.Bm25SparseTextEncoder;
-import com.gen3.catalogue.qdrant.QdrantAudiobookRepository;
-import com.gen3.catalogue.qdrant.QdrantPointMapper;
-import com.gen3.catalogue.snapshot.BookVectorSnapshot;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookEmbedding;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookRecord;
+import com.gen3.shared.audiobookcatalogue.qdrant.Bm25SparseTextEncoder;
+import com.gen3.shared.audiobookcatalogue.qdrant.QdrantAudiobookRepository;
+import com.gen3.shared.audiobookcatalogue.qdrant.QdrantPointMapper;
+import com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
 import java.nio.file.Path;

@@ -13,6 +13,7 @@ participant SessionTransitionService as Transition
 participant "ConversationEngine\nIntent handlers + RecommendationPager" as Engine
 participant "SessionRepository\nRedis adapter" as Sessions
 participant "RecommendationWorkflow\nEmbedding → retrieval → ranking" as Workflow
+participant "ReadHistoryRepository\nOptional history adapter" as History
 participant "ConversationResponseGenerator\nAI narration when needed" as Response
 
 User -> Gateway : Natural-language request
@@ -52,9 +53,11 @@ else MORE with no previous search
   Engine -> Engine : Mark search clarification required\nDo not retrieve candidates
 else Recommendation, refinement, or MORE
   Engine -> Engine : Intent handler resolves context and preferences\nReplace ActiveSearch if search changes
-  Engine -> Engine : Take pending recommendations, up to requested count
+  Engine -> History : Load current user's read IDs (bounded)
+  History --> Engine : Read IDs, or logged fail-open on failure/oversize
+  Engine -> Engine : Filter pending books against read/shown IDs\nTake up to requested count
   opt Page still needs books
-    Engine -> Workflow : Build fresh batch, excluding shown IDs and cached tail
+    Engine -> Workflow : Build fresh batch, excluding read/shown IDs and cached tail
     activate Workflow
     Workflow -> Workflow : Load user preference vectors\nBuild query vectors when needed
     alt Personalised request lacks usable preferences

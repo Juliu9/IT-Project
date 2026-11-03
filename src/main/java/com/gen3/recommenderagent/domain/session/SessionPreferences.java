@@ -1,9 +1,9 @@
 package com.gen3.recommenderagent.domain.session;
 
-import com.gen3.catalogue.model.PersonNameNormalizer;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
+import com.gen3.shared.audiobookcatalogue.model.PersonNameNormalizer;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -11,6 +11,11 @@ import java.util.function.Function;
 
 /** Search preferences retained for the lifetime of one recommendation session. */
 public class SessionPreferences {
+
+  static final int MAX_TERM_CHARACTERS = 256;
+  static final int MAX_TERMS_PER_SEMANTIC_FIELD = 20;
+  static final int MAX_TOTAL_TERMS = 100;
+  static final int MAX_SERIALIZED_BYTES = 32 * 1024;
 
   private SemanticQuery positiveSemanticQuery;
   private SemanticQuery negativeSemanticQuery;
@@ -119,6 +124,7 @@ public class SessionPreferences {
             get(removals, SessionPreferences::getMustNotInclude),
             "mustNotInclude",
             replace);
+    validateLimits(result);
     return result;
   }
 
@@ -313,6 +319,73 @@ public class SessionPreferences {
           .forEach(value -> result.remove(value.trim().toLowerCase(Locale.ROOT)));
     }
     return result.isEmpty() ? null : List.copyOf(result.values());
+  }
+
+  private static void validateLimits(SessionPreferences preferences) {
+    var values = new java.util.ArrayList<String>();
+    for (var query :
+        java.util.List.of(
+            preferences.positiveSemanticQuery == null
+                ? new SemanticQuery()
+                : preferences.positiveSemanticQuery,
+            preferences.negativeSemanticQuery == null
+                ? new SemanticQuery()
+                : preferences.negativeSemanticQuery)) {
+      for (var field :
+          java.util.List.of(
+              safe(query.getGenres()),
+              safe(query.getTopics()),
+              safe(query.getKeywords()),
+              safe(query.getAuthors()),
+              safe(query.getNarrators()))) {
+        if (field.size() > MAX_TERMS_PER_SEMANTIC_FIELD) {
+          throw new InvalidRequestException(
+              "Please keep each preference category to "
+                  + MAX_TERMS_PER_SEMANTIC_FIELD
+                  + " values or fewer.");
+        }
+        values.addAll(field);
+      }
+    }
+    addCriteria(values, preferences.mustInclude);
+    addCriteria(values, preferences.mustNotInclude);
+    if (values.size() > MAX_TOTAL_TERMS) {
+      throw new InvalidRequestException(
+          "Please keep your saved preferences to " + MAX_TOTAL_TERMS + " values or fewer.");
+    }
+    if (values.stream().anyMatch(value -> value.length() > MAX_TERM_CHARACTERS)) {
+      throw new InvalidRequestException(
+          "Please keep each saved preference to " + MAX_TERM_CHARACTERS + " characters or fewer.");
+    }
+    try {
+      byte[] serialized =
+          tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsBytes(preferences);
+      if (serialized.length > MAX_SERIALIZED_BYTES) {
+        throw new InvalidRequestException(
+            "Your saved preferences are too large; remove some values.");
+      }
+    } catch (tools.jackson.core.JacksonException exception) {
+      throw new IllegalStateException("Could not validate saved preference size", exception);
+    }
+  }
+
+  private static List<String> safe(List<String> values) {
+    return values == null ? List.of() : values;
+  }
+
+  private static void addCriteria(List<String> values, ExactCriteria criteria) {
+    if (criteria == null) {
+      return;
+    }
+    values.addAll(safe(criteria.getAuthors()));
+    values.addAll(safe(criteria.getNarrators()));
+    java.util.stream.Stream.of(
+            criteria.getLanguage(),
+            criteria.getSource(),
+            criteria.getDuration(),
+            criteria.getPublicationYear())
+        .filter(value -> value != null && !value.isBlank())
+        .forEach(values::add);
   }
 
   private static String scalar(String base, String addition, String removal, boolean replace) {

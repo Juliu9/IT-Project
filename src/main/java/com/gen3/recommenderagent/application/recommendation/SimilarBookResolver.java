@@ -1,17 +1,17 @@
 package com.gen3.recommenderagent.application.recommendation;
 
-import com.gen3.catalogue.model.AudiobookTitle;
-import com.gen3.catalogue.model.PersonNameNormalizer;
-import com.gen3.catalogue.port.AudiobookTitleLookup;
-import com.gen3.catalogue.port.AudiobookVectorRepository;
-import com.gen3.catalogue.vector.VectorMath;
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.domain.search.SimilarBookReference;
 import com.gen3.recommenderagent.domain.session.PendingQuestion;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.retrieval.CandidateRetrievalException;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookTitle;
+import com.gen3.shared.audiobookcatalogue.model.PersonNameNormalizer;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookTitleLookup;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookVectorRepository;
+import com.gen3.shared.vector.VectorMath;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -39,16 +39,16 @@ public class SimilarBookResolver {
         && request.getIntent() != ConversationAction.MORE_RESULTS) {
       return;
     }
-    if (request.getDecision() == ConversationDecision.SIMILAR_BOOK_SELECTION
+    if (request.getPendingQuestion() == ConversationQuestion.SIMILAR_BOOK_SELECTION
         && request.isSearchClarificationRequired()) {
       return;
     }
-    if (request.getDecision() == ConversationDecision.SIMILAR_BOOK_UNAVAILABLE) {
+    if (request.getPendingQuestion() == ConversationQuestion.SIMILAR_BOOK_UNAVAILABLE) {
       request.setSearchClarificationRequired(true);
       return;
     }
     if (request.isSimilarToClarificationRequired()) {
-      clarify(session, request, ConversationDecision.SIMILAR_BOOK_REQUIRED, List.of());
+      clarify(session, request, ConversationQuestion.SIMILAR_BOOK_REQUIRED, List.of());
       return;
     }
     var reference = request.getSearchContext().getSimilarBook();
@@ -59,7 +59,7 @@ public class SimilarBookResolver {
             request,
             new AudiobookTitle(reference.bookId(), reference.title(), reference.authors()));
       }
-      if (request.getDecision() != ConversationDecision.SIMILAR_BOOK_UNAVAILABLE) {
+      if (request.getPendingQuestion() != ConversationQuestion.SIMILAR_BOOK_UNAVAILABLE) {
         session.setPendingQuestion(null);
       }
       return;
@@ -105,10 +105,10 @@ public class SimilarBookResolver {
     var unique = distinctTitleAndAuthors(candidates);
 
     if (matches.isEmpty()) {
-      clarify(session, request, ConversationDecision.SIMILAR_BOOK_NOT_FOUND, List.of());
+      clarify(session, request, ConversationQuestion.SIMILAR_BOOK_NOT_FOUND, List.of());
     } else if (!truncated && unique.size() == 1) {
       loadVector(session, request, unique.getFirst());
-      if (request.getDecision() == ConversationDecision.SIMILAR_BOOK_UNAVAILABLE) {
+      if (request.getPendingQuestion() == ConversationQuestion.SIMILAR_BOOK_UNAVAILABLE) {
         request.setSearchClarificationRequired(true);
       } else {
         session.setPendingQuestion(null);
@@ -117,7 +117,7 @@ public class SimilarBookResolver {
       clarify(
           session,
           request,
-          ConversationDecision.SIMILAR_BOOK_SELECTION,
+          ConversationQuestion.SIMILAR_BOOK_SELECTION,
           unique.stream().limit(MAX_CHOICES).toList());
     }
   }
@@ -162,20 +162,20 @@ public class SimilarBookResolver {
 
   private void unavailable(Session session, ConversationDraft request, AudiobookTitle book) {
     LOGGER.warn("similar.book.vector.unavailable bookId={}", book.bookId());
-    clarify(session, request, ConversationDecision.SIMILAR_BOOK_UNAVAILABLE, List.of());
+    clarify(session, request, ConversationQuestion.SIMILAR_BOOK_UNAVAILABLE, List.of());
   }
 
   private void clarify(
       Session session,
       ConversationDraft request,
-      ConversationDecision decision,
+      ConversationQuestion question,
       List<AudiobookTitle> choices) {
-    request.setDecision(decision);
+    request.setPendingQuestion(question);
     request.setSearchClarificationRequired(true);
     request.setSimilarBookChoices(choices);
     var pendingRequest = ConversationDraft.toStoredTurn(request);
     var pending = new PendingQuestion.SimilarBook();
-    pending.setDecision(decision);
+    pending.setKind(question);
     pending.setRequest(pendingRequest);
     session.setPendingQuestion(pending);
   }

@@ -7,7 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationOutcome;
+import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
@@ -16,18 +17,28 @@ import org.junit.jupiter.api.Test;
 
 class ResponseGeneratorTest {
 
-  @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.CsvSource({
-    "RECENCY_EXHAUSTED,There are no newer books within your selected period.",
-    "RECENCY_RANGE_CONFIRMATION,Those years extend beyond your previous period. Would you like to use the new year range instead?"
-  })
-  void recencyOutcomesUseFixedResponses(ConversationDecision decision, String expected) {
+  @Test
+  void recencyOutcomeUsesFixedResponse() {
     var request = new ConversationDraft();
     request.setIntent(ConversationAction.REFINE);
-    request.setDecision(decision);
+    request.setOutcome(ConversationOutcome.RECENCY_EXHAUSTED);
     var ai = org.mockito.Mockito.mock(AiResponseGenerator.class);
     assertEquals(
-        expected,
+        "There are no newer books within your selected period.",
+        new ConversationResponseGenerator(ai)
+            .generate(List.of(), ConversationDraft.toTurn(request)));
+    org.mockito.Mockito.verifyNoInteractions(ai);
+  }
+
+  @Test
+  void recencyQuestionUsesFixedResponse() {
+    var request = new ConversationDraft();
+    request.setIntent(ConversationAction.REFINE);
+    request.setPendingQuestion(ConversationQuestion.RECENCY_RANGE_CONFIRMATION);
+    request.setSearchClarificationRequired(true);
+    var ai = org.mockito.Mockito.mock(AiResponseGenerator.class);
+    assertEquals(
+        "Those years extend beyond your previous period. Would you like to use the new year range instead?",
         new ConversationResponseGenerator(ai)
             .generate(List.of(), ConversationDraft.toTurn(request)));
     org.mockito.Mockito.verifyNoInteractions(ai);
@@ -42,7 +53,7 @@ class ResponseGeneratorTest {
     var request = new ConversationDraft();
     request.setIntent(intent);
     if (intent != ConversationAction.RECOMMENDATION) {
-      request.setPendingQuestion(ConversationDecision.PREFERENCE_CLARIFICATION);
+      request.setPendingQuestion(ConversationQuestion.PREFERENCE_CLARIFICATION);
     }
     var books =
         java.util.stream.IntStream.rangeClosed(1, 5)
@@ -74,15 +85,11 @@ class ResponseGeneratorTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.EnumSource(
-      value = ConversationDecision.class,
-      names = {"SIMILAR_BOOK_SELECTION", "EXPLANATION_TARGET_CLARIFICATION", "HELP", "NO_MATCHES"})
-  void fixedMessagesAndAppendedQuestionsRespectTheFinalBudget(ConversationDecision decision) {
+      value = ConversationAction.class,
+      names = {"HELP", "RECOMMENDATION"})
+  void fixedMessagesAndAppendedQuestionsRespectTheFinalBudget(ConversationAction action) {
     var request = new ConversationDraft();
-    request.setIntent(
-        decision == ConversationDecision.HELP
-            ? ConversationAction.HELP
-            : ConversationAction.RECOMMENDATION);
-    request.setDecision(decision);
+    request.setIntent(action);
     request.setRawText("fantasy ".repeat(200));
     var books =
         java.util.stream.IntStream.rangeClosed(1, 5)
@@ -96,31 +103,30 @@ class ResponseGeneratorTest {
         java.util.stream.IntStream.rangeClosed(1, 5)
             .mapToObj(
                 rank ->
-                    new com.gen3.catalogue.model.AudiobookTitle(
+                    new com.gen3.shared.audiobookcatalogue.model.AudiobookTitle(
                         "id-" + rank,
                         books.get(rank - 1).getTitle(),
                         List.of("author ".repeat(100))))
             .toList());
-    if (decision == ConversationDecision.HELP) {
-      request.setPendingQuestion(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+    if (action == ConversationAction.HELP) {
+      request.setPendingQuestion(ConversationQuestion.EXPLANATION_TARGET_CLARIFICATION);
     }
     String result =
         new ConversationResponseGenerator(new AiResponseGenerator(null))
             .generate(books, ConversationDraft.toTurn(request));
     org.assertj.core.api.Assertions.assertThat(result.split("\\s+")).hasSizeLessThanOrEqualTo(150);
-    if (decision != ConversationDecision.NO_MATCHES) {
-      for (int rank = 1; rank <= 5; rank++) {
-        assertTrue(result.contains(rank + ". Title " + rank));
-      }
+    if (action == ConversationAction.HELP) {
+      assertFalse(result.contains("I shared"));
+      assertFalse(result.contains("Which one would you like me to explain?"));
     }
     assertEquals("Title 1" + " long ".repeat(60), books.getFirst().getTitle());
   }
 
   @Test
-  void usesTheResolvedDecisionWithoutReinterpretingIntent() {
+  void derivesNoMoreResultsFromTheTurn() {
     var request = new ConversationDraft();
-    request.setIntent(ConversationAction.HELP);
-    request.setDecision(ConversationDecision.NO_MORE_RESULTS);
+    request.setIntent(ConversationAction.MORE_RESULTS);
+    request.setNoMoreRecommendations(true);
     var ai = org.mockito.Mockito.mock(AiResponseGenerator.class);
     var generator = new ConversationResponseGenerator(ai);
     assertEquals(
@@ -441,5 +447,22 @@ class ResponseGeneratorTest {
     assertTrue(response.toLowerCase().contains("adjust your search"));
     assertTrue(response.toLowerCase().contains("explore more books"));
     assertTrue(response.toLowerCase().contains("clear"));
+  }
+
+  @Test
+  void helpDoesNotAppendAStaleExplanationQuestion() {
+    var generator = new ConversationResponseGenerator(new AiResponseGenerator(null));
+    var request = new ConversationDraft();
+    request.setIntent(ConversationAction.HELP);
+    request.setPendingQuestion(ConversationQuestion.EXPLANATION_TARGET_CLARIFICATION);
+
+    String response =
+        generator.generate(
+            List.of(new Recommendation("1", 1, 1.0, "Previously shown")),
+            ConversationDraft.toTurn(request));
+
+    assertTrue(response.startsWith("I can help you find audiobooks"));
+    assertFalse(response.contains("I shared"));
+    assertFalse(response.contains("Which one would you like me to explain?"));
   }
 }

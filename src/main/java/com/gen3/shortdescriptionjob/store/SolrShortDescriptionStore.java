@@ -1,7 +1,7 @@
 package com.gen3.shortdescriptionjob.store;
 
-import com.gen3.catalogue.model.StoredAudiobook;
-import com.gen3.catalogue.solr.SolrAudiobookRepository;
+import com.gen3.shared.audiobookcatalogue.model.StoredAudiobook;
+import com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository;
 import com.gen3.shortdescriptionjob.ShortDescriptionMode;
 import java.io.IOException;
 import java.util.ArrayList;

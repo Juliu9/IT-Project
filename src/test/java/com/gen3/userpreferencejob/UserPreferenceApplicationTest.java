@@ -13,6 +13,7 @@ class UserPreferenceApplicationTest {
           .withUserConfiguration(UserPreferenceApplication.class)
           .withPropertyValues(
               "spring.ai.openai.api-key=",
+              "qdrant.collection=books",
               "user.preferences.favourites-csv-path=",
               "user.preferences.history-csv-path=")
           .withBean(QdrantClient.class, () -> mock(QdrantClient.class));
@@ -61,7 +62,8 @@ class UserPreferenceApplicationTest {
             context ->
                 assertThat(context)
                     .hasNotFailed()
-                    .hasSingleBean(com.gen3.catalogue.port.AudiobookVectorRepository.class)
+                    .hasSingleBean(
+                        com.gen3.shared.audiobookcatalogue.port.AudiobookVectorRepository.class)
                     .hasSingleBean(
                         com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository
                             .class)

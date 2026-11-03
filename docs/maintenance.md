@@ -7,73 +7,49 @@ Individual commands, prerequisites, writes, completion checks and retry instruct
 
 ## Before running a job
 
-Run from the repository root with Java 21. These are dedicated non-web processes: they exit when
-finished and do not schedule themselves. Normal recommendation-server startup rejects enabled
-maintenance flags. Keep unrelated job flags disabled and run one maintenance writer at a time
-against a stable catalogue. Jobs do not take the database offline, but scans and writes compete
-with interactive requests for resources. Catalogue pagination is not a transactional snapshot;
-changes behind a scan cursor may require another run.
+Run from the repository root with Java 21. Jobs are non-web, exit when finished, and do not schedule
+themselves. **Run one maintenance writer at a time against a stable catalogue.** Pagination is not a
+transactional snapshot, and jobs compete with interactive traffic.
 
 Runbook examples use `-Dspring-boot.run.profiles=dev` to load the optional root `.env`. For
 shell/IDE-supplied credentials, omit that argument. The dev website only exists in the recommendation
 server; selecting the profile does not turn a job into a web server. See
 [configuration loading](configuration.md#loading-and-overriding-settings). Do not put secrets in
-command arguments or commit `.env`, generated datasets, snapshots, manifests, or logs.
+command arguments. **Never commit `.env`, generated datasets, snapshots, manifests, or logs.**
 
 The selected backend is Qdrant unless `AUDIOBOOK_DATABASE=solr` is supplied. Migration is the sole
 job connecting to both databases. Redis is required for the server, not for these jobs. Only
 embedding generation and summary-provider operations need AI credentials or incur AI charges.
-The snapshot launcher needs no enable flag: choosing its dedicated main class is the opt-in.
-Only user import has a `dry-run` mode; the other jobs must be treated as real operations.
+The snapshot launcher's main class is its opt-in. **Only user import has a dry-run mode; treat every
+other job as a real operation.**
+
+The [read-history importer](jobs/read-history.md) writes additive user/book pairs to PostgreSQL.
+It needs no catalogue, preference vectors, Redis, or AI credentials and can run during serving.
 
 ## Automatic progress reporting
 
 Maintenance jobs print `maintenance.progress` immediately and every 10 seconds while running.
 This covers snapshot export/validation/loading, embedding generation, catalogue migration,
 user-import preparation/aggregation, and short-description selection/generation/writes.
+Read-history import reports its processed CSV rows after each committed batch.
 
 ```text
 maintenance.progress job=book.snapshot.rebuild stage=reading catalogue and writing snapshot processed=12500 total=unknown elapsedMs=60000 sinceProgressMs=1500
 ```
 
-`stage` identifies current work or I/O, `processed` is the last completed counter update for that
-stage, and `sinceProgressMs` is the time since the stage or counter changed. Snapshot counts advance
-per export page (or every 1,000 vectors during local validation/loading). User aggregation reports
-users processed and a known user total. CSV preparation updates counts every 10,000 rows;
-embedding/migration counters advance after completed pages. Short-description writes log a
-processed-book count after each completed request.
+`stage` is the current work, `processed` is the last completed count, and `sinceProgressMs` is time
+since the stage or count changed. `total=unknown` means no exact total is available. A heartbeat
+proves only that the reporter is alive; it does not retry, cancel, or prove success. **Only the job's
+completion event, zero exit status, and `BUILD SUCCESS` confirm success.**
 
-`total=unknown` means no exact total is available; limits are not presented as totals and no ETA is
-invented. A heartbeat proves the reporter is alive, not that a pending remote operation is advancing.
-An increasing `sinceProgressMs` during a read, write, or provider wait makes that lack of advancement
-visible. It does not trigger retries, cancel work, query the database, or declare success.
-The reporter stops automatically on success or failure. Use the job's existing completion event and
-`BUILD SUCCESS` as confirmation of success. Already-running jobs must finish or be restarted before
-they can use new reporting code; updating files does not instrument a running JVM.
+## Local log files
 
-## Catalogue embeddings
-
-See [Catalogue embeddings](jobs/embeddings.md).
-
-## Solr-to-Qdrant migration
-
-See [Migration](jobs/migration.md).
-
-## Short descriptions
-
-See [Short descriptions](jobs/short-descriptions.md).
-
-## User preferences
-
-See [User-preference import](jobs/user-preferences.md).
-
-### Read-only dry run (Solr or Qdrant)
-
-See [Dry-run import](jobs/user-preferences.md#read-only-dry-run-solr-or-qdrant).
-
-### Build or refresh the local snapshot
-
-See [Snapshot rebuild](jobs/snapshots.md#build-or-refresh-the-local-snapshot).
+Every maintenance launcher keeps console output and also writes the application's output to a
+unique `logs/<job>/<epoch-milliseconds>-<uuid>.log` file. The job directories are `embeddings`,
+`short-descriptions`, `migration`, `snapshot`, `user-import`, and `read-history`. Logs are retained until manually
+removed and are ignored by Git. Override the destination for any launch with
+`--logging.file.name=/path/to/job.log`. Maven output produced before the application starts is not
+included.
 
 ## Solr launcher verification
 

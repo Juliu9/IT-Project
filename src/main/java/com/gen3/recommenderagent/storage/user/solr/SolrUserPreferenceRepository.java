@@ -1,9 +1,9 @@
 package com.gen3.recommenderagent.storage.user.solr;
 
-import com.gen3.catalogue.solr.SolrVectors;
-import com.gen3.catalogue.vector.VectorMath;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
+import com.gen3.shared.audiobookcatalogue.solr.SolrVectors;
+import com.gen3.shared.vector.VectorMath;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;

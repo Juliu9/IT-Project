@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.SessionRequest;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.Session;
 import java.util.EnumSet;
@@ -38,13 +37,13 @@ class ConversationStructureTest {
     var result = state.begin(session, input);
     assertThat(state.needsRecommendations(result)).isFalse();
     state.finish(session, result, input);
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.HELP);
+    assertThat(result.getOutcome()).isNull();
     assertThat(session.getBookCount()).isEqualTo(3);
-    assertThat(session.getLastOutcome().decision()).isEqualTo(ConversationDecision.HELP);
+    assertThat(session.getLastOutcome().outcome()).isNull();
     assertThat(input.getBookCount()).isNull();
     assertThat(result.getRawText()).isEqualTo("help");
     assertThat(session.getLastOutcome().turn().getRawText()).isNull();
-    assertThat(session.getLastOutcome().turn().getDecision()).isNull();
+    assertThat(session.getLastOutcome().turn().getOutcome()).isNull();
   }
 
   @Test
@@ -77,7 +76,6 @@ class ConversationStructureTest {
       }
 
       public ConversationDraft resolve(Session session, ConversationDraft input) {
-        input.setDecision(ConversationDecision.HELP);
         return input;
       }
 

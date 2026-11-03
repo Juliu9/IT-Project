@@ -1,737 +1,410 @@
 # Architecture and behavior
 
-[README](../README.md) · [Sessions](#session-guarantees-and-replacement) · [Search rules](#search-and-retrieval-rules) · [Adapters](#database-selection-and-replacement) · [Models](#chat-models)
+[README](../README.md) · [Configuration](configuration.md) · [Diagrams](diagrams/README.md) · [Job runbooks](jobs/README.md)
 
-This document owns the request pipeline, conversation rules, and adapter guarantees.
-For setup and commands, start with the [README](../README.md).
+This document describes the system's durable boundaries and runtime guarantees. Setup, commands,
+and property defaults live in the linked operational documents. Phrase-level conversation examples
+belong in behavior tests rather than this overview.
 
-## Contents
+## System at a glance
 
-- [Request pipeline](#request-pipeline) and [terminology](#terminology)
-- [Session guarantees](#session-guarantees-and-replacement)
-- [Search and retrieval rules](#search-and-retrieval-rules)
-- [Server packages](#recommendation-server-packages) and [maintenance modules](#maintenance-modules)
-- [Conversation policy](#conversation-policy) and [input parsing](#input-parsing)
-- [Semantic information and control intents](#semantic-information-and-control-intents)
-- [Explanations and response validation](#explaining-recommendations)
-- [Configuration and schema](#configuration-and-schema)
-- [Database adapters](#database-selection-and-replacement) and [chat models](#chat-models)
-- [Request limits](#request-limits)
+The repository contains one interactive recommendation server and six independently launched
+maintenance jobs. They share catalogue models and database adapters but have separate entry points.
+
+```text
+HTTP request
+  → parse intent
+  → lock and load session
+  → resolve conversation action
+  → retrieve and rank candidates when needed
+  → commit session
+  → generate response text
+
+Maintenance launchers
+  → embeddings | snapshots | short descriptions | migration | user preferences | read history
+```
+
+The server supports either Qdrant or Solr. Redis stores interactive sessions. Maintenance jobs do
+not require Redis and run separately from the HTTP server.
 
 ## Request pipeline
 
-1. `RequestGateway` accepts text plus user/session IDs. `InputParser` returns a `UserIntent` through
-   exact-command matching or model extraction. Exact commands never load session context; only the AI
-   path receives the bounded parser context.
-   This context keeps the last action and pending question separate from the retained recommendation
-   page in `activeSearch.search`. Each displayed title includes its original rank, including on later
-   pages. Help and single-book explanations do not replace the page supplied to the parser.
-2. `SessionTransitionService` locks and loads the session. `IntentResolver` converts the stated
-   intent into a `SessionRequest`, then `ConversationEngine` applies session rules, validates
-   criteria, and requests a page only when needed.
-   Both API endpoints pass raw text and `UserIntent` through this boundary; there is no gateway fallback
-   that parses directly to an executable request. Gateway tests mock this same production signature.
-3. `AudiobookRecommendationWorkflow` prepares query vectors; `AudiobookRetrievalPlanner` builds the
-   mandatory exact filters and retrieval mode. `CandidateRetrievalService` queries the selected adapter.
-4. `RankingService` combines available retrieval relevance, stored-user preference similarity, and
-   universal rules such as recency/duration plausibility. Weights belong in
-   [configuration](configuration.md#ranking-rules).
-5. The session commits the completed outcome and active-search state together. Response generation then
-   uses fixed wording or a separate chat client; the response model never selects the books.
+1. `RequestGateway` validates the text and opaque user/session IDs.
+2. `InputParser` uses an exact-command fast path or the parser model to produce a `UserIntent`.
+3. `SessionTransitionService` locks and loads the session. `IntentResolver` converts the intent into
+   an executable `SessionRequest`; `ConversationEngine` applies conversation rules.
+4. When books are required, `AudiobookRecommendationWorkflow` prepares the query vector,
+   `AudiobookRetrievalPlanner` creates exact filters and a retrieval plan, and the selected database
+   adapter retrieves candidates.
+5. `RankingService` combines available retrieval relevance, stored reading-preference similarity,
+   and universal ranking rules.
+6. The completed turn, active search, and queue changes commit together. Response generation then
+   uses fixed wording or the response model. The response model never selects books.
 
-Catalogue embedding, snapshot export, summary generation, migration and CSV imports run in dedicated maintenance
-applications. Interactive requests only generate query embeddings when retrieval needs them.
-See the [request sequence diagram](diagrams/recommendation-flow.svg) for execution order.
+Interactive requests generate query embeddings only when retrieval needs them. Catalogue embedding,
+snapshot export, summary generation, migration, and CSV imports are maintenance operations. See the
+[request sequence diagram](diagrams/recommendation-flow.svg).
 
-## Terminology
+## Core terms
 
-| Term | Meaning | Distinguish from |
-| --- | --- | --- |
-| Conversation policy | Rules governing how a request uses earlier criteria, preferences, recommendations, and history. | Intent routing or response wording |
-| Conversation decision | Resolved conversational action, such as presenting recommendations, asking for clarification, or acknowledging an action. | Response text, intent, or “conversation outcome” |
-| User intent | The parser's statement of what the user meant, before session rules interpret references or pending questions. | A final action or a persisted request |
-| Session request | The executable request created from a user intent while the session is locked. | Parser output |
-| Search context | Retained criteria and personalisation choice for the latest recommendation search. | The entire conversation or saved preferences |
-| Active search | The current completed search, its bounded shown IDs, and its pending recommendation queue. | A conversation-wide history |
-| Last outcome | The most recent completed turn and decision, used by repeat. | The active search |
+| Term | Meaning |
+| --- | --- |
+| User intent | The parser's untrusted description of what the user meant |
+| Session request | The executable action produced while the session is locked |
+| Search context | The criteria and personalisation state for one recommendation search |
+| Active search | The current search, displayed page, shown IDs, and queued recommendations |
+| Pending question | One unfinished clarification with the context needed to resume it |
+| Last outcome | The latest completed turn used by `REPEAT` |
 
 ## Session guarantees and replacement
 
-All session changes use one `SessionRepository.update` for the `(userId, sessionId)` pair.
-An adapter must preserve cross-instance exclusion, single-attempt commits, the 24-hour sliding
-expiry, and shared session error types. Queue consumption and shown IDs must commit together;
-a cache providing only get/set needs additional coordination.
+Every change for a `(userId, sessionId)` pair goes through one `SessionRepository.update`. A session
+adapter must provide:
 
-Redis checks lock ownership and session version before saving and renews long-running locks.
-Response generation runs in the store's `afterCommit` callback while the same session lease remains
-held and renewed. Replacement adapters must keep excluding same-session updates until this callback
-finishes, including on failure. Generation cannot roll back committed history; neither callback is
-retried automatically. Other sessions are independent. `sessionLockMs` includes response generation;
-`recommendMs` and `responseMs` are nested within it and must not be added to it.
+- cross-instance exclusion for concurrent updates;
+- a single-attempt commit with version/ownership validation;
+- a 24-hour sliding expiry;
+- atomic updates to shown IDs, queue consumption, active search, and completed outcome;
+- lock renewal while long-running work and post-commit response generation continue.
 
-| Failure | HTTP status |
+Response generation runs after the state commit while the same session lease remains held. **A
+response failure cannot roll back committed history and is not retried automatically.** Other sessions
+remain independent. Redis uses separate lock and session keys; replacement stores must provide the
+same behavior, not merely `get` and `set` operations.
+
+Set `SESSION_STORE` to a registered replacement adapter. Selecting a non-Redis store disables the
+Redis adapter and its Boot infrastructure.
+
+| Failure | HTTP result |
 | --- | --- |
-| Session already locked | `409` |
-| Commit rejected or lock lost | `503` |
-| Parser/query-embedding provider failure or exhausted retries | `503`, with a readable retry message |
-| Catalogue retrieval unavailable | `503`, with a readable retry message |
-
-Set `SESSION_STORE` to a registered replacement adapter's name. This disables the Redis adapter
-and Boot's Redis connections, templates, repositories, and health checks.
-
-Lock keys use a separate `lock:` namespace from session data keys. Response-model failures use the
-built-in narration fallback rather than the parser/query-embedding error response above.
+| Session is already locked | `409` |
+| Lock is lost or commit is rejected | `503` |
+| Parser or query-embedding provider fails after retries | `503` with a retry message |
+| Catalogue retrieval is unavailable | `503` with a retry message |
+| Response-model failure | Committed result with built-in wording |
 
 ## Search and retrieval rules
 
+### Retrieval and filtering
+
+The planner chooses semantic, keyword, or hybrid retrieval. Exact author, narrator, language,
+source, duration, and publication-year requirements remain mandatory database filters; they are
+never relaxed to fill a page. Semantic preferences influence vectors and ranking instead.
+
+Duration accepts hours/minutes and inclusive or strict ranges. Publication constraints use years;
+relative expressions are resolved against the current UTC year. Catalogue publication metadata is
+`pubdate`, while `publicationYear` is only a search criterion. Invalid or contradictory exact ranges
+return `400` before retrieval and do not mutate the saved search.
+
+Author and narrator filters accept one person per field. A conservative normalizer supports common
+forward/reversed forms and initials without attempting fuzzy identity matching. Include/exclude
+conflicts use the same comparison rules.
+
+**Author- and narrator-style searches have limited accuracy.** The catalogue vectors contain names
+and ordinary book descriptions, not dedicated descriptions of an author's writing style or a
+narrator's performance style. Requests such as “in the style of J. K. Rowling” therefore use a name
+as a semantic hint and may return weak or inconsistent matches. Improving this requires sourced
+style descriptions to be stored and embedded as searchable catalogue data.
+
 ### Books similar to a reference
 
-"Books similar to The Hunger Games" remains `RECOMMENDATION`. The parser extracts `similarToTitle`
-and an optional `similarToAuthor`; this author identifies the reference and does not restrict the
-recommended authors. Extra tastes remain semantic criteria, and exact constraints remain filters.
-Explicit requests for a whole series or multiple references prompt for one individual book.
-A single named title goes to catalogue lookup even when it is also the name of a series.
+Similar-book requests first resolve one catalogue title through `AudiobookTitleLookup`. A unique
+exact match is selected; ambiguous or partial matches ask the user to choose from at most five
+title/author options. The reference author disambiguates editions but does not filter recommended
+authors.
 
-`SimilarBookResolver` uses the configured `AudiobookTitleLookup` adapter before replacing the active
-search. A unique exact title match (ignoring case/punctuation) selects the reference. Its author can
-narrow editions; otherwise the user chooses from at most five title/author matches using a number,
-ordinal, title or unique author. “The last one” selects the final reference choice; “the former”
-and “the latter” select the first and last choices respectively. Partial title matches always need confirmation.
-Adapters scan matching title pages while retaining bounded choices, returning exact titles when
-present before falling back to partial titles. A truncated exact-match set never automatically
-selects a reference. No match asks which aspects the user
-liked; a taste reply keeps the original exact constraints and starts a normal semantic search.
+The selected book must already have a usable dense vector. **Request-time code never generates or
+writes catalogue vectors.** The reference vector can be combined with positive and negative semantic
+criteria, while exact constraints remain filters. The reference book and previously shown books are
+excluded from results.
 
-The selected book must have a usable existing dense vector. Missing vectors produce a fixed response
-and warning, asking for another title while preserving the search constraints, old search and cached
-page. A bare replacement title resumes that search; “yes” first asks which title. No catalogue vectors
-are generated or written at request time. Storage failures follow the normal retrieval-error contract. Title and vector lookup
-are shared ports implemented by both Solr and Qdrant, without database types in conversation policy.
+The session retains the original reference vector and effective query vector. Cached pages and
+refills reuse them without repeating title lookup or embedding. A new standalone search replaces the
+reference; clarification and cancellation follow the normal pending-question rules.
 
-The reference vector is combined with additional positive/negative semantic vectors using the normal
-vector math. The reference ID and shown IDs are excluded before candidate selection. Saved exact
-preferences still apply; saved semantic tastes/user vectors participate only with explicit
-personalisation. Retrieval uses dense similarity with the exact filters, followed by normal ranking.
+### Personalisation
 
-The session saves the original reference vector and effective query vector. Full cached More pages
-skip retrieval; a refill reuses the effective vector without title lookup or query embedding. Refine
-keeps the reference and rebuilds from its original vector, avoiding repeated blending. A new standalone
-search replaces the reference. Explain and Repeat retain the resolved reference as search evidence.
-Pending title clarification is separate from the displayed page; Cancel/Clear history remove it.
-`ClarificationResolver` routes replies to the current question before catalogue access, so a later
-explanation question takes priority over older title choices. Count changes abandon those choices. Title matching shares one
-normaliser for case, punctuation and catalogue `$b` markers across reference and explanation flows.
-Resuming a reference selection restores explicit search criteria and reapplies current preferences;
-preference resets abandon unfinished searches rather than reviving inherited filters.
-“None of these” asks for another reference title while retaining the search constraints.
-“None of those, try The Hobbit” immediately looks up the replacement title with those constraints. Reference author
-lookup and author replies use the same conservative person-name equivalence as exact filters.
+Personalised retrieval combines the current positive semantic vector with the stored user-taste
+vector, subtracts negative semantic evidence, and normalizes the result. Ranking then applies its
+configured signal weights. If only one positive source exists, it contributes at full strength.
 
-Pending choices are stored once in their request snapshot.
+A first personalised request with neither stored vectors nor saved session preferences asks what the
+user likes before retrieval. Exact constraints alone do not substitute for positive taste. Stored
+user vectors and session preferences are frozen in the search snapshot so `MORE_RESULTS` remains
+consistent; new searches and refinements load current preferences again.
 
-### Outstanding questions
+Saved session preferences are bounded before an update commits: each value is at most 256 Java
+characters, each semantic field holds at most 20 values, the whole preference set holds at most 100
+values, and its JSON representation is at most 32 KiB. **An oversized update is rejected atomically;
+existing preferences are neither truncated nor partially changed.**
 
-`Session.pendingQuestion` holds one typed question and its unfinished action's context. Question
-subclasses cover search/duration/year clarifications, preferences, explanations and similar-book
-selection. There is no suspended question or automatic resumption stack.
-Completed history and every pending request use structured snapshots without raw user messages.
-The current response still has access to its own raw input; stored criteria, references and choices
-remain available when answering a question after a session reload.
+### Paging, refinements, and replay
 
-HELP preserves the question and adds a reminder; REPEAT preserves its existing replay behaviour.
-UNKNOWN keeps the question and says “I didn't quite catch that. Just to clarify, …” followed by the
-current question and any choices. Contextual answers such as “horror”, “the second one” or “under three
-hours” resolve the current question before ordinary intent dispatch.
+Retrieval excludes recently shown IDs and returns candidates for ranking. Ranking removes duplicates,
+keeps a bounded queue, and serves one to five books. A full cached page skips preference lookup,
+embedding, retrieval, and ranking. The session retains at most 500 shown IDs.
 
-Any other explicit action abandons the previous question and unfinished request. Preference edits,
-count changes, resets, explanations and More cannot later revive old selections. The new action may
-ask its own question. Completed searches, displayed books, saved preferences and cached results remain
-available unless the action explicitly clears them.
-
-Zero, negative and fractional recommendation counts immediately use the saved session count,
-preserving the action and criteria. The response explains that counts must be whole numbers from
-one to five. Invalid count settings leave the saved count unchanged and acknowledge its current value.
-Only explicit valid count settings change the saved default; counts above five are capped at five
-with a limit notice based on the resolved count, regardless of numeric or worded input. No count
-question or suspended count request is created.
-With no previous search, “2 more” asks for criteria and retains two through HELP/cache reloads.
-“Yes” after a no-match or exhausted-results offer asks what to change without retrieving again;
-the previous explicit criteria remain available until the user answers or starts another action.
-
-Redis saves question subclasses with explicit type names. Only the current cache format is supported;
-there is no legacy conversion or history-based recovery. Clear outdated development sessions or use
-a new session ID after changing the cache schema.
-
-`ConversationText` owns courtesy normalization and ordinal parsing, shared by CommandParser and
-ClarificationResolver. The resolver owns session decisions; Session owns preference merging and
-preference-question cleanup. For example, "please, the second
-one" selects rank 2 after a question, while "could you explain number two, please" explicitly requests
-an explanation. Titles and search criteria still use their original text.
-
-### Runtime comparisons
-
-“Make them longer” sets a minimum one minute beyond the longest displayed duration. If that
-conflicts with an existing maximum, ask before extending the range. Refusal keeps the old search.
-Missing durations ask for a limit. The active search question retains explicit criteria for duration
-and year replies; replies reapply current session preferences.
-
-"Make them shorter" is a `REFINE` command, not a saved-preference edit. It skips AI, preserves the
-active search's content and other constraints, and uses `shorter=true` without inventing a numeric
-limit. With no previous search (including cleared/expired/new sessions), it asks what content the
-user wants and performs no retrieval, even when saved preferences exist.
-
-Recommendations retain their catalogue `duration_minutes` and `pubdate` through ranking, paging and
-session storage. Year-based filters, recency scoring and newer/older comparisons derive years from
-valid publication dates; no `publicationYear` is stored on a book. Search criteria may still express
-`publicationYear` because it is a user-requested year constraint, not catalogue metadata.
-When every displayed duration is known and greater than one minute, a shorter refinement sets the
-new duration filter strictly below the shortest displayed book. The resolved limit is retained for
-More; session preferences are unchanged. If durations are missing, the page is empty, or the shortest
-book is already one minute, it asks for a duration limit and preserves the old page/batch. A numeric
-limit reply refines that search. Explicit duration requests still use their stated bounds.
-
-### Context and cached results
-
-Retrieval excludes recently shown IDs before selecting up to 50 candidates. Ranking removes
-remaining duplicates and shown books, retains up to 20 recommendations, and serves at most five
-according to the requested count. Queued items retain ID, title, short description, score and
-reading-preference evidence, so full cached pages skip preference lookup, embedding, retrieval,
-and ranking. Parsing still runs (possibly through the fast path); response generation follows.
-
-MORE keeps the cached tail and refills when needed. Short pages are valid; no remaining matches
-produce an explicit exhaustion message. Changed search criteria invalidate the batch. Count changes
-and Help preserve it; preference-update behaviour is specified below. The session retains at most
-500 shown IDs, so older books can eventually reappear. Clear history removes searches, shown IDs,
-pending recommendations and clarification state, while preserving preferences and result count.
-
-Outstanding clarification questions and search-change offers are saved in session state, independently
-of the latest response. HELP, REPEAT, UNKNOWN and cache reloads preserve the outstanding
-question. Other explicit actions abandon the unfinished action. After no matches,
-no more results or an empty explanation page, "yes" opens a search-change question and "no" declines
-without removing preferences or history, including after those interruptions.
-
-Duration replies share parsing with exact filters: "a couple of hours", "a hundred minutes",
-"two thousand minutes" and "2 hours 30" retain the pending search and shorter/longer direction.
-AI parsing also recognises these forms in complete requests. Vague limits such as "a few hours"
-remain clarification cases.
-
-A zero-match search still supplies context for `MORE_RESULTS`; clearing history removes it.
-`MORE_RESULTS` restores saved search criteria. `REPEAT` replays the latest resolved request,
-including explanations, help, clarifications, and empty results, without retrieving or applying
-state changes again. Repeated REPEAT requests keep replaying the same original request.
-`REPEAT_RECOMMENDATIONS` ("repeat the books", "show those recommendations again") instead
-restores the retained search page, even after help or a single-book explanation. It leaves search
-history, shown IDs and the pending queue untouched, while updating the latest replay snapshot so
-"repeat that" afterward repeats that page. No page yields a fixed message; an empty latest MORE
-repeats exhaustion rather than falling back to an older page. Clearing history removes the page.
-
-A pending explanation-target question accepts “all of them” as the whole displayed page, including
-after HELP or a cache reload. Outside that question, the reply remains context-dependent.
-
-`Session.lastOutcome` stores one completed turn and decision for REPEAT. `Session.activeSearch`
-stores the one search that can be refined, paged, or used as displayed-page context, together with
-bounded shown IDs and pending recommendation snapshots. Raw input and final response text are not
-stored. A repeated explanation uses the original selected books and criteria; AI wording may vary.
-Clearing history removes the active search and replaces the repeat outcome with its acknowledgement.
-
-Pending recommendations are catalogue snapshots inside `ActiveSearch`. Edits and removals affect
-new batches; cached items are not rechecked on each page. The queue needs no Redis-specific keys or
-additional storage-adapter operations.
-
-### Session preference updates and search snapshots
-
-The parser supplies `preferenceUpdates` and `preferenceRemovals`, both `SessionPreferences` values.
-Likes add to the positive query; dislikes add to the negative query. Removing a like does not add a
-dislike. “Avoid romance” supplies both positive removal and negative addition. Explicit replacements
-name only the affected fields in `replacePreferenceFields`, for example `positiveSemanticQuery.genres`;
-replacement without a new value clears that field. Other preferences remain unchanged.
-
-An empty update creates a preference question. A short taste reply completes the update without
-retrieving books. A new explicit action discards that question; there is no older question to restore.
-
-`RESET_PREFERENCES` clears saved session preferences and the current question, and resets
-the result count to 5. It preserves stored user vectors, shown-book history, the displayed page,
-and the remaining cached batch. MORE uses the reset count; REPEAT_RECOMMENDATIONS retains the old
-page. A cache refill for MORE continues with that search's original criteria and stored-vector
-snapshot even after preferences are reset; it does not apply the new-search personalisation gate.
-Replies to a personalised taste question (for example "horror") are saved in SessionPreferences
-when the pending search resumes, so later personalised requests reuse them. Only the reply's semantic
-preferences are saved; the original search's author, duration and other one-off constraints remain
-search-specific. Exact preferences are saved through explicit preference updates.
-
-Successful updates change only session preferences and the replay acknowledgement. They preserve the
-latest displayed page, shown IDs, search history and pending batch. Both repeat modes remain usable.
-New `RECOMMENDATION`/`REFINE` requests combine explicit `searchCriteria` with the latest preferences.
-The resolved search keeps its effective criteria for `MORE_RESULTS`; refills do not merge today's
-session preferences. `userPreferenceSnapshot` and `userPreferencesLoaded` also freeze stored reading
-vectors (including their absence) for retrieval and ranking. New searches/refinements reload them.
-
-Search snapshots retain the explicit/effective criteria split and whether stored reading vectors have
-been loaded. Missing reading-vector evidence is loaded once when needed; new searches/refinements
-refresh it. This session evidence is distinct from the local binary book-vector cache used by imports.
-
-### Refinements and exact-filter corrections
-
-Self-contained criteria, such as “fantasy under five hours”, route to `RECOMMENDATION`.
-“More recent” (including “I want books from more recent times”) is a `REFINE` that keeps
-search content and sets an inclusive lower publication-year bound to the floored average of the
-latest displayed page's known years. Unknown years are ignored; when every year is missing, it asks
-for a starting year without consuming the previous search or queued books. A supplied starting year
-resumes that search. A different refinement abandons the year question; an upper-bound reply such
-as “before 2000” replaces the unfinished recency request. Any previous upper year bound remains in
-force for a supplied starting year. If the start exceeds that bound, ask before extending the period:
-“yes” replaces the old period with the proposed range, retaining any explicitly supplied end year;
-“no” keeps the original search, and a different range replaces the
-proposal. The confirmation survives HELP, REPEAT, UNKNOWN and cache reloads. An answer uses its saved
-explicit criteria; preference updates, resets and count changes abandon the confirmation.
-When the average would not advance the existing lower bound, advance it by one year instead. If
-that exceeds the period's end, return a fixed exhaustion message without consuming the page or queue;
-MORE and REPEAT_RECOMMENDATIONS remain available, while REPEAT repeats the exhaustion message.
-“Older ones” mirrors the recency comparison with an upper bound one year below the floored average
-of known displayed years. Keep the existing lower bound when compatible; otherwise ask before
-extending the period. If all years are missing, ask for an ending year and retain the full refinement.
-
-Explicit periods stay literal:
-“1950 to the 2000s” means 1950–2009. A standalone decade, including “from the 2000s”,
-means 2000–2009. Publication years must be within 1–9999; exclusive bounds outside that range
-ask for a valid range before retrieval. Ordinary “recent books” still means the last five years.
-Without an active search, a comparative refinement asks what kind of audiobook the user wants.
-A context-dependent `REFINE` without a previous search asks for criteria without embedding or
-retrieval; stored user preferences alone are not a previous search. A self-contained request can
-still answer a pending preference question and save that taste for the session.
-
-Search edits use `replaceSearchFields`, an allowlisted list of criteria paths, reusing the preference
-field validation. “Make it horror instead” replaces `positiveSemanticQuery.genres`; “also mystery”
-adds to the existing genres. “Make it more horror” followed by “make it more romance” adds both
-genres to the existing positive semantic criteria. “More” does not assign a numerical weight.
-Explicit “instead” or “replace” wording replaces the named field instead of adding to it.
-A listed field with no value clears it: “any author is fine now” clears
-`mustInclude.authors`, while “remove the time limit” clears `mustInclude.duration`. Omitted fields
-still inherit previous values. These edits leave saved preferences unchanged. Override paths persist
-with the search through cache reloads, MORE and later refinements, preventing saved preferences from
-reintroducing a cleared filter or replaced genre. A new recommendation request starts fresh.
-
-Each author/narrator field accepts at most one person, for exact filters, style criteria and saved
-preferences. A newly supplied name replaces the previous choice, including “also”/“add” wording.
-One author together with one narrator is supported. Multiple distinct names in the same field return
-`400` asking the user to choose one, before retrieval or session commit; names are never truncated.
-Equivalent catalogue spellings of the same person are deduplicated. Catalogue records retain their
-existing multivalued author/narrator fields, and genres/topics/keywords still support multiple values.
-For genres, topics and keywords in leading “also”/“add” instructions, supplied values remain additions even when another field is
-removed in the same message; empty replacement fields still clear their filters. Explicit
-“instead”/“replace” wording retains replacement behavior. Unrelated filters
-and semantic criteria remain inherited for refinements.
-
-Before queue invalidation or recommendation work, the planner checks exact include/exclude
-constraints. Explicit new requirements override conflicting inherited exclusions, and vice versa.
-Contradictions within the new message return `400` with a clarification question; the saved search,
-queue, shown IDs and session version remain unchanged. A range conflicts only when its exclusion covers
-the entire required interval. Semantic combinations, such as romantic horror, are not conflicts.
-This checks logical impossibility, not whether the current catalogue happens to contain matches.
-
-Author/narrator filters share `PersonNameNormalizer` in the catalogue model. Each database adapter
-adds conservative OR variants at query time: `Suzanne Collins` also tries `Collins, Suzanne`, and
-an explicit `García Márquez, Gabriel` also tries `Gabriel García Márquez`. Two-word forward names and dotted-initial prefixes with a single-word surname
-(e.g. `J. K. Rowling` → `Rowling, J. K.`) are reversed; other longer forward names, suffix-bearing
-names, and uncertain comma formats are not guessed. Include/exclude conflict checks use the same name-order comparison. Original request
-and preference values remain unchanged, so MORE/REFINE reuse those names and regenerate variants.
-Removing saved author/narrator preferences uses this same equivalence, including semantic preferences.
-“Remove X from my preferences” removes matching saved values across positive and negative fields.
-“I no longer like X” removes positive values only; it does not invent a dislike or alter the current batch.
-This uses no dictionary, catalogue scan, AI call, new index, or migration. Generated alternatives
-also tolerate a terminal catalogue period and compact/spaced dotted initials (`J.K.` / `J. K.`).
-Separated single-letter initials (`J K`) match those dotted forms in both name orders; compact
-undotted words (`JK`) are not assumed to be initials. This works for authors and narrators,
-without expanding initials into full names or removing suffix punctuation. These alternatives
-are not verified catalogue identities; typo matching, full-name aliases, arbitrary stored casing,
-and complete discovery of longer-name variants remain outside this limited approach.
-
-### Semantic criteria and personalisation
-
-Author-only and narrator-only semantic criteria select semantic retrieval. “A book by Suzanne
-Collins” sets `mustInclude.authors`; “books similar to Suzanne Collins style” sets
-`positiveSemanticQuery.authors`, without an author filter or a similar-book title lookup. Narrator
-requirements versus narrator-style similarity follow the same distinction. Exact names in
-`mustInclude` and `mustNotInclude` use separate `ExactCriteria` instances and remain mandatory
-database filters.
-
-For personalised retrieval with stored taste:
-
-1. Normalize the stored-taste signal and give it equal weight to the current positive semantic vector.
-2. Subtract the negative semantic vector and normalize the combined result.
-3. Apply the ranker's separately configured scoring weights to retrieved candidates.
-
-If either positive source is absent, the other contributes at full strength. Exact filters are
-never relaxed to fill the result count.
-
-A first personalised request without stored user vectors or saved session preferences asks
-"What genres do you like?", even if that request includes semantic criteria or exact constraints.
-It does not embed or retrieve candidates until the user answers. The answer supplies taste and
-resumes the retained search. With saved preferences, positive or negative semantic taste is
-still required when no user vectors exist.
-Exact constraints remain mandatory filters and are never embedded as a substitute for taste. Short
-answers to the taste question merge with the pending search and retain its count; explicit searches
-abandon it. Corrections and contradictions use the existing exact-filter policy before retrieval.
-
-### Exact duration and year filters
-
-| Filter | Accepted expressions | Boundaries |
-| --- | --- | --- |
-| Duration | Hours/minutes, decimals, `1h 30m`, `between 2 and 3 hours` | `under`/`over` are strict; `at most`/`at least` inclusive; bare duration exact |
-| Publication year | Four-digit year, comparisons, inclusive ranges, `around YYYY`, `period YYYY`, `recent`, `past year`, `last N years` | `after`/`before` are strict; bare year exact; relative windows include both boundary years |
-
-The parser preserves relative publication phrases rather than guessing a calendar year. Retrieval
-resolves them against the current UTC year: `recent`/`recently` means the last five years; `past year`
-means one year; `last 4 years` and `last four years` mean four. Both include and exclude filters use
-these rules. In 2026 these become 2021–2026, 2025–2026, and 2022–2026 respectively, excluding future
-years. Zero, fractional, negative, and unrepresentably large windows return `400`.
-
-Approximate phrases such as “around 2000” and “the period 2000” mean an inclusive ±5-year
-range: 1995–2005. Bounds stay within calendar years 1–9999; a bare “2000” remains exact.
-
-Catalogue metadata contains years only, so these are inclusive year ranges, not exact rolling
-month/day cutoffs. Cached pages remain snapshots of the search that produced them.
-
-Duration bounds account for whole-minute catalogue values. Invalid, ambiguous, reversed, or
-unrepresentable duration ranges return `400`; unsupported or reversed year expressions also return `400`.
-
-## Recommendation server packages
-
-The recommendation server is under `com.gen3.recommenderagent`:
-
-| Package | Responsibility |
+| Action | Behavior |
 | --- | --- |
-| `api` | HTTP requests and error responses |
-| `application` | Session transaction boundary and shared chat-client wiring |
-| `application.conversation` | Intent resolution, executable request/draft state, conversation engine and request/preference mapping |
-| `application.conversation.workflow` | Dispatch, handlers, clarification, criteria merging, history and conversation rules |
-| `application.recommendation` | Recommendation workflow and cached-page management |
-| `domain.conversation` | Conversation actions, decisions, completed turns and explanation selectors |
-| `domain.session` | Session aggregate, pending question, active search and last outcome |
-| `domain.search` / `domain.recommendation` | Search criteria/value objects and recommendation limits/results |
-| `inputparser` / `response` | Structured request parsing, raw-text/duration interpretation, and response wording |
-| `embedding` | QueryEmbeddingService, positive/negative query vectors |
-| `retrieval` / `retrieval.plan` | Candidate search execution, retrieval plans and filter parsing |
-| `ranker` / `ranker.scorer` | Candidate ranking and scoring rules |
-| `storage.user` | Reading-preference storage contracts, models and database adapters |
-| `ai` | Provider-error translation for live parsing, embedding, and response calls |
-| `storage.session` | Session contract, commit errors and Redis adapter |
-| `observability` | Request timing and AI usage telemetry |
+| `MORE_RESULTS` | Consumes the cached queue and refills with the frozen search when needed |
+| `REFINE` | Inherits the active search and changes only the requested criteria |
+| `REPEAT` | Replays the last completed action without applying it again |
+| `REPEAT_RECOMMENDATIONS` | Replays the retained recommendation page without consuming the queue |
+| `CLEAR_HISTORY` | Removes active search, shown IDs, queue, and clarification state; keeps preferences |
+| `RESET_PREFERENCES` | Clears session preferences and resets the page count; keeps search history |
 
-Vector lookup ports expose reads only. Embedding writes belong to `AudiobookEmbeddingStore`;
-migration uses its separate existing-data copy operation.
+Comparative refinements such as shorter, longer, newer, and older derive a boundary from the latest
+displayed page. If required metadata is missing or a new range would conflict with an existing bound,
+the system asks for clarification without consuming the page or queue. Explicit search-field
+replacement can clear or replace a named inherited field; ordinary additions preserve other fields.
 
-Shared audiobook code lives in sibling `com.gen3.catalogue`: `model`, `port`, `solr`,
-`qdrant`, `vector`, and the local `snapshot` implementation. It has no dependency on `recommenderagent`. The server scans both
-packages; maintenance launchers explicitly import the adapters they need. This is a package
-boundary within the existing Maven module. Current database contracts are described under
-[Configuration and schema](#configuration-and-schema).
+### Pending questions
 
-`ConversationResponseGenerator` handles fixed decision messages and delegates recommendation
-and explanation narration to `AiResponseGenerator`. The AI implementation owns prompts, output
-validation, and built-in narration fallbacks. `ResponseGenerator` remains the API-facing contract.
-Known provider failures are translated by the live AI adapters into `AiProviderException`:
-parser/query-embedding failures return the existing 503 message, while response failures use the
-built-in fallback. Unexpected programming exceptions propagate as server errors. Maintenance
-jobs retain their independent retry and recovery policies.
+The session stores at most one typed pending question. Short replies such as a number, title, taste,
+or duration resolve that question before ordinary intent dispatch. `HELP`, `REPEAT`, `UNKNOWN`, and
+cache reloads preserve it. Another explicit action abandons it and may create a new question; there
+is no hidden question stack.
 
-The sibling maintenance packages remain separate runnable jobs. CSV interaction records
-(`UserFavourite` and `UserHistory`) belong to `userpreferencejob.model`. Catalogue embedding
-generation remains in `embeddingjob`; the query embedding module only embeds live search criteria.
-`RecommendationPolicy` owns the existing limits and result-count clamping rules.
-
-## Maintenance modules
-
-Five sibling job packages have dedicated non-web launchers. They are not started by the server
-and do not schedule themselves. See the [job runbooks](jobs/README.md) for commands and recovery.
-
-`embeddingjob` fills absent catalogue dense vectors by default; explicit `rebuild-all` regenerates
-existing vectors too. Qdrant filters dense-vector presence in the database. Solr reads bounded pages
-of stored vectors to check presence, including catalogues/segments with no indexed vectors; both
-adapters select books before any AI calls. Existing presence does not prove text/model freshness.
-After a successful pass, including a no-op, the launcher uses the full-catalogue snapshot publisher shared with
-`snapshotjob`. The standalone publisher only exports existing vectors; it can retry snapshot
-publication independently of paid generation. `catalogue.snapshot.BookVectorSnapshot` owns the
-versioned binary format, compatibility checks, checksum, atomic publication and process-local cache.
-It implements the read-only `AudiobookVectorRepository` interface for user import, but has no Spring
-registration in the recommendation server. Interactive searches continue reading the selected database.
-
-`userpreferencejob` validates and loads that snapshot, streams CSVs through bounded external sorting,
-deduplicates favourites/history, and validates every user's distinct-book limit before profile writes.
-It aggregates complete-user batches with one shared time-decay reference instant. Write mode replaces
-imported users' vectors; dry-run substitutes a validating sink. `shared.jobruntime.JobProgress` provides
-periodic reporting shared by all jobs without initiating database operations or retries.
-
-The snapshot is a local derived file, not a database backup or an incremental change feed. Imports
-accept the last compatible snapshot without an age limit; catalogue changes require refresh. Shared
-record schemas are not modified by snapshot publication. Jobs remain in the same Maven module and
-reuse catalogue adapters. `shared.identity.OpaqueIds` supplies the same boundary validation for
-HTTP user/session IDs and imported CSV user IDs.
+Pending and completed state use structured snapshots, not raw user messages or final response text.
+Clear outdated development sessions or use a new session ID after changing the session schema.
 
 ## Conversation policy
 
-| Component | Owns |
-| --- | --- |
-| `SessionTransitionService.process` | The single `SessionRepository.update` load, transition, and commit boundary |
-| `ConversationEngine` | Resolve, validate, retrieve when needed, then complete the turn inside that boundary |
-| `ConversationDispatcher` | Validated handler dispatch and shared completion ordering |
-| `ClarificationResolver` | Short numeric/title replies, pending-question priority, and cancellation routing |
-| `SearchContextResolver` | Search inheritance, current preferences for new searches/refinements, and frozen preferences for MORE |
-| Preference, explanation, replay, and session-action handlers | Their own action rules; no independent saves or locks |
-| `ExactFilterPolicy` | Exact-filter parsing, inherited corrections and conflict validation |
-| `RecommendationPager` | Cached pages, refill, duplicate exclusion and displayed ranks |
-| `ConversationHistory` | Retained searches, metadata and replay snapshots |
-| `ConversationResponseGenerator` / `AiResponseGenerator` | Fixed wording and AI narration after the session commits |
+`UserIntent` is parser output, not an executable command. `IntentResolver` and the registered
+conversation handlers apply session context, pending-question priority, exact-filter validation,
+and history rules inside the session transaction.
 
-`UserIntent` is the parser's small, untrusted statement of user meaning. Provider responses and
-token usage stay inside the parser. `IntentResolver` converts it to a `SessionRequest` while the
-session is locked; conversation policy then resolves pending questions, page references and search
-availability. A `ConversationDraft` holds working state inside that transition. `SearchContext`
-groups explicit and effective criteria with frozen reading-preference evidence. Completion creates a
-`ConversationTurn` for response generation and session state; parser-only edit instructions are not
-persisted in that turn. `LastOutcome` carries the completed turn and decision consumed by replay and
-response generation.
+Supported intents are:
 
-Development sessions use only the current `Session` schema: `pendingQuestion`, `activeSearch`, and
-`lastOutcome`. Reset Redis or use a new session ID when this schema changes.
+| Search | Navigation and replay | Preferences and session | Other |
+| --- | --- | --- | --- |
+| `RECOMMENDATION` | `MORE_RESULTS` | `UPDATE_PREFERENCES` | `EXPLAIN_RECOMMENDATION` |
+| `REFINE` | `REPEAT` | `RESET_PREFERENCES` | `HELP` |
+|  | `REPEAT_RECOMMENDATIONS` | `CHANGE_COUNT` | `CANCEL` |
+|  |  | `CLEAR_HISTORY` | `UNKNOWN` |
+
+Only recommendation and refinement intents introduce new search semantics. Navigation and
+explanation actions inherit committed context. Preference edits use their own addition, removal, and
+replacement fields instead of masquerading as searches.
 
 ### Input parsing
 
-`InputParser` validates input, tries `CommandParser`, and falls back to `AiParser` when no exact
-command matches. Both paths produce `UserIntent`; conversion to `SessionRequest` happens later,
-inside the locked session transition. `AiParser` owns the model prompt, output schema, and provider
-calls. The AI path receives only bounded reference context (the current pending question, latest
-action and up to five displayed titles). Exact commands skip both the model and context load but
-still use the normal session/conversation pipeline. The switch in
-[`CommandParser`](../src/main/java/com/gen3/recommenderagent/inputparser/CommandParser.java)
-is the authoritative alias list. It covers Help, More (including “next”), both repeat actions,
-page explanations, clear history and cancellation.
+`CommandParser` handles exact commands such as Help, More, repeat, page explanations, count changes,
+history clearing, and cancellation. It ignores harmless casing, spacing, punctuation, and supported
+courtesy wording. Commands with extra criteria go to `AiParser` instead of losing information.
 
-Matching ignores case, extra whitespace, curly apostrophe differences, and boundary punctuation.
-It removes supported polite wording such as “please”/“kindly”, opening greetings or “sorry”/“excuse me”,
-and trailing “cheers”/“ta”/“many thanks”. The original input is preserved. Explicit numeric More commands such as “2 more”, “show me 2 more”
-and “2 more audiobooks” preserve their count without calling AI. Settings commands such as
-“only three at a time”, “3 per page”, “change count to three books”, and “4 books at a time” use
-CHANGE_COUNT, including while a preference
-question is pending; they do not edit saved tastes. Bare selections such as “1”,
-“one” and “the second audiobook” also skip AI as UNKNOWN; pending session context resolves their
-meaning. Without a pending question they stay UNKNOWN. Negations and extra criteria still go through the model; “2 more but shorter” and “more British authors” are not
-reduced to a plain More command.
+The AI parser receives bounded context: the current pending question, latest action, and at most five
+displayed titles. Its structured response is validated and converted to `UserIntent`; session state
+is not changed during parsing. The authoritative fast-path aliases live in
+[`CommandParser`](../src/main/java/com/gen3/recommenderagent/inputparser/CommandParser.java).
 
-The parser schema and response vocabulary remain explicit contracts rather than dynamically
-loadable plugins. The model's JSON requires only `intent`; other fields, including nested
-criteria, may be omitted. Parser guidance asks for compact output without null/empty values or false
-flags; Java supplies their existing defaults. This is converter-based format guidance, not native
-strict Structured Outputs. Standalone taste replies supply search criteria once; pending preference
-updates derive their edits through `SessionPreferences.fromRequest`. Explicit preference commands
-retain their addition/removal/replacement fields.
+To add an intent:
 
-### Adding an intent
+1. extend the parser contract and validation;
+2. implement or extend a conversation handler and register it;
+3. reuse existing search, filter, paging, and history modules;
+4. add fresh-session, follow-up, failure, and replay tests.
 
-1. Add its parser contract and normalization rules, including whether it can introduce search criteria.
-2. Implement or extend a `ConversationHandler` family and register its bean in
-   `ConversationConfiguration`. The dispatcher rejects duplicate or missing intent registrations.
-3. Keep action rules in that handler and reuse the filter, search, paging and history modules.
-   Handlers mutate the supplied session; the transaction service alone loads and commits it.
-4. Add behavior tests for fresh sessions, follow-ups and replay. Update response wording as needed.
+### Explaining recommendations
 
-Simple actions share `SessionActionHandler`; a new intent does not require a new class by default.
+Explanations operate only on the retained displayed page. They do not retrieve, embed, rank, consume
+the queue, or mark more books as shown. A request may select the whole page or books by rank, title,
+or relative position. Missing or ambiguous selectors create a clarification question.
 
-Count-setting commands update the session without consuming the pending recommendation queue. An explicit count
-on `MORE_RESULTS`, such as “2 more”, applies to that page without changing the saved default.
-“More, make it three at a time” also uses a temporary count: each message executes one intent.
-Use a separate CHANGE_COUNT request to save a new default.
+The response may mention stored reading preferences only when the selected recommendation records
+that those vectors influenced retrieval or ranking. It must not infer specific favourite genres or
+books from that flag. Explanation output is limited to 150 words.
 
-`CANCEL` acknowledges cancellation and clears pending preference clarification without clearing
-search history, preferences, or queued books. “Never mind” and “cancel” also end book-selection
-questions. While a preference question is pending, clear declines such as “no”, “not now”,
-“keep my preferences”, “nothing”, or “no changes” cancel it without changing saved preferences or
-count. Declining a genre question abandons that unfinished search while preserving earlier results
-and cached books. “Not now” and “leave it” use the CANCEL fast path alongside explicit cancellation commands.
-Bare “no” declines any pending question; preference-specific declines remain contextual and skip AI.
-Unrecognized replies no longer become personalised searches merely because a taste
-question is pending.
+Recommendation and explanation narration must mention every supplied title. If model output is
+blank, fails, exceeds the explanation limit, or omits a title, built-in wording is used. This local
+check verifies title coverage, not factual accuracy.
 
-Generic recommendation requests without criteria, such as “Recommend an audiobook” or “give me
-some books”, use the
-personalised path. Existing users can use stored taste vectors; users without usable preferences
-are asked what they like before candidate retrieval. Explicit criteria still work without requiring
-personalisation.
+## Code organization
 
-## Semantic information and control intents
+### Recommendation server packages
 
-Supported intents are `RECOMMENDATION`, `REFINE`, `MORE_RESULTS`, `REPEAT`, `REPEAT_RECOMMENDATIONS`, `CHANGE_COUNT`,
-`EXPLAIN_RECOMMENDATION`, `UPDATE_PREFERENCES`, `RESET_PREFERENCES`, `CLEAR_HISTORY`, `HELP`, `CANCEL`, and `UNKNOWN`.
+| Package | Responsibility |
+| --- | --- |
+| `api` | HTTP boundary and errors |
+| `application` / `application.conversation` | Session transaction, intent resolution, and conversation rules |
+| `application.recommendation` | Recommendation workflow and cached-page management |
+| `domain.*` | Conversation, session, search, and recommendation state |
+| `inputparser` / `response` | Intent parsing and response wording |
+| `embedding` / `retrieval` / `ranker` | Query vectors, candidate retrieval, and scoring |
+| `storage.user` / `storage.session` | User-preference and session contracts/adapters |
+| `ai` / `observability` | Provider error translation, timing, and usage telemetry |
 
-Only `RECOMMENDATION` and `REFINE` accept newly parsed positive/negative semantic queries or the
-personalised flag. Other intents discard these fields. `MORE_RESULTS`, `REPEAT_RECOMMENDATIONS`, and
-`EXPLAIN_RECOMMENDATION` inherit saved search context; `REPEAT` restores its retained request context; semantic search changes use `REFINE`.
-`UPDATE_PREFERENCES` carries semantic and exact changes through separate `SessionPreferences` values;
-its search-semantic fields remain empty. Standalone criteria route to `RECOMMENDATION`; context can
-resolve them as an answer to a pending preference question.
+Shared catalogue code lives under `com.gen3.shared.audiobookcatalogue` and does not depend on the
+recommendation server. It owns audiobook models, database ports/adapters, and local snapshots;
+shared vector mathematics lives under `com.gen3.shared.vector`.
 
-A personalised search with zero matches reports that the combined current search and saved
-preferences found no matches. It does not blame a particular filter, echo only the latest message,
-change preferences, or retry with relaxed constraints.
+### Maintenance modules
 
-## Explaining recommendations
+| Package | Responsibility |
+| --- | --- |
+| `embeddingjob` | Generate and store catalogue vectors, then refresh the snapshot |
+| `snapshotjob` | Export existing vectors to a validated local file |
+| `shortdescriptionjob` | Generate and store missing or rebuilt summaries |
+| `migrationjob` | Copy supported Solr catalogue data to Qdrant |
+| `userpreferencejob` | Stream CSV interactions and aggregate user vectors |
+| `shared.readhistory` | Bounded history contracts under `port`, PostgreSQL adapter/configuration under `postgres` |
+| `shared.csv` | Reusable CSV readers, normalization and input records under `model` |
+| `readhistoryjob` | Independent additive CSV history importer and launcher |
+| `shared.jobruntime` | Periodic progress reporting and per-run log naming |
 
-`EXPLAIN_RECOMMENDATION` carries optional `referenceRank` and `referenceTitle`, independent of
-`bookCount` and semantic criteria. No selectors means the whole latest search page. A bare “explain”
-automatically explains the sole book when the latest page contains one recommendation. Title matching
-ignores case/punctuation and uses exact matches before unique partial matches. Missing, ambiguous,
-out-of-range or conflicting references produce a ranked-title clarification. A bare ordinal is not
-an explanation request on its own. While a book-selection clarification is pending, a numeric
-reply such as “1”, “1.”, “first”, or “the first one” selects that rank from the retained page;
-a numeric title such as “1984” matches its displayed book when it is not a valid rank.
-“The last one” and “the latter” select the final displayed book; “the former” selects the first.
-These relative positions also work in complete questions such as “Why the last book?”. Other invalid numbers ask again. An otherwise unrecognized reply can also identify a displayed title. HELP preserves this context; a new search replaces it. “Why the fourth book?” also resolves independently.
-“Explain two more” and “explain book two more” both select book 2 for more detail, never two additional
-books. Single-book explanations retain the original displayed rank.
-`explanationSelection` carries literal include/exclude lists of ranks, relative positions or titles.
-Empty includes mean the whole page. Multiple titles and “all except” selections use the same exact/
-unique-partial matching; exclusions win, duplicates disappear, and displayed order/ranks remain intact.
-An invalid or ambiguous selector asks for clarification while retaining other selections and exclusions.
-Each bare reply resolves the next unresolved item. An explicit new explanation replaces that subset;
-MORE/new searches clear it. Empty subsets ask which books to explain without calling AI. The existing
-150-word total explanation limit also applies to subsets.
+Jobs reuse catalogue adapters but have dedicated launchers and safety flags. The snapshot is a
+derived cache, not a backup or change feed. See the [job runbooks](jobs/README.md) for writes,
+prerequisites, and recovery.
 
-Model-provided ranks and counts accept large integers before conversion to bounded internal values:
-oversized ranks clarify rather than overflow, and result counts retain the existing one-to-five cap.
-Malformed model numeric fields and structured responses exceeding JSON limits return a friendly `400`
-validation message. Invalid user recommendation counts use the saved session count rather than
-rounding or interpreting zero as replay. Invalid settings preserve the saved default.
+### Read-book eligibility
 
-Bare title replies to a pending explanation question match the displayed page even when the parser
-labels them RECOMMENDATION or REFINE. Explicit search commands still start a new search.
+`shared.readhistory.port.ReadHistoryRepository` is a replaceable bounded read contract. Its PostgreSQL adapter
+uses an indexed user/book table and an explicit connection pool; schema setup is manual. The
+independent importer reuses CSV normalization and adds pairs without altering preference vectors
+or book payloads. Starting a book counts as read; exclusion matches exact catalogue IDs only.
 
-The resolved explanation copies saved criteria and selects from the page inside the session update.
-It does not retrieve, embed, rank, consume the pending batch, add shown IDs or replace completed search
-history. As an explicit action it abandons any unrelated pending question. No search yields a fixed onboarding message; an empty latest page
-yields a distinct fixed message, even if an older page had results. The session represents committed
-recommendations, not confirmation that a client displayed or spoke them.
+Shared CSV readers and their input records live under `shared.csv`, so neither import job depends
+on the other job's implementation. The recommendation application explicitly imports the shared
+PostgreSQL configuration; it does not component-scan every shared helper or start import jobs.
 
-Each retained/queued `Recommendation.readingPreferencesUsed` records whether stored preference
-vectors contributed to personalised retrieval or a positive active preference ranking score. It is
-copied when batch items receive page ranks and defaults to false when no evidence was recorded. Each scorer returns
-its evidence in `ScoreResult`; the composite combines available contributions, and ranking reuses
-that result without detecting scorer classes or scoring selected books again. Explanations never
-reload today's preference profile to justify an older selection. They may mention reading preferences
-when recorded, but cannot infer favourite genres or specific books from that flag. Descriptions and
-saved criteria support semantic explanations; filter requests alone cannot prove actual book metadata.
-Response generation uses the existing role-specific chat client, with distinct explanation instructions
-and an honest built-in fallback. Explanations are plain text with a 150-word total limit; oversized
-AI output uses a bounded fallback covering every selected book. Clarification/no-history responses
-need no response-model call.
-Recommendation and explanation narration also undergo a local title-coverage check, ignoring case,
-accents and punctuation. If any supplied title is missing, the built-in response names every book
-with its rank and available short description, without internal book IDs. This check makes no extra
-AI or database calls; it checks title presence, not whether the AI's explanation is factually correct.
+When configured, `ReadHistoryExclusions` loads one current-user snapshot in `RecommendationPager`.
+`ConversationDraft` holds those IDs for this request only; stored turns/sessions omit them. The
+workflow merges them into retrieval/ranking exclusions and the pager checks cached/refilled books.
+Repeat/explain preserve their original selection without history lookup. Solr uses term-set
+exclusions rather than a large OR query; every retrieval mode shares the same filter.
+
+Lookup failures and histories over the configured limit log a structured warning and fail open;
+session shown-ID exclusions still apply. No unread-only guarantee applies in those cases. Successful
+lookups never relax exclusions to fill a page. See [read history](jobs/read-history.md) for operations.
+
+## Technology replacement guide
+
+Difficulty describes the contract and data-migration risk, not merely the number of changed lines:
+
+| Level | Meaning |
+| --- | --- |
+| Low | Configuration change with no stored-data migration |
+| Medium | One adapter boundary plus focused tests |
+| High | Distributed-state or stored-data contracts must be preserved or migrated |
+| Very high | Cross-cutting framework and runtime change |
+
+| Change | Difficulty | Starting points | Why / required work |
+| --- | --- | --- | --- |
+| Change an OpenAI chat model | Low | [`application.properties`](../src/main/resources/application.properties), [model configuration](configuration.md#ai-models-and-shared-vector-dimensions) | Change the role-specific model and verify structured parser output, narration, usage reporting, and fallbacks. No data migration. |
+| Replace the chat provider | Medium | [`ChatClientConfiguration`](../src/main/java/com/gen3/recommenderagent/application/ChatClientConfiguration.java), `inputparser`, `response`, `ai` | Supply both role-specific clients and preserve parser schema, retries, provider-error translation, usage telemetry, title coverage, and response fallbacks. |
+| Change the embedding model or dimensions | High | [`application.properties`](../src/main/resources/application.properties), `embeddingjob`, database vector schemas, `snapshotjob`, `userpreferencejob` | **Requires compatible schemas, a complete catalogue reindex, a new snapshot, and regenerated user vectors.** A property-only change can mix incompatible vectors. |
+| Replace the short-description provider | Medium | [`ShortDescriptionGenerator`](../src/main/java/com/gen3/shortdescriptionjob/provider/ShortDescriptionGenerator.java), `shortdescriptionjob.provider`, provider tests | Preserve ten-book grouping, bounded concurrency, ID/response validation, word limits, retries, timeouts, and incremental writes. |
+| Add a catalogue database | High | [`shared.audiobookcatalogue.port`](../src/main/java/com/gen3/shared/audiobookcatalogue/port), backend configuration, `storage.user`, maintenance store interfaces, integration tests | Implement search modes, exact filters, title/details/vector lookup, identity and write guarantees, user preferences, and the maintenance operations the backend supports. Document schema and migration. |
+| Replace Redis session storage | High | [`SessionRepository`](../src/main/java/com/gen3/recommenderagent/storage/session/SessionRepository.java), `storage.session`, session configuration and concurrency tests | Preserve distributed exclusion, lease renewal, versioned atomic commit, sliding expiry, error mapping, and the post-commit response callback. A basic key/value adapter is insufficient. |
+| Upgrade Solr, Qdrant, or Redis | Medium–High | [`compose.yaml`](../compose.yaml), [`pom.xml`](../pom.xml), schemas, container integration tests, [version table](configuration.md#supported-and-tested-versions) | Verify client/server compatibility and existing stored data. Major upgrades may require schema or data migration and a rollback backup. |
+| Replace Alloy/Grafana | Low–Medium | [`compose.observability.yaml`](../compose.observability.yaml), [`observability/`](../observability), [observability guide](observability.md) | Keep application telemetry unchanged when the replacement can consume the same structured logs; otherwise update the export allowlist and field documentation. |
+| Replace Spring Boot | Very high | [`pom.xml`](../pom.xml), application launchers, configuration, HTTP, dependency injection, data and test infrastructure | Cross-cutting rewrite with no dedicated replacement seam. Treat it as a platform migration. |
+
+Before a replacement, record the current behavior, data format, rollback point, and integration tests.
+Classify it as either an **implementation swap** behind an existing interface or a **data-contract
+change** involving identity, schema, vectors, or sessions. The latter requires an explicit migration
+and rollback plan even when the code diff is small.
 
 ## Configuration and schema
 
-See [Configuration reference](configuration.md) for property defaults, environment overrides,
-model selection, connections, and maintenance opt-ins.
+The [configuration reference](configuration.md) owns property defaults, supported/tested versions,
+provider connections, model selection, schemas, and maintenance opt-ins.
 
-Qdrant stores dense and sparse vectors plus filterable metadata. Exact author, narrator, language,
-duration, and source constraints are applied as filters. Solr supports the same runtime storage ports,
-plus catalogue embedding, summary maintenance, and preference imports. Its hybrid search blends
-lexical and dense scores; candidate vectors are normalized for preference ranking.
-
-[`solr/vector-field-schema.xml`](../solr/vector-field-schema.xml) is a manual snippet for
-configuring an external Solr collection. It stays outside `src/` because the application does not
-load it or bundle it as a runtime resource. Apply its definitions to the target collection and match
-the vector dimensions to the configured embedding model.
+Qdrant and Solr implement the same runtime catalogue and user-preference ports. Their storage
+schemas differ: Qdrant uses named dense/sparse vectors and payload indexes; Solr uses configured
+fields and blends lexical with dense scores. Both normalize candidate vectors for preference
+ranking. Schema files under [`solr/`](../solr/) are manual external-collection definitions, not
+runtime resources loaded by the application.
 
 ## Database selection and replacement
 
 ### Backend selection
 
-Local Docker and Qdrant integration tests use server 1.19.1 with Java client 1.18.0. Vector readers
-use the current dense-vector response format; legacy flattened responses are not supported.
-Before reusing an older data volume, check server compatibility and the vendor’s upgrade instructions.
+`AUDIOBOOK_DATABASE` selects one backend for a server or job; Qdrant is the default. Both backends
+provide candidate search, title/details lookup, exact book-vector lookup, and user-preference storage.
+**Selecting a backend does not create, copy, or migrate existing data.**
 
-`audiobook.database` in `application.properties` selects one database for the whole request flow;
-`qdrant` is the default. The former `audiobook.candidate-retriever` setting is rejected to prevent
-mixed backends. Both `qdrant` and `solr` provide candidate search, book-vector lookup, and user-preference
-storage. Maintenance jobs select their own backend with the same property.
+Server and client versions are listed in
+[Supported and tested versions](configuration.md#supported-and-tested-versions). Older Qdrant
+flattened vector responses are not supported.
 
 ### Add a database adapter
 
-1. Register `AudiobookCandidateSearch`, `AudiobookVectorRepository`, `AudiobookTitleLookup`,
-   `AudiobookDetailsLookup`, and `UserPreferenceVectorRepository` implementations under the same
-   backend selection. Title lookup supports similar-book requests; details lookup supports the dev page.
-2. Preserve semantic, keyword, hybrid, and filtered search and the existing write guarantees.
-   Report unsupported operations explicitly.
-3. Select the backend with `audiobook.database`. This disables Qdrant clients and adapters.
+1. Register implementations of `AudiobookCandidateSearch`, `AudiobookVectorRepository`,
+   `AudiobookTitleLookup`, `AudiobookDetailsLookup`, and `UserPreferenceVectorRepository` under one
+   backend selection.
+2. Preserve semantic, keyword, hybrid, filtered search, identity, and write guarantees. Report an
+   unsupported operation explicitly.
+3. For snapshot generation and the embedding job's post-pass refresh, register a
+   `CatalogueSnapshotSource` implementing read-only vector pagination and catalogue identity.
+   Configure `<backend>.collection` alongside `audiobook.database=<backend>`.
+   `SnapshotIdentity` resolves these settings for both publishing and offline preference imports;
+   startup rejects a source whose backend or collection differs from that identity.
+4. Implement the maintenance ports needed by the backend: `AudiobookEmbeddingStore` for embedding
+   writes and `AudiobookEnrichmentStore` for short-description updates. Register adapters in the
+   relevant launcher's composition without adding backend-specific branches to consumers.
+5. Add configuration, schema documentation, and integration coverage. Verify snapshot pagination,
+   catalogue IDs and vectors, and publish/reopen compatibility through the offline reader. Include
+   launcher checks that built-in backend beans are absent for a replacement backend and that an
+   identity mismatch fails startup.
 
-Missing implementations fail startup instead of falling back to Qdrant. Conversation and ranking
-code remain unchanged. Selection does not copy data; maintenance jobs have their own store contracts.
+Missing implementations fail startup rather than falling back to another backend. Conversation and
+ranking code must remain independent of database-specific types.
+
+An arbitrary backend name and `<backend>.collection` can identify an existing local snapshot for
+offline loading. They do not provide database access: generation requires a registered
+`CatalogueSnapshotSource`. Snapshot paths remain
+`<snapshot-directory>/<backend>/<collection-hash>.bin`; preserve this identity and the stored
+metadata when replacing an adapter so existing snapshots remain readable.
 
 ### Solr schema and record identity
 
-`SolrAudiobookRepository` supplies search, indexing, and exact vector lookups by the catalogue's
-unique `id`. Lookups deduplicate IDs and query in batches of at most 100; missing vectors are omitted.
-`SolrUserPreferenceRepository` stores exact external user IDs in a separate collection. Atomic saves
-replace both taste vectors, including removal of an absent vector, while preserving unrelated metadata.
-Reads do not create collections or schemas. Stored vectors must be finite, nonzero, and match the
-configured dimension; preference and candidate vectors are normalized for ranking.
+Solr uses the catalogue's unique string `id` and a separate user-preference collection keyed by the
+exact external user ID. Reads never create collections or schemas. Import saves replace mapped
+vector sides, preserve absent or unmapped sides, and retain unrelated fields through atomic updates.
+Stored vectors must be finite, nonzero, and match the configured dimension.
 
-Solr is wired only when selected, except for the explicit migration source. The preference-import
-launcher registers either Solr or Qdrant adapters without loading Redis or AI models. See
-[Solr configuration](configuration.md#solr) for schema prerequisites and connection settings.
+Solr is wired only when selected, except when it is the explicit migration source. See
+[Solr configuration](configuration.md#solr) for fields, schemas, collections, and connections.
 
 ### Qdrant schema and record identity
 
-Qdrant field names, index types, vector schema, and filter translation live in
-`QdrantAudiobookSchema`, inside the adapter. Reads still require an existing collection without
-creating indexes. Explicit repository writes can create an absent collection; the embedding
-maintenance job requires an existing collection. Existing collections are not automatically
-inspected or migrated.
+Qdrant schema names and filter translation live inside its adapter. Reads require an existing
+collection; explicit repository writes may create one, but the embedding job requires one already.
+Existing collections are not automatically inspected or migrated.
 
-Qdrant catalogue lookups match the payload's `id`, independently of whether the point ID is an
-integer or a UUID. Existing points retain their original IDs during explicit writes and migration
-repairs. New books keep the deterministic UUID convention. A generated ID already occupied by
-another record is rejected instead of overwritten. Migration checks every source ID and fills only
-missing supported payload fields from same-named Solr fields, preserving populated target data and
-vectors. Missing/invalid source dates are not guessed.
+The payload `id` is the catalogue identity regardless of the Qdrant point ID. Each payload ID must
+match exactly one point. Lookup and writes reject duplicates rather than selecting, merging, or
+deleting one automatically. Existing points keep their point IDs; new books use deterministic UUIDs,
+and collisions are rejected.
 
-Each payload `id` must identify one point in the selected collection. Lookup, migration, and explicit
-writes reject multiple matches for a requested book ID; writes also reject duplicate IDs within an
-input batch. No duplicate is selected, merged, or deleted automatically. Matching reads are
-paginated with up to 100 requested IDs for metadata and 500 for vector-only reads. Vector-only reads
-select only `id` and the named `dense` vector; metadata lookups do not fetch vectors. Keep the `id` keyword index on existing strict-mode
-collections. Maintenance writes still require a stable catalogue and one writer; checks do not
-enforce uniqueness against concurrent external writers.
+Metadata and vector-only reads request only the fields they need and paginate bounded batches. Keep
+the `id` keyword index on strict-mode collections. Maintenance operations still require a stable
+catalogue and one writer; adapter checks cannot prevent races with external writers.
 
 ## Chat models
 
 The parser and response generator use separate clients:
 
-| Role | Model override | Replacement `ChatClient` bean |
+| Role | Override | Replacement bean |
 | --- | --- | --- |
-| Input parser | `INPUT_PARSER_CHAT_MODEL` (`ai.input-parser.model`) | `inputParserChatClient` |
-| Response generator | `RESPONSE_GENERATOR_CHAT_MODEL` (`ai.response-generator.model`) | `responseGeneratorChatClient` |
+| Input parser | `INPUT_PARSER_CHAT_MODEL` | `inputParserChatClient` |
+| Response generator | `RESPONSE_GENERATOR_CHAT_MODEL` | `responseGeneratorChatClient` |
 
-Blank overrides inherit the provider default; see [model settings](configuration.md#ai-models-and-shared-vector-dimensions).
-A replacement bean affects only its role; its provider must support the model.
+Blank overrides inherit the provider default. Replacing one bean changes only that role and does not
+change providers automatically. See [model settings](configuration.md#ai-models-and-shared-vector-dimensions).
 
-Response-model failure or missing/blank text uses built-in recommendation wording and preserves
-the committed session. Failures are logged locally.
-Both narration paths validate title coverage and use readable built-in wording when a title is
-missing. Explanations also enforce a 150-word limit; ordinary recommendations request that limit in
-the prompt but do not enforce it. Neither check proves the narration is factually correct. See
-[response validation](#explaining-recommendations) for the shared checks and fallbacks.
+Parser and query-embedding failures return a provider-unavailable response. Response-model failures
+use built-in wording and preserve the committed session.
 
 ## Request limits
 
 | Input | Result |
 | --- | --- |
-| Missing, empty, or whitespace-only text | `400` and the blank-input fallback; no model or session work |
+| Missing or blank text | `400`; no model or session work |
 | Decoded text over 10,000 Java characters | `400` before model calls |
-| HTTP body over 40,000 bytes | `413`, including bodies without `Content-Length` |
+| HTTP body over 40,000 bytes | `413` |
+| User or session ID blank or over 256 Java characters | `400` before parsing/session access |
 
-The HTTP reader consumes at most 40,001 bytes to detect an oversized body.
-
-See [application.properties](../src/main/resources/application.properties) for all settings and
-[the diagrams](diagrams/README.md) for system views.
+See the [behavior tests](../src/test/java/com/gen3/recommenderagent/) for executable edge-case
+coverage and the [diagrams](diagrams/README.md) for visual system views.

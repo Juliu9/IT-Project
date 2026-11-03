@@ -2,6 +2,7 @@ package com.gen3.recommenderagent.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -13,7 +14,6 @@ import static org.mockito.Mockito.when;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
@@ -47,7 +47,7 @@ class SessionTransitionServiceTest {
     assertEquals(
         recommendations.stream().map(Recommendation::getId).toList(),
         result.getRecommendations().stream().map(Recommendation::getId).toList());
-    assertEquals(ConversationDecision.RECOMMENDATIONS, result.getDecision());
+    assertNull(result.getOutcome());
     verify(sessions).update(eq("session-1"), eq("user-1"), any(), any());
     assertNotNull(result.getRequestId());
     assertNotNull(result.getCreatedAt());
@@ -70,7 +70,7 @@ class SessionTransitionServiceTest {
         service(sessions, workflow)
             .process("session-2", "user-2", "set count to 2", request, Function.identity());
 
-    assertEquals(ConversationDecision.COUNT_CHANGED, result.getDecision());
+    assertNull(result.getOutcome());
     verify(sessions).update(eq("session-2"), eq("user-2"), any(), any());
     assertEquals(2, session.getBookCount());
     assertEquals(List.of(), result.getRecommendations());

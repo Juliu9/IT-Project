@@ -4,8 +4,8 @@ import static io.qdrant.client.ConditionFactory.hasId;
 import static io.qdrant.client.ConditionFactory.isEmpty;
 import static io.qdrant.client.WithPayloadSelectorFactory.enable;
 
-import com.gen3.catalogue.model.StoredAudiobook;
-import com.gen3.catalogue.qdrant.QdrantPointMapper;
+import com.gen3.shared.audiobookcatalogue.model.StoredAudiobook;
+import com.gen3.shared.audiobookcatalogue.qdrant.QdrantPointMapper;
 import com.gen3.shortdescriptionjob.ShortDescriptionMode;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Common.Filter;

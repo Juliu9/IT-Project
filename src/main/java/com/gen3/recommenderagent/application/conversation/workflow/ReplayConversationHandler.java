@@ -2,11 +2,10 @@ package com.gen3.recommenderagent.application.conversation.workflow;
 
 import static com.gen3.recommenderagent.application.conversation.workflow.ConversationHistory.historyEntry;
 import static com.gen3.recommenderagent.application.conversation.workflow.ConversationHistory.latestDisplayedSearch;
-import static com.gen3.recommenderagent.application.conversation.workflow.ConversationRules.decisionFor;
 
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationOutcome;
 import com.gen3.recommenderagent.domain.session.Session;
 import java.util.List;
 
@@ -26,6 +25,7 @@ public final class ReplayConversationHandler implements ConversationHandler {
     if (effective.getIntent() == ConversationAction.REPEAT_RECOMMENDATIONS) {
       ConversationDraft previous = latestDisplayedSearch(session);
       ConversationDraft repeated = restoreRequest(previous, effective);
+      repeated.setPendingQuestion(null);
       repeated.setPreferenceClarificationRequired(false);
       repeated.setSearchClarificationRequired(false);
       repeated.setNoMoreRecommendations(
@@ -33,7 +33,11 @@ public final class ReplayConversationHandler implements ConversationHandler {
               && (previous.isNoMoreRecommendations()
                   || previous.getIntent() == ConversationAction.MORE_RESULTS)
               && repeated.getRecommendations().isEmpty());
-      repeated.setDecision(decisionFor(repeated.getRecommendations(), repeated));
+      if (previous == null) {
+        repeated.setOutcome(
+            com.gen3.recommenderagent.domain.conversation.ConversationOutcome
+                .NO_RECOMMENDATIONS_TO_REPEAT);
+      }
       return repeated;
     }
     return effective;
@@ -45,15 +49,15 @@ public final class ReplayConversationHandler implements ConversationHandler {
         outcome == null || outcome.turn() == null
             ? latestDisplayedSearch(session)
             : ConversationDraft.fromTurn(outcome.turn());
-    ConversationDecision decision = outcome == null ? null : outcome.decision();
+    var savedOutcome = outcome == null ? null : outcome.outcome();
     if (previous == null) {
       incoming.setRecommendations(List.of());
-      incoming.setDecision(ConversationDecision.NOTHING_TO_REPEAT);
+      incoming.setOutcome(ConversationOutcome.NOTHING_TO_REPEAT);
       return incoming;
     }
     ConversationDraft repeated = restoreRequest(previous, incoming);
-    repeated.setDecision(
-        decision == null ? decisionFor(repeated.getRecommendations(), previous) : decision);
+    repeated.setOutcome(savedOutcome);
+    repeated.setResponseAction(previous.getIntent());
     return repeated;
   }
 

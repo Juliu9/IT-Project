@@ -2,7 +2,6 @@ package com.gen3.recommenderagent.application.recommendation;
 
 import static com.gen3.recommenderagent.domain.recommendation.RecommendationPolicy.RECOMMENDATION_BATCH_SIZE;
 
-import com.gen3.catalogue.vector.VectorMath;
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
@@ -15,6 +14,7 @@ import com.gen3.recommenderagent.ranker.RankingContext;
 import com.gen3.recommenderagent.retrieval.CandidateRetriever;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
+import com.gen3.shared.vector.VectorMath;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -91,6 +91,9 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
       }
     }
     Set<String> shownBookIds = new HashSet<>(shownBooks(session));
+    if (request != null) {
+      shownBookIds.addAll(request.getReadBookIds());
+    }
     if (request != null && request.getSearchContext().getSimilarBook() != null) {
       shownBookIds.add(request.getSearchContext().getSimilarBook().bookId());
     }

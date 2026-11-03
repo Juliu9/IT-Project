@@ -24,6 +24,22 @@ import tools.jackson.databind.ObjectMapper;
 
 class InputParserTest {
   @Test
+  void explicitReferenceToPreviousLikesForcesPersonalisation() {
+    String text = "Give me something similar to what I liked previously, but with more humour.";
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.REFINE);
+    var query = new SemanticQuery();
+    query.setKeywords(List.of("humour"));
+    parsed.setPositiveSemanticQuery(query);
+    var ai = mock(AiParser.class);
+    when(ai.parse(text)).thenReturn(parsed);
+
+    var result = new InputParser(new CommandParser(), ai).parse(text);
+
+    assertEquals(true, result.isPersonalised());
+  }
+
+  @Test
   void aiReceivesExplicitPageRanksSeparatelyFromTheLatestAction() {
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     var parsed = new UserIntent();
@@ -139,7 +155,7 @@ class InputParserTest {
   }
 
   @Test
-  void ambiguousWordCountsCanStillBeRejectedByAiWithoutLosingCriteria() {
+  void genreRequestsWithZeroCountsAreRewrittenWithoutLosingCriteria() {
     var ai = mock(AiParser.class);
     var parsed = new UserIntent();
     parsed.setIntent(ConversationAction.RECOMMENDATION);
@@ -147,10 +163,11 @@ class InputParserTest {
     var query = new SemanticQuery();
     query.setGenres(List.of("mystery"));
     parsed.setPositiveSemanticQuery(query);
-    when(ai.parse("Give me zero mystery books")).thenReturn(parsed);
+    when(ai.parse("Give me some mystery books")).thenReturn(parsed);
     var result = new InputParser(new CommandParser(), ai).parse("Give me zero mystery books");
     assertEquals(true, result.isInvalidBookCount());
     assertEquals(List.of("mystery"), result.getPositiveSemanticQuery().getGenres());
+    org.mockito.Mockito.verify(ai).parse("Give me some mystery books");
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -161,7 +178,7 @@ class InputParserTest {
     var result = new InputParser(new CommandParser(), ai).parse(text);
     assertEquals(ConversationAction.RECOMMENDATION, result.getIntent());
     assertEquals(true, result.isPersonalised());
-    assertEquals(true, result.isExplicitSearch());
+    assertEquals(true, result.startsNewSearch());
     assertEquals(null, result.getMustInclude());
     assertEquals(null, result.getPositiveSemanticQuery());
     verifyNoInteractions(ai);
@@ -265,7 +282,7 @@ class InputParserTest {
     when(ai.parse(anyString())).thenReturn(wrongIntent);
     var result = new InputParser(new CommandParser(), ai).parse(text);
     assertEquals(ConversationAction.RECOMMENDATION, result.getIntent());
-    assertEquals(true, result.isExplicitSearch());
+    assertEquals(true, result.startsNewSearch());
     assertEquals(false, result.isPersonalised());
     var bounds =
         new com.gen3.recommenderagent.retrieval.plan.ExactFilterPolicy()
@@ -357,7 +374,7 @@ class InputParserTest {
             .parse("I want the same kinds of books but from more recent times");
     assertEquals(ConversationAction.REFINE, result.getIntent());
     assertEquals("more recent", result.getMustInclude().getPublicationYear());
-    assertEquals(true, result.isExplicitSearch());
+    assertEquals(true, result.startsNewSearch());
   }
 
   @Test
@@ -522,7 +539,7 @@ class InputParserTest {
          "mustInclude":{"duration":"under 10 hours"}}
         """);
     assertEquals("The Hunger Games", result.getSimilarToTitle());
-    assertEquals(true, result.isExplicitSearch());
+    assertEquals(true, result.startsNewSearch());
     assertEquals("Suzanne Collins", result.getSimilarToAuthor());
     assertEquals("under 10 hours", result.getMustInclude().getDuration());
     assertEquals(null, result.getReferenceTitle());
@@ -537,7 +554,7 @@ class InputParserTest {
     org.assertj.core.api.Assertions.assertThat(schema.path("required"))
         .containsExactly(new ObjectMapper().readTree("\"intent\""));
     org.assertj.core.api.Assertions.assertThat(schema.findValues("required")).hasSize(1);
-    assertEquals("boolean", schema.path("properties").path("explicitSearch").path("type").asText());
+    assertEquals(false, schema.path("properties").has("startsNewSearch"));
     assertEquals(false, schema.path("additionalProperties").asBoolean());
     org.assertj.core.api.Assertions.assertThat(
             schema.path("properties").path("positiveSemanticQuery").path("description").asText())
@@ -556,7 +573,7 @@ class InputParserTest {
     assertEquals(null, request.getPositiveSemanticQuery());
     assertEquals(null, request.getMustInclude());
     assertEquals(null, request.getPreferenceUpdates());
-    assertEquals(false, request.isExplicitSearch());
+    assertEquals(false, request.startsNewSearch());
     assertEquals(false, request.isPersonalised());
   }
 
@@ -633,7 +650,7 @@ class InputParserTest {
         {"intent":"UPDATE_PREFERENCES",
          "preferenceUpdates":{"negativeSemanticQuery":{"genres":["romance"]}},
          "preferenceRemovals":{"positiveSemanticQuery":{"genres":["romance"]}},
-         "replacePreferenceFields":["mustInclude.language"], "explicitSearch":false}
+         "replacePreferenceFields":["mustInclude.language"]}
         """);
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(client
@@ -684,7 +701,9 @@ class InputParserTest {
                 prompt ->
                     prompt.contains("self-contained criteria")
                         && prompt.contains(
-                            "Each author or narrator field supports at most one person")));
+                            "Each author or narrator field supports at most one person")
+                        && prompt.contains("Java owns that conversational policy")
+                        && prompt.contains("\"horror\" -> RECOMMENDATION")));
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -889,8 +908,29 @@ class InputParserTest {
     assertEquals(null, result.getBookCount());
     assertEquals(null, result.getReferenceRank());
     assertEquals(null, result.getSimilarToTitle());
-    assertEquals(false, result.isExplicitSearch());
+    assertEquals(false, result.startsNewSearch());
     verifyNoInteractions(client);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "Recommend horror,true",
+    "Find fantasy audiobooks,true",
+    "I want atmospheric mysteries,true",
+    "Books by Ursula Le Guin,true",
+    "horror,false",
+    "fantasy under ten hours,false"
+  })
+  void javaDeterminesWhetherCriteriaStartANewSearch(String text, boolean expected) {
+    var parsed = new UserIntent();
+    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    var query = new SemanticQuery();
+    query.setGenres(List.of("horror"));
+    parsed.setPositiveSemanticQuery(query);
+    var ai = mock(AiParser.class);
+    when(ai.parse(anyString())).thenReturn(parsed);
+
+    assertEquals(expected, new InputParser(new CommandParser(), ai).parse(text).startsNewSearch());
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -914,7 +954,7 @@ class InputParserTest {
             .parse(text);
     assertEquals(ConversationAction.REFINE, result.getIntent());
     assertEquals(true, result.isShorter());
-    assertEquals(true, result.isExplicitSearch());
+    assertEquals(true, result.startsNewSearch());
     assertEquals(null, result.getPositiveSemanticQuery());
     assertEquals(null, result.getMustInclude());
     assertEquals(null, result.getPreferenceUpdates());

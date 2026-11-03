@@ -151,4 +151,52 @@ class SessionPreferencesTest {
     assertThatThrownBy(() -> new SessionPreferences().updated(null, null, List.of("unknown.field")))
         .isInstanceOf(InvalidRequestException.class);
   }
+
+  @Test
+  void rejectsOversizedTermsAndSemanticFieldsAtomically() {
+    var original = new SessionPreferences();
+    var base = new SemanticQuery();
+    base.setGenres(List.of("fantasy"));
+    original.setPositiveSemanticQuery(base);
+
+    var longAddition = new SessionPreferences();
+    var longQuery = new SemanticQuery();
+    longQuery.setTopics(List.of("x".repeat(257)));
+    longAddition.setPositiveSemanticQuery(longQuery);
+    assertThatThrownBy(() -> original.updated(longAddition, null, List.of()))
+        .isInstanceOf(InvalidRequestException.class)
+        .hasMessageContaining("256");
+
+    var manyAddition = new SessionPreferences();
+    var manyQuery = new SemanticQuery();
+    manyQuery.setKeywords(
+        java.util.stream.IntStream.rangeClosed(1, 21).mapToObj(i -> "term-" + i).toList());
+    manyAddition.setPositiveSemanticQuery(manyQuery);
+    assertThatThrownBy(() -> original.updated(manyAddition, null, List.of()))
+        .isInstanceOf(InvalidRequestException.class)
+        .hasMessageContaining("20");
+    assertThat(original.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
+  }
+
+  @Test
+  void rejectsMoreThanOneHundredSavedTerms() {
+    var additions = new SessionPreferences();
+    var positive = new SemanticQuery();
+    positive.setGenres(terms("genre", 20));
+    positive.setTopics(terms("topic", 20));
+    positive.setKeywords(terms("keyword", 20));
+    additions.setPositiveSemanticQuery(positive);
+    var negative = new SemanticQuery();
+    negative.setGenres(terms("avoid-genre", 20));
+    negative.setTopics(terms("avoid-topic", 20));
+    negative.setKeywords(terms("avoid-keyword", 20));
+    additions.setNegativeSemanticQuery(negative);
+    assertThatThrownBy(() -> new SessionPreferences().updated(additions, null, List.of()))
+        .isInstanceOf(InvalidRequestException.class)
+        .hasMessageContaining("100");
+  }
+
+  private List<String> terms(String prefix, int count) {
+    return java.util.stream.IntStream.range(0, count).mapToObj(i -> prefix + i).toList();
+  }
 }

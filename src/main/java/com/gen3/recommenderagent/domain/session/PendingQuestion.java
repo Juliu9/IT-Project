@@ -3,7 +3,7 @@ package com.gen3.recommenderagent.domain.session;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.domain.conversation.ExplanationSelection;
 
@@ -16,24 +16,24 @@ import com.gen3.recommenderagent.domain.conversation.ExplanationSelection;
   @JsonSubTypes.Type(value = PendingQuestion.SimilarBook.class, name = "similarBook")
 })
 public abstract class PendingQuestion {
-  private ConversationDecision decision;
+  private ConversationQuestion kind;
 
-  public ConversationDecision getDecision() {
-    return decision;
+  public ConversationQuestion getKind() {
+    return kind;
   }
 
-  public void setDecision(ConversationDecision value) {
-    decision = value;
+  public void setKind(ConversationQuestion value) {
+    kind = value;
   }
 
   @JsonIgnore
-  public boolean accepts(ConversationDecision value) {
+  public boolean accepts(ConversationQuestion value) {
     return create(value).getClass() == getClass();
   }
 
-  public static PendingQuestion create(ConversationDecision decision) {
+  public static PendingQuestion create(ConversationQuestion kind) {
     PendingQuestion question =
-        switch (decision) {
+        switch (kind) {
           case PREFERENCE_CLARIFICATION, PREFERENCE_UPDATE_CLARIFICATION -> new Preference();
           case EXPLANATION_TARGET_CLARIFICATION -> new Explanation();
           case SIMILAR_BOOK_SELECTION,
@@ -43,7 +43,7 @@ public abstract class PendingQuestion {
               new SimilarBook();
           default -> new Search();
         };
-    question.setDecision(decision);
+    question.setKind(kind);
     return question;
   }
 
@@ -67,7 +67,7 @@ public abstract class PendingQuestion {
     private ExplanationSelection selection;
 
     public Explanation() {
-      setDecision(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+      setKind(ConversationQuestion.EXPLANATION_TARGET_CLARIFICATION);
     }
 
     public ExplanationSelection getSelection() {

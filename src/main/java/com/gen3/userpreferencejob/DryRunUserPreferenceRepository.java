@@ -1,8 +1,8 @@
 package com.gen3.userpreferencejob;
 
-import com.gen3.catalogue.vector.VectorMath;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
+import com.gen3.shared.vector.VectorMath;
 import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;

@@ -74,7 +74,7 @@ class DemoWebsiteTest {
   void addsCatalogueMetadataWithoutChangingTheTurnAndSurvivesLookupFailure(boolean failure)
       throws Exception {
     var gateway = mock(RequestGateway.class);
-    var catalogue = mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class);
+    var catalogue = mock(com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class);
     var turn = new ConversationTurn();
     var book =
         new com.gen3.recommenderagent.domain.recommendation.Recommendation("id", 1, 0.7, "Title");
@@ -82,7 +82,7 @@ class DemoWebsiteTest {
     when(gateway.handleDemoRequest("session", "user", "books"))
         .thenReturn(new RequestGateway.DemoResponse("Your books", turn, null));
     var stored =
-        new com.gen3.catalogue.model.AudiobookRecord(
+        new com.gen3.shared.audiobookcatalogue.model.AudiobookRecord(
             "id", "source", "Title", java.util.List.of("Author"), "Description");
     if (failure) {
       when(catalogue.findBooksByIds(java.util.List.of("id")))
@@ -110,7 +110,7 @@ class DemoWebsiteTest {
   @org.junit.jupiter.api.Test
   void skipsCatalogueLookupWhenThereAreNoRecommendations() throws Exception {
     var gateway = mock(RequestGateway.class);
-    var catalogue = mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class);
+    var catalogue = mock(com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class);
     var turn = new ConversationTurn();
     when(gateway.handleDemoRequest("session", "user", "help"))
         .thenReturn(new RequestGateway.DemoResponse("Help", turn, null));
@@ -122,7 +122,7 @@ class DemoWebsiteTest {
   @org.junit.jupiter.api.Test
   void omitsVectorsFromDevPayloadWithoutChangingSessionData() {
     var gateway = mock(RequestGateway.class);
-    var catalogue = mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class);
+    var catalogue = mock(com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class);
     var turn = new ConversationTurn();
     turn.setSimilarBook(
         new com.gen3.recommenderagent.domain.search.SimilarBookReference(
@@ -160,8 +160,8 @@ class DemoWebsiteTest {
   @Import({RequestGateway.class, DemoWebsite.class, RequestExceptionHandler.class})
   static class TestConfiguration {
     @Bean
-    com.gen3.catalogue.port.AudiobookDetailsLookup catalogue() {
-      return mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class);
+    com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup catalogue() {
+      return mock(com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class);
     }
 
     @Bean

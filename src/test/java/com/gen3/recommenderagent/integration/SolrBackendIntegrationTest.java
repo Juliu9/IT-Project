@@ -4,15 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import com.gen3.catalogue.model.AudiobookFilterConditions;
-import com.gen3.catalogue.model.AudiobookFilters;
-import com.gen3.catalogue.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.api.RequestGateway;
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.ranker.RankingService;
@@ -27,9 +24,12 @@ import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.solr.SolrUserPreferenceRepository;
 import com.gen3.recommenderagent.testsupport.SolrContainerTestSupport;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookFilterConditions;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookFilters;
+import com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository;
+import com.gen3.shared.csv.model.UserFavourite;
+import com.gen3.shared.csv.model.UserHistory;
 import com.gen3.userpreferencejob.UserPreferenceAggregatorService;
-import com.gen3.userpreferencejob.model.UserFavourite;
-import com.gen3.userpreferencejob.model.UserHistory;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -204,12 +204,12 @@ class SolrBackendIntegrationTest {
     var explain = new ConversationDraft();
     explain.setIntent(ConversationAction.EXPLAIN_RECOMMENDATION);
     var explanation = service.process("session", user, explain);
-    assertThat(explanation.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(explanation.getOutcome()).isNull();
     assertThat(explanation.getRecommendations()).hasSize(2);
     var fresh = new ConversationDraft();
     fresh.setIntent(ConversationAction.RECOMMENDATION);
-    assertThat(service.process("new-session", "new-user", fresh).getDecision())
-        .isEqualTo(ConversationDecision.PREFERENCE_CLARIFICATION);
+    assertThat(service.process("new-session", "new-user", fresh).getPendingQuestion())
+        .isEqualTo(ConversationQuestion.PREFERENCE_CLARIFICATION);
     verifyNoInteractions(model);
   }
 

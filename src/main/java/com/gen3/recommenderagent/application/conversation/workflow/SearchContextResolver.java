@@ -61,7 +61,7 @@ public final class SearchContextResolver implements ConversationHandler {
         && !(effective.isShorter() || effective.isLonger())
         && effective.getIntent() != ConversationAction.MORE_RESULTS
         && acceptsPreferences(effective.getIntent())) {
-      if (!effective.isExplicitSearch()) {
+      if (!effective.startsNewSearch()) {
         effective.setPreferenceAnswer(
             ConversationRules.hasQuery(effective.getPositiveSemanticQuery())
                 || ConversationRules.hasQuery(effective.getNegativeSemanticQuery()));
@@ -195,7 +195,7 @@ public final class SearchContextResolver implements ConversationHandler {
         original == null ? ConversationAction.UNKNOWN : original.getIntent();
     if ((originalIntent == ConversationAction.REFINE
             || originalIntent == ConversationAction.RECOMMENDATION)
-        && !original.isExplicitSearch()
+        && !original.startsNewSearch()
         && request.isPreferenceAnswer()
         && !request.isPreferenceClarificationRequired()) {
       var taste = new SessionPreferences();

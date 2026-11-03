@@ -8,9 +8,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.catalogue.model.AudiobookTitle;
-import com.gen3.catalogue.port.AudiobookTitleLookup;
-import com.gen3.catalogue.port.AudiobookVectorRepository;
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationEngine;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
@@ -19,7 +16,8 @@ import com.gen3.recommenderagent.application.recommendation.RecommendationPager;
 import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
 import com.gen3.recommenderagent.application.recommendation.SimilarBookResolver;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationOutcome;
+import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.domain.conversation.ExplanationSelection;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
@@ -33,6 +31,9 @@ import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
 import com.gen3.recommenderagent.response.ConversationResponseGenerator;
 import com.gen3.recommenderagent.retrieval.plan.ExactFilterPolicy;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookTitle;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookTitleLookup;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookVectorRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.IntStream;
@@ -52,7 +53,10 @@ class ApprovedInputFlowTest {
   private final ConversationEngine engine =
       new ConversationEngine(
           ConversationTestSupport.dispatcher(),
-          new RecommendationPager(workflow),
+          new RecommendationPager(
+              workflow,
+              new com.gen3.recommenderagent.application.recommendation.ReadHistoryExclusions(
+                  java.util.Optional.empty(), 10000)),
           new ExactFilterPolicy(),
           new SimilarBookResolver(titles, vectors));
   private final AiResponseGenerator narration =
@@ -169,20 +173,7 @@ class ApprovedInputFlowTest {
     }
     var result = process(text);
     assertThat(result.getIntent()).isEqualTo(action);
-    assertThat(result.getDecision())
-        .isEqualTo(
-            switch (action) {
-              case RECOMMENDATION, REFINE, MORE_RESULTS, REPEAT, REPEAT_RECOMMENDATIONS ->
-                  ConversationDecision.RECOMMENDATIONS;
-              case EXPLAIN_RECOMMENDATION -> ConversationDecision.EXPLANATION;
-              case CHANGE_COUNT -> ConversationDecision.COUNT_CHANGED;
-              case UPDATE_PREFERENCES -> ConversationDecision.PREFERENCES_UPDATED;
-              case RESET_PREFERENCES -> ConversationDecision.PREFERENCES_RESET;
-              case CLEAR_HISTORY -> ConversationDecision.HISTORY_CLEARED;
-              case HELP -> ConversationDecision.HELP;
-              case CANCEL -> ConversationDecision.CANCELLED;
-              case UNKNOWN -> ConversationDecision.UNKNOWN;
-            });
+    assertThat(result.getOutcome()).isNull();
     assertThat(responses.generate(result.getRecommendations(), result)).isNotBlank();
     switch (action) {
       case RECOMMENDATION, REFINE -> {
@@ -245,12 +236,12 @@ class ApprovedInputFlowTest {
       assertThat(session.getBookCount()).isEqualTo(3);
     }
     reload();
-    assertThat(session.getLastOutcome().decision()).isEqualTo(result.getDecision());
+    assertThat(session.getLastOutcome().outcome()).isEqualTo(result.getOutcome());
   }
 
   @ParameterizedTest
   @org.junit.jupiter.params.provider.EnumSource(
-      value = ConversationDecision.class,
+      value = ConversationQuestion.class,
       names = {
         "PREFERENCE_CLARIFICATION",
         "PREFERENCE_UPDATE_CLARIFICATION",
@@ -260,7 +251,7 @@ class ApprovedInputFlowTest {
         "RECENCY_YEAR_CLARIFICATION",
         "SIMILAR_BOOK_SELECTION"
       })
-  void pendingRequestsDoNotStoreRawMessagesAcrossHelpAndReload(ConversationDecision decision)
+  void pendingRequestsDoNotStoreRawMessagesAcrossHelpAndReload(ConversationQuestion decision)
       throws Exception {
     String raw = "private-original-message-marker";
     var action =
@@ -286,10 +277,10 @@ class ApprovedInputFlowTest {
         duration = null;
         year = null;
         search();
-        input.setExplicitSearch(true);
-        input.setShorter(decision == ConversationDecision.SHORTER_DURATION_CLARIFICATION);
-        input.setLonger(decision == ConversationDecision.LONGER_DURATION_CLARIFICATION);
-        if (decision == ConversationDecision.RECENCY_YEAR_CLARIFICATION) {
+        input.setStartsNewSearch(true);
+        input.setShorter(decision == ConversationQuestion.SHORTER_DURATION_CLARIFICATION);
+        input.setLonger(decision == ConversationQuestion.LONGER_DURATION_CLARIFICATION);
+        if (decision == ConversationQuestion.RECENCY_YEAR_CLARIFICATION) {
           var include = new ExactCriteria();
           include.setPublicationYear("more recent");
           input.setMustInclude(include);
@@ -297,7 +288,7 @@ class ApprovedInputFlowTest {
       }
     }
     var result = engine.process(session, input);
-    assertThat(result.getDecision()).isEqualTo(decision);
+    assertThat(result.getPendingQuestion()).isEqualTo(decision);
     assertThat(result.getRawText()).isEqualTo(raw);
     assertThat(new ObjectMapper().writeValueAsString(session)).doesNotContain(raw);
     reload();
@@ -305,17 +296,17 @@ class ApprovedInputFlowTest {
         (com.gen3.recommenderagent.domain.session.PendingQuestion.SearchRequest)
             session.getPendingQuestion();
     assertThat(pending.getRequest().getRawText()).isNull();
-    assertThat(session.getPendingDecision()).isEqualTo(decision);
+    assertThat(session.getPendingQuestionKind()).isEqualTo(decision);
     if (input.getIntent() == ConversationAction.REFINE) {
       assertThat(pending.getRequest().getPositiveSemanticQuery().getGenres())
           .containsExactly("fantasy");
     }
-    if (decision == ConversationDecision.SIMILAR_BOOK_SELECTION) {
+    if (decision == ConversationQuestion.SIMILAR_BOOK_SELECTION) {
       assertThat(pending.getRequest().getSimilarBookChoices()).hasSize(2);
     }
     process("help");
     reload();
-    assertThat(session.getPendingDecision()).isEqualTo(decision);
+    assertThat(session.getPendingQuestionKind()).isEqualTo(decision);
     assertThat(
             ((com.gen3.recommenderagent.domain.session.PendingQuestion.SearchRequest)
                     session.getPendingQuestion())
@@ -435,12 +426,12 @@ class ApprovedInputFlowTest {
     exact.setDuration("under 2 hours");
     exact.setAuthors(List.of("Suzanne Collins"));
     refine.setMustInclude(exact);
-    assertThat(engine.process(session, refine).getDecision())
-        .isEqualTo(ConversationDecision.RECENCY_YEAR_CLARIFICATION);
+    assertThat(engine.process(session, refine).getPendingQuestion())
+        .isEqualTo(ConversationQuestion.RECENCY_YEAR_CLARIFICATION);
     process("help");
     reload();
     var result = process("2000");
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getMustInclude().getDuration()).isEqualTo("under 2 hours");
     assertThat(result.getMustInclude().getAuthors()).containsExactly("Suzanne Collins");
     assertThat(result.getMustInclude().getPublicationYear()).isEqualTo("from 2000");
@@ -462,11 +453,11 @@ class ApprovedInputFlowTest {
     genre.setGenres(List.of("horror"));
     refine.setPositiveSemanticQuery(genre);
     refine.setReplaceSearchFields(List.of("positiveSemanticQuery.genres"));
-    assertThat(engine.process(session, refine).getDecision())
+    assertThat(engine.process(session, refine).getPendingQuestion())
         .isEqualTo(
             longer
-                ? ConversationDecision.LONGER_DURATION_CLARIFICATION
-                : ConversationDecision.SHORTER_DURATION_CLARIFICATION);
+                ? ConversationQuestion.LONGER_DURATION_CLARIFICATION
+                : ConversationQuestion.SHORTER_DURATION_CLARIFICATION);
     process("help");
     reload();
     var answer = request(ConversationAction.RECOMMENDATION, "under three hours");
@@ -487,8 +478,8 @@ class ApprovedInputFlowTest {
     exact.setPublicationYear("from 2000");
     original.setMustInclude(exact);
     engine.process(session, original);
-    assertThat(process("older ones").getDecision())
-        .isEqualTo(ConversationDecision.RECENCY_RANGE_CONFIRMATION);
+    assertThat(process("older ones").getPendingQuestion())
+        .isEqualTo(ConversationQuestion.RECENCY_RANGE_CONFIRMATION);
     process("help");
     reload();
     var result = process("yes");
@@ -518,8 +509,8 @@ class ApprovedInputFlowTest {
     exact.setDuration("under 55 minutes");
     original.setMustInclude(exact);
     engine.process(session, original);
-    assertThat(process("make them longer").getDecision())
-        .isEqualTo(ConversationDecision.DURATION_RANGE_CONFIRMATION);
+    assertThat(process("make them longer").getPendingQuestion())
+        .isEqualTo(ConversationQuestion.DURATION_RANGE_CONFIRMATION);
     reload();
     process("help");
     var result = process("yes");
@@ -601,16 +592,16 @@ class ApprovedInputFlowTest {
   void unresolvedSubsetRetainsOtherSelectionsAcrossHelpAndReload() {
     search();
     var question = selection(List.of("Book", "99"), List.of("Book 5"));
-    assertThat(question.getDecision())
-        .isEqualTo(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+    assertThat(question.getPendingQuestion())
+        .isEqualTo(ConversationQuestion.EXPLANATION_TARGET_CLARIFICATION);
     assertThat(responses.generate(question.getRecommendations(), question))
         .contains("identify Book");
     var help = process("help");
     assertThat(responses.generate(help.getRecommendations(), help)).contains("identify Book");
     reload();
     var nextQuestion = process("2");
-    assertThat(nextQuestion.getDecision())
-        .isEqualTo(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+    assertThat(nextQuestion.getPendingQuestion())
+        .isEqualTo(ConversationQuestion.EXPLANATION_TARGET_CLARIFICATION);
     assertThat(responses.generate(nextQuestion.getRecommendations(), nextQuestion))
         .contains("identify 99");
     var result = process("4");
@@ -624,7 +615,7 @@ class ApprovedInputFlowTest {
   void excludingTheEntirePageProducesAnEmptySelection(String text) {
     search();
     var result = process(text);
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EMPTY_EXPLANATION_SELECTION);
+    assertThat(result.getOutcome()).isEqualTo(ConversationOutcome.EMPTY_EXPLANATION_SELECTION);
     assertThat(result.getRecommendations()).isEmpty();
     verifyNoInteractions(ai, narration);
   }
@@ -633,7 +624,7 @@ class ApprovedInputFlowTest {
   void emptySubsetReturnsFriendlyResponseAndCanSelectAgainWithoutAi() {
     search();
     var empty = selection(List.of("2"), List.of("2"));
-    assertThat(empty.getDecision()).isEqualTo(ConversationDecision.EMPTY_EXPLANATION_SELECTION);
+    assertThat(empty.getOutcome()).isEqualTo(ConversationOutcome.EMPTY_EXPLANATION_SELECTION);
     assertThat(responses.generate(empty.getRecommendations(), empty))
         .contains("aren't any books left");
     verifyNoInteractions(narration);
@@ -650,7 +641,7 @@ class ApprovedInputFlowTest {
     selection(List.of("99"), List.of());
     process("more");
     assertThat(session.getPendingExplanation()).isNull();
-    assertThat(process("2").getDecision()).isEqualTo(ConversationDecision.UNKNOWN);
+    assertThat(process("2").getOutcome()).isNull();
   }
 
   @Test
@@ -663,7 +654,7 @@ class ApprovedInputFlowTest {
     when(vectors.findEmbeddingByBookId(anyString())).thenReturn(Optional.of(new float[] {1, 0}));
     var search = request(ConversationAction.RECOMMENDATION, "similar to Reference");
     search.setSimilarToTitle("Reference");
-    search.setExplicitSearch(true);
+    search.setStartsNewSearch(true);
     engine.process(session, search);
     var invalid = request(ConversationAction.CHANGE_COUNT, "set count to zero");
     invalid.setInvalidBookCount(true);
@@ -688,7 +679,7 @@ class ApprovedInputFlowTest {
     var input = request(ConversationAction.RECOMMENDATION, "similar to Reference under two hours");
     input.setSimilarToTitle("Reference");
     input.setBookCount(2);
-    input.setExplicitSearch(true);
+    input.setStartsNewSearch(true);
     var criteria = new ExactCriteria();
     criteria.setDuration("under 2 hours");
     input.setMustInclude(criteria);
@@ -715,7 +706,7 @@ class ApprovedInputFlowTest {
     var displayed = search();
     referenceChoices();
     var result = process(reply);
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.CANCELLED);
+    assertThat(result.getOutcome()).isNull();
     assertThat(session.getPendingQuestion()).isNull();
     assertThat(process("repeat the recommendations").getRecommendations())
         .extracting(Recommendation::getId)
@@ -727,7 +718,7 @@ class ApprovedInputFlowTest {
   @Test
   void firstSearchKeepsTheMoreCountAcrossHelpAndReload() {
     var question = process("2 more");
-    assertThat(question.getDecision()).isEqualTo(ConversationDecision.SEARCH_CLARIFICATION);
+    assertThat(question.getPendingQuestion()).isEqualTo(ConversationQuestion.SEARCH_CLARIFICATION);
     verifyNoInteractions(workflow);
     process("help");
     reload();
@@ -784,9 +775,10 @@ class ApprovedInputFlowTest {
     process("help");
     process("repeat");
     reload();
-    assertThat(session.getPendingDecision()).isEqualTo(ConversationDecision.SEARCH_CHANGE_OFFER);
+    assertThat(session.getPendingQuestionKind())
+        .isEqualTo(ConversationQuestion.SEARCH_CHANGE_OFFER);
     var declined = process(reply);
-    assertThat(declined.getDecision()).isEqualTo(ConversationDecision.SEARCH_DECLINED);
+    assertThat(declined.getOutcome()).isEqualTo(ConversationOutcome.SEARCH_DECLINED);
     assertThat(responses.generate(declined.getRecommendations(), declined))
         .contains("No problem.", "try another search");
     assertThat(session.getPreferences().getPositiveSemanticQuery().getGenres())
@@ -796,7 +788,7 @@ class ApprovedInputFlowTest {
             .latestDisplayedSearch(session);
     assertThat(after.getRequestId()).isEqualTo(before.getRequestId());
     assertThat(after.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
-    assertThat(process("repeat").getDecision()).isEqualTo(ConversationDecision.SEARCH_DECLINED);
+    assertThat(process("repeat").getOutcome()).isEqualTo(ConversationOutcome.SEARCH_DECLINED);
     verifyNoInteractions(workflow);
   }
 
@@ -808,7 +800,7 @@ class ApprovedInputFlowTest {
     reload();
     var repeated = process("repeat");
     assertThat(repeated.getIntent()).isEqualTo(ConversationAction.REPEAT);
-    assertThat(repeated.getDecision()).isEqualTo(ConversationDecision.NO_MATCHES);
+    assertThat(repeated.getOutcome()).isNull();
     assertThat(repeated.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
     assertThat(responses.generate(repeated.getRecommendations(), repeated))
         .contains("matching those search criteria")
@@ -843,7 +835,8 @@ class ApprovedInputFlowTest {
     }
     var before = session.getActiveSearch().getSearch();
     var question = process("yes");
-    assertThat(question.getDecision()).isEqualTo(ConversationDecision.SEARCH_CHANGE_CLARIFICATION);
+    assertThat(question.getPendingQuestion())
+        .isEqualTo(ConversationQuestion.SEARCH_CHANGE_CLARIFICATION);
     assertThat(responses.generate(question.getRecommendations(), question))
         .contains("What would you like to change");
     assertThat(session.getActiveSearch().getSearch().getRequestId())
@@ -867,13 +860,13 @@ class ApprovedInputFlowTest {
     var displayed = search();
     var personalised = request(ConversationAction.RECOMMENDATION, "personalised for me");
     personalised.setPersonalised(true);
-    personalised.setExplicitSearch(true);
+    personalised.setStartsNewSearch(true);
     var question = engine.process(session, personalised);
     assertThat(question.isPreferenceClarificationRequired()).isTrue();
     reload();
     if (action.equals("explain")) {
-      assertThat(selection(List.of("99"), List.of()).getDecision())
-          .isEqualTo(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+      assertThat(selection(List.of("99"), List.of()).getPendingQuestion())
+          .isEqualTo(ConversationQuestion.EXPLANATION_TARGET_CLARIFICATION);
       var chosen = process("2");
       assertThat(chosen.getRecommendations())
           .extracting(Recommendation::getRank)

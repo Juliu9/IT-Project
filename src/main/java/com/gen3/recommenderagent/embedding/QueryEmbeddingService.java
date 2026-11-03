@@ -1,9 +1,9 @@
 package com.gen3.recommenderagent.embedding;
 
-import com.gen3.catalogue.vector.VectorMath;
 import com.gen3.recommenderagent.ai.AiProviderCalls;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
+import com.gen3.shared.vector.VectorMath;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;

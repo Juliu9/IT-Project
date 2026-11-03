@@ -2,9 +2,9 @@ package com.gen3.embeddingjob.store;
 
 import static io.qdrant.client.WithPayloadSelectorFactory.enable;
 
-import com.gen3.catalogue.model.StoredAudiobook;
-import com.gen3.catalogue.qdrant.QdrantPointMapper;
 import com.gen3.embeddingjob.EmbeddingMode;
+import com.gen3.shared.audiobookcatalogue.model.StoredAudiobook;
+import com.gen3.shared.audiobookcatalogue.qdrant.QdrantPointMapper;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Points.ScrollPoints;
 import java.io.IOException;

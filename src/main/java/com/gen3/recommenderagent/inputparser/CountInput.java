@@ -44,6 +44,9 @@ final class CountInput {
           && number.equals("zero")
           && !text.substring(match.end(group), match.end())
               .strip()
+              .matches("(?i)(?:" + ConversationText.GENRE_PATTERN + ") (?:books?|audiobooks?)")
+          && !text.substring(match.end(group), match.end())
+              .strip()
               .matches(
                   "(?i)(?:(?:more )?(?:books?|audiobooks?|recommendations?)|more|at a time|per page|per request)")) {
         continue;

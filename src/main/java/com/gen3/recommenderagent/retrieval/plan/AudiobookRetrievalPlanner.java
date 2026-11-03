@@ -1,8 +1,8 @@
 package com.gen3.recommenderagent.retrieval.plan;
 
-import com.gen3.catalogue.model.AudiobookFilters;
 import com.gen3.recommenderagent.application.conversation.SessionRequest;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookFilters;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,11 +43,8 @@ public class AudiobookRetrievalPlanner {
   RetrievalMode modeFor(SemanticQuery positive, SemanticQuery negative, AudiobookFilters filters) {
     boolean hasSemantic = hasSemanticContent(positive) || hasSemanticContent(negative);
     boolean hasFilters = filters != null && filters.hasConditions();
-    if (hasSemantic && hasFilters) {
-      return RetrievalMode.HYBRID;
-    }
     if (hasSemantic) {
-      return RetrievalMode.SEMANTIC;
+      return RetrievalMode.HYBRID;
     }
     if (hasFilters) {
       return RetrievalMode.FILTER_ONLY;

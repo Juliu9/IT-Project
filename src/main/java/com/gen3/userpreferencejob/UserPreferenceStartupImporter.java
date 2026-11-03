@@ -17,7 +17,7 @@ public class UserPreferenceStartupImporter implements ApplicationRunner {
   private static final Logger LOGGER = LoggerFactory.getLogger(UserPreferenceStartupImporter.class);
 
   private final StreamingUserPreferenceImporter importer;
-  private final com.gen3.catalogue.snapshot.BookVectorSnapshot snapshot;
+  private final com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot snapshot;
 
   @Value("${user.preferences.favourites-csv-path}")
   private String favouritesCsvPath;
@@ -28,9 +28,12 @@ public class UserPreferenceStartupImporter implements ApplicationRunner {
   @Value("${user.preferences.import.mode:dry-run}")
   private String mode;
 
+  @Value("${user.preferences.import.manifest-path:./data/user-import-work/approved.properties}")
+  private Path manifestPath;
+
   public UserPreferenceStartupImporter(
       StreamingUserPreferenceImporter importer,
-      com.gen3.catalogue.snapshot.BookVectorSnapshot snapshot) {
+      com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot snapshot) {
     this.importer = importer;
     this.snapshot = snapshot;
   }
@@ -45,15 +48,26 @@ public class UserPreferenceStartupImporter implements ApplicationRunner {
       snapshot.validate();
       snapshotLoadMs = (System.nanoTime() - started) / 1_000_000;
     }
-    var result = importer.run(Path.of(favouritesCsvPath), Path.of(historyCsvPath));
+    Path favourites = Path.of(favouritesCsvPath);
+    Path history = Path.of(historyCsvPath);
+    var manifest = new UserPreferenceImportManifest(manifestPath);
+    var result =
+        importer.run(
+            favourites,
+            history,
+            plan -> manifest.approve(mode, favourites, history, snapshot, plan));
 
     LOGGER.info(
-        "user.preferences.import.completed mode={} favourites={} history={} users={} uniqueRecords={} snapshotLoadMs={} csvReadMs={} sortMs={} aggregationMs={} totalMs={}",
+        "user.preferences.import.completed mode={} favourites={} history={} users={} uniqueRecords={} fullUpdates={} partialUpdates={} unmappedUsers={} unmappedReport={} snapshotLoadMs={} csvReadMs={} sortMs={} aggregationMs={} totalMs={}",
         mode,
         result.favourites(),
         result.history(),
         result.users(),
         result.uniqueRecords(),
+        result.fullUpdates(),
+        result.partialUpdates(),
+        result.unmappedUsers(),
+        result.unmappedReport(),
         snapshotLoadMs,
         result.csvReadMs(),
         result.sortMs(),
@@ -61,7 +75,7 @@ public class UserPreferenceStartupImporter implements ApplicationRunner {
         (System.nanoTime() - started) / 1_000_000);
     LOGGER.info(
         "dry-run".equals(mode)
-            ? "Dry run completed. No user preference vectors were saved or cleared."
+            ? "Dry run completed. No user preference vectors were changed."
             : "Successfully aggregated and saved user preference vectors to the selected database.");
   }
 }

@@ -191,7 +191,7 @@ public class InputParser {
     request.setPreferenceUpdates(parsed.getPreferenceUpdates());
     request.setPreferenceRemovals(parsed.getPreferenceRemovals());
     request.setReplacePreferenceFields(parsed.getReplacePreferenceFields());
-    request.setExplicitSearch(parsed.isExplicitSearch());
+    request.setStartsNewSearch(startsNewSearch(rawText, parsed));
     applySearchReplacements(rawText, parsed, request);
     request.setReferenceRank(boundedInteger(parsed.getReferenceRank()));
     request.setReferenceTitle(parsed.getReferenceTitle());
@@ -220,6 +220,27 @@ public class InputParser {
     return request;
   }
 
+  /** Conversational precedence is application policy, not model output. */
+  private boolean startsNewSearch(String rawText, UserIntent parsed) {
+    if (parsed.getIntent() != ConversationAction.RECOMMENDATION
+        && parsed.getIntent() != ConversationAction.REFINE) {
+      return false;
+    }
+    String command = ConversationText.normalizeCommand(rawText);
+    return command.matches(
+            "^(?:(?:recommend|suggest|find|show me|give me|search for|look for|help me find)\\b.*"
+                + "|(?:i want|i'd like|i would like|i need|i'm looking for)\\b.*"
+                + "|(?:only )?(?:books?|audiobooks?|recommendations?)\\b.*"
+                + "|the same but\\b.*)$")
+        || parsed.isShorter()
+        || parsed.isLonger()
+        || !parsed.getReplaceSearchFields().isEmpty()
+        || ConversationText.isYearRefinement(
+            parsed.getMustInclude() == null ? null : parsed.getMustInclude().getPublicationYear())
+        || parsed.getSimilarToTitle() != null
+        || parsed.isSimilarToClarificationRequired();
+  }
+
   private void applySearchReplacements(String rawText, UserIntent parsed, SessionRequest request) {
     if (parsed.getIntent() == ConversationAction.RECOMMENDATION
         || parsed.getIntent() == ConversationAction.REFINE) {
@@ -242,6 +263,13 @@ public class InputParser {
   private void applyPersonalisation(String rawText, SessionRequest request) {
     String command =
         com.gen3.recommenderagent.inputparser.ConversationText.normalizeCommand(rawText);
+    if ((request.getIntent() == ConversationAction.RECOMMENDATION
+            || request.getIntent() == ConversationAction.REFINE)
+        && command.matches(
+            ".*\\b(?:my preferences|my reading|my favourites|my favorites|my history|what i (?:liked|enjoyed|read|listened to) (?:before|previously))\\b.*")) {
+      request.setPersonalised(true);
+      return;
+    }
     if (command.matches(
             "^(?:i want |give me |recommend |show me )?(?:a |an |some |[0-9]+ )?(?:books?|audiobooks?) (?:by|narrated by) .+")
         && !command.matches(

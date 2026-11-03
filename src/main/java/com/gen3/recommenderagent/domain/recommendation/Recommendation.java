@@ -14,7 +14,7 @@ public class Recommendation {
 
   @com.fasterxml.jackson.annotation.JsonIgnore
   public Integer getPublicationYear() {
-    return com.gen3.catalogue.model.PublicationDate.year(pubdate);
+    return com.gen3.shared.audiobookcatalogue.model.PublicationDate.year(pubdate);
   }
 
   public String getPubdate() {
@@ -22,7 +22,7 @@ public class Recommendation {
   }
 
   public void setPubdate(String value) {
-    pubdate = com.gen3.catalogue.model.PublicationDate.normalize(value);
+    pubdate = com.gen3.shared.audiobookcatalogue.model.PublicationDate.normalize(value);
   }
 
   @com.fasterxml.jackson.annotation.JsonProperty("duration_minutes")

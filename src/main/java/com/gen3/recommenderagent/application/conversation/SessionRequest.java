@@ -114,7 +114,7 @@ public class SessionRequest {
   private SessionPreferences preferenceUpdates;
   private SessionPreferences preferenceRemovals;
   private List<String> replacePreferenceFields;
-  private boolean explicitSearch;
+  private boolean startsNewSearch;
   private SemanticQuery positiveSemanticQuery;
   private SemanticQuery negativeSemanticQuery;
   private ExactCriteria mustInclude;
@@ -194,12 +194,12 @@ public class SessionRequest {
     replacePreferenceFields = value;
   }
 
-  public boolean isExplicitSearch() {
-    return explicitSearch;
+  public boolean startsNewSearch() {
+    return startsNewSearch;
   }
 
-  public void setExplicitSearch(boolean value) {
-    explicitSearch = value;
+  public void setStartsNewSearch(boolean value) {
+    startsNewSearch = value;
   }
 
   public SemanticQuery getPositiveSemanticQuery() {
@@ -244,6 +244,11 @@ public class SessionRequest {
 
   public boolean isPersonalised() {
     return personalised;
+  }
+
+  /** Whether this request must use its resolved semantic vectors for retrieval. */
+  public boolean requiresSemanticRetrieval() {
+    return isPersonalised();
   }
 
   public void setPersonalised(boolean value) {

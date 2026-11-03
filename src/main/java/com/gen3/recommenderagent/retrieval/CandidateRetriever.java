@@ -1,8 +1,8 @@
 package com.gen3.recommenderagent.retrieval;
 
-import com.gen3.catalogue.model.AudiobookCandidate;
 import com.gen3.recommenderagent.application.conversation.SessionRequest;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectors;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookCandidate;
 import java.util.List;
 import java.util.Set;
 

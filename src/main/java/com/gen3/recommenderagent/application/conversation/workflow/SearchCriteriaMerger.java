@@ -125,7 +125,7 @@ public final class SearchCriteriaMerger {
             ? null
             : new ArrayList<>(source.getReplacePreferenceFields()));
     copy.setReplaceSearchFields(source.getReplaceSearchFields());
-    copy.setExplicitSearch(source.isExplicitSearch());
+    copy.setStartsNewSearch(source.startsNewSearch());
     copy.setInvalidBookCount(source.isInvalidBookCount());
     copy.setPreferenceRemovalTerms(source.getPreferenceRemovalTerms());
     copy.setPositivePreferenceRemovalOnly(source.isPositivePreferenceRemovalOnly());
@@ -153,7 +153,7 @@ public final class SearchCriteriaMerger {
       copy.setSimilarToClarificationRequired(source.isSimilarToClarificationRequired());
     }
     if (source instanceof ConversationDraft draft) {
-      copy.setDecision(draft.getDecision());
+      copy.setOutcome(draft.getOutcome());
       copy.setPendingQuestion(draft.getPendingQuestion());
       copy.setPreferenceAnswer(draft.isPreferenceAnswer());
       copy.setSearchClarificationRequired(draft.isSearchClarificationRequired());

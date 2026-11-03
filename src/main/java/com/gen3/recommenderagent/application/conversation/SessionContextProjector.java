@@ -15,9 +15,7 @@ public class SessionContextProjector {
       return SessionContext.EMPTY;
     }
     String pending =
-        session.getPendingQuestion() == null
-            ? null
-            : session.getPendingQuestion().getDecision().name();
+        session.getPendingQuestion() == null ? null : session.getPendingQuestion().getKind().name();
     String action =
         session.getLastOutcome() == null
                 || session.getLastOutcome().turn() == null

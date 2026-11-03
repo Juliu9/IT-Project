@@ -1,7 +1,7 @@
 package com.gen3.embeddingjob.store;
 
-import com.gen3.catalogue.solr.SolrAudiobookRepository;
 import com.gen3.embeddingjob.EmbeddingMode;
+import com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository;
 import java.io.IOException;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
