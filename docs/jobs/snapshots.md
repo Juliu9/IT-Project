@@ -22,13 +22,36 @@ This job reads existing vectors; it cannot generate missing ones.
 ## Build or refresh the local snapshot
 
 ```bash
-AUDIOBOOK_DATABASE=qdrant QDRANT_TIMEOUT=120s ./mvnw spring-boot:run \
+AUDIOBOOK_DATABASE=qdrant \
+QDRANT_COLLECTION=audiobooks_hybrid \
+QDRANT_TIMEOUT=120s \
+./mvnw spring-boot:run \
   -Dapplication.main-class=com.gen3.snapshotjob.BookVectorSnapshotApplication \
   -Dspring-boot.run.profiles=dev
 ```
 
-Use `AUDIOBOOK_DATABASE=solr` for Solr. **The job reads catalogue vectors but does not change database
-records.** Retry a failed post-embedding export with this command, not the embedding job.
+For Solr, use `AUDIOBOOK_DATABASE=solr` and set `SOLR_COLLECTION` to the catalogue collection.
+The built-in defaults are `audiobooks_hybrid` for Qdrant and `combinedbooks` for Solr; declaring the
+collection in an operational command makes the source unambiguous. **The job reads catalogue vectors
+but does not change database records.** Retry a failed post-embedding export with this command, not
+the embedding job.
+
+### How backend and collection select the source
+
+The launcher resolves one catalogue identity from `audiobook.database` and the corresponding
+`<backend>.collection` property. For example, `audiobook.database=qdrant` requires
+`qdrant.collection`, while `audiobook.database=solr` requires `solr.collection`. Environment
+variables use Spring's uppercase form, such as `QDRANT_COLLECTION` and `SOLR_COLLECTION`.
+Defaults belong to application configuration rather than `SnapshotIdentity`, so a replacement
+backend can follow the same convention without changing the identity resolver. An isolated launcher
+or test configuration that does not load `application.properties` must provide its collection.
+
+Spring then selects the matching `CatalogueSnapshotSource`. The built-in Qdrant adapter scrolls
+Qdrant records; the Solr adapter queries stored vectors with pagination. Both expose the same
+read-only pages of book IDs and dense vectors to the snapshot writer. Startup rejects an adapter
+whose reported backend or collection differs from the configured identity. A replacement backend
+must register its own `CatalogueSnapshotSource`; setting an arbitrary backend name provides snapshot
+identity for offline loading but does not create database access for snapshot generation.
 
 Files live under `data/book-vector-snapshot/<backend>/<collection-hash>.bin`, or the configured
 `BOOK_VECTOR_SNAPSHOT_DIRECTORY`. Both jobs must use the same persistent directory and catalogue
@@ -76,7 +99,10 @@ new embeddings.
 `[0.6, 0.8]`, to check exact persistence, paginated exports, absent vectors, failed-refresh safety,
 checksum corruption, incompatible metadata and invalid input. `SnapshotSourcesTest` checks the
 Solr/Qdrant read adapters, field selection and pagination. `BookVectorSnapshotApplicationTest`
-checks both backends' launcher wiring without AI models or profile writers.
+checks both backends' launcher wiring without AI models or profile writers, plus replacement-backend
+publication and offline reopening, absence of built-in backend beans, and rejection of mismatched
+source identity. See [adding a database adapter](../architecture.md#add-a-database-adapter) for the
+snapshot source contract and collection configuration required by a new backend.
 
 `QdrantSnapshotIntegrationTest` creates a disposable Qdrant collection with a vector-bearing book
 and a book without a vector. It checks paginated export and that database records remain unchanged.

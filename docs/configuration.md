@@ -421,6 +421,10 @@ requirements and replacement semantics.
 
 Snapshots are separated by backend and catalogue collection. Compatibility uses the backend,
 collection, configured `spring.ai.openai.embedding.options.model`, and `embedding.dimensions`.
+The selected `audiobook.database` requires its matching `<backend>.collection` property. Built-in
+defaults come from the Qdrant and Solr configuration tables above; the snapshot identity resolver
+does not contain a backend list or duplicate those defaults. A replacement backend must configure
+its own collection and register a `CatalogueSnapshotSource` to generate snapshots.
 **The model identifier is a declared contract; database records do not store model provenance.**
 Changing servers while retaining the same backend/collection name requires a manual snapshot rebuild.
 The [snapshot launcher](jobs/snapshots.md) needs no enable flag. Imports accept a compatible snapshot

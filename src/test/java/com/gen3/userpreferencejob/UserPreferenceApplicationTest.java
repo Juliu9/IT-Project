@@ -13,6 +13,7 @@ class UserPreferenceApplicationTest {
           .withUserConfiguration(UserPreferenceApplication.class)
           .withPropertyValues(
               "spring.ai.openai.api-key=",
+              "qdrant.collection=books",
               "user.preferences.favourites-csv-path=",
               "user.preferences.history-csv-path=")
           .withBean(QdrantClient.class, () -> mock(QdrantClient.class));

@@ -14,11 +14,40 @@ import com.google.common.util.concurrent.Futures;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Points.ScrollPoints;
 import io.qdrant.client.grpc.Points.ScrollResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
 class SnapshotSourcesTest {
+  @TempDir Path directory;
+
+  @Test
+  void offlineSnapshotsAcceptAnyConfiguredBackendIdentity() throws Exception {
+    var environment =
+        new org.springframework.mock.env.MockEnvironment()
+            .withProperty("audiobook.database", "other")
+            .withProperty("other.collection", "books")
+            .withProperty("embedding.dimensions", "2")
+            .withProperty("book.vector-snapshot.directory", directory.toString());
+
+    SnapshotConfiguration.snapshot(environment)
+        .rebuild(
+            (cursor, limit) ->
+                new com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot.Page(
+                    List.of(
+                        new com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot.Entry(
+                            "book", new float[] {1, 0})),
+                    null),
+            10);
+
+    try (var files = Files.list(directory.resolve("other"))) {
+      assertThat(files).hasSize(1);
+    }
+  }
+
   @Test
   void solrUsesStoredVectorsAndContinuesPastFullPages() throws Exception {
     var repository = mock(SolrAudiobookRepository.class);
@@ -29,7 +58,9 @@ class SnapshotSourcesTest {
                     new AudiobookRecord("book", "source", "Title", List.of(), "Description"),
                     new float[] {0.6f, 0.8f})));
     when(repository.findStoredBooks("book", 1)).thenReturn(List.of());
-    var source = SnapshotSources.solr(repository);
+    var source = SnapshotSources.solr(repository, "books");
+    assertThat(source.backend()).isEqualTo("solr");
+    assertThat(source.collection()).isEqualTo("books");
     var first = source.page(null, 1);
     assertThat(first.entries().getFirst().vector()).containsExactly(0.6f, 0.8f);
     assertThat(first.nextCursor()).isEqualTo("book");
@@ -65,6 +96,8 @@ class SnapshotSourcesTest {
                 ScrollResponse.newBuilder().addResult(point).setNextPageOffset(next).build()),
             Futures.immediateFuture(ScrollResponse.getDefaultInstance()));
     var source = SnapshotSources.qdrant(client, "books");
+    assertThat(source.backend()).isEqualTo("qdrant");
+    assertThat(source.collection()).isEqualTo("books");
     var first = source.page(null, 500);
     assertThat(first.entries().getFirst().bookId()).isEqualTo("book");
     assertThat(first.entries().getFirst().vector()).containsExactly(0.6f, 0.8f);

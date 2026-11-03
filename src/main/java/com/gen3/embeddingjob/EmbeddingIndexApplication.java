@@ -82,7 +82,7 @@ public class EmbeddingIndexApplication {
       AudiobookEmbeddingStore store,
       EmbeddingModel model,
       com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot snapshot,
-      com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot.Source snapshotSource,
+      com.gen3.snapshotjob.CatalogueSnapshotSource snapshotSource,
       @Value("${book.vector-snapshot.page-size:500}") int snapshotPageSize,
       @Value("${audiobook.embedding-index.page-size:100}") int pageSize,
       @Value("${audiobook.embedding-index.maximum-records:0}") int maximumRecords,

@@ -18,7 +18,7 @@ class EmbeddingIndexApplicationTest {
     var store = mock(AudiobookEmbeddingStore.class);
     var model = mock(EmbeddingModel.class);
     var snapshot = mock(com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot.class);
-    var source = mock(com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot.Source.class);
+    var source = mock(com.gen3.snapshotjob.CatalogueSnapshotSource.class);
     org.mockito.Mockito.when(store.embeddingPage(null, 10, EmbeddingMode.MISSING_ONLY))
         .thenReturn(new AudiobookEmbeddingStore.Page(java.util.List.of(), null));
     new EmbeddingIndexApplication()
@@ -45,6 +45,7 @@ class EmbeddingIndexApplicationTest {
           .withPropertyValues(
               "spring.ai.openai.api-key=ci-placeholder",
               "spring.ai.model.embedding=none",
+              "qdrant.collection=audiobooks_hybrid",
               "solr.url=http://localhost:8983/solr",
               "solr.collection=books",
               "solr.username=",

@@ -335,10 +335,27 @@ flattened vector responses are not supported.
    backend selection.
 2. Preserve semantic, keyword, hybrid, filtered search, identity, and write guarantees. Report an
    unsupported operation explicitly.
-3. Add configuration, schema documentation, and integration coverage.
+3. For snapshot generation and the embedding job's post-pass refresh, register a
+   `CatalogueSnapshotSource` implementing read-only vector pagination and catalogue identity.
+   Configure `<backend>.collection` alongside `audiobook.database=<backend>`.
+   `SnapshotIdentity` resolves these settings for both publishing and offline preference imports;
+   startup rejects a source whose backend or collection differs from that identity.
+4. Implement the maintenance ports needed by the backend: `AudiobookEmbeddingStore` for embedding
+   writes and `AudiobookEnrichmentStore` for short-description updates. Register adapters in the
+   relevant launcher's composition without adding backend-specific branches to consumers.
+5. Add configuration, schema documentation, and integration coverage. Verify snapshot pagination,
+   catalogue IDs and vectors, and publish/reopen compatibility through the offline reader. Include
+   launcher checks that built-in backend beans are absent for a replacement backend and that an
+   identity mismatch fails startup.
 
 Missing implementations fail startup rather than falling back to another backend. Conversation and
 ranking code must remain independent of database-specific types.
+
+An arbitrary backend name and `<backend>.collection` can identify an existing local snapshot for
+offline loading. They do not provide database access: generation requires a registered
+`CatalogueSnapshotSource`. Snapshot paths remain
+`<snapshot-directory>/<backend>/<collection-hash>.bin`; preserve this identity and the stored
+metadata when replacing an adapter so existing snapshots remain readable.
 
 ### Solr schema and record identity
 

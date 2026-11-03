@@ -59,7 +59,7 @@ public class BookVectorSnapshotApplication {
   @Bean
   ApplicationRunner snapshotJob(
       BookVectorSnapshot snapshot,
-      BookVectorSnapshot.Source source,
+      CatalogueSnapshotSource source,
       @Value("${book.vector-snapshot.page-size:500}") int pageSize) {
     return args -> snapshot.rebuild(source, pageSize);
   }

@@ -16,6 +16,8 @@ standalone launcher refreshes or retries this export without rerunning embedding
 ## Operation
 
 - Launcher: `com.gen3.snapshotjob.BookVectorSnapshotApplication`.
+- Selection: `audiobook.database=<backend>` requires `<backend>.collection`; built-in defaults come
+  from application configuration. Generation also requires the matching `CatalogueSnapshotSource`.
 - Writes: local snapshot file only; no database records or schemas are changed.
 - Also runs automatically after successful catalogue embedding generation.
 - **A failed refresh preserves the previous snapshot.** Imports accept the last compatible version
