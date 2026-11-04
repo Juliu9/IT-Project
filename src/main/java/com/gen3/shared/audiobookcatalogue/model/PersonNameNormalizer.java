@@ -14,8 +14,10 @@ public final class PersonNameNormalizer {
   private static final Pattern SUFFIX =
       Pattern.compile("(?i)(?:^|[\\s,])(?:jr|sr|ii|iii|iv|v|vi)\\.?$");
 
+  /** Prevents instantiation of this utility class. */
   private PersonNameNormalizer() {}
 
+  /** Builds supported catalogue name variants without fuzzy identity matching. */
   public static List<String> variants(List<String> names) {
     var values = new LinkedHashSet<String>();
     if (names == null) {
@@ -62,6 +64,7 @@ public final class PersonNameNormalizer {
     return List.copyOf(values);
   }
 
+  /** Adds forward and reversed name forms to the variant collection. */
   private static void addOrders(Set<String> forms, String given, String family) {
     forms.add(given + " " + family);
     forms.add(family + ", " + given);
@@ -78,6 +81,7 @@ public final class PersonNameNormalizer {
     }
   }
 
+  /** Builds a stable normalized key for comparing supported person-name forms. */
   public static String comparisonKey(String name) {
     String base = withoutCataloguePeriod(clean(name));
     String[] parts = commaParts(base);
@@ -95,10 +99,12 @@ public final class PersonNameNormalizer {
     return forward.toLowerCase(Locale.ROOT);
   }
 
+  /** Normalizes whitespace and supported punctuation in a person name. */
   private static String clean(String name) {
     return name == null ? "" : name.strip().replaceAll("(?U)\\s+", " ");
   }
 
+  /** Removes supported trailing catalogue punctuation from a person name. */
   private static String withoutCataloguePeriod(String name) {
     if (!name.endsWith(".") || SUFFIX.matcher(name).find()) {
       return name;
@@ -109,6 +115,7 @@ public final class PersonNameNormalizer {
         : name;
   }
 
+  /** Splits catalogue-style reversed names into their usable components. */
   private static String[] commaParts(String name) {
     String[] parts = name.split(",", -1);
     if (parts.length != 2) {

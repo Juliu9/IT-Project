@@ -24,18 +24,22 @@ public class RequestTelemetry {
   private static final ThreadLocal<RequestState> CURRENT = new ThreadLocal<>();
   private final ObjectMapper objectMapper;
 
+  /** Initializes request telemetry dependencies or the per-request collection of demo metrics. */
   public RequestTelemetry(ObjectMapper objectMapper) {
     this.objectMapper = objectMapper;
   }
 
+  /** Begins synchronous request telemetry without enabling demo-only detail collection. */
   public void start() {
     CURRENT.set(new RequestState(false));
   }
 
+  /** Begins request telemetry with the details needed by the development demo. */
   public void startDemo() {
     CURRENT.set(new RequestState(true));
   }
 
+  /** Measures a synchronous pipeline stage while preserving the operation's result or failure. */
   public static <T> T measure(String stage, Supplier<T> action) {
     RequestState state = CURRENT.get();
     if (state == null) {
@@ -49,6 +53,7 @@ public class RequestTelemetry {
     }
   }
 
+  /** Records the response-generation mode for the current request. */
   public static void responseMode(String responseMode) {
     RequestState state = CURRENT.get();
     if (state != null) {
@@ -56,6 +61,7 @@ public class RequestTelemetry {
     }
   }
 
+  /** Records the retrieval mode and returned candidate count for the current request. */
   public static void retrieval(String mode, int candidates) {
     RequestState state = CURRENT.get();
     if (state != null) {
@@ -64,6 +70,7 @@ public class RequestTelemetry {
     }
   }
 
+  /** Records the selected catalogue backend for the current request. */
   public static void retrievalBackend(String backend) {
     RequestState state = CURRENT.get();
     if (state != null) {
@@ -71,6 +78,7 @@ public class RequestTelemetry {
     }
   }
 
+  /** Adds observed provider usage and attempt counts to the current request. */
   public static void ai(String operation, int attempts, AiOperationObserver.AiUsage usage) {
     RequestState state = CURRENT.get();
     if (state == null) {
@@ -104,6 +112,7 @@ public class RequestTelemetry {
     }
   }
 
+  /** Returns the collected request metrics in a client-facing immutable representation. */
   public Snapshot snapshot() {
     RequestState state = CURRENT.get();
     return state == null
@@ -121,10 +130,12 @@ public class RequestTelemetry {
       Map<String, AiOperationObserver.AiUsage> operations,
       Map<String, Object> retrieval) {}
 
+  /** Finishes successful request telemetry using the completed conversation turn. */
   public void complete(ConversationTurn request) {
     finish(request == null ? null : ConversationDraft.fromTurn(request), "SUCCESS");
   }
 
+  /** Finishes failed request telemetry using any available request context. */
   public void fail(SessionRequest request) {
     var draft = new ConversationDraft();
     if (request != null) {
@@ -134,6 +145,7 @@ public class RequestTelemetry {
     finish(draft, "FAILURE");
   }
 
+  /** Completes request timing and emits the final telemetry event. */
   private void finish(ConversationDraft request, String outcome) {
     RequestState state = CURRENT.get();
     if (state == null) {
@@ -160,6 +172,7 @@ public class RequestTelemetry {
     CURRENT.remove();
   }
 
+  /** Emits the structured summary for the completed request. */
   private void log(Map<String, Object> event) {
     try {
       LOGGER.info("{}", objectMapper.writeValueAsString(event));
@@ -168,6 +181,7 @@ public class RequestTelemetry {
     }
   }
 
+  /** Reads an available telemetry value without requiring a populated entry. */
   private static int value(Integer tokenCount) {
     return tokenCount == null ? 0 : tokenCount;
   }
@@ -176,6 +190,7 @@ public class RequestTelemetry {
     private final Instant startedAt = Instant.now();
     private final Map<String, AiOperationObserver.AiUsage> operations;
 
+    /** Initializes request telemetry dependencies or the per-request collection of demo metrics. */
     private RequestState(boolean demo) {
       operations = demo ? new LinkedHashMap<>() : null;
     }
@@ -190,6 +205,7 @@ public class RequestTelemetry {
     private int outputTokens;
     private boolean usageAvailable = true;
 
+    /** Converts elapsed request time into milliseconds. */
     private long durationMillis() {
       return Duration.between(startedAt, Instant.now()).toMillis();
     }

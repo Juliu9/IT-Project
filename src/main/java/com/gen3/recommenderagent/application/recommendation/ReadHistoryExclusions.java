@@ -17,6 +17,7 @@ public class ReadHistoryExclusions {
   private final Optional<ReadHistoryRepository> repository;
   private final int maximumBooks;
 
+  /** Configures optional history access and the maximum supported exclusion count per user. */
   public ReadHistoryExclusions(
       Optional<ReadHistoryRepository> repository,
       @Value("${read-history.maximum-books-per-user:10000}") int maximumBooks) {
@@ -27,6 +28,9 @@ public class ReadHistoryExclusions {
     this.maximumBooks = maximumBooks;
   }
 
+  /**
+   * Loads bounded read-book exclusions, using the documented fail-open behavior on lookup failure.
+   */
   public Set<String> load(String userId, String requestId) {
     if (repository.isEmpty()) {
       return Set.of();
@@ -34,6 +38,7 @@ public class ReadHistoryExclusions {
     return RequestTelemetry.measure("historyLoadMs", () -> lookup(userId, requestId));
   }
 
+  /** Queries the configured history port and enforces the per-user exclusion limit. */
   private Set<String> lookup(String userId, String requestId) {
     try {
       var ids = repository.orElseThrow().findReadBookIds(userId, maximumBooks + 1);

@@ -43,10 +43,25 @@ public class CommandParser {
           "(?:(?:recommend|show me|give me|i want|i'd like|i would like) )?"
               + "(?:some )?(?:books|audiobooks) from ((?:around|(?:the )?period) [0-9]{4})");
 
+  /** Recognizes supported complete commands without making an AI call. */
   public UserIntent parse(String rawText) {
     String command = normalizeCommand(rawText);
     if (ConversationText.isCancellationReply(command)) {
       return intent(ConversationAction.CANCEL);
+    }
+    if (java.util.Set.of(
+            "what are my current session preferences",
+            "what are my session preferences",
+            "what are my current preferences",
+            "what are my preferences",
+            "show my preferences",
+            "show my session preferences",
+            "explain my preferences",
+            "explain preferences",
+            "show preferences",
+            "list my preferences")
+        .contains(command)) {
+      return intent(ConversationAction.EXPLAIN_PREFERENCES);
     }
     var temporaryCount = TEMPORARY_MORE_COUNT.matcher(command);
     if (temporaryCount.matches()) {
@@ -113,6 +128,7 @@ public class CommandParser {
     return intent(intent);
   }
 
+  /** Recognizes a command requesting longer recommendations. */
   private UserIntent longerRefinement(String command) {
     if (java.util.Set.of(
             "make them longer",
@@ -128,6 +144,7 @@ public class CommandParser {
     return null;
   }
 
+  /** Recognizes a complete request for recommendations based on stored user taste. */
   private UserIntent personalisedRecommendation(String command) {
     if (java.util.Set.of(
             "give me some books",
@@ -142,6 +159,7 @@ public class CommandParser {
     return null;
   }
 
+  /** Recognizes commands that refine publication recency. */
   private UserIntent recencyRefinement(String command) {
     if (ConversationText.isRecencyRefinement(command)) {
       var parsed = intent(ConversationAction.REFINE);
@@ -153,6 +171,7 @@ public class CommandParser {
     return null;
   }
 
+  /** Recognizes explicit removal of saved preference terms. */
   private UserIntent preferenceRemoval(java.util.regex.Matcher removal) {
     var parsed = intent(ConversationAction.UPDATE_PREFERENCES);
     String term =
@@ -166,6 +185,7 @@ public class CommandParser {
     return parsed;
   }
 
+  /** Recognizes a search that states semantic content to avoid. */
   private UserIntent negativeSearch(String command) {
     var negative =
         Pattern.compile("^(?:the same but )?less (violent|dark|scary|romantic)$").matcher(command);
@@ -179,7 +199,7 @@ public class CommandParser {
               negative.matches() ? ConversationAction.REFINE : ConversationAction.RECOMMENDATION);
       var query = new com.gen3.recommenderagent.domain.search.SemanticQuery();
       if (negative.matches()) {
-        query.setKeywords(java.util.List.of(negative.group(1)));
+        query.setTopics(java.util.List.of(negative.group(1)));
       } else {
         query.setGenres(java.util.List.of(without.group(1)));
       }
@@ -189,6 +209,7 @@ public class CommandParser {
     return null;
   }
 
+  /** Recognizes supported exact publication-year search wording. */
   private UserIntent publicationYearCommand(String command) {
     var approximateYear = APPROXIMATE_YEAR_REQUEST.matcher(command);
     if (approximateYear.matches()) {
@@ -208,6 +229,7 @@ public class CommandParser {
     return null;
   }
 
+  /** Recognizes explicit removal of a field from the active search. */
   private UserIntent searchFieldRemoval(String command) {
     String cleared =
         switch (command) {
@@ -231,6 +253,7 @@ public class CommandParser {
     return null;
   }
 
+  /** Identifies short wording that may answer an outstanding conversation question. */
   private boolean isContextualReply(String rawText) {
     return ConversationText.replacementReferenceTitle(rawText) != null
         || ConversationText.relativeSelectionReply(rawText, 2) != null
@@ -241,6 +264,7 @@ public class CommandParser {
         || com.gen3.recommenderagent.inputparser.ConversationText.isPreferenceDecline(rawText);
   }
 
+  /** Recognizes an explicit change to the saved recommendation count. */
   private UserIntent changedCount(String command) {
     var changedCount = CHANGE_COUNT.matcher(command);
     if (changedCount.matches()) {
@@ -253,6 +277,7 @@ public class CommandParser {
     return null;
   }
 
+  /** Recognizes a command requesting shorter recommendations. */
   private UserIntent shorterRefinement(String command) {
     if (java.util.Set.of(
             "make them shorter",
@@ -271,6 +296,7 @@ public class CommandParser {
     return null;
   }
 
+  /** Recognizes a request for another page with an explicit recommendation count. */
   private UserIntent countedMore(String command) {
     var countedMore = COUNTED_MORE.matcher(command);
     if (countedMore.matches()) {
@@ -282,6 +308,7 @@ public class CommandParser {
     return null;
   }
 
+  /** Maps complete control-command wording to its conversation action. */
   private ConversationAction keywordIntent(String command) {
     return switch (command) {
       case "help",
@@ -367,6 +394,7 @@ public class CommandParser {
     };
   }
 
+  /** Recognizes explanation requests and extracts any stated recommendation selectors. */
   private UserIntent explanation(String command) {
     String target;
     if (command.startsWith("explain ")) {
@@ -407,6 +435,7 @@ public class CommandParser {
     return parsed;
   }
 
+  /** Extracts rank or title selectors used to identify explanation targets. */
   private java.util.List<String> selectors(String text) {
     text = text.replaceFirst(" (?:more|in more detail)$", "");
     if (ConversationText.isWholePageReply(text)
@@ -424,12 +453,14 @@ public class CommandParser {
     return java.util.List.of(values);
   }
 
+  /** Converts recognized count wording into the parser's numeric representation. */
   private static BigInteger countValue(String count) {
     return Character.isDigit(count.charAt(0))
         ? new BigInteger(count)
         : BigInteger.valueOf(selectionReply(count));
   }
 
+  /** Creates parsed command output for the supplied conversation action. */
   private static UserIntent intent(ConversationAction action) {
     var parsed = new UserIntent();
     parsed.setIntent(action);

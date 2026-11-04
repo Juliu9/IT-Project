@@ -40,6 +40,7 @@ import org.springframework.core.env.Environment;
   SolrAudiobookRepository.class
 })
 public class ShortDescriptionApplication {
+  /** Starts this application with the supplied command-line configuration. */
   public static void main(String[] args) {
     try (var context =
         new SpringApplicationBuilder(ShortDescriptionApplication.class)
@@ -51,6 +52,7 @@ public class ShortDescriptionApplication {
     }
   }
 
+  /** Rejects incompatible job flags and missing opt-in settings before job execution. */
   @Bean
   static BeanFactoryPostProcessor validateJob(Environment environment) {
     return factory -> {

@@ -20,6 +20,7 @@ import java.util.List;
 
 /** Owns search inheritance, frozen MORE context, current preferences and search completion. */
 public final class SearchContextResolver implements ConversationHandler {
+  /** Returns the conversation actions handled by this handler. */
   public java.util.Set<ConversationAction> intents() {
     return java.util.Set.of(
         ConversationAction.RECOMMENDATION,
@@ -27,6 +28,9 @@ public final class SearchContextResolver implements ConversationHandler {
         ConversationAction.MORE_RESULTS);
   }
 
+  /**
+   * Resolves search criteria, saved preferences, clarification state, and the requested page count.
+   */
   public ConversationDraft resolve(Session session, ConversationDraft effective) {
     if (effective.getIntent() == ConversationAction.RECOMMENDATION
         && !hasSearchCriteria(effective)) {
@@ -91,6 +95,7 @@ public final class SearchContextResolver implements ConversationHandler {
     return effective;
   }
 
+  /** Reports whether the effective action can incorporate saved session preferences. */
   private boolean acceptsPreferences(ConversationAction intent) {
     return intent == ConversationAction.UPDATE_PREFERENCES
         || intent == ConversationAction.RECOMMENDATION
@@ -98,6 +103,7 @@ public final class SearchContextResolver implements ConversationHandler {
         || intent == ConversationAction.MORE_RESULTS;
   }
 
+  /** Inherits active-search context needed for refinements and follow-up pages. */
   private void applyPreviousSearch(ConversationDraft target, Session session) {
     ConversationTurn current = session.getActiveSearch().getSearch();
     if (current == null || !isSearchContext(current)) {
@@ -138,6 +144,7 @@ public final class SearchContextResolver implements ConversationHandler {
     }
   }
 
+  /** Combines explicit search criteria with applicable saved session preferences. */
   private void applyPreferences(ConversationDraft target, Session session) {
     if (target == null || session == null || session.getPreferences() == null) {
       return;
@@ -155,6 +162,7 @@ public final class SearchContextResolver implements ConversationHandler {
     merge(base, target);
   }
 
+  /** Applies the saved count when the current search does not supply a valid override. */
   private Integer resolveBookCount(ConversationDraft request, Session session) {
     if (request != null
         && !request.isInvalidBookCount()
@@ -165,6 +173,7 @@ public final class SearchContextResolver implements ConversationHandler {
     return session == null ? null : session.getBookCount();
   }
 
+  /** Reports whether the incoming action makes the cached recommendation queue obsolete. */
   public boolean invalidatesBatch(SessionRequest request) {
     ConversationAction intent = request == null ? ConversationAction.UNKNOWN : request.getIntent();
     ConversationDraft filters = new ConversationDraft();
@@ -178,14 +187,17 @@ public final class SearchContextResolver implements ConversationHandler {
         || (intent == ConversationAction.MORE_RESULTS && hasSearchCriteria(filters));
   }
 
+  /** Reports whether the resolved action requires a recommendation page. */
   public boolean needsRecommendations(ConversationDraft request) {
     return !request.isSearchClarificationRequired();
   }
 
+  /** Reports whether this handler retains reusable search context after completion. */
   public boolean retainsHistory() {
     return true;
   }
 
+  /** Retains the completed search page and records the books shown to the user. */
   public void finish(Session session, ConversationDraft request, SessionRequest original) {
     if (request.isSearchClarificationRequired()) {
       request.setRecommendations(List.of());

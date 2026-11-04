@@ -166,6 +166,59 @@ class PreferenceUpdateFlowTest {
     assertThat(resumed.getPositiveSemanticQuery().getGenres()).containsExactly("adventure");
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+  void categoryOverflowReturnsAConversationalResponseWithoutChangingPreferences(
+      boolean accumulated) {
+    var existing = tastes("fantasy");
+    if (accumulated) {
+      existing
+          .getPositiveSemanticQuery()
+          .setGenres(IntStream.range(0, 10).mapToObj(i -> "genre-" + i).toList());
+    }
+    process(update(existing));
+    var before = new ObjectMapper().writeValueAsString(saved());
+    var parsed = new com.gen3.recommenderagent.inputparser.UserIntent();
+    parsed.setIntent(ConversationAction.UPDATE_PREFERENCES);
+    var changes = tastes("romance");
+    if (!accumulated) {
+      changes
+          .getPositiveSemanticQuery()
+          .setGenres(IntStream.range(0, 11).mapToObj(i -> "genre-" + i).toList());
+    }
+    parsed.setPreferenceUpdates(changes);
+    var ai = mock(AiParser.class);
+    String raw = "update my preferences";
+    when(ai.parse(raw)).thenReturn(parsed);
+    var parser = new InputParser(new CommandParser(), ai);
+    var gateway =
+        new com.gen3.recommenderagent.api.RequestGateway(
+            parser, service, new ConversationResponseGenerator(null));
+    var response = gateway.handleDemoRequest("session", "user", raw);
+    assertThat(response.response()).contains("10", "haven't changed your preferences");
+    assertThat(new ObjectMapper().writeValueAsString(saved())).isEqualTo(before);
+    var repeat = process(request(ConversationAction.REPEAT));
+    assertThat(new ConversationResponseGenerator(null).generate(List.of(), repeat))
+        .isEqualTo(response.response());
+    verifyNoInteractions(vectors, retriever, ranker, users);
+  }
+
+  @Test
+  void positiveGenreUpdateReplacesSavedAvoidanceWithoutModelSuppliedRemovals() {
+    var avoided = new SessionPreferences();
+    var negative = new SemanticQuery();
+    negative.setGenres(List.of("horror", "romance"));
+    avoided.setNegativeSemanticQuery(negative);
+    process(update(avoided));
+    process(update(tastes("Horror")));
+    assertThat(saved().getPositiveSemanticQuery().getGenres()).containsExactly("Horror");
+    assertThat(saved().getNegativeSemanticQuery().getGenres()).containsExactly("romance");
+    process(update(avoided));
+    assertThat(saved().getPositiveSemanticQuery().getGenres()).isNullOrEmpty();
+    assertThat(saved().getNegativeSemanticQuery().getGenres()).containsExactly("romance", "horror");
+    verifyNoInteractions(vectors, retriever, ranker, users);
+  }
+
   @Test
   void tasteReplyDoesNotPromotePendingSearchConstraintsOrSemanticsToSavedPreferences() {
     var search = request(ConversationAction.RECOMMENDATION);

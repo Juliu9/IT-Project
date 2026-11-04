@@ -12,11 +12,13 @@ import org.springframework.core.env.Environment;
 @ConditionalOnProperty(name = "read-history.enabled", havingValue = "true")
 @ConditionalOnMissingBean(ReadHistoryRepository.class)
 public class ReadHistoryConfiguration {
+  /** Creates the explicitly configured connection pool for optional read-history access. */
   @Bean(destroyMethod = "close")
   HikariDataSource readHistoryDataSource(Environment environment) {
     return ReadHistoryDataSource.create(environment);
   }
 
+  /** Creates the PostgreSQL history adapter using the dedicated history connection pool. */
   @Bean
   ReadHistoryRepository readHistoryRepository(
       @org.springframework.beans.factory.annotation.Qualifier("readHistoryDataSource")

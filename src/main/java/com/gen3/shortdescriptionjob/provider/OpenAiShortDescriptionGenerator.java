@@ -26,6 +26,7 @@ public class OpenAiShortDescriptionGenerator implements ShortDescriptionGenerato
   private final String baseUrl;
   private final String model;
 
+  /** Configures JSON summary requests and rejects missing API credentials or model selection. */
   public OpenAiShortDescriptionGenerator(
       ObjectMapper mapper, HttpClient client, String apiKey, String baseUrl, String model) {
     if (apiKey == null || apiKey.isBlank() || model == null || model.isBlank()) {
@@ -39,6 +40,7 @@ public class OpenAiShortDescriptionGenerator implements ShortDescriptionGenerato
     this.model = model;
   }
 
+  /** {@inheritDoc} */
   @Override
   public Map<String, String> generate(List<AudiobookRecord> books)
       throws IOException, InterruptedException {
@@ -118,6 +120,7 @@ public class OpenAiShortDescriptionGenerator implements ShortDescriptionGenerato
 
   @Configuration(proxyBeanMethods = false)
   public static class ConfigurationAdapter {
+    /** Builds the summary provider with its configured credentials, model, and HTTP timeouts. */
     @Bean
     @ConditionalOnMissingBean(ShortDescriptionGenerator.class)
     ShortDescriptionGenerator shortDescriptionGenerator(

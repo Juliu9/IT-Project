@@ -15,14 +15,17 @@ import org.springframework.stereotype.Component;
 public class AudiobookRetrievalPlanner {
   private final ExactFilterPolicy filterPolicy;
 
+  /** Creates the retrieval planner with the default exact-filter policy. */
   public AudiobookRetrievalPlanner() {
     this(new ExactFilterPolicy());
   }
 
+  /** Creates the retrieval planner with default or explicitly supplied exact-filter policy. */
   AudiobookRetrievalPlanner(Clock clock) {
     this(new ExactFilterPolicy(clock));
   }
 
+  /** Creates the retrieval planner with default or explicitly supplied exact-filter policy. */
   @Autowired
   public AudiobookRetrievalPlanner(ExactFilterPolicy filterPolicy) {
     this.filterPolicy = filterPolicy;
@@ -60,7 +63,6 @@ public class AudiobookRetrievalPlanner {
     List<String> terms = new ArrayList<>();
     add(terms, semanticQuery.getTopics());
     add(terms, semanticQuery.getGenres());
-    add(terms, semanticQuery.getKeywords());
     return terms.isEmpty() ? fallback : String.join(" ", terms);
   }
 
@@ -71,19 +73,21 @@ public class AudiobookRetrievalPlanner {
     }
   }
 
+  /** Reports whether the request contains semantic evidence usable by a retrieval plan. */
   private boolean hasSemanticContent(SemanticQuery query) {
     return query != null
         && (hasValues(query.getTopics())
             || hasValues(query.getGenres())
-            || hasValues(query.getKeywords())
             || hasValues(query.getAuthors())
             || hasValues(query.getNarrators()));
   }
 
+  /** Reports whether any criteria or preference values are present. */
   private boolean hasValues(List<String> values) {
     return values != null && values.stream().anyMatch(this::hasText);
   }
 
+  /** Reports whether the supplied text contains a non-whitespace character. */
   private boolean hasText(String value) {
     return value != null && !value.isBlank();
   }

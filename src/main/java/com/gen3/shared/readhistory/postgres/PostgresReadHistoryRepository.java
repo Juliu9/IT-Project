@@ -15,10 +15,12 @@ public final class PostgresReadHistoryRepository
     implements ReadHistoryRepository, ReadHistoryWriter {
   private final DataSource dataSource;
 
+  /** Creates the history reader and writer with the explicit PostgreSQL data source. */
   public PostgresReadHistoryRepository(DataSource dataSource) {
     this.dataSource = dataSource;
   }
 
+  /** {@inheritDoc} */
   @Override
   public Set<String> findReadBookIds(String userId, int limit) throws IOException {
     if (!OpaqueIds.isValid(userId) || limit < 1) {
@@ -43,6 +45,7 @@ public final class PostgresReadHistoryRepository
     }
   }
 
+  /** {@inheritDoc} */
   @Override
   public void addReadBooks(List<ReadBook> books) throws IOException {
     for (var book : books) {

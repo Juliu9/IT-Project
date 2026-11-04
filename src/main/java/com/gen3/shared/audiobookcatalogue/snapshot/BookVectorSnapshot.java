@@ -33,6 +33,10 @@ public final class BookVectorSnapshot implements AudiobookVectorRepository {
   private Map<String, float[]> loaded;
   private String loadedCreatedAt;
 
+  /**
+   * Configures the snapshot path and compatibility identity, rejecting invalid dimensions or
+   * labels.
+   */
   public BookVectorSnapshot(
       Path file, String backend, String collection, String model, int dimensions) {
     if (dimensions < 1 || backend.isBlank() || collection.isBlank() || model.isBlank()) {
@@ -45,6 +49,7 @@ public final class BookVectorSnapshot implements AudiobookVectorRepository {
     this.dimensions = dimensions;
   }
 
+  /** Writes and validates a checksummed temporary snapshot, then atomically publishes it. */
   public synchronized void rebuild(Source source, int pageSize) throws IOException {
     if (pageSize < 1) {
       throw new IllegalArgumentException("Snapshot page size must be positive");
@@ -129,12 +134,14 @@ public final class BookVectorSnapshot implements AudiobookVectorRepository {
     }
   }
 
+  /** {@inheritDoc} */
   @Override
   public Optional<float[]> findEmbeddingByBookId(String bookId) throws IOException {
     validate();
     return Optional.ofNullable(loaded.get(bookId));
   }
 
+  /** {@inheritDoc} */
   @Override
   public Map<String, float[]> findEmbeddingsByBookIds(Collection<String> bookIds)
       throws IOException {
@@ -149,6 +156,9 @@ public final class BookVectorSnapshot implements AudiobookVectorRepository {
     return result;
   }
 
+  /**
+   * Validates snapshot identity, vectors, record count, and checksum, optionally retaining vectors.
+   */
   private Map<String, float[]> read(Path path, boolean retain, JobProgress progress)
       throws IOException {
     progress.stage(retain ? "loading local vectors" : "validating snapshot");
@@ -215,6 +225,7 @@ public final class BookVectorSnapshot implements AudiobookVectorRepository {
     return result;
   }
 
+  /** Rejects vectors with wrong dimensions, nonfinite values, or zero length. */
   private void validateVector(float[] vector) throws IOException {
     if (vector.length != dimensions) {
       throw new IOException("Snapshot vector dimension mismatch");
@@ -231,6 +242,7 @@ public final class BookVectorSnapshot implements AudiobookVectorRepository {
     }
   }
 
+  /** Creates the checksum digest used to verify the snapshot file. */
   private static MessageDigest sha256() {
     try {
       return MessageDigest.getInstance("SHA-256");
@@ -239,6 +251,7 @@ public final class BookVectorSnapshot implements AudiobookVectorRepository {
     }
   }
 
+  /** Returns the pinned snapshot metadata and the current file checksum used by import approval. */
   public synchronized Identity identity() throws IOException {
     validate();
     var digest = sha256();
@@ -269,6 +282,7 @@ public final class BookVectorSnapshot implements AudiobookVectorRepository {
       String sha256) {}
 
   public interface Source {
+    /** Reads a bounded source page of book IDs and existing stored vectors. */
     Page page(String cursor, int limit) throws IOException;
   }
 

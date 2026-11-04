@@ -5,6 +5,7 @@ import java.util.List;
 /** Vector operations shared by indexing and similarity search. */
 public final class VectorMath {
 
+  /** Prevents instantiation of this utility class. */
   private VectorMath() {}
 
   /** Returns a unit-length copy; rejects empty, zero, or non-finite vectors. */
@@ -65,6 +66,7 @@ public final class VectorMath {
     return normalize(combined);
   }
 
+  /** Checks whether every component of the combined vector is zero. */
   private static boolean isZero(float[] vector) {
     for (float value : vector) {
       if (value != 0.0f) {
@@ -74,6 +76,7 @@ public final class VectorMath {
     return true;
   }
 
+  /** Scales the vector and returns a unit-length copy. */
   private static float[] scaleAndNormalize(float[] vector, float scale) {
     float[] scaled = new float[vector.length];
     for (int index = 0; index < vector.length; index++) {
@@ -82,6 +85,7 @@ public final class VectorMath {
     return normalize(scaled);
   }
 
+  /** Adds or subtracts averaged vector evidence while rejecting dimension mismatches. */
   private static void addAverage(float[] destination, List<float[]> vectors, float direction) {
     if (vectors.isEmpty()) {
       return;

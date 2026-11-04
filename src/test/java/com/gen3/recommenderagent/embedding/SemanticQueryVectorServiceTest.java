@@ -39,9 +39,9 @@ class SemanticQueryVectorServiceTest {
     assertTrue(vectors.isEmpty());
   }
 
-  private SemanticQuery query(String keyword) {
+  private SemanticQuery query(String topic) {
     SemanticQuery query = new SemanticQuery();
-    query.setKeywords(List.of(keyword));
+    query.setTopics(List.of(topic));
     return query;
   }
 }

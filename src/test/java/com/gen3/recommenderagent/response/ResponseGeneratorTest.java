@@ -160,7 +160,7 @@ class ResponseGeneratorTest {
     query.setAuthors(List.of("Agatha Christie"));
     request.setPositiveSemanticQuery(query);
     SemanticQuery avoided = new SemanticQuery();
-    avoided.setKeywords(List.of("violence"));
+    avoided.setTopics(List.of("violence"));
     request.setNegativeSemanticQuery(avoided);
     ExactCriteria filter = new ExactCriteria();
     filter.setLanguage("English");

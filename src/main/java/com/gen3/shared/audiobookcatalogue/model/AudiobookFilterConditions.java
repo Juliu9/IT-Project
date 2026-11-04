@@ -13,10 +13,12 @@ public record AudiobookFilterConditions(
     Integer minimumPublicationYear,
     Integer maximumPublicationYear) {
 
+  /** Returns an instance with no available values or evidence. */
   public static AudiobookFilterConditions empty() {
     return new AudiobookFilterConditions(List.of(), List.of(), null, null, null, null, null, null);
   }
 
+  /** Reports whether any exact inclusion, exclusion, or range bounds are present. */
   public boolean hasConditions() {
     return (authors != null && !authors.isEmpty())
         || (narrators != null && !narrators.isEmpty())

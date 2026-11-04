@@ -17,11 +17,16 @@ public final class ReadHistoryImporter {
   private final UserHistoryCsvReader reader;
   private final ReadHistoryWriter writer;
 
+  /** Connects the streaming history reader to the batched read-history writer. */
   public ReadHistoryImporter(UserHistoryCsvReader reader, ReadHistoryWriter writer) {
     this.reader = reader;
     this.writer = writer;
   }
 
+  /**
+   * Streams CSV book interactions and writes bounded batches; earlier batches survive later
+   * failures.
+   */
   public long run(Path path, int batchSize) throws IOException {
     if (batchSize < 1 || batchSize > 100_000) {
       throw new IllegalArgumentException("Read-history batch size must be between 1 and 100000");

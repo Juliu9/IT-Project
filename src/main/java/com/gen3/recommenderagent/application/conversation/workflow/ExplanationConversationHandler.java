@@ -16,10 +16,12 @@ import java.util.List;
 
 /** Resolves explanation targets exclusively against the displayed recommendation page. */
 public final class ExplanationConversationHandler implements ConversationHandler {
+  /** Returns the conversation actions handled by this handler. */
   public java.util.Set<ConversationAction> intents() {
     return java.util.Set.of(ConversationAction.EXPLAIN_RECOMMENDATION);
   }
 
+  /** Resolves the requested explanation against the retained displayed recommendation page. */
   public ConversationDraft resolve(Session session, ConversationDraft input) {
     if (session == null) {
       input.setOutcome(ConversationOutcome.NOTHING_TO_EXPLAIN);
@@ -29,6 +31,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
     return input;
   }
 
+  /** Determines the explanation targets and any clarification needed for the current page. */
   private void resolveExplanation(ConversationDraft target, Session session) {
     target.setRecommendations(List.of());
     target.setPreferenceClarificationRequired(false);
@@ -78,6 +81,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
     target.setRecommendations(matches);
   }
 
+  /** Restricts explanation to the selected recommendations from the displayed page. */
   private void resolveSubset(ConversationDraft target, Session session, List<Recommendation> page) {
     var selection = target.getExplanationSelection();
     var include = resolveSelectors(selection.include(), page);
@@ -105,6 +109,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
     }
   }
 
+  /** Maps literal selectors to displayed books while retaining unresolved selections. */
   private static List<String> resolveSelectors(List<String> selectors, List<Recommendation> page) {
     return selectors.stream()
         .flatMap(
@@ -120,6 +125,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
         .toList();
   }
 
+  /** Returns the first selector that cannot be matched to the supplied page. */
   static String firstUnresolved(ExplanationSelection selection, List<Recommendation> page) {
     return java.util.stream.Stream.concat(
             selection.include().stream(), selection.exclude().stream())
@@ -128,6 +134,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
         .orElse(null);
   }
 
+  /** Finds displayed recommendations matching the supplied rank, position, or title selector. */
   private static List<Recommendation> select(List<Recommendation> page, String value) {
     Integer position = ConversationText.relativeSelectionReply(value, page.size());
     if (position != null) {
@@ -144,6 +151,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
     return title.isBlank() ? List.of() : matchingTitles(page, title);
   }
 
+  /** Reports whether the reply identifies a title on the retained displayed page. */
   static boolean matchesDisplayedTitle(Session session, String title) {
     var previous = latestDisplayedSearch(session);
     String normalized = AudiobookTitle.normalize(title);
@@ -153,6 +161,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
         && !matchingTitles(previous.getRecommendations(), normalized).isEmpty();
   }
 
+  /** Finds displayed books whose titles match the supplied selector. */
   private static List<Recommendation> matchingTitles(List<Recommendation> page, String title) {
     var exact =
         page.stream()
@@ -165,6 +174,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
         : exact;
   }
 
+  /** Returns the telemetry label describing how this action obtained its results. */
   public String retrievalMode(ConversationDraft result) {
     return "SESSION_EXPLANATION";
   }

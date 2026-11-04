@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.time.format.ResolverStyle;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
@@ -20,8 +21,13 @@ import org.springframework.stereotype.Component;
 public class UserHistoryCsvReader {
 
   private static final DateTimeFormatter DATE_FORMATTER =
-      DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+      DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss").withResolverStyle(ResolverStyle.STRICT);
 
+  /**
+   * Streams book interactions with normalized IDs and strictly validated UTC timestamps. A supplied
+   * update time replaces the creation time; invalid rows fail with their row number. Consumer
+   * failures propagate after any earlier records have already been delivered.
+   */
   public void read(Path path, CsvRecordConsumer<UserHistory> consumer) throws IOException {
 
     CSVFormat format =

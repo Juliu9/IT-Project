@@ -65,6 +65,7 @@ public class SolrAudiobookRepository
   private final String vectorField;
   private final int vectorDimension;
 
+  /** Configures catalogue access through Solr with its selected collection and vector settings. */
   @Autowired
   public SolrAudiobookRepository(
       SolrClient solrClient,
@@ -77,6 +78,7 @@ public class SolrAudiobookRepository
     this.vectorDimension = vectorDimension;
   }
 
+  /** Configures catalogue access through Solr with its selected collection and vector settings. */
   public SolrAudiobookRepository(SolrClient solrClient, String collection) {
     this(solrClient, collection, "embedding", 1536);
   }
@@ -127,10 +129,12 @@ public class SolrAudiobookRepository
     }
   }
 
+  /** Detects person-name separators requiring special exact-filter handling. */
   private boolean containsSeparator(List<String> ids, String separator) {
     return ids.stream().anyMatch(id -> id.contains(separator));
   }
 
+  /** Adds structured inclusion or exclusion constraints to the Solr query. */
   private void addConditions(
       SolrQuery query, AudiobookFilterConditions conditions, boolean excluded) {
     if (conditions == null || !conditions.hasConditions()) {
@@ -165,6 +169,7 @@ public class SolrAudiobookRepository
     }
   }
 
+  /** Adds supported minimum and maximum bounds as a Solr filter query. */
   private void addRangeFilter(
       SolrQuery query, String field, Integer minimum, Integer maximum, boolean excluded) {
     if (minimum == null && maximum == null) {
@@ -197,6 +202,7 @@ public class SolrAudiobookRepository
     }
   }
 
+  /** Adds exact field values with Solr-safe escaping. */
   private void addExactFilter(SolrQuery query, String field, String value, boolean excluded) {
     if (value != null && !value.isBlank()) {
       query.addFilterQuery(
@@ -243,6 +249,7 @@ public class SolrAudiobookRepository
     }
   }
 
+  /** {@inheritDoc} */
   @Override
   public List<AudiobookCandidate> searchHybrid(
       float[] queryVector, String query, AudiobookFilters filters, int limit) throws IOException {
@@ -314,6 +321,7 @@ public class SolrAudiobookRepository
     }
   }
 
+  /** {@inheritDoc} */
   @Override
   public List<AudiobookRecord> findBooksByIds(List<String> bookIds) throws IOException {
     if (bookIds.isEmpty()) {
@@ -391,12 +399,14 @@ public class SolrAudiobookRepository
     return records;
   }
 
+  /** Adds an escaped exclusive lower ID bound for stable catalogue paging. */
   private void setAfterId(SolrQuery query, String afterId) {
     if (afterId != null) {
       query.addFilterQuery("id:{\"" + ClientUtils.escapeQueryChars(afterId) + "\" TO *]");
     }
   }
 
+  /** Reads a sorted catalogue page with optional vectors and source-version metadata. */
   private SolrDocumentList cataloguePage(String afterId, int limit, boolean includeVectors)
       throws IOException {
     SolrQuery solrQuery = new SolrQuery("*:* ".trim());
@@ -416,6 +426,7 @@ public class SolrAudiobookRepository
     }
   }
 
+  /** Executes dense-vector retrieval with the supplied filters and result limit. */
   private QueryResponse searchVector(float[] queryVector, AudiobookFilters filters, int limit)
       throws SolrServerException, IOException {
     SolrQuery solrQuery = new SolrQuery();
@@ -429,6 +440,7 @@ public class SolrAudiobookRepository
     return solrClient.query(collection, solrQuery, SolrRequest.METHOD.POST);
   }
 
+  /** Combines retrieval results by book ID while retaining their usable ranking evidence. */
   private List<SolrDocument> mergeResults(
       SolrDocumentList keywordDocuments, SolrDocumentList vectorDocuments) {
     Map<String, SolrDocument> documents = new LinkedHashMap<>();
@@ -464,25 +476,30 @@ public class SolrAudiobookRepository
         .toList();
   }
 
+  /** Copies the supplied catalogue candidate data for result fusion. */
   private SolrDocument copy(SolrDocument source) {
     SolrDocument copy = new SolrDocument();
     source.getFieldNames().forEach(name -> copy.setField(name, source.getFieldValue(name)));
     return copy;
   }
 
+  /** Reads a finite numeric retrieval score from the Solr result. */
   private double numericScore(SolrDocument document) {
     Object score = document.getFieldValue("score");
     return score instanceof Number number ? number.doubleValue() : 0.0;
   }
 
+  /** Selects the applicable maximum retrieval score when combining results. */
   private double maxScore(Map<String, Double> scores) {
     return scores.values().stream().mapToDouble(Double::doubleValue).max().orElse(0.0);
   }
 
+  /** Normalizes a retrieval score to the range used by result fusion. */
   private double normalized(Double score, double maximum) {
     return score == null || maximum <= 0.0 ? 0.0 : score / maximum;
   }
 
+  /** Formats a validated dense vector for the Solr vector query parser. */
   private String vectorLiteral(float[] vector) {
     StringBuilder literal = new StringBuilder("[");
     for (int index = 0; index < vector.length; index++) {
@@ -494,6 +511,7 @@ public class SolrAudiobookRepository
     return literal.append(']').toString();
   }
 
+  /** Converts stored scalar or collection values into the shared list representation. */
   private List<Float> toList(float[] vector) {
     List<Float> values = new java.util.ArrayList<>(vector.length);
     for (float value : vector) {
@@ -502,6 +520,7 @@ public class SolrAudiobookRepository
     return values;
   }
 
+  /** Rejects vectors whose size differs from the configured embedding dimension. */
   private void validateDimension(float[] vector) {
     if (vector.length != vectorDimension) {
       throw new IllegalArgumentException(
@@ -553,6 +572,7 @@ public class SolrAudiobookRepository
     return searchKeyword("*:*", filters, limit);
   }
 
+  /** Maps Solr result documents and available scores into catalogue candidates. */
   private List<AudiobookCandidate> toCandidates(Collection<SolrDocument> documents)
       throws IOException {
     List<AudiobookCandidate> candidates = new ArrayList<>();
@@ -568,6 +588,7 @@ public class SolrAudiobookRepository
     return candidates;
   }
 
+  /** {@inheritDoc} */
   @Override
   public Optional<float[]> findEmbeddingByBookId(String bookId) throws IOException {
     return bookId == null || bookId.isBlank()
@@ -575,6 +596,7 @@ public class SolrAudiobookRepository
         : Optional.ofNullable(findEmbeddingsByBookIds(List.of(bookId)).get(bookId));
   }
 
+  /** {@inheritDoc} */
   @Override
   public Map<String, float[]> findEmbeddingsByBookIds(Collection<String> bookIds)
       throws IOException {

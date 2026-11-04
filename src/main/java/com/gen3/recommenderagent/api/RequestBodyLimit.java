@@ -19,12 +19,14 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestBodyAdviceAd
 public class RequestBodyLimit extends RequestBodyAdviceAdapter {
   private static final int MAX_BYTES = InputParser.MAX_REQUEST_CHARACTERS * 4;
 
+  /** {@inheritDoc} */
   @Override
   public boolean supports(
       MethodParameter parameter, Type type, Class<? extends HttpMessageConverter<?>> converter) {
     return type == String.class;
   }
 
+  /** {@inheritDoc} */
   @Override
   public HttpInputMessage beforeBodyRead(
       HttpInputMessage input,
@@ -50,6 +52,7 @@ public class RequestBodyLimit extends RequestBodyAdviceAdapter {
     };
   }
 
+  /** Creates the HTTP payload-too-large error returned for oversized request bodies. */
   private ResponseStatusException tooLarge() {
     return new ResponseStatusException(
         HttpStatus.PAYLOAD_TOO_LARGE,

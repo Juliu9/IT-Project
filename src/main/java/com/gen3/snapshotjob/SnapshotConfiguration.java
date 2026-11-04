@@ -10,10 +10,16 @@ import org.springframework.core.env.Environment;
 /** Snapshot publishing machinery, shared by the standalone rebuild and embedding workflow. */
 @Configuration(proxyBeanMethods = false)
 public class SnapshotConfiguration {
+  /**
+   * Builds the local snapshot reader using the selected backend, collection, model, and dimensions.
+   */
   public static BookVectorSnapshot snapshot(Environment environment) {
     return snapshot(environment, SnapshotIdentity.from(environment));
   }
 
+  /**
+   * Builds the local snapshot reader using the selected backend, collection, model, and dimensions.
+   */
   private static BookVectorSnapshot snapshot(Environment environment, SnapshotIdentity identity) {
     String backend = identity.backend();
     String collection = identity.collection();
@@ -37,11 +43,13 @@ public class SnapshotConfiguration {
         environment.getProperty("embedding.dimensions", Integer.class, 1536));
   }
 
+  /** Resolves the backend and collection identity used for snapshot compatibility checks. */
   @Bean
   SnapshotIdentity snapshotIdentity(Environment environment) {
     return SnapshotIdentity.from(environment);
   }
 
+  /** Builds a snapshot reader after checking that its source matches the configured identity. */
   @Bean
   BookVectorSnapshot bookVectorSnapshot(
       Environment environment, SnapshotIdentity identity, CatalogueSnapshotSource source) {
@@ -51,6 +59,7 @@ public class SnapshotConfiguration {
     return snapshot(environment, identity);
   }
 
+  /** Registers the Qdrant source for exporting existing catalogue vectors. */
   @Bean
   @ConditionalOnProperty(name = "audiobook.database", havingValue = "qdrant", matchIfMissing = true)
   CatalogueSnapshotSource qdrantSnapshotSource(
@@ -58,6 +67,7 @@ public class SnapshotConfiguration {
     return SnapshotSources.qdrant(client, identity.collection());
   }
 
+  /** Registers the Solr source for exporting existing catalogue vectors. */
   @Bean
   @ConditionalOnProperty(name = "audiobook.database", havingValue = "solr")
   CatalogueSnapshotSource solrSnapshotSource(

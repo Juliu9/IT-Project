@@ -7,17 +7,20 @@ import java.util.Optional;
 
 public interface UserPreferenceVectorRepository {
 
+  /** Stores one user's supplied favourites and history vectors. */
   void save(UserPreferenceEmbedding embedding) throws IOException;
 
   /** Removes both stored taste vectors without deleting unrelated user metadata. */
   void clear(String userId) throws IOException;
 
+  /** Clears stored taste vectors for each supplied user ID. */
   default void clearAll(List<String> userIds) throws IOException {
     for (String userId : userIds) {
       clear(userId);
     }
   }
 
+  /** Saves the supplied user preference vectors in input order. */
   default void saveAll(List<UserPreferenceEmbedding> embeddings) throws IOException {
     for (var embedding : embeddings) {
       save(embedding);
@@ -41,9 +44,11 @@ public interface UserPreferenceVectorRepository {
     }
   }
 
+  /** Reports whether a vector is present and nonempty. */
   private static boolean hasVector(float[] vector) {
     return vector != null && vector.length > 0;
   }
 
+  /** Loads the stored taste vectors for one user, returning empty when none are available. */
   Optional<UserPreferenceEmbedding> findEmbeddingByUserId(String userId) throws IOException;
 }

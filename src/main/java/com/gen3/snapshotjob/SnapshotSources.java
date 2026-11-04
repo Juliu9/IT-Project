@@ -11,8 +11,10 @@ import java.util.concurrent.ExecutionException;
 
 /** Read-only scans of existing catalogue vectors; never generates embeddings. */
 final class SnapshotSources {
+  /** Prevents instantiation of this utility class. */
   private SnapshotSources() {}
 
+  /** Creates a paginated snapshot source backed by existing Solr catalogue vectors. */
   static CatalogueSnapshotSource solr(SolrAudiobookRepository repository, String collection) {
     return identified(
         "solr",
@@ -27,6 +29,7 @@ final class SnapshotSources {
         });
   }
 
+  /** Creates a paginated snapshot source backed by existing Qdrant catalogue vectors. */
   static CatalogueSnapshotSource qdrant(QdrantClient client, String collection) {
     return identified(
         "qdrant",
@@ -86,17 +89,21 @@ final class SnapshotSources {
         });
   }
 
+  /** Wraps a vector source with the backend and collection identity required by snapshot wiring. */
   private static CatalogueSnapshotSource identified(
       String backend, String collection, BookVectorSnapshot.Source source) {
     return new CatalogueSnapshotSource() {
+      /** Returns the backend identifier used to match a snapshot source to its configuration. */
       public String backend() {
         return backend;
       }
 
+      /** Returns the collection identifier used to match a snapshot source to its configuration. */
       public String collection() {
         return collection;
       }
 
+      /** Reads the next bounded vector page from the wrapped catalogue source. */
       public BookVectorSnapshot.Page page(String cursor, int limit) throws IOException {
         return source.page(cursor, limit);
       }

@@ -15,12 +15,14 @@ public class UserPreferenceScorer implements CandidateScorer {
   private final double favouritesWeight;
   private final double historyWeight;
 
+  /** Configures the relative favourites and history contributions to user-taste scoring. */
   public UserPreferenceScorer(RankingScoringProperties properties) {
     RankingScoringProperties.UserPreferenceWeights weights = properties.userPreference();
     this.favouritesWeight = weights.favouritesWeight();
     this.historyWeight = weights.historyWeight();
   }
 
+  /** {@inheritDoc} */
   @Override
   public ScoreResult score(AudiobookCandidate candidate, RankingContext context) {
     if (candidate == null
@@ -46,6 +48,7 @@ public class UserPreferenceScorer implements CandidateScorer {
     return ScoreResult.available(score, score > 0.0);
   }
 
+  /** Adds available cosine-similarity evidence with its configured taste-vector weight. */
   private void addSimilarity(
       List<WeightedSimilarity> similarities, float[] candidate, float[] preference, double weight) {
     if (weight > 0.0 && preference != null && preference.length == candidate.length) {

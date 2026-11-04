@@ -26,6 +26,7 @@ public class SolrUserPreferenceRepository implements UserPreferenceVectorReposit
   private final String collection;
   private final int dimension;
 
+  /** Configures separate Solr user storage and rejects invalid collection or dimension settings. */
   public SolrUserPreferenceRepository(
       SolrClient client,
       @Value("${solr.user-preference-collection:user}") String collection,
@@ -40,6 +41,7 @@ public class SolrUserPreferenceRepository implements UserPreferenceVectorReposit
     this.dimension = dimension;
   }
 
+  /** {@inheritDoc} */
   @Override
   public void save(UserPreferenceEmbedding embedding) throws IOException {
     if (embedding == null) {
@@ -48,6 +50,7 @@ public class SolrUserPreferenceRepository implements UserPreferenceVectorReposit
     saveAll(List.of(embedding));
   }
 
+  /** {@inheritDoc} */
   @Override
   public void saveAll(List<UserPreferenceEmbedding> embeddings) throws IOException {
     if (embeddings.isEmpty()) {
@@ -78,11 +81,13 @@ public class SolrUserPreferenceRepository implements UserPreferenceVectorReposit
     }
   }
 
+  /** {@inheritDoc} */
   @Override
   public void clear(String userId) throws IOException {
     clearAll(Collections.singletonList(userId));
   }
 
+  /** {@inheritDoc} */
   @Override
   public void clearAll(List<String> userIds) throws IOException {
     for (String userId : userIds) {
@@ -112,6 +117,7 @@ public class SolrUserPreferenceRepository implements UserPreferenceVectorReposit
     }
   }
 
+  /** {@inheritDoc} */
   @Override
   public Optional<UserPreferenceEmbedding> findEmbeddingByUserId(String userId) throws IOException {
     if (userId == null || userId.isBlank()) {

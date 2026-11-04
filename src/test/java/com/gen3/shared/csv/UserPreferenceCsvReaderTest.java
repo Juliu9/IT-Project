@@ -69,6 +69,38 @@ class UserPreferenceCsvReaderTest {
             new UserHistory("a_b", "c_d", Instant.parse("2026-02-01T00:00:00Z")));
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "2025-02-30 12:00:00,NULL",
+    "2025-02-29 12:00:00,NULL",
+    "2024-02-29 12:00:00,2025-02-30 12:00:00"
+  })
+  void rejectsImpossibleHistoryDates(String created, String updated) throws IOException {
+    Path csv = temporaryDirectory.resolve("invalid-dates.csv");
+    Files.writeString(
+        csv,
+        "type,user,item,created_at,updated_at\nbook,u,rnib:book:42:Title,"
+            + created
+            + ","
+            + updated
+            + "\n");
+    assertThatThrownBy(() -> new UserHistoryCsvReader().read(csv, row -> {}))
+        .isInstanceOf(IOException.class)
+        .hasMessageContaining("row 1");
+  }
+
+  @Test
+  void acceptsLeapDay() throws IOException {
+    Path csv = temporaryDirectory.resolve("leap-day.csv");
+    Files.writeString(
+        csv,
+        "type,user,item,created_at,updated_at\nbook,u,rnib:book:42:Title,2024-02-29 12:00:00,NULL\n");
+    var history = new java.util.ArrayList<UserHistory>();
+    new UserHistoryCsvReader().read(csv, history::add);
+    assertThat(history)
+        .containsExactly(new UserHistory("u", "rnib_42", Instant.parse("2024-02-29T12:00:00Z")));
+  }
+
   /** Rejects malformed catalogue item identifiers instead of producing an unusable point ID. */
   @Test
   void rejectsMalformedBookItem() {

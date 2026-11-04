@@ -9,6 +9,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
     com.gen3.shared.readhistory.postgres.ReadHistoryConfiguration.class)
 public class RecommenderAgentApplication {
 
+  /** Starts this application with the supplied command-line configuration. */
   public static void main(String[] args) {
     SpringApplication.run(RecommenderAgentApplication.class, args);
   }

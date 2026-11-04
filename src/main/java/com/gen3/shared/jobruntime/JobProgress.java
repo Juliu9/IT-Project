@@ -16,10 +16,12 @@ public final class JobProgress implements AutoCloseable {
   private final ScheduledExecutorService scheduler;
   private volatile State state = new State("starting", 0, -1, started);
 
+  /** Starts periodic progress reporting with the supplied job name and reporting settings. */
   public JobProgress(String job) {
     this(job, Duration.ofSeconds(10), LoggerFactory.getLogger(JobProgress.class));
   }
 
+  /** Starts periodic progress reporting with the supplied job name and reporting settings. */
   JobProgress(String job, Duration interval, Logger logger) {
     if (interval.toMillis() < 1) {
       throw new IllegalArgumentException("Progress interval must be positive");
@@ -41,6 +43,7 @@ public final class JobProgress implements AutoCloseable {
         java.util.concurrent.TimeUnit.MILLISECONDS);
   }
 
+  /** Changes the reported job stage and resets its progress-age timer. */
   public void stage(String stage) {
     State before = state;
     if (!before.stage().equals(stage)) {
@@ -48,6 +51,7 @@ public final class JobProgress implements AutoCloseable {
     }
   }
 
+  /** Records processed and total counts and refreshes the last-progress time when they change. */
   public void update(long processed, long total) {
     State before = state;
     state =
@@ -60,6 +64,7 @@ public final class JobProgress implements AutoCloseable {
                 : before.lastProgress());
   }
 
+  /** Emits the current job stage, counts, elapsed time, and time since measurable progress. */
   private void report() {
     State current = state;
     long now = System.nanoTime();
@@ -73,6 +78,7 @@ public final class JobProgress implements AutoCloseable {
         (now - current.lastProgress()) / 1_000_000);
   }
 
+  /** {@inheritDoc} */
   @Override
   public void close() {
     scheduler.shutdownNow();

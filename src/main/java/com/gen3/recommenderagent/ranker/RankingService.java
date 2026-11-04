@@ -18,6 +18,7 @@ public class RankingService implements Ranker {
 
   private final CompositeScorer compositeScorer;
 
+  /** Creates the ranker with the configured composite candidate scorer. */
   public RankingService(CompositeScorer compositeScorer) {
     this.compositeScorer = compositeScorer;
   }
@@ -55,6 +56,7 @@ public class RankingService implements Ranker {
     return toRecommendations(scoredCandidates, limit);
   }
 
+  /** Removes invalid, excluded, and duplicate books before scoring. */
   private List<AudiobookCandidate> eligibleCandidates(
       List<AudiobookCandidate> candidates, RankingContext context) {
     Set<String> seenBookIds = new HashSet<>();
@@ -67,6 +69,7 @@ public class RankingService implements Ranker {
         .toList();
   }
 
+  /** Adds the finite retrieval-score range observed across eligible candidates. */
   private RankingContext scoringContext(List<AudiobookCandidate> eligible, RankingContext context) {
     List<Double> retrievalScores =
         eligible.stream()
@@ -85,6 +88,7 @@ public class RankingService implements Ranker {
     return context.withRetrievalScoreRange(minimumRetrievalScore, maximumRetrievalScore);
   }
 
+  /** Converts sorted scores to ranked recommendations while retaining explanation metadata. */
   private List<Recommendation> toRecommendations(
       List<ScoredCandidate> scoredCandidates, int limit) {
     boolean hasScoredCandidate =

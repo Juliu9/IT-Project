@@ -5,6 +5,7 @@ public enum ShortDescriptionMode {
   MISSING_ONLY,
   REBUILD_ALL;
 
+  /** Resolves the summary-generation mode and rejects unsupported configuration values. */
   public static ShortDescriptionMode parse(String value) {
     if ("missing-only".equals(value)) {
       return MISSING_ONLY;

@@ -14,10 +14,14 @@ import org.springframework.stereotype.Component;
 public class IntentResolver {
   private final InputParser inputParser;
 
+  /** Creates the session-bound intent converter using the configured input parser. */
   public IntentResolver(InputParser inputParser) {
     this.inputParser = inputParser;
   }
 
+  /**
+   * Converts parsed meaning into the application request while the caller owns the session update.
+   */
   public SessionRequest resolve(Session session, String rawText, UserIntent intent) {
     // Keep interpretation here, not in the AI prompt. Existing conversation rules perform the
     // detailed pending-question and page-reference resolution after this conversion.

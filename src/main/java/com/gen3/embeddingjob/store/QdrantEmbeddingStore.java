@@ -26,6 +26,7 @@ public class QdrantEmbeddingStore implements AudiobookEmbeddingStore {
   private final int vectorDimension;
   private boolean checked;
 
+  /** Configures the Qdrant catalogue client, point mapping, and expected vector dimensions. */
   public QdrantEmbeddingStore(
       QdrantClient client,
       QdrantPointMapper mapper,
@@ -37,6 +38,7 @@ public class QdrantEmbeddingStore implements AudiobookEmbeddingStore {
     this.vectorDimension = vectorDimension;
   }
 
+  /** {@inheritDoc} */
   @Override
   public Page embeddingPage(String cursor, int limit, EmbeddingMode mode) throws IOException {
     requireCollection();
@@ -68,6 +70,7 @@ public class QdrantEmbeddingStore implements AudiobookEmbeddingStore {
             : null);
   }
 
+  /** {@inheritDoc} */
   @Override
   public void updateEmbeddings(List<Update> updates) throws IOException {
     if (updates.isEmpty()) {
@@ -88,6 +91,7 @@ public class QdrantEmbeddingStore implements AudiobookEmbeddingStore {
     await(client.updateVectorsAsync(request.build()), "update existing catalogue vectors");
   }
 
+  /** Fails if the configured catalogue collection does not exist. */
   private void requireCollection() throws IOException {
     if (!checked) {
       if (!await(client.collectionExistsAsync(collection), "check Qdrant collection")) {
@@ -97,12 +101,14 @@ public class QdrantEmbeddingStore implements AudiobookEmbeddingStore {
     }
   }
 
+  /** Rejects vectors whose size differs from the configured embedding dimension. */
   private void validateDimension(float[] vector) {
     if (vector == null || vector.length != vectorDimension) {
       throw new IllegalArgumentException("Embedding dimension mismatch");
     }
   }
 
+  /** Converts the stored reference into the point identifier used by Qdrant. */
   private io.qdrant.client.grpc.Common.PointId pointId(String reference) throws IOException {
     try {
       return io.qdrant.client.grpc.Common.PointId.parseFrom(Base64.getDecoder().decode(reference));
@@ -111,6 +117,10 @@ public class QdrantEmbeddingStore implements AudiobookEmbeddingStore {
     }
   }
 
+  /**
+   * Waits for the database operation, preserving interruption and translating failures to I/O
+   * errors.
+   */
   private <T> T await(Future<T> future, String operation) throws IOException {
     try {
       return future.get();

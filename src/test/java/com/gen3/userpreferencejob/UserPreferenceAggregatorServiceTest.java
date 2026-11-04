@@ -56,6 +56,29 @@ class UserPreferenceAggregatorServiceTest {
         new float[] {0.8944272f, 0.4472136f}, saved.getValue().getFirst().historyVector(), 0.0001f);
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"1950-01-01T00:00:00Z", "0001-07-01T00:00:00Z"})
+  void oldHistoriesRetainRelativeWeightsWithoutUnderflow(String timestamp) throws IOException {
+    var books = mock(AudiobookVectorRepository.class);
+    var users = mock(UserPreferenceVectorRepository.class);
+    when(books.findEmbeddingsByBookIds(org.mockito.ArgumentMatchers.anyCollection()))
+        .thenReturn(Map.of("recent", new float[] {1, 0}, "older", new float[] {0, 1}));
+    Instant recent = Instant.parse(timestamp);
+    new UserPreferenceAggregatorService(books, users)
+        .aggregateAndSave(
+            List.of(),
+            List.of(
+                new UserHistory("u", "recent", recent),
+                new UserHistory("u", "older", recent.minus(180, ChronoUnit.DAYS)),
+                new UserHistory("u", "missing", Instant.parse("2026-01-01T00:00:00Z"))),
+            Instant.parse("2026-11-04T00:00:00Z"));
+    ArgumentCaptor<List<UserPreferenceEmbedding>> saved = ArgumentCaptor.forClass(List.class);
+    verify(users).saveAllPreservingMissing(saved.capture());
+    assertArrayEquals(
+        new float[] {0.8944272f, 0.4472136f}, saved.getValue().getFirst().historyVector(), 0.0001f);
+  }
+
   @Test
   void reimportWithNoAvailableVectorsLeavesPreviousTasteSignalsUnchanged() throws IOException {
     var books = mock(AudiobookVectorRepository.class);

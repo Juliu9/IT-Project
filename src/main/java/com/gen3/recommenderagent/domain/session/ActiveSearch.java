@@ -41,6 +41,7 @@ public class ActiveSearch {
             : new ArrayList<>(value.stream().limit(RECOMMENDATION_BATCH_SIZE).toList());
   }
 
+  /** Records new shown IDs in order and evicts the oldest when the 500-ID limit is reached. */
   public void addShownBookIds(List<String> bookIds) {
     if (bookIds == null) {
       return;

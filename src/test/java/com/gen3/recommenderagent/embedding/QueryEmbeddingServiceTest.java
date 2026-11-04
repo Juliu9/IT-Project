@@ -21,10 +21,10 @@ class QueryEmbeddingServiceTest {
     EmbeddingModel model = mock(EmbeddingModel.class);
     QueryEmbeddingService indexer = new QueryEmbeddingService(model);
     SemanticQuery query = new SemanticQuery();
-    query.setTopics(List.of("desert planets"));
+    query.setTopics(List.of("desert planets", "survival"));
     query.setGenres(List.of("science fiction"));
-    query.setKeywords(List.of("survival"));
     String text = indexer.buildSemanticQueryText(query);
+    assertThat(text).isEqualTo("Topics: desert planets, survival\nGenres: science fiction");
     EmbeddingResponse response = mock(EmbeddingResponse.class);
     when(response.getResults()).thenReturn(List.of(new Embedding(new float[] {0, 5}, 0)));
     when(model.embedForResponse(List.of(text))).thenReturn(response);
@@ -40,7 +40,7 @@ class QueryEmbeddingServiceTest {
     SemanticQuery positive = new SemanticQuery();
     positive.setTopics(List.of("space"));
     SemanticQuery negative = new SemanticQuery();
-    negative.setKeywords(List.of("gore"));
+    negative.setTopics(List.of("gore"));
     List<String> texts =
         List.of(indexer.buildSemanticQueryText(positive), indexer.buildSemanticQueryText(negative));
     EmbeddingResponse response = mock(EmbeddingResponse.class);

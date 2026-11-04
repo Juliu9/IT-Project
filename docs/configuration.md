@@ -93,6 +93,9 @@ through the `dev` Spring profile does not expose them to Maven. External suites 
 their explicit `RUN_LIVE_*` gate is `true`; once enabled, missing credentials are test failures rather
 than silent skips.
 
+`clean verify` includes unit and container integration tests. To run every suite, enable both live
+gates; to guarantee no paid calls, pass `-DexcludedGroups=external` regardless of exported gates.
+
 The recommendation test must return saved books and their titles; a nonblank fallback is not enough.
 Parser evaluations use synthetic text and require neither a catalogue nor Redis. Mocked tests cover
 mapping and prompt contracts; live cases measure actual model recognition.
@@ -179,6 +182,8 @@ not a separately installed prerequisite.
 | Maven | `3.9.16` wrapper; `3.9+` enforced | Required | [Maven wrapper](../.mvn/wrapper/maven-wrapper.properties) and [build enforcement](../pom.xml) |
 | Spring Boot | `4.1.0` | Build dependency | [Maven parent](../pom.xml) |
 | Spring AI | `2.0.1` | Build dependency | [Maven dependency management](../pom.xml) |
+| JUnit Jupiter / Mockito | `6.0.3` / `5.23.0` | Test dependencies, managed by Boot | [Maven dependency management](../pom.xml) |
+| Testcontainers | `2.0.5` | Test dependency | [Maven build](../pom.xml) |
 | Solr server | `9.6.0` | Tested | [Solr container test support](../src/test/java/com/gen3/recommenderagent/testsupport/SolrContainerTestSupport.java) |
 | SolrJ client | `9.6.0` | Build dependency | [Maven dependency](../pom.xml) |
 | Qdrant server | `1.19.1` | Tested/local default | [Local Compose services](../compose.yaml) |

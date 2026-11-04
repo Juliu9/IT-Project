@@ -24,6 +24,7 @@ final class CountInput {
 
   record Check(boolean invalid, String modelText) {}
 
+  /** Separates invalid recommendation quantities from the text passed to intent parsing. */
   static Check check(String text) {
     if (text.matches("(?is).*\\b(?:explain|why|reason)\\b.*")) {
       return new Check(false, text);
@@ -68,15 +69,13 @@ final class CountInput {
     return new Check(false, text);
   }
 
+  /** Distinguishes zero used in a subject from a requested recommendation quantity. */
   static boolean describesZero(String text, UserIntent parsed) {
     String normalized = subjectKey(text);
     return java.util.stream.Stream.of(
             parsed.getPositiveSemanticQuery(), parsed.getNegativeSemanticQuery())
         .filter(java.util.Objects::nonNull)
-        .flatMap(
-            query ->
-                java.util.stream.Stream.of(
-                    query.getTopics(), query.getGenres(), query.getKeywords()))
+        .flatMap(query -> java.util.stream.Stream.of(query.getTopics(), query.getGenres()))
         .filter(java.util.Objects::nonNull)
         .flatMap(java.util.Collection::stream)
         .filter(java.util.Objects::nonNull)
@@ -84,6 +83,7 @@ final class CountInput {
         .anyMatch(value -> value.matches("zero\\s+.+") && normalized.contains(value));
   }
 
+  /** Normalizes subject wording for comparison against parsed search meaning. */
   private static String subjectKey(String text) {
     return text.toLowerCase(java.util.Locale.ROOT)
         .replaceAll("\\p{Pd}", " ")
@@ -91,10 +91,12 @@ final class CountInput {
         .strip();
   }
 
+  /** Reports whether the text requests an additional recommendation page. */
   static boolean more(String text) {
     return text.toLowerCase(java.util.Locale.ROOT).matches("(?s).*\\b(?:more|another)\\b.*");
   }
 
+  /** Reports whether the text changes the saved recommendation count. */
   static boolean setting(String text) {
     return text.toLowerCase(java.util.Locale.ROOT)
         .matches("(?s).*\\b(?:count|at a time|per page|per request)\\b.*");

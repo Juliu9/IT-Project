@@ -13,7 +13,7 @@ import java.util.function.Function;
 public class SessionPreferences {
 
   static final int MAX_TERM_CHARACTERS = 256;
-  static final int MAX_TERMS_PER_SEMANTIC_FIELD = 20;
+  public static final int MAX_TERMS_PER_SEMANTIC_FIELD = 10;
   static final int MAX_TOTAL_TERMS = 100;
   static final int MAX_SERIALIZED_BYTES = 32 * 1024;
 
@@ -66,7 +66,6 @@ public class SessionPreferences {
       query.setNarrators(terms);
       query.setGenres(terms);
       query.setTopics(terms);
-      query.setKeywords(terms);
       var exact = new ExactCriteria();
       exact.setAuthors(terms);
       exact.setNarrators(terms);
@@ -86,6 +85,7 @@ public class SessionPreferences {
     return result;
   }
 
+  /** Copies and validates the saved preference set through the same rules used by updates. */
   public SessionPreferences copy() {
     return updated(null, null, List.of());
   }
@@ -98,14 +98,24 @@ public class SessionPreferences {
     var result = new SessionPreferences();
     result.positiveSemanticQuery =
         query(
-            positiveSemanticQuery,
+            query(
+                positiveSemanticQuery,
+                null,
+                get(additions, SessionPreferences::getNegativeSemanticQuery),
+                "positiveSemanticQuery",
+                List.of()),
             get(additions, SessionPreferences::getPositiveSemanticQuery),
             get(removals, SessionPreferences::getPositiveSemanticQuery),
             "positiveSemanticQuery",
             replace);
     result.negativeSemanticQuery =
         query(
-            negativeSemanticQuery,
+            query(
+                negativeSemanticQuery,
+                null,
+                get(additions, SessionPreferences::getPositiveSemanticQuery),
+                "negativeSemanticQuery",
+                List.of()),
             get(additions, SessionPreferences::getNegativeSemanticQuery),
             get(removals, SessionPreferences::getNegativeSemanticQuery),
             "negativeSemanticQuery",
@@ -128,13 +138,14 @@ public class SessionPreferences {
     return result;
   }
 
+  /** Rejects replacement paths that do not name supported preference fields. */
   private static void validateReplacementFields(List<String> replace) {
     for (String path : replace) {
       String[] parts = path == null ? new String[0] : path.split("\\.");
       if (parts.length != 2
           || !(switch (parts[0]) {
             case "positiveSemanticQuery", "negativeSemanticQuery" ->
-                List.of("genres", "topics", "keywords", "authors", "narrators").contains(parts[1]);
+                List.of("genres", "topics", "authors", "narrators").contains(parts[1]);
             case "mustInclude", "mustNotInclude" ->
                 List.of("authors", "narrators", "language", "source", "duration", "publicationYear")
                     .contains(parts[1]);
@@ -146,6 +157,7 @@ public class SessionPreferences {
     }
   }
 
+  /** Combines exact criteria using explicit additions, removals, and field replacements. */
   private static ExactCriteria updatedCriteria(
       ExactCriteria base,
       ExactCriteria additions,
@@ -192,6 +204,7 @@ public class SessionPreferences {
     return result;
   }
 
+  /** Reports whether any criteria or preference values are present. */
   public boolean hasValues() {
     return hasQuery(positiveSemanticQuery)
         || hasQuery(negativeSemanticQuery)
@@ -211,18 +224,22 @@ public class SessionPreferences {
             .anyMatch(value -> value != null && !value.isBlank());
   }
 
+  /** Reports whether the semantic query contains any usable preference values. */
   private static boolean hasQuery(SemanticQuery query) {
     return query != null && query.hasValues();
   }
 
+  /** Reports whether the supplied list contains at least one nonblank term. */
   private static boolean hasTerms(List<String> terms) {
     return terms != null && terms.stream().anyMatch(value -> value != null && !value.isBlank());
   }
 
+  /** Reads a nested value safely when its containing object may be absent. */
   private static <T, R> R get(T source, Function<T, R> getter) {
     return source == null ? null : getter.apply(source);
   }
 
+  /** Combines semantic fields while respecting removals, replacements, and person limits. */
   private static SemanticQuery query(
       SemanticQuery base,
       SemanticQuery additions,
@@ -245,12 +262,6 @@ public class SessionPreferences {
             get(additions, SemanticQuery::getTopics),
             get(removals, SemanticQuery::getTopics),
             replace.contains(prefix + ".topics")));
-    result.setKeywords(
-        terms(
-            get(base, SemanticQuery::getKeywords),
-            get(additions, SemanticQuery::getKeywords),
-            get(removals, SemanticQuery::getKeywords),
-            replace.contains(prefix + ".keywords")));
     result.setAuthors(
         personTerms(
             get(base, SemanticQuery::getAuthors),
@@ -266,6 +277,7 @@ public class SessionPreferences {
     return result;
   }
 
+  /** Resolves one person value and applies removals using normalized name comparisons. */
   private static List<String> personTerms(
       List<String> base, List<String> additions, List<String> removals, boolean replace) {
     var supplied = singlePerson(additions);
@@ -286,6 +298,7 @@ public class SessionPreferences {
     return remaining.isEmpty() ? null : remaining;
   }
 
+  /** Normalizes person names and rejects more than one distinct person in a field. */
   private static List<String> singlePerson(List<String> values) {
     if (values == null) {
       return null;
@@ -302,6 +315,7 @@ public class SessionPreferences {
     return unique.isEmpty() ? null : List.copyOf(unique.values());
   }
 
+  /** Combines semantic terms with case-insensitive deduplication and explicit removals. */
   private static List<String> terms(
       List<String> base, List<String> additions, List<String> removals, boolean replace) {
     var result = new LinkedHashMap<String, String>();
@@ -321,6 +335,9 @@ public class SessionPreferences {
     return result.isEmpty() ? null : List.copyOf(result.values());
   }
 
+  /**
+   * Rejects preference sets exceeding field, value-length, total-value, or serialized-size limits.
+   */
   private static void validateLimits(SessionPreferences preferences) {
     var values = new java.util.ArrayList<String>();
     for (var query :
@@ -335,11 +352,10 @@ public class SessionPreferences {
           java.util.List.of(
               safe(query.getGenres()),
               safe(query.getTopics()),
-              safe(query.getKeywords()),
               safe(query.getAuthors()),
               safe(query.getNarrators()))) {
         if (field.size() > MAX_TERMS_PER_SEMANTIC_FIELD) {
-          throw new InvalidRequestException(
+          throw new PreferenceLimitException(
               "Please keep each preference category to "
                   + MAX_TERMS_PER_SEMANTIC_FIELD
                   + " values or fewer.");
@@ -369,10 +385,12 @@ public class SessionPreferences {
     }
   }
 
+  /** Returns an empty list when no values are supplied. */
   private static List<String> safe(List<String> values) {
     return values == null ? List.of() : values;
   }
 
+  /** Collects exact-constraint values for total preference limit validation. */
   private static void addCriteria(List<String> values, ExactCriteria criteria) {
     if (criteria == null) {
       return;
@@ -388,6 +406,7 @@ public class SessionPreferences {
         .forEach(values::add);
   }
 
+  /** Applies an optional scalar addition, removal, or replacement to the inherited value. */
   private static String scalar(String base, String addition, String removal, boolean replace) {
     String value = addition != null && !addition.isBlank() ? addition : replace ? null : base;
     return value != null && removal != null && value.trim().equalsIgnoreCase(removal.trim())

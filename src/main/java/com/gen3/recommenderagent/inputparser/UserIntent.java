@@ -177,6 +177,7 @@ public class UserIntent {
     this.personalised = personalised;
   }
 
+  /** Creates an empty instance for subsequent configuration or state restoration. */
   public UserIntent() {}
 
   public ConversationAction getIntent() {

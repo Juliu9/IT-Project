@@ -33,6 +33,9 @@ public class ConversationDraft extends SessionRequest {
     return turn;
   }
 
+  /**
+   * Snapshots the working draft into a conversation turn with copied search and preference state.
+   */
   public static ConversationTurn toTurn(ConversationDraft draft) {
     var turn = new ConversationTurn();
     turn.setSearchContext(draft.getSearchContext().copy());
@@ -45,6 +48,10 @@ public class ConversationDraft extends SessionRequest {
     turn.setExplanationSelection(draft.getExplanationSelection());
     turn.setReferenceRank(draft.getReferenceRank());
     turn.setReferenceTitle(draft.getReferenceTitle());
+    turn.setSessionPreferenceSnapshot(
+        draft.getSessionPreferenceSnapshot() == null
+            ? null
+            : draft.getSessionPreferenceSnapshot().copy());
     turn.setBookCount(draft.getBookCount());
     turn.setInvalidBookCount(draft.isInvalidBookCount());
     turn.setOutcome(draft.getOutcome());
@@ -56,6 +63,7 @@ public class ConversationDraft extends SessionRequest {
     return turn;
   }
 
+  /** Restores a working draft from a retained conversation snapshot. */
   public static ConversationDraft fromTurn(ConversationTurn turn) {
     var draft = new ConversationDraft();
     draft.setSearchContext(turn.getSearchContext().copy());
@@ -68,6 +76,10 @@ public class ConversationDraft extends SessionRequest {
     draft.setExplanationSelection(turn.getExplanationSelection());
     draft.setReferenceRank(turn.getReferenceRank());
     draft.setReferenceTitle(turn.getReferenceTitle());
+    draft.setSessionPreferenceSnapshot(
+        turn.getSessionPreferenceSnapshot() == null
+            ? null
+            : turn.getSessionPreferenceSnapshot().copy());
     draft.setBookCount(turn.getBookCount());
     draft.setInvalidBookCount(turn.isInvalidBookCount());
     draft.setOutcome(turn.getOutcome());
@@ -77,6 +89,16 @@ public class ConversationDraft extends SessionRequest {
     draft.setNoMoreRecommendations(turn.isNoMoreRecommendations());
     draft.setRecommendations(turn.getRecommendations());
     return draft;
+  }
+
+  private SessionPreferences sessionPreferenceSnapshot;
+
+  public SessionPreferences getSessionPreferenceSnapshot() {
+    return sessionPreferenceSnapshot;
+  }
+
+  public void setSessionPreferenceSnapshot(SessionPreferences value) {
+    sessionPreferenceSnapshot = value;
   }
 
   private boolean preferenceAnswer;
@@ -212,6 +234,7 @@ public class ConversationDraft extends SessionRequest {
     return searchContext.isPersonalised();
   }
 
+  /** {@inheritDoc} */
   @Override
   public boolean requiresSemanticRetrieval() {
     return isPersonalised() || searchContext.getSimilarBook() != null;

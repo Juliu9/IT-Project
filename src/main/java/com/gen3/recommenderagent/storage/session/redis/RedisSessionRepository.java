@@ -59,6 +59,7 @@ public class RedisSessionRepository implements SessionRepository {
   private final Duration lockRenewalInterval;
   private final ScheduledExecutorService lockRenewalExecutor;
 
+  /** Configures typed session storage and the lock lease used to coordinate session updates. */
   @Autowired
   public RedisSessionRepository(
       RedisTemplate<String, Session> redisTemplate, StringRedisTemplate stringRedisTemplate) {
@@ -66,6 +67,7 @@ public class RedisSessionRepository implements SessionRepository {
         redisTemplate, stringRedisTemplate, LOCK_TTL, LOCK_RENEWAL_INTERVAL, LOCK_RENEWAL_EXECUTOR);
   }
 
+  /** Configures typed session storage and the lock lease used to coordinate session updates. */
   RedisSessionRepository(
       RedisTemplate<String, Session> redisTemplate,
       StringRedisTemplate stringRedisTemplate,
@@ -79,11 +81,13 @@ public class RedisSessionRepository implements SessionRepository {
     this.lockRenewalExecutor = lockRenewalExecutor;
   }
 
+  /** {@inheritDoc} */
   @Override
   public Session snapshot(String sessionId, String userId) {
     return redisTemplate.opsForValue().get(sessionKey(sessionId, userId));
   }
 
+  /** {@inheritDoc} */
   @Override
   public <T, R> R update(
       String sessionId, String userId, Function<Session, T> change, Function<T, R> afterCommit) {
@@ -106,6 +110,7 @@ public class RedisSessionRepository implements SessionRepository {
                 }));
   }
 
+  /** Loads an existing session or creates a new session with the supplied identity. */
   private Session load(String sessionId, String userId) {
     Session session = redisTemplate.opsForValue().get(sessionKey(sessionId, userId));
     if (session == null) {
@@ -117,6 +122,7 @@ public class RedisSessionRepository implements SessionRepository {
     return session;
   }
 
+  /** Saves the session only while lock ownership and the watched version remain valid. */
   private boolean commit(Session session, LockOwnership lock) {
     // A successful renewal must not change the watched key before EXEC.
     synchronized (lock) {
@@ -124,6 +130,7 @@ public class RedisSessionRepository implements SessionRepository {
       return Boolean.TRUE.equals(
           redisTemplate.execute(
               new SessionCallback<Boolean>() {
+                /** {@inheritDoc} */
                 @Override
                 public <K, V> Boolean execute(RedisOperations<K, V> operations) {
                   RedisOperations<String, Session> sessionOperations =
@@ -153,6 +160,7 @@ public class RedisSessionRepository implements SessionRepository {
     }
   }
 
+  /** Holds a renewable owner-token lock through transition, commit, and response generation. */
   private <T> T withSessionLock(
       String sessionId, String userId, Function<LockOwnership, T> operation) {
     String lockKey = "lock:" + sessionKey(sessionId, userId);
@@ -185,6 +193,7 @@ public class RedisSessionRepository implements SessionRepository {
     }
   }
 
+  /** Extends the owned lock lease and marks ownership lost if renewal cannot be confirmed. */
   private void renew(LockOwnership lock) {
     synchronized (lock) {
       try {
@@ -200,11 +209,13 @@ public class RedisSessionRepository implements SessionRepository {
     }
   }
 
+  /** Narrows Redis callback operations to the typed session representation. */
   @SuppressWarnings("unchecked")
   private RedisOperations<String, Session> sessionOperations(RedisOperations<?, ?> operations) {
     return (RedisOperations<String, Session>) operations;
   }
 
+  /** Builds an unambiguous Redis key from the user ID length, user ID, and session ID. */
   private String sessionKey(String sessionId, String userId) {
     String user = Objects.requireNonNull(userId, "userId must not be null");
     String session = Objects.requireNonNull(sessionId, "sessionId must not be null");
@@ -213,6 +224,7 @@ public class RedisSessionRepository implements SessionRepository {
 
   private record LockOwnership(String key, String owner, AtomicBoolean lost) {
 
+    /** Confirms that this request still owns the lock and has not observed a lost lease. */
     private boolean isOwnedBy(StringRedisTemplate redis) {
       return !lost.get() && owner.equals(redis.opsForValue().get(key));
     }

@@ -17,10 +17,15 @@ import java.util.Set;
 public class UserPreferenceImportManifest {
   private final Path path;
 
+  /** Selects the manifest file used to bind writes to an approved dry run. */
   public UserPreferenceImportManifest(Path path) {
     this.path = path;
   }
 
+  /**
+   * Writes a dry-run manifest or rejects write inputs that differ from the approved hashes and
+   * counts.
+   */
   public void approve(
       String mode,
       Path favourites,
@@ -48,6 +53,7 @@ public class UserPreferenceImportManifest {
     }
   }
 
+  /** Builds the input hashes, snapshot identity, and outcome counts bound by import approval. */
   private Properties properties(
       Path favourites,
       Path history,
@@ -70,12 +76,14 @@ public class UserPreferenceImportManifest {
     return properties;
   }
 
+  /** Adds the normalized input path and its checksum to the manifest properties. */
   private void file(Properties properties, String prefix, Path file) throws IOException {
     Path normalized = file.toAbsolutePath().normalize();
     properties.setProperty(prefix + ".file", normalized.toString());
     properties.setProperty(prefix + ".sha256", sha256(normalized));
   }
 
+  /** Writes the dry-run approval manifest and restricts its permissions where supported. */
   private void write(Properties properties) throws IOException {
     Path parent = path.toAbsolutePath().getParent();
     Files.createDirectories(parent);
@@ -90,6 +98,7 @@ public class UserPreferenceImportManifest {
     }
   }
 
+  /** Calculates the input file checksum without loading the whole file into memory. */
   private String sha256(Path file) throws IOException {
     MessageDigest digest;
     try {

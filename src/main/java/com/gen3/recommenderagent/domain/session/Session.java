@@ -119,6 +119,7 @@ public class Session {
         : null;
   }
 
+  /** Creates an empty instance for subsequent configuration or state restoration. */
   public Session() {}
 
   public String getSessionId() {
@@ -192,12 +193,16 @@ public class Session {
     return current.updated(additions, removals, replacementFields);
   }
 
+  /** Clears an unfinished preference question without disturbing other question types. */
   public void clearPreferenceQuestions() {
     if (pendingQuestion instanceof PendingQuestion.Preference) {
       pendingQuestion = null;
     }
   }
 
+  /**
+   * Clears search, replay, and pending-question state while retaining saved preferences and count.
+   */
   public void clearHistory() {
     pendingQuestion = null;
     this.lastOutcome = null;

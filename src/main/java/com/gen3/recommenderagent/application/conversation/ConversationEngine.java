@@ -19,6 +19,9 @@ public class ConversationEngine {
   private final RecommendationPager pager;
   private final ExactFilterPolicy planner;
 
+  /**
+   * Connects conversation policy, paging, exact-filter validation, and reference-book resolution.
+   */
   public ConversationEngine(
       ConversationDispatcher conversation,
       RecommendationPager pager,
@@ -30,10 +33,15 @@ public class ConversationEngine {
     this.planner = planner;
   }
 
+  /** Runs a session conversation action and returns its completed turn snapshot. */
   public ConversationTurn process(Session session, SessionRequest request) {
     return ConversationDraft.toTurn(apply(session, request));
   }
 
+  /**
+   * Resolves and validates the action, obtains any required page, and completes session history
+   * updates.
+   */
   private ConversationDraft apply(Session session, SessionRequest original) {
     var previousBatch = new ArrayList<>(session.getActiveSearch().getPendingRecommendations());
     ConversationDraft result =

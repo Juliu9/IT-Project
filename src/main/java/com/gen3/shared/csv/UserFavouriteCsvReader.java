@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class UserFavouriteCsvReader {
 
+  /** Streams valid book favourites with normalized IDs, skipping non-book records. */
   public void read(Path path, CsvRecordConsumer<UserFavourite> consumer) throws IOException {
 
     CSVFormat format =

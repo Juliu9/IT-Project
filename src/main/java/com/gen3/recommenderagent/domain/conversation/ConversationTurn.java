@@ -14,6 +14,16 @@ import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ConversationTurn {
+  private SessionPreferences sessionPreferenceSnapshot;
+
+  public SessionPreferences getSessionPreferenceSnapshot() {
+    return sessionPreferenceSnapshot;
+  }
+
+  public void setSessionPreferenceSnapshot(SessionPreferences value) {
+    sessionPreferenceSnapshot = value;
+  }
+
   private boolean invalidBookCount;
 
   public boolean isInvalidBookCount() {

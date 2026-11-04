@@ -129,7 +129,7 @@ class ApprovedInputFlowTest {
     var page = search();
     var preferences = new SessionPreferences();
     var tastes = new SemanticQuery();
-    tastes.setKeywords(List.of("adventure"));
+    tastes.setTopics(List.of("adventure"));
     preferences.setPositiveSemanticQuery(tastes);
     session.setPreferences(preferences);
     session.setBookCount(3);
@@ -146,6 +146,7 @@ class ApprovedInputFlowTest {
           case REPEAT -> "repeat";
           case REPEAT_RECOMMENDATIONS -> "repeat the recommendations";
           case EXPLAIN_RECOMMENDATION -> "explain the second one";
+          case EXPLAIN_PREFERENCES -> "what are my current session preferences";
           case CHANGE_COUNT -> "set count to two";
           case UPDATE_PREFERENCES -> "remember that I like comedy";
           case RESET_PREFERENCES -> "reset preferences";
@@ -162,7 +163,7 @@ class ApprovedInputFlowTest {
       var query = new SemanticQuery();
       if (action == ConversationAction.UPDATE_PREFERENCES) {
         var update = new SessionPreferences();
-        query.setKeywords(List.of("comedy"));
+        query.setTopics(List.of("comedy"));
         update.setPositiveSemanticQuery(query);
         stated.setPreferenceUpdates(update);
       } else {
@@ -204,7 +205,7 @@ class ApprovedInputFlowTest {
               .containsExactly(2);
       case CHANGE_COUNT -> assertThat(session.getBookCount()).isEqualTo(2);
       case UPDATE_PREFERENCES ->
-          assertThat(session.getPreferences().getPositiveSemanticQuery().getKeywords())
+          assertThat(session.getPreferences().getPositiveSemanticQuery().getTopics())
               .containsExactly("adventure", "comedy");
       case RESET_PREFERENCES -> {
         assertThat(session.getPreferences()).isNull();
@@ -214,6 +215,12 @@ class ApprovedInputFlowTest {
         assertThat(session.getActiveSearch().getSearch()).isNull();
         assertThat(session.getActiveSearch().getPendingRecommendations()).isEmpty();
         assertThat(session.getActiveSearch().getShownBookIds()).isEmpty();
+      }
+      case EXPLAIN_PREFERENCES -> {
+        assertThat(result.getRecommendations()).isEmpty();
+        assertThat(responses.generate(result.getRecommendations(), result))
+            .contains(
+                "You enjoy stories about adventure.", "I'll give you 3 recommendations at a time.");
       }
       case HELP, CANCEL, UNKNOWN -> assertThat(result.getRecommendations()).isEmpty();
       default -> throw new AssertionError("Missing intent assertions: " + action);
@@ -567,7 +574,7 @@ class ApprovedInputFlowTest {
     search();
     var result = process("the same but less violent");
     assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
-    assertThat(result.getNegativeSemanticQuery().getKeywords()).containsExactly("violent");
+    assertThat(result.getNegativeSemanticQuery().getTopics()).containsExactly("violent");
     result = process("only books without romance");
     assertThat(result.getNegativeSemanticQuery().getGenres()).containsExactly("romance");
     verifyNoInteractions(ai);

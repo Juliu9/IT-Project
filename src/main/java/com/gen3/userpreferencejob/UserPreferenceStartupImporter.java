@@ -31,6 +31,7 @@ public class UserPreferenceStartupImporter implements ApplicationRunner {
   @Value("${user.preferences.import.manifest-path:./data/user-import-work/approved.properties}")
   private Path manifestPath;
 
+  /** Connects the streaming importer to the compatible local book-vector snapshot. */
   public UserPreferenceStartupImporter(
       StreamingUserPreferenceImporter importer,
       com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot snapshot) {
@@ -38,6 +39,7 @@ public class UserPreferenceStartupImporter implements ApplicationRunner {
     this.snapshot = snapshot;
   }
 
+  /** {@inheritDoc} */
   @Override
   public void run(ApplicationArguments args) throws Exception {
     long started = System.nanoTime();

@@ -64,7 +64,7 @@ end-to-end throughput.
 Specialized models may reduce the AI bottleneck for narrow, structured work. For example,
 [Jev](https://jev-ai.org/docs/) accepts application state and typed questions, then returns bounded
 answers with probability distributions rather than conversational text. ScaleDown offers separate
-[Classify](https://skmtc.dev/scaledown/apis/scaledown-api/docs/classify/post),
+[Classify](https://docs.scaledown.ai/api-reference/classify-overview),
 [Extract](https://docs.scaledown.ai/api-reference/extract-overview), and
 [Summarize](https://docs.scaledown.ai/api-reference/summarize-overview) task models: Classify chooses
 among defined labels with scores, Extract returns requested fields, and Summarize produces a

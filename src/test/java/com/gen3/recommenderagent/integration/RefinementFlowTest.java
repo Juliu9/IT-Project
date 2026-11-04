@@ -443,7 +443,7 @@ class RefinementFlowTest {
     positive.setGenres(List.of("mystery"));
     initial.setPositiveSemanticQuery(positive);
     var negative = new SemanticQuery();
-    negative.setKeywords(List.of("dark"));
+    negative.setTopics(List.of("dark"));
     initial.setNegativeSemanticQuery(negative);
     initial.setMustInclude(include);
     process(initial);
@@ -482,7 +482,7 @@ class RefinementFlowTest {
       assertThat(result.getSearchCriteria().getPositiveSemanticQuery().getGenres())
           .containsExactlyElementsOf(expected);
       assertThat(result.getMustInclude().getDuration()).isEqualTo("under 10 hours");
-      assertThat(result.getNegativeSemanticQuery().getKeywords()).containsExactly("dark");
+      assertThat(result.getNegativeSemanticQuery().getTopics()).containsExactly("dark");
       assertThat(result.getReplaceSearchFields())
           .containsExactlyElementsOf(
               replacement.isEmpty() ? List.of() : List.of("positiveSemanticQuery.genres"));
