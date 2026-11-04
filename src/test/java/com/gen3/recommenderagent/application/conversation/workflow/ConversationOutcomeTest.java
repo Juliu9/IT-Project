@@ -20,6 +20,7 @@ class ConversationOutcomeTest {
     assertThat(ConversationOutcome.values())
         .containsExactly(
             ConversationOutcome.UNAVAILABLE,
+            ConversationOutcome.PREFERENCE_LIMIT_EXCEEDED,
             ConversationOutcome.SEARCH_DECLINED,
             ConversationOutcome.RECENCY_EXHAUSTED,
             ConversationOutcome.NOTHING_TO_REPEAT,
