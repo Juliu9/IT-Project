@@ -5,6 +5,7 @@ public enum EmbeddingMode {
   MISSING_ONLY,
   REBUILD_ALL;
 
+  /** Resolves the configured embedding mode and rejects unsupported values. */
   public static EmbeddingMode parse(String value) {
     if ("missing-only".equals(value)) {
       return MISSING_ONLY;

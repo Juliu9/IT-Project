@@ -2,7 +2,6 @@ package com.gen3.recommenderagent.application.recommendation;
 
 import static com.gen3.recommenderagent.domain.recommendation.RecommendationPolicy.RECOMMENDATION_BATCH_SIZE;
 
-import com.gen3.catalogue.vector.VectorMath;
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
@@ -15,6 +14,7 @@ import com.gen3.recommenderagent.ranker.RankingContext;
 import com.gen3.recommenderagent.retrieval.CandidateRetriever;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
+import com.gen3.shared.vector.VectorMath;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -91,6 +91,9 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
       }
     }
     Set<String> shownBookIds = new HashSet<>(shownBooks(session));
+    if (request != null) {
+      shownBookIds.addAll(request.getReadBookIds());
+    }
     if (request != null && request.getSearchContext().getSimilarBook() != null) {
       shownBookIds.add(request.getSearchContext().getSimilarBook().bookId());
     }
@@ -118,6 +121,7 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
     return recommendations;
   }
 
+  /** Builds retrieval evidence from explicit semantics, stored taste, and any reference book. */
   private SemanticQueryVectors retrievalVectors(
       ConversationDraft request, UserPreferenceEmbedding preferences) {
     var context = request == null ? null : request.getSearchContext();
@@ -149,12 +153,14 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
     return new SemanticQueryVectors(List.of(combined), List.of());
   }
 
+  /** Adds nonempty vector evidence to the supplied collection. */
   private void addVector(List<float[]> vectors, float[] vector) {
     if (vector != null && vector.length > 0) {
       vectors.add(vector);
     }
   }
 
+  /** Loads stored user taste once per search and retains its snapshot for later pages. */
   private Optional<UserPreferenceEmbedding> userPreferences(Session session) {
     if (session == null || session.getUserId() == null || session.getUserId().isBlank()) {
       return Optional.empty();
@@ -167,6 +173,7 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
     }
   }
 
+  /** Collects book IDs already shown or excluded from the active search. */
   private Set<String> shownBooks(Session session) {
     if (session == null || session.getActiveSearch().getShownBookIds() == null) {
       return Set.of();

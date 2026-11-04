@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
@@ -44,8 +44,8 @@ class ConversationDispatcherTest {
     answer.setRawText(text);
     var result = conversationState.begin(session, answer);
     conversationState.finish(session, result, answer);
-    assertEquals(ConversationDecision.CANCELLED, result.getDecision());
-    assertNull(session.getPendingDecision());
+    assertNull(result.getOutcome());
+    assertNull(session.getPendingQuestionKind());
     assertFalse(session.isAwaitingPreferenceUpdate());
     assertEquals(preferences, session.getPreferences());
     assertEquals(3, session.getBookCount());
@@ -55,25 +55,25 @@ class ConversationDispatcherTest {
   @org.junit.jupiter.params.provider.ValueSource(strings = {"no", "not now", "leave it"})
   void decliningAPendingSelectionCancelsIt(String text) {
     var session = new Session();
-    session.setPendingDecision(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+    session.setPendingQuestionKind(ConversationQuestion.EXPLANATION_TARGET_CLARIFICATION);
     var reply = request(ConversationAction.UNKNOWN);
     reply.setRawText(text);
     var result = conversationState.begin(session, reply);
     conversationState.finish(session, result, reply);
-    assertEquals(ConversationDecision.CANCELLED, result.getDecision());
-    assertNull(session.getPendingDecision());
+    assertNull(result.getOutcome());
+    assertNull(session.getPendingQuestionKind());
   }
 
   @Test
   void preferenceSpecificDeclinesDoNotCancelOtherQuestions() {
     var session = new Session();
-    session.setPendingDecision(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+    session.setPendingQuestionKind(ConversationQuestion.EXPLANATION_TARGET_CLARIFICATION);
     var reply = request(ConversationAction.UNKNOWN);
     reply.setRawText("keep my preferences");
     var result = new ClarificationResolver().resolve(session, reply);
     assertTrue(result.getIntent() != ConversationAction.CANCEL);
     assertEquals(
-        ConversationDecision.EXPLANATION_TARGET_CLARIFICATION, session.getPendingDecision());
+        ConversationQuestion.EXPLANATION_TARGET_CLARIFICATION, session.getPendingQuestionKind());
   }
 
   private final ConversationDispatcher conversationState = ConversationTestSupport.dispatcher();
@@ -127,7 +127,7 @@ class ConversationDispatcherTest {
     ConversationDraft pending = request(ConversationAction.UNKNOWN);
     pending.setPersonalised(true);
     pending.setPreferenceClarificationRequired(true);
-    session.setPendingDecision(ConversationDecision.PREFERENCE_CLARIFICATION);
+    session.setPendingQuestionKind(ConversationQuestion.PREFERENCE_CLARIFICATION);
     ((com.gen3.recommenderagent.domain.session.PendingQuestion.Preference)
             session.getPendingQuestion())
         .setRequest(ConversationDraft.toTurn(pending));
@@ -150,7 +150,7 @@ class ConversationDispatcherTest {
     ConversationDraft pending = request(ConversationAction.UNKNOWN);
     pending.setPersonalised(true);
     pending.setPreferenceClarificationRequired(true);
-    session.setPendingDecision(ConversationDecision.PREFERENCE_CLARIFICATION);
+    session.setPendingQuestionKind(ConversationQuestion.PREFERENCE_CLARIFICATION);
     ((com.gen3.recommenderagent.domain.session.PendingQuestion.Preference)
             session.getPendingQuestion())
         .setRequest(ConversationDraft.toTurn(pending));
@@ -209,7 +209,7 @@ class ConversationDispatcherTest {
     var pending = request(ConversationAction.RECOMMENDATION);
     pending.setPreferenceClarificationRequired(true);
     pending.setPersonalised(true);
-    session.setPendingDecision(ConversationDecision.PREFERENCE_CLARIFICATION);
+    session.setPendingQuestionKind(ConversationQuestion.PREFERENCE_CLARIFICATION);
     ((com.gen3.recommenderagent.domain.session.PendingQuestion.Preference)
             session.getPendingQuestion())
         .setRequest(ConversationDraft.toTurn(pending));
@@ -223,12 +223,10 @@ class ConversationDispatcherTest {
     assertFalse(conversationState.needsRecommendations(result));
     conversationState.finish(session, result, reply);
     assertFalse(session.isAwaitingPersonalisedPreferences());
-    assertEquals(ConversationDecision.CANCELLED, result.getDecision());
+    assertNull(result.getOutcome());
     assertEquals(List.of("saved-book"), session.getActiveSearch().getShownBookIds());
     assertEquals(preferences, session.getPreferences());
-    assertEquals(
-        ConversationDecision.CANCELLED,
-        conversationState.begin(session, request(ConversationAction.REPEAT)).getDecision());
+    assertNull(conversationState.begin(session, request(ConversationAction.REPEAT)).getOutcome());
   }
 
   @Test
@@ -236,7 +234,7 @@ class ConversationDispatcherTest {
     var session = new Session();
     var pending = request(ConversationAction.RECOMMENDATION);
     pending.setPreferenceClarificationRequired(true);
-    session.setPendingDecision(ConversationDecision.PREFERENCE_CLARIFICATION);
+    session.setPendingQuestionKind(ConversationQuestion.PREFERENCE_CLARIFICATION);
     ((com.gen3.recommenderagent.domain.session.PendingQuestion.Preference)
             session.getPendingQuestion())
         .setRequest(ConversationDraft.toTurn(pending));
@@ -255,7 +253,7 @@ class ConversationDispatcherTest {
     var pending = searchRequest(ConversationAction.RECOMMENDATION, "horror");
     pending.setPersonalised(true);
     pending.setPreferenceClarificationRequired(true);
-    session.setPendingDecision(ConversationDecision.PREFERENCE_CLARIFICATION);
+    session.setPendingQuestionKind(ConversationQuestion.PREFERENCE_CLARIFICATION);
     ((com.gen3.recommenderagent.domain.session.PendingQuestion.Preference)
             session.getPendingQuestion())
         .setRequest(ConversationDraft.toTurn(pending));
@@ -275,7 +273,7 @@ class ConversationDispatcherTest {
         ConversationDraft.toTurn(searchRequest(ConversationAction.RECOMMENDATION, "fantasy")));
     var pending = searchRequest(ConversationAction.RECOMMENDATION, "horror");
     pending.setPreferenceClarificationRequired(true);
-    session.setPendingDecision(ConversationDecision.PREFERENCE_CLARIFICATION);
+    session.setPendingQuestionKind(ConversationQuestion.PREFERENCE_CLARIFICATION);
     ((com.gen3.recommenderagent.domain.session.PendingQuestion.Preference)
             session.getPendingQuestion())
         .setRequest(ConversationDraft.toTurn(pending));
@@ -291,11 +289,11 @@ class ConversationDispatcherTest {
     var pending = request(ConversationAction.RECOMMENDATION);
     pending.setPersonalised(true);
     pending.setPreferenceClarificationRequired(true);
-    session.setPendingDecision(ConversationDecision.PREFERENCE_CLARIFICATION);
+    session.setPendingQuestionKind(ConversationQuestion.PREFERENCE_CLARIFICATION);
     ((com.gen3.recommenderagent.domain.session.PendingQuestion.Preference)
             session.getPendingQuestion())
         .setRequest(ConversationDraft.toTurn(pending));
-    session.setPendingDecision(ConversationDecision.PREFERENCE_CLARIFICATION);
+    session.setPendingQuestionKind(ConversationQuestion.PREFERENCE_CLARIFICATION);
     var update = request(ConversationAction.UPDATE_PREFERENCES);
     var question = conversationState.begin(session, update);
     conversationState.finish(session, question, update);

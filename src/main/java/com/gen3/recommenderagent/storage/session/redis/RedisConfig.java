@@ -14,6 +14,7 @@ import tools.jackson.databind.ObjectMapper;
 @Configuration
 public class RedisConfig {
 
+  /** Builds a Redis template with string keys and typed JSON session values. */
   @Bean
   public RedisTemplate<String, Session> redisTemplate(
       RedisConnectionFactory connectionFactory, ObjectMapper objectMapper) {

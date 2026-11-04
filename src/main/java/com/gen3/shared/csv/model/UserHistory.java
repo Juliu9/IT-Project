@@ -1,0 +1,20 @@
+package com.gen3.shared.csv.model;
+
+import java.time.Instant;
+
+public record UserHistory(
+    String userId, String bookId, Instant lastInteractionTime) { // Changed field name
+
+  /** Creates a history interaction and validates its user, book, and interaction timestamp. */
+  public UserHistory {
+    if (userId == null || userId.isBlank()) {
+      throw new IllegalArgumentException("User ID must not be blank");
+    }
+    if (bookId == null || bookId.isBlank()) {
+      throw new IllegalArgumentException("Book ID must not be blank");
+    }
+    if (lastInteractionTime == null) {
+      throw new IllegalArgumentException("Interaction timestamp must not be null");
+    }
+  }
+}

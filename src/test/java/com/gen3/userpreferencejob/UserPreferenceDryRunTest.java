@@ -5,9 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import com.gen3.catalogue.port.AudiobookVectorRepository;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookVectorRepository;
 import io.qdrant.client.QdrantClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -46,9 +46,9 @@ class UserPreferenceDryRunTest {
     com.gen3.snapshotjob.SnapshotConfiguration.snapshot(environment)
         .rebuild(
             (cursor, limit) ->
-                new com.gen3.catalogue.snapshot.BookVectorSnapshot.Page(
+                new com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot.Page(
                     java.util.List.of(
-                        new com.gen3.catalogue.snapshot.BookVectorSnapshot.Entry(
+                        new com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot.Entry(
                             missing ? "other" : "local_one", new float[] {1, 0})),
                     null),
             10);
@@ -93,7 +93,7 @@ class UserPreferenceDryRunTest {
               .getBean(UserPreferenceStartupImporter.class)
               .run(new DefaultApplicationArguments());
           assertThat(context.getBean(AudiobookVectorRepository.class))
-              .isInstanceOf(com.gen3.catalogue.snapshot.BookVectorSnapshot.class);
+              .isInstanceOf(com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot.class);
           verifyNoInteractions(solr, qdrant);
         });
     assertThat(output.getOut())
@@ -102,8 +102,8 @@ class UserPreferenceDryRunTest {
             "csvReadMs=",
             "aggregationMs=",
             "totalMs=",
-            missing ? "missingVectorUsers=1 clears=0" : "generatedProfiles=1 writes=0",
-            "No user preference vectors were saved or cleared.")
+            missing ? "unmappedUsers=1" : "partialUpdates=1",
+            "No user preference vectors were changed.")
         .doesNotContain("Successfully aggregated and saved");
   }
 
@@ -126,10 +126,10 @@ class UserPreferenceDryRunTest {
           com.gen3.snapshotjob.SnapshotConfiguration.snapshot(environment)
               .rebuild(
                   (cursor, limit) ->
-                      new com.gen3.catalogue.snapshot.BookVectorSnapshot.Page(
+                      new com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot.Page(
                           java.util.List.of(
-                              new com.gen3.catalogue.snapshot.BookVectorSnapshot.Entry(
-                                  "book", new float[] {1, 0})),
+                              new com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot
+                                  .Entry("book", new float[] {1, 0})),
                           null),
                   10);
           try (var files = Files.list(snapshotDirectory.resolve(backend))) {

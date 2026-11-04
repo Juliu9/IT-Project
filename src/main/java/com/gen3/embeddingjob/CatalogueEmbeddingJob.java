@@ -15,6 +15,7 @@ public class CatalogueEmbeddingJob {
   private final int maximumRecords;
   private final EmbeddingMode mode;
 
+  /** Configures catalogue paging, generation mode, and record limits for embedding writes. */
   public CatalogueEmbeddingJob(
       AudiobookEmbeddingStore store,
       AudiobookEmbeddingIndexer indexer,
@@ -32,6 +33,9 @@ public class CatalogueEmbeddingJob {
     this.mode = java.util.Objects.requireNonNull(mode);
   }
 
+  /**
+   * Pages through the catalogue and writes normalized embeddings for the selected generation mode.
+   */
   public void run() throws Exception {
     try (var progress = new JobProgress("catalogue.embeddings")) {
       String cursor = null;

@@ -1,6 +1,6 @@
 package com.gen3.shortdescriptionjob;
 
-import com.gen3.catalogue.model.StoredAudiobook;
+import com.gen3.shared.audiobookcatalogue.model.StoredAudiobook;
 import com.gen3.shared.jobruntime.JobProgress;
 import com.gen3.shortdescriptionjob.provider.ShortDescriptionGenerator;
 import com.gen3.shortdescriptionjob.store.AudiobookEnrichmentStore;
@@ -29,6 +29,7 @@ public class ShortDescriptionEnricher implements ApplicationRunner {
   private final int concurrency;
   private final ShortDescriptionMode mode;
 
+  /** Configures summary generation limits, concurrency, update mode, and storage dependencies. */
   public ShortDescriptionEnricher(
       AudiobookEnrichmentStore store,
       ShortDescriptionGenerator generator,
@@ -46,6 +47,7 @@ public class ShortDescriptionEnricher implements ApplicationRunner {
     this.mode = ShortDescriptionMode.parse(mode);
   }
 
+  /** {@inheritDoc} */
   @Override
   public void run(ApplicationArguments arguments) throws Exception {
     try (var progress = new JobProgress("short.descriptions")) {
@@ -110,6 +112,7 @@ public class ShortDescriptionEnricher implements ApplicationRunner {
     }
   }
 
+  /** Requires one nonblank summary per input book and limits each summary to twenty words. */
   private List<AudiobookEnrichmentStore.ShortDescriptionUpdate> generate(
       List<StoredAudiobook> books) throws IOException, InterruptedException {
     var descriptions = generator.generate(books.stream().map(StoredAudiobook::record).toList());

@@ -11,6 +11,7 @@ public record RankingScoringProperties(
     UserPreferenceWeights userPreference,
     UniversalRuleWeights universalRules) {
 
+  /** Creates relative scoring weights and validates their supported finite, nonnegative values. */
   public RankingScoringProperties {
     validateWeight("retrieval-relevance-weight", retrievalRelevanceWeight);
     validateWeight("user-preference-weight", userPreferenceWeight);
@@ -27,6 +28,7 @@ public record RankingScoringProperties(
     }
   }
 
+  /** Rejects scoring weights outside the supported finite, nonnegative range. */
   private static void validateWeight(String name, double weight) {
     if (!Double.isFinite(weight) || weight < 0.0) {
       throw new IllegalArgumentException(name + " must be finite and nonnegative");
@@ -36,6 +38,9 @@ public record RankingScoringProperties(
   /** Relative contributions of the two available user-preference vectors. */
   public record UserPreferenceWeights(double favouritesWeight, double historyWeight) {
 
+    /**
+     * Creates relative scoring weights and validates their supported finite, nonnegative values.
+     */
     public UserPreferenceWeights {
       validateWeight("user-preference.favourites-weight", favouritesWeight);
       validateWeight("user-preference.history-weight", historyWeight);
@@ -49,6 +54,9 @@ public record RankingScoringProperties(
   /** Relative contributions of user-independent catalogue quality signals. */
   public record UniversalRuleWeights(double recencyWeight, double durationPlausibilityWeight) {
 
+    /**
+     * Creates relative scoring weights and validates their supported finite, nonnegative values.
+     */
     public UniversalRuleWeights {
       validateWeight("universal-rules.recency-weight", recencyWeight);
       validateWeight("universal-rules.duration-plausibility-weight", durationPlausibilityWeight);

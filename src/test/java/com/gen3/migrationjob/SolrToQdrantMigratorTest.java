@@ -5,14 +5,26 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.catalogue.model.AudiobookEmbedding;
-import com.gen3.catalogue.model.AudiobookRecord;
-import com.gen3.catalogue.qdrant.QdrantAudiobookRepository;
-import com.gen3.catalogue.solr.SolrAudiobookRepository;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookEmbedding;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookRecord;
+import com.gen3.shared.audiobookcatalogue.qdrant.QdrantAudiobookRepository;
+import com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class SolrToQdrantMigratorTest {
+  @Test
+  void rejectsNegativeLimitsAndNonPositiveBatchesBeforeUse() {
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> new SolrToQdrantMigrator(null, null, 100, -1))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("cannot be negative");
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> new SolrToQdrantMigrator(null, null, 0, 1))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("must be positive");
+  }
+
   @Test
   void copiesStoredVectorsAndRecordsWithoutVectorsAcrossPages() throws Exception {
     var source = mock(SolrAudiobookRepository.class);

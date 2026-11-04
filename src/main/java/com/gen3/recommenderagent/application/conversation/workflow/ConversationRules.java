@@ -3,9 +3,7 @@ package com.gen3.recommenderagent.application.conversation.workflow;
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.SessionRequest;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
-import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.inputparser.ConversationText;
@@ -16,6 +14,7 @@ import java.util.stream.Stream;
  * Input normalization and fallback response decisions shared by parsing and conversation handlers.
  */
 public final class ConversationRules {
+  /** Prevents instantiation of this utility class. */
   private ConversationRules() {}
 
   /** Shared eligibility rule for parsed inputs and restored conversation requests. */
@@ -39,9 +38,9 @@ public final class ConversationRules {
         || (request.getMustInclude() != null
             && ConversationText.isYearRefinement(request.getMustInclude().getPublicationYear()))) {
       request.setIntent(ConversationAction.REFINE);
-      request.setExplicitSearch(true);
+      request.setStartsNewSearch(true);
     } else if (hasText(request.getSimilarToTitle()) || request.isSimilarToClarificationRequired()) {
-      request.setExplicitSearch(true);
+      request.setStartsNewSearch(true);
     }
     if (request.getIntent() != ConversationAction.EXPLAIN_RECOMMENDATION) {
       request.setExplanationSelection(null);
@@ -51,78 +50,29 @@ public final class ConversationRules {
     return request;
   }
 
+  /** Limits new search semantics to recommendation and refinement actions. */
   static boolean acceptsSemanticInformation(ConversationAction intent) {
     return intent == ConversationAction.RECOMMENDATION || intent == ConversationAction.REFINE;
   }
 
-  public static ConversationDecision decisionFor(
-      List<Recommendation> recommendations, ConversationDraft request) {
-    if (recommendations == null && request == null) {
-      return ConversationDecision.UNAVAILABLE;
-    }
-    // Clarification outranks actions; actions outrank empty-result messages.
-    if (request != null) {
-      if (request.isSearchClarificationRequired()) {
-        return ConversationDecision.SEARCH_CLARIFICATION;
-      }
-      if (request.isPreferenceClarificationRequired()) {
-        return ConversationDecision.PREFERENCE_CLARIFICATION;
-      }
-      if (request.getIntent() != null) {
-        ConversationDecision action =
-            switch (request.getIntent()) {
-              case EXPLAIN_RECOMMENDATION ->
-                  recommendations == null || recommendations.isEmpty()
-                      ? ConversationDecision.NOTHING_TO_EXPLAIN
-                      : ConversationDecision.EXPLANATION;
-              case CHANGE_COUNT ->
-                  request.isInvalidBookCount()
-                      ? ConversationDecision.COUNT_UNCHANGED
-                      : ConversationDecision.COUNT_CHANGED;
-              case UPDATE_PREFERENCES -> ConversationDecision.PREFERENCES_UPDATED;
-              case RESET_PREFERENCES -> ConversationDecision.PREFERENCES_RESET;
-              case CLEAR_HISTORY -> ConversationDecision.HISTORY_CLEARED;
-              case HELP -> ConversationDecision.HELP;
-              case CANCEL -> ConversationDecision.CANCELLED;
-              case UNKNOWN -> ConversationDecision.UNKNOWN;
-              default -> null;
-            };
-        if (action != null) {
-          return action;
-        }
-      }
-    }
-    if (recommendations == null || recommendations.isEmpty()) {
-      if (request != null
-          && (request.isNoMoreRecommendations()
-              || request.getIntent() == ConversationAction.MORE_RESULTS)) {
-        return ConversationDecision.NO_MORE_RESULTS;
-      }
-      if (request != null && request.getIntent() == ConversationAction.REPEAT_RECOMMENDATIONS) {
-        return ConversationDecision.NO_RECOMMENDATIONS_TO_REPEAT;
-      }
-      if (request != null && request.getIntent() == ConversationAction.REPEAT) {
-        return ConversationDecision.NOTHING_TO_REPEAT;
-      }
-      return ConversationDecision.NO_MATCHES;
-    }
-    return ConversationDecision.RECOMMENDATIONS;
-  }
-
+  /** Identifies actions that browse or change the active recommendation search. */
   static boolean isRecommendationIntent(ConversationAction intent) {
     return intent == ConversationAction.RECOMMENDATION
         || intent == ConversationAction.REFINE
         || intent == ConversationAction.MORE_RESULTS;
   }
 
+  /** Checks whether the supplied request represents reusable recommendation search context. */
   static boolean isSearchContext(ConversationDraft request) {
     return request != null && isRecommendationIntent(request.getIntent());
   }
 
+  /** Checks whether the supplied request represents reusable recommendation search context. */
   static boolean isSearchContext(ConversationTurn turn) {
     return turn != null && isRecommendationIntent(turn.getIntent());
   }
 
+  /** Reports whether any usable semantic, exact, personalised, or reference-book criteria exist. */
   static boolean hasSearchCriteria(ConversationDraft request) {
     if (request == null) {
       return false;
@@ -153,14 +103,17 @@ public final class ConversationRules {
                     exclude.getSource())));
   }
 
+  /** Reports whether the semantic query contains any usable preference values. */
   static boolean hasQuery(SemanticQuery query) {
     return query != null && query.hasValues();
   }
 
+  /** Reports whether the supplied list contains at least one nonblank term. */
   static boolean hasTerms(List<String> terms) {
     return terms != null && terms.stream().anyMatch(value -> value != null && !value.isBlank());
   }
 
+  /** Reports whether the supplied text contains a non-whitespace character. */
   static boolean hasText(String... values) {
     return Stream.of(values).anyMatch(value -> value != null && !value.isBlank());
   }

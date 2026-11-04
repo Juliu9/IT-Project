@@ -10,14 +10,13 @@ import org.springframework.stereotype.Component;
 public class SessionContextProjector {
   private static final int MAX_DISPLAYED_BOOKS = 5;
 
+  /** Extracts bounded parser context from the pending question, last action, and displayed page. */
   public SessionContext project(Session session) {
     if (session == null) {
       return SessionContext.EMPTY;
     }
     String pending =
-        session.getPendingQuestion() == null
-            ? null
-            : session.getPendingQuestion().getDecision().name();
+        session.getPendingQuestion() == null ? null : session.getPendingQuestion().getKind().name();
     String action =
         session.getLastOutcome() == null
                 || session.getLastOutcome().turn() == null

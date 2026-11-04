@@ -1,6 +1,8 @@
 package com.gen3.recommenderagent.application.conversation;
 
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.conversation.ConversationOutcome;
+import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
@@ -12,6 +14,18 @@ import java.util.List;
 
 /** Private-to-conversation working state; never used as a persisted turn or response contract. */
 public class ConversationDraft extends SessionRequest {
+  private java.util.Set<String> readBookIds = java.util.Set.of();
+
+  /** Request-local eligibility snapshot; deliberately not copied into stored turns or sessions. */
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public java.util.Set<String> getReadBookIds() {
+    return readBookIds;
+  }
+
+  public void setReadBookIds(java.util.Set<String> value) {
+    readBookIds = java.util.Set.copyOf(value);
+  }
+
   /** Retains structured context without persisting the user's original message. */
   public static ConversationTurn toStoredTurn(ConversationDraft draft) {
     var turn = toTurn(draft);
@@ -19,6 +33,9 @@ public class ConversationDraft extends SessionRequest {
     return turn;
   }
 
+  /**
+   * Snapshots the working draft into a conversation turn with copied search and preference state.
+   */
   public static ConversationTurn toTurn(ConversationDraft draft) {
     var turn = new ConversationTurn();
     turn.setSearchContext(draft.getSearchContext().copy());
@@ -27,12 +44,17 @@ public class ConversationDraft extends SessionRequest {
     turn.setRawText(draft.getRawText());
     turn.setCreatedAt(draft.getCreatedAt());
     turn.setIntent(draft.getIntent());
+    turn.setResponseAction(draft.getResponseAction());
     turn.setExplanationSelection(draft.getExplanationSelection());
     turn.setReferenceRank(draft.getReferenceRank());
     turn.setReferenceTitle(draft.getReferenceTitle());
+    turn.setSessionPreferenceSnapshot(
+        draft.getSessionPreferenceSnapshot() == null
+            ? null
+            : draft.getSessionPreferenceSnapshot().copy());
     turn.setBookCount(draft.getBookCount());
     turn.setInvalidBookCount(draft.isInvalidBookCount());
-    turn.setDecision(draft.getDecision());
+    turn.setOutcome(draft.getOutcome());
     turn.setPendingQuestion(draft.getPendingQuestion());
     turn.setPreferenceClarificationRequired(draft.isPreferenceClarificationRequired());
     turn.setSearchClarificationRequired(draft.isSearchClarificationRequired());
@@ -41,6 +63,7 @@ public class ConversationDraft extends SessionRequest {
     return turn;
   }
 
+  /** Restores a working draft from a retained conversation snapshot. */
   public static ConversationDraft fromTurn(ConversationTurn turn) {
     var draft = new ConversationDraft();
     draft.setSearchContext(turn.getSearchContext().copy());
@@ -49,18 +72,33 @@ public class ConversationDraft extends SessionRequest {
     draft.setRawText(turn.getRawText());
     draft.setCreatedAt(turn.getCreatedAt());
     draft.setIntent(turn.getIntent());
+    draft.setResponseAction(turn.getResponseAction());
     draft.setExplanationSelection(turn.getExplanationSelection());
     draft.setReferenceRank(turn.getReferenceRank());
     draft.setReferenceTitle(turn.getReferenceTitle());
+    draft.setSessionPreferenceSnapshot(
+        turn.getSessionPreferenceSnapshot() == null
+            ? null
+            : turn.getSessionPreferenceSnapshot().copy());
     draft.setBookCount(turn.getBookCount());
     draft.setInvalidBookCount(turn.isInvalidBookCount());
-    draft.setDecision(turn.getDecision());
+    draft.setOutcome(turn.getOutcome());
     draft.setPendingQuestion(turn.getPendingQuestion());
     draft.setPreferenceClarificationRequired(turn.isPreferenceClarificationRequired());
     draft.setSearchClarificationRequired(turn.isSearchClarificationRequired());
     draft.setNoMoreRecommendations(turn.isNoMoreRecommendations());
     draft.setRecommendations(turn.getRecommendations());
     return draft;
+  }
+
+  private SessionPreferences sessionPreferenceSnapshot;
+
+  public SessionPreferences getSessionPreferenceSnapshot() {
+    return sessionPreferenceSnapshot;
+  }
+
+  public void setSessionPreferenceSnapshot(SessionPreferences value) {
+    sessionPreferenceSnapshot = value;
   }
 
   private boolean preferenceAnswer;
@@ -73,23 +111,25 @@ public class ConversationDraft extends SessionRequest {
     preferenceAnswer = value;
   }
 
-  private ConversationDecision pendingQuestion;
+  private ConversationQuestion pendingQuestion;
 
-  public ConversationDecision getPendingQuestion() {
+  public ConversationQuestion getPendingQuestion() {
     return pendingQuestion;
   }
 
-  public void setPendingQuestion(ConversationDecision value) {
+  public void setPendingQuestion(ConversationQuestion value) {
     pendingQuestion = value;
   }
 
-  private List<com.gen3.catalogue.model.AudiobookTitle> similarBookChoices = List.of();
+  private List<com.gen3.shared.audiobookcatalogue.model.AudiobookTitle> similarBookChoices =
+      List.of();
 
-  public List<com.gen3.catalogue.model.AudiobookTitle> getSimilarBookChoices() {
+  public List<com.gen3.shared.audiobookcatalogue.model.AudiobookTitle> getSimilarBookChoices() {
     return similarBookChoices;
   }
 
-  public void setSimilarBookChoices(List<com.gen3.catalogue.model.AudiobookTitle> value) {
+  public void setSimilarBookChoices(
+      List<com.gen3.shared.audiobookcatalogue.model.AudiobookTitle> value) {
     similarBookChoices = value;
   }
 
@@ -103,7 +143,8 @@ public class ConversationDraft extends SessionRequest {
     searchContext.setReplaceSearchFields(value);
   }
 
-  private ConversationDecision decision;
+  private ConversationOutcome outcome;
+  private ConversationAction responseAction;
   private boolean preferenceClarificationRequired;
   private boolean searchClarificationRequired;
   private boolean noMoreRecommendations;
@@ -117,12 +158,20 @@ public class ConversationDraft extends SessionRequest {
     searchContext = value;
   }
 
-  public ConversationDecision getDecision() {
-    return decision;
+  public ConversationOutcome getOutcome() {
+    return outcome;
   }
 
-  public void setDecision(ConversationDecision value) {
-    decision = value;
+  public void setOutcome(ConversationOutcome value) {
+    outcome = value;
+  }
+
+  public ConversationAction getResponseAction() {
+    return responseAction;
+  }
+
+  public void setResponseAction(ConversationAction value) {
+    responseAction = value;
   }
 
   public boolean isPreferenceClarificationRequired() {
@@ -183,6 +232,12 @@ public class ConversationDraft extends SessionRequest {
 
   public boolean isPersonalised() {
     return searchContext.isPersonalised();
+  }
+
+  /** {@inheritDoc} */
+  @Override
+  public boolean requiresSemanticRetrieval() {
+    return isPersonalised() || searchContext.getSimilarBook() != null;
   }
 
   public void setPersonalised(boolean value) {

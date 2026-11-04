@@ -4,8 +4,8 @@ import static io.qdrant.client.ConditionFactory.hasId;
 import static io.qdrant.client.ConditionFactory.isEmpty;
 import static io.qdrant.client.WithPayloadSelectorFactory.enable;
 
-import com.gen3.catalogue.model.StoredAudiobook;
-import com.gen3.catalogue.qdrant.QdrantPointMapper;
+import com.gen3.shared.audiobookcatalogue.model.StoredAudiobook;
+import com.gen3.shared.audiobookcatalogue.qdrant.QdrantPointMapper;
 import com.gen3.shortdescriptionjob.ShortDescriptionMode;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Common.Filter;
@@ -34,6 +34,7 @@ public class QdrantShortDescriptionStore implements AudiobookEnrichmentStore {
   private final QdrantPointMapper mapper;
   private final String collection;
 
+  /** Connects summary payload updates to the configured Qdrant catalogue collection. */
   public QdrantShortDescriptionStore(
       QdrantClient client,
       QdrantPointMapper mapper,
@@ -65,6 +66,10 @@ public class QdrantShortDescriptionStore implements AudiobookEnrichmentStore {
     updatePayloads(operations);
   }
 
+  /**
+   * Builds a targeted summary update, guarding missing-only writes against overwriting populated
+   * fields.
+   */
   private PointsUpdateOperation setDescriptionPayload(
       io.qdrant.client.grpc.Common.PointId pointId,
       String field,
@@ -124,6 +129,7 @@ public class QdrantShortDescriptionStore implements AudiobookEnrichmentStore {
     return records;
   }
 
+  /** Converts the stored reference into the point identifier used by Qdrant. */
   private io.qdrant.client.grpc.Common.PointId pointId(String storageReference) throws IOException {
     try {
       return io.qdrant.client.grpc.Common.PointId.parseFrom(
@@ -133,6 +139,7 @@ public class QdrantShortDescriptionStore implements AudiobookEnrichmentStore {
     }
   }
 
+  /** Writes the prepared summary payload operations to Qdrant. */
   private void updatePayloads(List<PointsUpdateOperation> operations) throws IOException {
     if (operations.isEmpty()) {
       return;
@@ -149,16 +156,19 @@ public class QdrantShortDescriptionStore implements AudiobookEnrichmentStore {
     }
   }
 
+  /** Fails if the configured catalogue collection does not exist. */
   private void requireCollection() throws IOException {
     if (!await(client.collectionExistsAsync(collection), "check Qdrant collection")) {
       throw new IOException("Qdrant collection does not exist: " + collection);
     }
   }
 
+  /** Reports whether the supplied text contains a non-whitespace character. */
   private boolean hasText(String value) {
     return value != null && !value.isBlank();
   }
 
+  /** Creates the configured payload index and waits for the database operation. */
   private void createPayloadIndex(String field) throws IOException {
     var request =
         CreateFieldIndexCollection.newBuilder()
@@ -172,6 +182,10 @@ public class QdrantShortDescriptionStore implements AudiobookEnrichmentStore {
         "create Qdrant payload index for " + field);
   }
 
+  /**
+   * Waits for the database operation, preserving interruption and translating failures to I/O
+   * errors.
+   */
   private <T> T await(Future<T> future, String operation) throws IOException {
     try {
       return future.get();

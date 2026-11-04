@@ -109,7 +109,9 @@ class RequestGatewayTest {
     when(responseGenerator.generate(null, completed)).thenReturn("No more recommendations.");
     var gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
-    var catalogue = org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class);
+    var catalogue =
+        org.mockito.Mockito.mock(
+            com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class);
     MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway, catalogue))
         .build()
         .perform(
@@ -188,7 +190,8 @@ class RequestGatewayTest {
             gateway,
             new DemoWebsite(
                 gateway,
-                org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
+                org.mockito.Mockito.mock(
+                    com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class)))
         .build()
         .perform(
             post("/api/v1/recommendations/demo")
@@ -221,7 +224,8 @@ class RequestGatewayTest {
             gateway,
             new DemoWebsite(
                 gateway,
-                org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
+                org.mockito.Mockito.mock(
+                    com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class)))
         .build()
         .perform(
             post("/api/v1/recommendations")
@@ -410,7 +414,8 @@ class RequestGatewayTest {
                 gateway,
                 new DemoWebsite(
                     gateway,
-                    org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
+                    org.mockito.Mockito.mock(
+                        com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class)))
             .setControllerAdvice(new RequestExceptionHandler())
             .build();
 
@@ -455,7 +460,8 @@ class RequestGatewayTest {
                 gateway,
                 new DemoWebsite(
                     gateway,
-                    org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
+                    org.mockito.Mockito.mock(
+                        com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class)))
             .setControllerAdvice(new RequestExceptionHandler())
             .build();
 
@@ -498,7 +504,8 @@ class RequestGatewayTest {
             gateway,
             new DemoWebsite(
                 gateway,
-                org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
+                org.mockito.Mockito.mock(
+                    com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class)))
         .setControllerAdvice(new RequestExceptionHandler())
         .build()
         .perform(
@@ -538,7 +545,8 @@ class RequestGatewayTest {
             gateway,
             new DemoWebsite(
                 gateway,
-                org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
+                org.mockito.Mockito.mock(
+                    com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class)))
         .setControllerAdvice(new RequestExceptionHandler())
         .build()
         .perform(

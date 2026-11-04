@@ -1,10 +1,10 @@
 package com.gen3.recommenderagent.retrieval;
 
-import com.gen3.catalogue.port.AudiobookCandidateSearch;
-import com.gen3.catalogue.port.AudiobookVectorRepository;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookCandidateSearch;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookVectorRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.context.annotation.Bean;
@@ -15,9 +15,13 @@ import org.springframework.core.env.Environment;
 @Configuration(proxyBeanMethods = false)
 public class CandidateRetrieverConfiguration {
 
+  /** Rejects incomplete backend selection and maintenance flags on the recommendation server. */
   @Bean
   static BeanFactoryPostProcessor validateDatabaseSelection(Environment environment) {
     return factory -> {
+      if (environment.getProperty("read-history.import.enabled", Boolean.class, false)) {
+        throw new IllegalArgumentException("Use the dedicated ReadHistoryApplication entry point");
+      }
       if (environment.getProperty("audiobook.embedding-index.enabled", Boolean.class, false)) {
         throw new IllegalArgumentException(
             "Run embedding indexing with the dedicated EmbeddingIndexApplication entry point");
@@ -46,6 +50,7 @@ public class CandidateRetrieverConfiguration {
     };
   }
 
+  /** Builds retrieval from the configured backend's complete set of storage ports. */
   @Bean
   CandidateRetriever candidateRetriever(
       @Value("${audiobook.database:qdrant}") String backend,

@@ -108,6 +108,7 @@ public class SearchContext {
     mustNotInclude = value;
   }
 
+  /** Copies explicit and effective criteria, including frozen vector evidence, for safe reuse. */
   public SearchContext copy() {
     var copy = new SearchContext();
     copy.setReplaceSearchFields(replaceSearchFields);

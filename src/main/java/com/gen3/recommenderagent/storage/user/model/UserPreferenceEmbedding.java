@@ -10,6 +10,7 @@ package com.gen3.recommenderagent.storage.user.model;
 public record UserPreferenceEmbedding(
     String userId, float[] favouritesVector, float[] historyVector) {
 
+  /** Requires a nonblank user ID and at least one supplied taste vector. */
   public UserPreferenceEmbedding {
     if (userId == null || userId.isBlank()) {
       throw new IllegalArgumentException("User ID must not be blank");

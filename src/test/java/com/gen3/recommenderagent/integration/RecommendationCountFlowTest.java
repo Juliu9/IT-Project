@@ -8,16 +8,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.gen3.catalogue.model.AudiobookTitle;
-import com.gen3.catalogue.port.AudiobookTitleLookup;
-import com.gen3.catalogue.port.AudiobookVectorRepository;
 import com.gen3.recommenderagent.application.conversation.ConversationEngine;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.application.recommendation.RecommendationPager;
 import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
 import com.gen3.recommenderagent.application.recommendation.SimilarBookResolver;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
@@ -28,6 +24,9 @@ import com.gen3.recommenderagent.inputparser.UserIntent;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
 import com.gen3.recommenderagent.response.ConversationResponseGenerator;
 import com.gen3.recommenderagent.retrieval.plan.ExactFilterPolicy;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookTitle;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookTitleLookup;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookVectorRepository;
 import java.math.BigInteger;
 import java.util.List;
 import java.util.Optional;
@@ -46,7 +45,10 @@ class RecommendationCountFlowTest {
   private final ConversationEngine engine =
       new ConversationEngine(
           ConversationTestSupport.dispatcher(),
-          new RecommendationPager(workflow),
+          new RecommendationPager(
+              workflow,
+              new com.gen3.recommenderagent.application.recommendation.ReadHistoryExclusions(
+                  java.util.Optional.empty(), 10000)),
           new ExactFilterPolicy(),
           new SimilarBookResolver(titles, vectors));
   private final ConversationResponseGenerator responses =
@@ -70,7 +72,6 @@ class RecommendationCountFlowTest {
   private UserIntent fantasy() {
     var intent = new UserIntent();
     intent.setIntent(ConversationAction.RECOMMENDATION);
-    intent.setExplicitSearch(true);
     var query = new SemanticQuery();
     query.setGenres(List.of("fantasy"));
     intent.setPositiveSemanticQuery(query);
@@ -86,7 +87,7 @@ class RecommendationCountFlowTest {
   void invalidSearchCountUsesSavedCountImmediatelyAndPreservesCriteria(String text) {
     when(ai.parse(anyString())).thenReturn(fantasy());
     var result = engine.process(session, parser.parse(text));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getRecommendations()).hasSize(3);
     assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
     assertThat(session.getBookCount()).isEqualTo(3);
@@ -109,7 +110,7 @@ class RecommendationCountFlowTest {
     intent.setIntent(ConversationAction.CHANGE_COUNT);
     when(ai.parse(anyString())).thenReturn(intent);
     var result = engine.process(session, parser.parse(text));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.COUNT_UNCHANGED);
+    assertThat(result.getOutcome()).isNull();
     assertThat(session.getBookCount()).isEqualTo(3);
     assertThat(session.getPendingQuestion()).isNull();
     assertThat(result.getRecommendations()).isEmpty();
@@ -238,7 +239,7 @@ class RecommendationCountFlowTest {
     when(workflow.recommend(any(), any())).thenReturn(List.of());
     engine.process(session, parser.parse("Recommend fantasy books"));
     var result = engine.process(session, parser.parse("0 more"));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.NO_MORE_RESULTS);
+    assertThat(result.getOutcome()).isNull();
     assertThat(responses.generate(result.getRecommendations(), result))
         .startsWith("Recommendation counts must be whole numbers between 1 and 5.");
   }

@@ -126,7 +126,6 @@ public class UserIntent {
   private SessionPreferences preferenceUpdates;
   private SessionPreferences preferenceRemovals;
   private List<String> replacePreferenceFields;
-  private boolean explicitSearch;
 
   public SessionPreferences getPreferenceUpdates() {
     return preferenceUpdates;
@@ -152,24 +151,22 @@ public class UserIntent {
     replacePreferenceFields = value;
   }
 
-  public boolean isExplicitSearch() {
-    return explicitSearch;
-  }
-
-  public void setExplicitSearch(boolean value) {
-    explicitSearch = value;
-  }
-
   private ConversationAction intent;
 
   @com.fasterxml.jackson.annotation.JsonPropertyDescription(
       "Explicitly requested positive genres, themes or styles. Include every stated positive taste even alongside exact filters or negativeSemanticQuery; omit only when none is stated.")
   private SemanticQuery positiveSemanticQuery;
 
+  @com.fasterxml.jackson.annotation.JsonPropertyDescription(
+      "Explicitly avoided genres, themes, moods, plots or character traits. For without/avoid/avoiding/no/less X, include X here without its negation cue, never in positiveSemanticQuery. Retain alongside positive tastes and exact filters.")
   private SemanticQuery negativeSemanticQuery;
+
   private ExactCriteria mustInclude;
   private ExactCriteria mustNotInclude;
   private BigInteger bookCount;
+
+  @com.fasterxml.jackson.annotation.JsonPropertyDescription(
+      "True when the user explicitly requests their stored reading preferences, favourites or history, or makes a generic recommendation request without criteria. Saved preferences are not explicit semantic topics; do not invent tastes from them.")
   private boolean personalised;
 
   public boolean isPersonalised() {
@@ -180,6 +177,7 @@ public class UserIntent {
     this.personalised = personalised;
   }
 
+  /** Creates an empty instance for subsequent configuration or state restoration. */
   public UserIntent() {}
 
   public ConversationAction getIntent() {

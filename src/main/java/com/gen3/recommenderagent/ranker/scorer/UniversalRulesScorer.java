@@ -1,8 +1,8 @@
 package com.gen3.recommenderagent.ranker.scorer;
 
-import com.gen3.catalogue.model.AudiobookCandidate;
-import com.gen3.catalogue.model.AudiobookRecord;
 import com.gen3.recommenderagent.ranker.RankingContext;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookCandidate;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookRecord;
 import java.time.Year;
 import java.util.function.IntSupplier;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,11 +16,13 @@ public class UniversalRulesScorer implements CandidateScorer {
   private final double durationPlausibilityWeight;
   private final IntSupplier currentYear;
 
+  /** Configures metadata scoring weights and the clock used for publication recency. */
   @Autowired
   public UniversalRulesScorer(RankingScoringProperties properties) {
     this(properties, () -> Year.now().getValue());
   }
 
+  /** Configures metadata scoring weights and the clock used for publication recency. */
   UniversalRulesScorer(RankingScoringProperties properties, IntSupplier currentYear) {
     RankingScoringProperties.UniversalRuleWeights weights = properties.universalRules();
     this.recencyWeight = weights.recencyWeight();
@@ -28,6 +30,7 @@ public class UniversalRulesScorer implements CandidateScorer {
     this.currentYear = currentYear;
   }
 
+  /** {@inheritDoc} */
   @Override
   public ScoreResult score(AudiobookCandidate candidate, RankingContext context) {
     if (candidate == null || candidate.audiobook() == null) {
@@ -55,6 +58,7 @@ public class UniversalRulesScorer implements CandidateScorer {
         : ScoreResult.available(weightedScore / availableWeight);
   }
 
+  /** Calculates the candidate's publication-recency signal when usable metadata is available. */
   private Double recencyScore(Integer publicationYear) {
     if (publicationYear == null || publicationYear <= 0) {
       return null;
@@ -75,6 +79,7 @@ public class UniversalRulesScorer implements CandidateScorer {
     return 0.35;
   }
 
+  /** Calculates the duration signal when usable audiobook length metadata is available. */
   private Double durationPlausibilityScore(Integer durationMinutes) {
     if (durationMinutes == null || durationMinutes <= 0) {
       return null;

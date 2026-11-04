@@ -1,20 +1,21 @@
 package com.gen3.recommenderagent.retrieval.plan;
 
-import com.gen3.catalogue.model.AudiobookFilterConditions;
-import com.gen3.catalogue.model.AudiobookFilters;
-import com.gen3.catalogue.model.PersonNameNormalizer;
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.PreferenceRequestMapper;
 import com.gen3.recommenderagent.application.conversation.SessionRequest;
 import com.gen3.recommenderagent.application.conversation.workflow.ConversationHistory;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationOutcome;
+import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.domain.search.DurationRange;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.inputparser.ConversationText;
 import com.gen3.recommenderagent.inputparser.DurationParser;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookFilterConditions;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookFilters;
+import com.gen3.shared.audiobookcatalogue.model.PersonNameNormalizer;
 import java.time.Clock;
 import java.time.Year;
 import java.util.ArrayList;
@@ -43,14 +44,17 @@ public class ExactFilterPolicy {
           "^(?:in |within |from )?(?:the )?(?:last|past) (?:([0-9]+|a|an|one|two|three|four|five|six|seven|eight|nine|ten) )?years?$");
   private final Clock clock;
 
+  /** Uses the UTC system clock to resolve relative publication-year constraints. */
   public ExactFilterPolicy() {
     this(Clock.systemUTC());
   }
 
+  /** Creates exact-filter policy using the UTC clock or an explicitly supplied clock. */
   ExactFilterPolicy(Clock clock) {
     this.clock = clock;
   }
 
+  /** Translates exact request constraints and excluded IDs into catalogue filter conditions. */
   public AudiobookFilters filters(SessionRequest request, Set<String> excludedBookIds) {
     return new AudiobookFilters(
         conditions(request == null ? null : request.getMustInclude()),
@@ -63,6 +67,7 @@ public class ExactFilterPolicy {
     resolveFilterCorrections(resolved, incoming, null);
   }
 
+  /** Validates new constraints and reconciles inherited conflicts using the explicit correction. */
   public void resolveFilterCorrections(
       SessionRequest resolved, SessionRequest incoming, SessionRequest previousSearch) {
     if ((resolved.getIntent() != ConversationAction.RECOMMENDATION
@@ -97,6 +102,7 @@ public class ExactFilterPolicy {
     requireCompatible(filters(resolved, Set.of()));
   }
 
+  /** Rejects exact requirements whose inclusion and exclusion leave no allowed value. */
   private void requireCompatible(AudiobookFilters filters) {
     var fields = conflicts(filters);
     if (!fields.isEmpty()) {
@@ -107,6 +113,7 @@ public class ExactFilterPolicy {
     }
   }
 
+  /** Identifies fields whose required values are completely forbidden by the exclusions. */
   private List<String> conflicts(AudiobookFilters filters) {
     var include = filters.mustInclude();
     var exclude = filters.mustNotInclude();
@@ -143,6 +150,7 @@ public class ExactFilterPolicy {
     return fields;
   }
 
+  /** Checks whether one bounded range completely excludes another supported range. */
   private boolean covers(
       Integer outerMin,
       Integer outerMax,
@@ -154,6 +162,7 @@ public class ExactFilterPolicy {
         && (outerMax == null ? ceiling : outerMax) >= (innerMax == null ? ceiling : innerMax);
   }
 
+  /** Returns normalized exact values for conflict checking in the selected field. */
   private List<String> exactValues(AudiobookFilterConditions filters, String field) {
     List<String> values =
         switch (field) {
@@ -171,12 +180,14 @@ public class ExactFilterPolicy {
         .toList();
   }
 
+  /** Normalizes names or scalar values for exact-constraint comparisons. */
   private String comparisonKey(String value, String field) {
     return field.equals("authors") || field.equals("narrators")
         ? PersonNameNormalizer.comparisonKey(value)
         : value.trim().toLowerCase(Locale.ROOT);
   }
 
+  /** Reports whether the selected exact-filter field contains a usable constraint. */
   private boolean supplied(AudiobookFilterConditions filters, String field) {
     return switch (field) {
       case "duration" ->
@@ -187,6 +198,7 @@ public class ExactFilterPolicy {
     };
   }
 
+  /** Removes values that match the explicit correction under the field's comparison rules. */
   private List<String> without(
       List<String> values, AudiobookFilterConditions correction, String field) {
     var removed = exactValues(correction, field);
@@ -197,6 +209,7 @@ public class ExactFilterPolicy {
             .toList();
   }
 
+  /** Removes a conflicting inherited constraint in the selected exact field. */
   private void clear(ExactCriteria criteria, String field, AudiobookFilterConditions correction) {
     switch (field) {
       case "authors" -> criteria.setAuthors(without(criteria.getAuthors(), correction, field));
@@ -210,6 +223,7 @@ public class ExactFilterPolicy {
     }
   }
 
+  /** Parses exact criteria into the catalogue's structured filter representation. */
   private AudiobookFilterConditions conditions(ExactCriteria filter) {
     if (filter == null) {
       return AudiobookFilterConditions.empty();
@@ -280,6 +294,7 @@ public class ExactFilterPolicy {
         "What publication year or year range would you like? You can also say 'after 2020' or 'in the last 5 years'.");
   }
 
+  /** Resolves recent-year wording against the configured UTC clock. */
   private RangeBounds relativeYearBounds(String normalized, Matcher relative) {
     int years;
     if (normalized.equals("recent") || normalized.equals("recently")) {
@@ -315,6 +330,7 @@ public class ExactFilterPolicy {
     return new RangeBounds(currentYear - years, currentYear);
   }
 
+  /** Rejects year bounds outside the supported calendar range. */
   private RangeBounds boundedYearRange(Integer lower, Integer upper) {
     if ((lower != null && (lower < 1 || lower > 9999))
         || (upper != null && (upper < 1 || upper > 9999))) {
@@ -334,11 +350,13 @@ public class ExactFilterPolicy {
   }
 
   private record RangeBounds(Integer minimum, Integer maximum) {
+    /** Returns an instance with no available values or evidence. */
     private static RangeBounds empty() {
       return new RangeBounds(null, null);
     }
   }
 
+  /** Resolves comparative publication wording against the latest displayed page. */
   private void resolveRecencyRefinement(ConversationDraft request, Session session) {
     if (request.getIntent() != ConversationAction.REFINE || request.getMustInclude() == null) {
       return;
@@ -348,7 +366,7 @@ public class ExactFilterPolicy {
     boolean relative = ConversationText.isYearRefinement(expression);
     boolean answeringYear =
         session != null
-            && session.getPendingDecision() == ConversationDecision.RECENCY_YEAR_CLARIFICATION;
+            && session.getPendingQuestionKind() == ConversationQuestion.RECENCY_YEAR_CLARIFICATION;
     if (!relative && !answeringYear) {
       return;
     }
@@ -370,15 +388,16 @@ public class ExactFilterPolicy {
     }
   }
 
+  /** Builds an older-publication bound and asks before crossing an inherited range. */
   private void resolveOlderRefinement(
       ConversationDraft request, Session session, ConversationDraft previous, List<Integer> years) {
     if (years.isEmpty()) {
-      awaitRefinement(request, session, ConversationDecision.RECENCY_YEAR_CLARIFICATION);
+      awaitRefinement(request, session, ConversationQuestion.RECENCY_YEAR_CLARIFICATION);
       return;
     }
     int upper = years.stream().mapToInt(Integer::intValue).sum() / years.size() - 1;
     if (upper < 1) {
-      request.setDecision(ConversationDecision.RECENCY_EXHAUSTED);
+      request.setOutcome(ConversationOutcome.RECENCY_EXHAUSTED);
       request.setSearchClarificationRequired(true);
       return;
     }
@@ -393,10 +412,11 @@ public class ExactFilterPolicy {
         conflict || lower == null ? "before " + (upper + 1) : "between " + lower + " and " + upper;
     setYear(request, bounded);
     if (conflict) {
-      awaitRefinement(request, session, ConversationDecision.RECENCY_RANGE_CONFIRMATION);
+      awaitRefinement(request, session, ConversationQuestion.RECENCY_RANGE_CONFIRMATION);
     }
   }
 
+  /** Builds a newer-publication bound while respecting inherited upper limits. */
   private void resolveNewerRefinement(
       ConversationDraft request,
       Session session,
@@ -414,7 +434,7 @@ public class ExactFilterPolicy {
       return;
     }
     if (lower == null) {
-      awaitRefinement(request, session, ConversationDecision.RECENCY_YEAR_CLARIFICATION);
+      awaitRefinement(request, session, ConversationQuestion.RECENCY_YEAR_CLARIFICATION);
       return;
     }
     var previousBounds =
@@ -428,9 +448,9 @@ public class ExactFilterPolicy {
     }
     if (lower > 9999 || (upper != null && lower > upper)) {
       if (relative) {
-        request.setDecision(ConversationDecision.RECENCY_EXHAUSTED);
+        request.setOutcome(ConversationOutcome.RECENCY_EXHAUSTED);
       } else {
-        request.setDecision(ConversationDecision.RECENCY_RANGE_CONFIRMATION);
+        request.setPendingQuestion(ConversationQuestion.RECENCY_RANGE_CONFIRMATION);
         session.setPendingRefinementRequest(ConversationDraft.toStoredTurn(request));
       }
       request.setSearchClarificationRequired(true);
@@ -446,13 +466,15 @@ public class ExactFilterPolicy {
     setYear(request, bounded);
   }
 
+  /** Retains the unfinished refinement and marks its clarification question. */
   private void awaitRefinement(
-      ConversationDraft request, Session session, ConversationDecision question) {
-    request.setDecision(question);
+      ConversationDraft request, Session session, ConversationQuestion question) {
+    request.setPendingQuestion(question);
     request.setSearchClarificationRequired(true);
     session.setPendingRefinementRequest(ConversationDraft.toStoredTurn(request));
   }
 
+  /** Updates the effective publication year and any retained explicit search criteria. */
   private void setYear(ConversationDraft request, String value) {
     request.getMustInclude().setPublicationYear(value);
     if (request.getSearchCriteria() != null) {
@@ -463,13 +485,15 @@ public class ExactFilterPolicy {
     }
   }
 
+  /** Combines a duration answer with the unfinished refinement's existing bounds. */
   private void resolveDurationAnswer(ConversationDraft request, Session session) {
     if (session == null
         || request.getIntent() != ConversationAction.REFINE
         || request.getMustInclude() == null
         || request.getMustInclude().getDuration() == null
-        || (session.getPendingDecision() != ConversationDecision.SHORTER_DURATION_CLARIFICATION
-            && session.getPendingDecision() != ConversationDecision.LONGER_DURATION_CLARIFICATION)
+        || (session.getPendingQuestionKind() != ConversationQuestion.SHORTER_DURATION_CLARIFICATION
+            && session.getPendingQuestionKind()
+                != ConversationQuestion.LONGER_DURATION_CLARIFICATION)
         || session.getPendingRefinementRequest() == null) {
       return;
     }
@@ -494,10 +518,11 @@ public class ExactFilterPolicy {
     }
     if ((old.minimum() != null && (minimum == null || minimum < old.minimum()))
         || (old.maximum() != null && (maximum == null || maximum > old.maximum()))) {
-      awaitRefinement(request, session, ConversationDecision.DURATION_RANGE_CONFIRMATION);
+      awaitRefinement(request, session, ConversationQuestion.DURATION_RANGE_CONFIRMATION);
     }
   }
 
+  /** Updates the effective duration and any retained explicit search criteria. */
   private void setDuration(ConversationDraft request, String value) {
     var include = request.getMustInclude() == null ? new ExactCriteria() : request.getMustInclude();
     include.setDuration(value);
@@ -510,6 +535,7 @@ public class ExactFilterPolicy {
     }
   }
 
+  /** Derives shorter-or-longer bounds from the displayed page and checks inherited limits. */
   private void resolveDurationRefinement(ConversationDraft request, Session session) {
     if (request.getIntent() != ConversationAction.REFINE
         || (!request.isShorter() && !request.isLonger())) {
@@ -527,8 +553,8 @@ public class ExactFilterPolicy {
           request,
           session,
           longer
-              ? ConversationDecision.LONGER_DURATION_CLARIFICATION
-              : ConversationDecision.SHORTER_DURATION_CLARIFICATION);
+              ? ConversationQuestion.LONGER_DURATION_CLARIFICATION
+              : ConversationQuestion.SHORTER_DURATION_CLARIFICATION);
       return;
     }
     int boundary =
@@ -558,14 +584,15 @@ public class ExactFilterPolicy {
     request.setShorter(false);
     request.setLonger(false);
     if (conflict) {
-      awaitRefinement(request, session, ConversationDecision.DURATION_RANGE_CONFIRMATION);
+      awaitRefinement(request, session, ConversationQuestion.DURATION_RANGE_CONFIRMATION);
     }
   }
 
+  /** Validates preference edits and resolves exact search corrections before retrieval. */
   public void validateTransition(
       ConversationDraft resolved, SessionRequest original, Session session) {
     if (resolved.getIntent() == ConversationAction.UPDATE_PREFERENCES) {
-      if (resolved.getDecision() == ConversationDecision.PREFERENCE_UPDATE_CLARIFICATION) {
+      if (resolved.getPendingQuestion() == ConversationQuestion.PREFERENCE_UPDATE_CLARIFICATION) {
         return;
       }
       var proposed = PreferenceRequestMapper.toRequest(resolved.getPreferenceUpdates());
@@ -599,10 +626,10 @@ public class ExactFilterPolicy {
     boolean awaitingTaste = session != null && session.isAwaitingPersonalisedPreferences();
     var previousSearch =
         original != null
-                && !(awaitingTaste && original.isExplicitSearch())
+                && !(awaitingTaste && original.startsNewSearch())
                 && (original.getIntent() == ConversationAction.REFINE
                     || original.getIntent() == ConversationAction.MORE_RESULTS
-                    || (awaitingTaste && !original.isExplicitSearch()))
+                    || (awaitingTaste && !original.startsNewSearch()))
             ? ConversationHistory.latestSearch(session)
             : null;
     SessionRequest previous =

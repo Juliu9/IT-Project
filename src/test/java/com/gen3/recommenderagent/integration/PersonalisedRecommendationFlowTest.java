@@ -10,14 +10,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.catalogue.model.AudiobookFilters;
-import com.gen3.catalogue.qdrant.QdrantAudiobookRepository;
 import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
 import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendationWorkflow;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
@@ -34,6 +32,8 @@ import com.gen3.recommenderagent.retrieval.CandidateRetrievalService;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookFilters;
+import com.gen3.shared.audiobookcatalogue.qdrant.QdrantAudiobookRepository;
 import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
@@ -100,7 +100,7 @@ class PersonalisedRecommendationFlowTest {
   void firstPersonalisedRequestNeedsSavedTasteEvenWhenCurrentRequestHasCriteria(String criteria)
       throws Exception {
     var request = personalisedRequest();
-    request.setExplicitSearch(true);
+    request.setStartsNewSearch(true);
     if (criteria.equals("constraints") || criteria.equals("both")) {
       var include = new ExactCriteria();
       include.setAuthors(List.of("Suzanne Collins"));
@@ -199,7 +199,7 @@ class PersonalisedRecommendationFlowTest {
             List.of(new Recommendation("remaining", 2, 0.8, "Remaining fantasy")));
     sessions.updateSession(session);
     var personalised = personalisedRequest();
-    personalised.setExplicitSearch(true);
+    personalised.setStartsNewSearch(true);
     assertThat(process(personalised).isPreferenceClarificationRequired()).isTrue();
     var cancel = new ConversationDraft();
     cancel.setIntent(
@@ -224,7 +224,7 @@ class PersonalisedRecommendationFlowTest {
   @org.junit.jupiter.params.provider.ValueSource(strings = {"horror", "romance"})
   void tasteReplyPreservesTheRequestedAuthorWithoutChangingTheSuppliedGenre(String genre) {
     var request = personalisedRequest();
-    request.setExplicitSearch(true);
+    request.setStartsNewSearch(true);
     request.setRawText("personalised book by jk rowling");
     var include = new ExactCriteria();
     include.setAuthors(List.of("jk rowling"));
@@ -277,7 +277,7 @@ class PersonalisedRecommendationFlowTest {
     cancel.setIntent(ConversationAction.UNKNOWN);
     cancel.setRawText("never mind");
     var result = process(cancel);
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.CANCELLED);
+    assertThat(result.getOutcome()).isNull();
     assertThat(responseGenerator.generate(result.getRecommendations(), result))
         .contains("cancelled");
     assertThat(sessions.getSession("session", "user").isAwaitingPersonalisedPreferences())
@@ -391,7 +391,7 @@ class PersonalisedRecommendationFlowTest {
     session.getPreferences().setPositiveSemanticQuery(earlier);
     ConversationDraft pending = personalisedRequest();
     pending.setPreferenceClarificationRequired(true);
-    session.setPendingDecision(ConversationDecision.PREFERENCE_CLARIFICATION);
+    session.setPendingQuestionKind(ConversationQuestion.PREFERENCE_CLARIFICATION);
     ((com.gen3.recommenderagent.domain.session.PendingQuestion.Preference)
             session.getPendingQuestion())
         .setRequest(ConversationDraft.toTurn(pending));
@@ -530,7 +530,7 @@ class PersonalisedRecommendationFlowTest {
   }
 
   @Test
-  void explicitSearchAbandonsPendingPersonalisationAndConstraints() throws Exception {
+  void startsNewSearchAbandonsPendingPersonalisationAndConstraints() throws Exception {
     var request = personalisedRequest();
     var include = new ExactCriteria();
     include.setPublicationYear("recent");
@@ -538,17 +538,17 @@ class PersonalisedRecommendationFlowTest {
     process(request);
     var answer = new ConversationDraft();
     answer.setIntent(ConversationAction.RECOMMENDATION);
-    answer.setExplicitSearch(true);
+    answer.setStartsNewSearch(true);
     var taste = new SemanticQuery();
     taste.setGenres(List.of("horror"));
     answer.setPositiveSemanticQuery(taste);
-    when(books.searchSemantic(any(), any(), eq(50))).thenReturn(List.of());
+    when(books.searchHybrid(any(), eq("horror"), any(), eq(50))).thenReturn(List.of());
     var result = process(answer);
     assertThat(result.isPersonalised()).isFalse();
     assertThat(
             result.getMustInclude() == null || result.getMustInclude().getPublicationYear() == null)
         .isTrue();
-    verify(books).searchSemantic(any(), eq(AudiobookFilters.empty()), eq(50));
+    verify(books).searchHybrid(any(), eq("horror"), eq(AudiobookFilters.empty()), eq(50));
   }
 
   @org.junit.jupiter.params.ParameterizedTest

@@ -26,6 +26,7 @@ public class AiOperationObserver {
   private static final ThreadLocal<Operation> CURRENT_OPERATION = new ThreadLocal<>();
   private final boolean enabled;
 
+  /** Configures provider-call observation, retry tracking, or per-operation timing state. */
   @Autowired
   public AiOperationObserver(ObjectProvider<RetryTemplate> retryTemplateProvider) {
     this.enabled = true;
@@ -36,14 +37,19 @@ public class AiOperationObserver {
     }
   }
 
+  /** Creates a disabled observer for callers that do not collect AI telemetry. */
   private AiOperationObserver() {
     this.enabled = false;
   }
 
+  /** Creates an observer that executes provider calls without recording their usage. */
   public static AiOperationObserver noop() {
     return new AiOperationObserver();
   }
 
+  /**
+   * Executes an AI operation while collecting duration, retry, and available token-usage metadata.
+   */
   public <T> T observe(String operation, Supplier<T> call, Function<T, AiUsage> usageExtractor) {
     if (!enabled) {
       return call.get();
@@ -75,6 +81,7 @@ public class AiOperationObserver {
     }
   }
 
+  /** Records the completed provider operation and whether usage metadata is available. */
   private void logCompletion(Operation operation, AiUsage usage) {
     RequestTelemetry.ai(operation.name(), operation.attempts(), usage);
     LOGGER.info(
@@ -96,10 +103,12 @@ public class AiOperationObserver {
 
     private final RetryListener delegate;
 
+    /** Configures provider-call observation, retry tracking, or per-operation timing state. */
     private LoggingRetryListener(RetryListener delegate) {
       this.delegate = delegate;
     }
 
+    /** {@inheritDoc} */
     @Override
     public void beforeRetry(RetryPolicy policy, Retryable<?> retryable, RetryState state) {
       if (delegate != null) {
@@ -116,6 +125,7 @@ public class AiOperationObserver {
       }
     }
 
+    /** {@inheritDoc} */
     @Override
     public void onRetryPolicyExhaustion(
         RetryPolicy policy,
@@ -141,29 +151,35 @@ public class AiOperationObserver {
     private Instant attemptStartedAt;
     private int retries;
 
+    /** Configures provider-call observation, retry tracking, or per-operation timing state. */
     private Operation(String name, Instant startedAt) {
       this.name = name;
       this.startedAt = startedAt;
       this.attemptStartedAt = startedAt;
     }
 
+    /** Returns the logical provider operation name used in telemetry. */
     private String name() {
       return name;
     }
 
+    /** Advances the retry count and resets the current attempt's start time. */
     private void recordRetry() {
       retries++;
       attemptStartedAt = Instant.now();
     }
 
+    /** Returns the initial attempt plus any recorded retries. */
     private int attempts() {
       return retries + 1;
     }
 
+    /** Returns total elapsed time for the observed operation. */
     private long durationMillis() {
       return Duration.between(startedAt, Instant.now()).toMillis();
     }
 
+    /** Returns elapsed time for the current provider attempt. */
     private long attemptDurationMillis() {
       return Duration.between(attemptStartedAt, Instant.now()).toMillis();
     }
@@ -176,6 +192,7 @@ public class AiOperationObserver {
       Integer totalTokens,
       boolean available) {
 
+    /** Extracts available model and token-usage metadata without inventing missing measurements. */
     public static AiUsage from(ChatResponse response) {
       if (response == null || response.getMetadata() == null) {
         return unavailable();
@@ -183,6 +200,7 @@ public class AiOperationObserver {
       return from(response.getMetadata().getModel(), response.getMetadata().getUsage());
     }
 
+    /** Extracts available model and token-usage metadata without inventing missing measurements. */
     public static AiUsage from(EmbeddingResponse response) {
       if (response == null || response.getMetadata() == null) {
         return unavailable();
@@ -190,6 +208,7 @@ public class AiOperationObserver {
       return from(response.getMetadata().getModel(), response.getMetadata().getUsage());
     }
 
+    /** Extracts available model and token-usage metadata without inventing missing measurements. */
     private static AiUsage from(String model, Usage usage) {
       if (usage == null) {
         return unavailable();
@@ -202,6 +221,7 @@ public class AiOperationObserver {
           true);
     }
 
+    /** Returns usage metadata explicitly marked as unavailable. */
     private static AiUsage unavailable() {
       return new AiUsage(null, null, null, null, false);
     }

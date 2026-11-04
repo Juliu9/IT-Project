@@ -3,8 +3,8 @@ package com.gen3.shortdescriptionjob.store;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.gen3.catalogue.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.testsupport.SolrContainerTestSupport;
+import com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository;
 import com.gen3.shortdescriptionjob.ShortDescriptionMode;
 import java.util.List;
 import java.util.Map;

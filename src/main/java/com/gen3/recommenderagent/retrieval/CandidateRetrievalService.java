@@ -1,13 +1,13 @@
 package com.gen3.recommenderagent.retrieval;
 
-import com.gen3.catalogue.model.AudiobookCandidate;
-import com.gen3.catalogue.port.AudiobookCandidateSearch;
 import com.gen3.recommenderagent.application.conversation.SessionRequest;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectors;
 import com.gen3.recommenderagent.observability.RequestTelemetry;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlan;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookCandidate;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookCandidateSearch;
 import java.io.IOException;
 import java.util.List;
 import java.util.Set;
@@ -20,6 +20,7 @@ public class CandidateRetrievalService implements CandidateRetriever {
   private final QueryEmbeddingService embeddingIndexer;
   private final AudiobookRetrievalPlanner retrievalPlanner;
 
+  /** Connects retrieval planning and query embeddings to the selected catalogue search adapter. */
   public CandidateRetrievalService(
       String backend,
       AudiobookCandidateSearch candidateSearch,
@@ -31,6 +32,7 @@ public class CandidateRetrievalService implements CandidateRetriever {
     this.retrievalPlanner = retrievalPlanner;
   }
 
+  /** {@inheritDoc} */
   @Override
   public List<AudiobookCandidate> getCandidates(
       SessionRequest request,
@@ -40,33 +42,30 @@ public class CandidateRetrievalService implements CandidateRetriever {
     try {
       RequestTelemetry.retrievalBackend(backend);
       AudiobookRetrievalPlan plan = retrievalPlanner.plan(limit, request, excludedBookIds);
-      boolean personalised =
+      boolean semanticRetrieval =
           request != null
-              && (request.isPersonalised()
-                  || (request
-                          instanceof
-                          com.gen3.recommenderagent.application.conversation.ConversationDraft draft
-                      && draft.getSearchContext().getSimilarBook() != null))
+              && request.requiresSemanticRetrieval()
               && vectors != null
               && !vectors.isEmpty();
       List<AudiobookCandidate> candidates =
-          personalised
+          semanticRetrieval
               ? retrieveSemantic(plan, vectors)
               : switch (plan.mode()) {
-                case SEMANTIC -> retrieveSemantic(plan, vectors);
                 case KEYWORD ->
                     candidateSearch.searchKeyword(plan.keywordText(), plan.filters(), plan.limit());
                 case HYBRID -> retrieveHybrid(plan, vectors);
                 case FILTER_ONLY -> candidateSearch.searchByFilters(plan.filters(), plan.limit());
                 case NONE -> List.of();
               };
-      RequestTelemetry.retrieval(personalised ? "SEMANTIC" : plan.mode().name(), candidates.size());
+      RequestTelemetry.retrieval(
+          semanticRetrieval ? "SEMANTIC" : plan.mode().name(), candidates.size());
       return candidates;
     } catch (IOException exception) {
       throw new CandidateRetrievalException(backend, exception);
     }
   }
 
+  /** Searches with combined vector evidence, falling back to keywords when no vector is usable. */
   private List<AudiobookCandidate> retrieveSemantic(
       AudiobookRetrievalPlan plan, SemanticQueryVectors vectors) throws IOException {
     float[] queryVector = embeddingIndexer.combineSemanticQueries(vectors);
@@ -76,6 +75,7 @@ public class CandidateRetrievalService implements CandidateRetriever {
     return candidateSearch.searchSemantic(queryVector, plan.filters(), plan.limit());
   }
 
+  /** Combines vector and keyword retrieval when both kinds of evidence are available. */
   private List<AudiobookCandidate> retrieveHybrid(
       AudiobookRetrievalPlan plan, SemanticQueryVectors vectors) throws IOException {
     float[] queryVector = embeddingIndexer.combineSemanticQueries(vectors);
@@ -89,6 +89,7 @@ public class CandidateRetrievalService implements CandidateRetriever {
         queryVector, plan.keywordText(), plan.filters(), plan.limit());
   }
 
+  /** Uses keyword retrieval only when the plan contains usable query text. */
   private List<AudiobookCandidate> retrieveKeywordFallback(AudiobookRetrievalPlan plan)
       throws IOException {
     if (plan.keywordText() == null || plan.keywordText().isBlank()) {

@@ -3,31 +3,35 @@ package com.gen3.recommenderagent.application.conversation.workflow;
 import static com.gen3.recommenderagent.application.conversation.workflow.ConversationHistory.latestDisplayedSearch;
 import static com.gen3.recommenderagent.application.conversation.workflow.SearchCriteriaMerger.merge;
 
-import com.gen3.catalogue.model.AudiobookTitle;
 import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationOutcome;
+import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.domain.conversation.ExplanationSelection;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.inputparser.ConversationText;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookTitle;
 import java.util.List;
 
 /** Resolves explanation targets exclusively against the displayed recommendation page. */
 public final class ExplanationConversationHandler implements ConversationHandler {
+  /** Returns the conversation actions handled by this handler. */
   public java.util.Set<ConversationAction> intents() {
     return java.util.Set.of(ConversationAction.EXPLAIN_RECOMMENDATION);
   }
 
+  /** Resolves the requested explanation against the retained displayed recommendation page. */
   public ConversationDraft resolve(Session session, ConversationDraft input) {
     if (session == null) {
-      input.setDecision(ConversationDecision.NOTHING_TO_EXPLAIN);
+      input.setOutcome(ConversationOutcome.NOTHING_TO_EXPLAIN);
       return input;
     }
     resolveExplanation(input, session);
     return input;
   }
 
+  /** Determines the explanation targets and any clarification needed for the current page. */
   private void resolveExplanation(ConversationDraft target, Session session) {
     target.setRecommendations(List.of());
     target.setPreferenceClarificationRequired(false);
@@ -36,7 +40,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
     target.setBookCount(null);
     ConversationDraft previous = latestDisplayedSearch(session);
     if (previous == null) {
-      target.setDecision(ConversationDecision.NOTHING_TO_EXPLAIN);
+      target.setOutcome(ConversationOutcome.NOTHING_TO_EXPLAIN);
       return;
     }
     merge(previous, target);
@@ -48,7 +52,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
                 .toList();
     target.setRecommendations(page);
     if (page.isEmpty()) {
-      target.setDecision(ConversationDecision.EMPTY_EXPLANATION_PAGE);
+      target.setOutcome(ConversationOutcome.EMPTY_EXPLANATION_PAGE);
       return;
     }
     if (target.getExplanationSelection() != null) {
@@ -68,16 +72,16 @@ public final class ExplanationConversationHandler implements ConversationHandler
             && !target.getReferenceTitle().isBlank())
         || (!title.isEmpty() && matches.size() != 1)
         || (rank != null && matches.stream().noneMatch(book -> rank.equals(book.getRank())))) {
-      target.setDecision(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+      target.setPendingQuestion(ConversationQuestion.EXPLANATION_TARGET_CLARIFICATION);
       return;
     }
     if (rank != null) {
       matches = matches.stream().filter(book -> rank.equals(book.getRank())).toList();
     }
     target.setRecommendations(matches);
-    target.setDecision(ConversationDecision.EXPLANATION);
   }
 
+  /** Restricts explanation to the selected recommendations from the displayed page. */
   private void resolveSubset(ConversationDraft target, Session session, List<Recommendation> page) {
     var selection = target.getExplanationSelection();
     var include = resolveSelectors(selection.include(), page);
@@ -86,7 +90,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
     target.setExplanationSelection(normalized);
     if (firstUnresolved(normalized, page) != null) {
       session.setPendingExplanation(normalized);
-      target.setDecision(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+      target.setPendingQuestion(ConversationQuestion.EXPLANATION_TARGET_CLARIFICATION);
       return;
     }
     var included = include.stream().map(Integer::valueOf).toList();
@@ -100,12 +104,12 @@ public final class ExplanationConversationHandler implements ConversationHandler
             .toList();
     session.setPendingExplanation(null);
     target.setRecommendations(selected);
-    target.setDecision(
-        selected.isEmpty()
-            ? ConversationDecision.EMPTY_EXPLANATION_SELECTION
-            : ConversationDecision.EXPLANATION);
+    if (selected.isEmpty()) {
+      target.setOutcome(ConversationOutcome.EMPTY_EXPLANATION_SELECTION);
+    }
   }
 
+  /** Maps literal selectors to displayed books while retaining unresolved selections. */
   private static List<String> resolveSelectors(List<String> selectors, List<Recommendation> page) {
     return selectors.stream()
         .flatMap(
@@ -121,6 +125,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
         .toList();
   }
 
+  /** Returns the first selector that cannot be matched to the supplied page. */
   static String firstUnresolved(ExplanationSelection selection, List<Recommendation> page) {
     return java.util.stream.Stream.concat(
             selection.include().stream(), selection.exclude().stream())
@@ -129,6 +134,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
         .orElse(null);
   }
 
+  /** Finds displayed recommendations matching the supplied rank, position, or title selector. */
   private static List<Recommendation> select(List<Recommendation> page, String value) {
     Integer position = ConversationText.relativeSelectionReply(value, page.size());
     if (position != null) {
@@ -145,6 +151,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
     return title.isBlank() ? List.of() : matchingTitles(page, title);
   }
 
+  /** Reports whether the reply identifies a title on the retained displayed page. */
   static boolean matchesDisplayedTitle(Session session, String title) {
     var previous = latestDisplayedSearch(session);
     String normalized = AudiobookTitle.normalize(title);
@@ -154,6 +161,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
         && !matchingTitles(previous.getRecommendations(), normalized).isEmpty();
   }
 
+  /** Finds displayed books whose titles match the supplied selector. */
   private static List<Recommendation> matchingTitles(List<Recommendation> page, String title) {
     var exact =
         page.stream()
@@ -166,6 +174,7 @@ public final class ExplanationConversationHandler implements ConversationHandler
         : exact;
   }
 
+  /** Returns the telemetry label describing how this action obtained its results. */
   public String retrievalMode(ConversationDraft result) {
     return "SESSION_EXPLANATION";
   }

@@ -8,8 +8,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.catalogue.model.AudiobookRecord;
-import com.gen3.catalogue.solr.SolrAudiobookRepository;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookRecord;
+import com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository;
 import com.gen3.shortdescriptionjob.ShortDescriptionMode;
 import java.util.List;
 import java.util.Map;

@@ -17,8 +17,7 @@ class SessionPreferencesTest {
         SemanticQuery::setTopics,
         SemanticQuery::setGenres,
         SemanticQuery::setAuthors,
-        SemanticQuery::setNarrators,
-        SemanticQuery::setKeywords);
+        SemanticQuery::setNarrators);
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -113,6 +112,35 @@ class SessionPreferencesTest {
         .hasMessageContaining("only one author and one narrator");
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.MethodSource("semanticFields")
+  void explicitAdditionRemovesTheMatchingOppositePreference(
+      java.util.function.BiConsumer<SemanticQuery, List<String>> field) {
+    var original = new SessionPreferences();
+    var negative = new SemanticQuery();
+    field.accept(negative, List.of("Horror"));
+    original.setNegativeSemanticQuery(negative);
+    var constraints = new ExactCriteria();
+    constraints.setLanguage("English");
+    original.setMustInclude(constraints);
+    var additions = new SessionPreferences();
+    var positive = new SemanticQuery();
+    field.accept(positive, List.of(" horror "));
+    additions.setPositiveSemanticQuery(positive);
+    var changed = original.updated(additions, null, List.of());
+    assertThat(changed.getPositiveSemanticQuery().hasValues()).isTrue();
+    assertThat(changed.getNegativeSemanticQuery().hasValues()).isFalse();
+    assertThat(changed.getMustInclude().getLanguage()).isEqualTo("English");
+    assertThat(original.getNegativeSemanticQuery().hasValues()).isTrue();
+    var reverse = new SessionPreferences();
+    var avoided = new SemanticQuery();
+    field.accept(avoided, List.of("HORROR"));
+    reverse.setNegativeSemanticQuery(avoided);
+    var reversed = changed.updated(reverse, null, List.of());
+    assertThat(reversed.getPositiveSemanticQuery().hasValues()).isFalse();
+    assertThat(reversed.getNegativeSemanticQuery().hasValues()).isTrue();
+  }
+
   @Test
   void changesAreCopiedDeduplicatedAndLimitedToTheNamedFields() {
     var original = new SessionPreferences();
@@ -150,5 +178,51 @@ class SessionPreferencesTest {
   void unknownReplacementFieldsAreRejected() {
     assertThatThrownBy(() -> new SessionPreferences().updated(null, null, List.of("unknown.field")))
         .isInstanceOf(InvalidRequestException.class);
+  }
+
+  @Test
+  void rejectsOversizedTermsAndSemanticFieldsAtomically() {
+    var original = new SessionPreferences();
+    var base = new SemanticQuery();
+    base.setGenres(List.of("fantasy"));
+    original.setPositiveSemanticQuery(base);
+
+    var longAddition = new SessionPreferences();
+    var longQuery = new SemanticQuery();
+    longQuery.setTopics(List.of("x".repeat(257)));
+    longAddition.setPositiveSemanticQuery(longQuery);
+    assertThatThrownBy(() -> original.updated(longAddition, null, List.of()))
+        .isInstanceOf(InvalidRequestException.class)
+        .hasMessageContaining("256");
+
+    var manyAddition = new SessionPreferences();
+    var manyQuery = new SemanticQuery();
+    manyQuery.setTopics(
+        java.util.stream.IntStream.rangeClosed(1, 11).mapToObj(i -> "term-" + i).toList());
+    manyAddition.setPositiveSemanticQuery(manyQuery);
+    assertThatThrownBy(() -> original.updated(manyAddition, null, List.of()))
+        .isInstanceOf(InvalidRequestException.class)
+        .hasMessageContaining("10");
+    assertThat(original.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
+  }
+
+  @Test
+  void acceptsTenTermsPerCategoryAndOnePersonPerField() {
+    var additions = new SessionPreferences();
+    var query = new SemanticQuery();
+    query.setGenres(terms("genre", 10));
+    query.setTopics(terms("topic", 10));
+    query.setAuthors(List.of("Author"));
+    query.setNarrators(List.of("Narrator"));
+    additions.setPositiveSemanticQuery(query);
+    additions.setNegativeSemanticQuery(query);
+    var saved = new SessionPreferences().updated(additions, null, List.of());
+    assertThat(saved.getPositiveSemanticQuery().getGenres()).hasSize(10);
+    assertThat(saved.getNegativeSemanticQuery().getTopics()).hasSize(10);
+    assertThat(saved.getNegativeSemanticQuery().getNarrators()).containsExactly("Narrator");
+  }
+
+  private List<String> terms(String prefix, int count) {
+    return java.util.stream.IntStream.range(0, count).mapToObj(i -> prefix + i).toList();
   }
 }

@@ -13,6 +13,7 @@ participant SessionTransitionService as Transition
 participant "ConversationEngine\nIntent handlers + RecommendationPager" as Engine
 participant "SessionRepository\nRedis adapter" as Sessions
 participant "RecommendationWorkflow\nEmbedding → retrieval → ranking" as Workflow
+participant "ReadHistoryRepository\nOptional history adapter" as History
 participant "ConversationResponseGenerator\nAI narration when needed" as Response
 
 User -> Gateway : Natural-language request
@@ -46,15 +47,26 @@ activate Engine
 
 alt REPEAT
   Engine -> Engine : Restore LastOutcome\nKeep ActiveSearch unchanged
+else EXPLAIN_PREFERENCES
+  Engine -> Engine : Snapshot saved preferences and recommendation count\nKeep search, queue and pending question unchanged
+else UPDATE_PREFERENCES
+  Engine -> Engine : Merge additions/removals/replacements atomically\nRemove matching saved opposite semantic tastes
+  note over Transition, Engine
+    Category overflow is caught by SessionTransitionService.
+    Keep saved preferences and the prior pending question;
+    save a repeatable limit outcome instead of returning 400.
+  end note
 else Explanation or repeat recommendations
   Engine -> Engine : Reuse displayed page or saved outcome\nNo candidate retrieval
 else MORE with no previous search
   Engine -> Engine : Mark search clarification required\nDo not retrieve candidates
 else Recommendation, refinement, or MORE
   Engine -> Engine : Intent handler resolves context and preferences\nReplace ActiveSearch if search changes
-  Engine -> Engine : Take pending recommendations, up to requested count
+  Engine -> History : Load current user's read IDs (bounded)
+  History --> Engine : Read IDs, or logged fail-open on failure/oversize
+  Engine -> Engine : Filter pending books against read/shown IDs\nTake up to requested count
   opt Page still needs books
-    Engine -> Workflow : Build fresh batch, excluding shown IDs and cached tail
+    Engine -> Workflow : Build fresh batch, excluding read/shown IDs and cached tail
     activate Workflow
     Workflow -> Workflow : Load user preference vectors\nBuild query vectors when needed
     alt Personalised request lacks usable preferences
@@ -67,7 +79,7 @@ else Recommendation, refinement, or MORE
     Engine -> Engine : Fill page from new queue\nReturn fewer if necessary
   end
   Engine -> Engine : Handler completes action; update LastOutcome\nEmpty MORE = no further matches
-else Count, preference, history, help or unknown action
+else Count, reset preferences, history, help, cancel or unknown action
   Engine -> Engine : Apply the relevant session action\nNo candidate retrieval
 end
 
@@ -82,6 +94,9 @@ note over Response
   Chat model for book explanations.
   Built-in wording for actions, clarification,
   exhausted results and model failures.
+  Preference reports list all required/excluded constraints first,
+  then styles, then genres/topics within the remaining word budget.
+  Exact constraints are never truncated, including on REPEAT.
 end note
 Response --> Gateway : Response text
 Gateway --> Sessions : Generated response

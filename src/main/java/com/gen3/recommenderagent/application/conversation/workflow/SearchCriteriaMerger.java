@@ -17,8 +17,10 @@ import java.util.Map;
 
 /** Copies and merges search criteria without changing parser input or retained history. */
 public final class SearchCriteriaMerger {
+  /** Prevents instantiation of this utility class. */
   private SearchCriteriaMerger() {}
 
+  /** Combines inherited and explicit criteria using the applicable field replacement rules. */
   public static void merge(SessionRequest base, ConversationDraft target) {
     if (base instanceof ConversationDraft previous
         && target.getSimilarToTitle() == null
@@ -50,10 +52,12 @@ public final class SearchCriteriaMerger {
     target.setReplaceSearchFields(new ArrayList<>(replacements));
   }
 
+  /** Selects the applicable author or narrator value while respecting single-person semantics. */
   private static List<String> person(List<String> base, List<String> supplied) {
     return union(hasTerms(supplied) ? null : base, supplied);
   }
 
+  /** Combines inherited and explicit criteria using the applicable field replacement rules. */
   private static SemanticQuery merge(SemanticQuery base, SemanticQuery override) {
     if (base == null && override == null) {
       return null;
@@ -70,13 +74,10 @@ public final class SearchCriteriaMerger {
         person(
             values(base, SemanticQuery::getNarrators),
             values(override, SemanticQuery::getNarrators)));
-    merged.setKeywords(
-        union(
-            values(base, SemanticQuery::getKeywords),
-            values(override, SemanticQuery::getKeywords)));
     return merged;
   }
 
+  /** Combines inherited and explicit criteria using the applicable field replacement rules. */
   private static ExactCriteria merge(ExactCriteria base, ExactCriteria override) {
     if (base == null && override == null) {
       return null;
@@ -110,6 +111,7 @@ public final class SearchCriteriaMerger {
   }
 
   // Resolution must not mutate parser input or the saved criteria used by later requests.
+  /** Creates a working conversation draft without modifying the supplied request. */
   public static ConversationDraft copyOf(SessionRequest source) {
     ConversationDraft copy = new ConversationDraft();
     copy.setIntent(ConversationAction.UNKNOWN);
@@ -125,7 +127,7 @@ public final class SearchCriteriaMerger {
             ? null
             : new ArrayList<>(source.getReplacePreferenceFields()));
     copy.setReplaceSearchFields(source.getReplaceSearchFields());
-    copy.setExplicitSearch(source.isExplicitSearch());
+    copy.setStartsNewSearch(source.startsNewSearch());
     copy.setInvalidBookCount(source.isInvalidBookCount());
     copy.setPreferenceRemovalTerms(source.getPreferenceRemovalTerms());
     copy.setPositivePreferenceRemovalOnly(source.isPositivePreferenceRemovalOnly());
@@ -153,7 +155,7 @@ public final class SearchCriteriaMerger {
       copy.setSimilarToClarificationRequired(source.isSimilarToClarificationRequired());
     }
     if (source instanceof ConversationDraft draft) {
-      copy.setDecision(draft.getDecision());
+      copy.setOutcome(draft.getOutcome());
       copy.setPendingQuestion(draft.getPendingQuestion());
       copy.setPreferenceAnswer(draft.isPreferenceAnswer());
       copy.setSearchClarificationRequired(draft.isSearchClarificationRequired());
@@ -167,19 +169,23 @@ public final class SearchCriteriaMerger {
     return copy;
   }
 
+  /** Copies criteria without sharing mutable preference lists. */
   private static SemanticQuery copy(SemanticQuery source) {
     return merge(null, source);
   }
 
+  /** Copies criteria without sharing mutable preference lists. */
   private static ExactCriteria copy(ExactCriteria source) {
     return merge(null, source);
   }
 
+  /** Returns an empty list for missing terms before merging values. */
   private static List<String> values(
       SemanticQuery query, java.util.function.Function<SemanticQuery, List<String>> getter) {
     return query == null ? null : getter.apply(query);
   }
 
+  /** Combines terms while retaining their order and removing duplicates. */
   static List<String> union(List<String> base, List<String> override) {
     Map<String, String> unique = new LinkedHashMap<>();
     add(unique, base);
@@ -187,6 +193,7 @@ public final class SearchCriteriaMerger {
     return unique.isEmpty() ? null : new ArrayList<>(unique.values());
   }
 
+  /** Adds nonblank terms to the destination collection. */
   private static void add(Map<String, String> unique, List<String> values) {
     if (values == null) {
       return;
@@ -197,6 +204,7 @@ public final class SearchCriteriaMerger {
         .forEach(value -> unique.putIfAbsent(value.toLowerCase(Locale.ROOT), value));
   }
 
+  /** Uses the supplied replacement value when present, otherwise keeps the inherited value. */
   private static String preferred(String base, String override) {
     return override == null || override.isBlank() ? base : override;
   }

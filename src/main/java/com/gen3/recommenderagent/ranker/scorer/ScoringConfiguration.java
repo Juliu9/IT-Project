@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Configuration;
 @EnableConfigurationProperties(RankingScoringProperties.class)
 public class ScoringConfiguration {
 
+  /** Combines the configured scoring signals with their positive relative weights. */
   @Bean
   public CompositeScorer compositeScorer(
       RetrievalRelevanceScorer retrievalRelevanceScorer,
@@ -24,6 +25,7 @@ public class ScoringConfiguration {
     return new CompositeScorer(scorers);
   }
 
+  /** Registers a scoring signal only when its configured contribution is positive. */
   private void add(List<WeightedScorer> scorers, CandidateScorer scorer, double weight) {
     if (weight > 0.0) {
       scorers.add(new WeightedScorer(scorer, weight));

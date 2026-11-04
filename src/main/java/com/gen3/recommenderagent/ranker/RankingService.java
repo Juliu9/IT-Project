@@ -1,9 +1,9 @@
 package com.gen3.recommenderagent.ranker;
 
-import com.gen3.catalogue.model.AudiobookCandidate;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.ranker.scorer.CompositeScorer;
 import com.gen3.recommenderagent.ranker.scorer.ScoreResult;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookCandidate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -18,6 +18,7 @@ public class RankingService implements Ranker {
 
   private final CompositeScorer compositeScorer;
 
+  /** Creates the ranker with the configured composite candidate scorer. */
   public RankingService(CompositeScorer compositeScorer) {
     this.compositeScorer = compositeScorer;
   }
@@ -55,6 +56,7 @@ public class RankingService implements Ranker {
     return toRecommendations(scoredCandidates, limit);
   }
 
+  /** Removes invalid, excluded, and duplicate books before scoring. */
   private List<AudiobookCandidate> eligibleCandidates(
       List<AudiobookCandidate> candidates, RankingContext context) {
     Set<String> seenBookIds = new HashSet<>();
@@ -67,6 +69,7 @@ public class RankingService implements Ranker {
         .toList();
   }
 
+  /** Adds the finite retrieval-score range observed across eligible candidates. */
   private RankingContext scoringContext(List<AudiobookCandidate> eligible, RankingContext context) {
     List<Double> retrievalScores =
         eligible.stream()
@@ -85,6 +88,7 @@ public class RankingService implements Ranker {
     return context.withRetrievalScoreRange(minimumRetrievalScore, maximumRetrievalScore);
   }
 
+  /** Converts sorted scores to ranked recommendations while retaining explanation metadata. */
   private List<Recommendation> toRecommendations(
       List<ScoredCandidate> scoredCandidates, int limit) {
     boolean hasScoredCandidate =

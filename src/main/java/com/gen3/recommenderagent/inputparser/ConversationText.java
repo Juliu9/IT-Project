@@ -5,6 +5,9 @@ import java.util.regex.Pattern;
 
 /** Shared courtesy normalization for complete commands and short selection replies. */
 public final class ConversationText {
+  static final String GENRE_PATTERN =
+      "romance|horror|fantasy|mystery|crime|comedy|science fiction|thrillers?";
+
   private static final Pattern SELECTION_REPLY =
       Pattern.compile(
           "(?i)^(?:(?:choose|pick|select)\\s+)?(?:the\\s+)?(?:(?:book|audiobook)\\s+)?(?:number\\s+)?([0-9]+(?:st|nd|rd|th)?|one|two|three|four|five|six|seven|eight|nine|ten|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)(?:\\s+(?:one|book|audiobook|recommendation))?(?:\\s+please)?[.!?]?$");
@@ -13,8 +16,12 @@ public final class ConversationText {
       Pattern.compile(
           "(?i)^(?:none of (?:these|those|them)|neither(?: of them)?)[,;.!]?\\s+(?:try|use)\\s+(.+)$");
 
+  /** Prevents instantiation of this utility class. */
   private ConversationText() {}
 
+  /**
+   * Normalizes case, whitespace, punctuation, and supported courtesy wording for command matching.
+   */
   public static String normalizeCommand(String rawText) {
     return rawText
         .strip()
@@ -35,6 +42,7 @@ public final class ConversationText {
         .stripTrailing();
   }
 
+  /** Maps relative wording to a one-based position within the displayed page. */
   public static Integer relativeSelectionReply(String text, int size) {
     if (text == null || size < 1) {
       return null;
@@ -61,6 +69,7 @@ public final class ConversationText {
     };
   }
 
+  /** Recognizes wording that abandons the current unfinished action. */
   public static boolean isCancellationReply(String text) {
     return text != null
         && java.util.Set.of(
@@ -77,6 +86,7 @@ public final class ConversationText {
             .contains(normalizeCommand(text));
   }
 
+  /** Extracts a replacement reference title from supported reply wording. */
   public static String replacementReferenceTitle(String text) {
     if (text == null) {
       return null;
@@ -85,6 +95,7 @@ public final class ConversationText {
     return match.matches() ? match.group(1).strip() : null;
   }
 
+  /** Recognizes wording that rejects the offered reference-book choices. */
   public static boolean isChoiceRejection(String text) {
     return text != null
         && java.util.Set.of(
@@ -97,6 +108,7 @@ public final class ConversationText {
             .contains(normalizeCommand(text));
   }
 
+  /** Recognizes wording selecting every book on the displayed page. */
   public static boolean isWholePageReply(String text) {
     return text != null
         && java.util.Set.of(
@@ -115,12 +127,14 @@ public final class ConversationText {
             .contains(normalizeCommand(text));
   }
 
+  /** Recognizes supported confirmation wording. */
   public static boolean isAffirmativeReply(String text) {
     return text != null
         && java.util.Set.of("yes", "yeah", "yep", "sure", "go ahead", "ok", "okay")
             .contains(normalizeCommand(text));
   }
 
+  /** Converts a duration-only answer into the requested shorter-or-longer constraint. */
   public static String durationReply(String text, boolean longer) {
     String reply = DurationParser.normalize(normalizeCommand(text));
     if (reply.isBlank()) {
@@ -146,6 +160,7 @@ public final class ConversationText {
     }
   }
 
+  /** Checks whether the reply states a duration without unrelated search instructions. */
   public static boolean isDurationOnlyReply(String text) {
     String value = DurationParser.normalize(normalizeCommand(text));
     return (value.matches(".*[0-9].*") || value.matches(".*\\b(?:hours?|hrs?|minutes?|mins?)\\b.*"))
@@ -156,6 +171,7 @@ public final class ConversationText {
             .matches("[0-9.\\s,/+−-]+");
   }
 
+  /** Recognizes supported comparative publication-recency wording. */
   public static boolean isRecencyRefinement(String text) {
     return text != null
         && java.util.Set.of(
@@ -166,16 +182,19 @@ public final class ConversationText {
             .contains(normalizeCommand(text));
   }
 
+  /** Recognizes wording that requests older publication years. */
   public static boolean isOlderRefinement(String text) {
     return text != null
         && java.util.Set.of("older", "older ones", "older books", "older audiobooks", "less recent")
             .contains(normalizeCommand(text));
   }
 
+  /** Identifies year wording that must be resolved relative to the current search. */
   public static boolean isYearRefinement(String text) {
     return isRecencyRefinement(text) || isOlderRefinement(text);
   }
 
+  /** Recognizes wording that declines to supply or change saved tastes. */
   public static boolean isPreferenceDecline(String reply) {
     return java.util.Set.of(
             "nothing",
@@ -189,6 +208,7 @@ public final class ConversationText {
         .contains(normalizeCommand(reply));
   }
 
+  /** Parses a supported selection reply without overflowing the rank representation. */
   public static Integer selectionReply(String reply) {
     var match = SELECTION_REPLY.matcher(ConversationText.normalizeCommand(reply));
     if (!match.matches()) {

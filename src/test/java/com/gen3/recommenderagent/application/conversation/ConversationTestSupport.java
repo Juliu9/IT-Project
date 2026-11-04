@@ -23,14 +23,27 @@ public final class ConversationTestSupport {
 
   public static SessionTransitionService transitions(
       SessionRepository sessions, RecommendationWorkflow workflow) {
+    return transitions(
+        sessions,
+        workflow,
+        new com.gen3.recommenderagent.application.recommendation.ReadHistoryExclusions(
+            java.util.Optional.empty(), 10000));
+  }
+
+  public static SessionTransitionService transitions(
+      SessionRepository sessions,
+      RecommendationWorkflow workflow,
+      com.gen3.recommenderagent.application.recommendation.ReadHistoryExclusions history) {
     var engine =
         new ConversationEngine(
             dispatcher(),
-            new RecommendationPager(workflow),
+            new RecommendationPager(workflow, history),
             new ExactFilterPolicy(),
             new com.gen3.recommenderagent.application.recommendation.SimilarBookResolver(
-                org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookTitleLookup.class),
-                org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookVectorRepository.class)));
+                org.mockito.Mockito.mock(
+                    com.gen3.shared.audiobookcatalogue.port.AudiobookTitleLookup.class),
+                org.mockito.Mockito.mock(
+                    com.gen3.shared.audiobookcatalogue.port.AudiobookVectorRepository.class)));
     // Resolver conversion is deterministic and does not call this parser's AI client.
     var parser =
         new InputParser(

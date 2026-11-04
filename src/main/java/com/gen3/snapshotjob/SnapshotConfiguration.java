@@ -1,8 +1,8 @@
 package com.gen3.snapshotjob;
 
-import com.gen3.catalogue.snapshot.BookVectorSnapshot;
+import com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot;
 import java.nio.file.Path;
-import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
@@ -10,14 +10,19 @@ import org.springframework.core.env.Environment;
 /** Snapshot publishing machinery, shared by the standalone rebuild and embedding workflow. */
 @Configuration(proxyBeanMethods = false)
 public class SnapshotConfiguration {
+  /**
+   * Builds the local snapshot reader using the selected backend, collection, model, and dimensions.
+   */
   public static BookVectorSnapshot snapshot(Environment environment) {
-    String backend = environment.getProperty("audiobook.database", "qdrant");
-    if (!backend.equals("qdrant") && !backend.equals("solr")) {
-      throw new IllegalArgumentException("Snapshot backend must be qdrant or solr");
-    }
-    String collection =
-        environment.getProperty(
-            backend + ".collection", backend.equals("solr") ? "audiobooks" : "audiobooks_hybrid");
+    return snapshot(environment, SnapshotIdentity.from(environment));
+  }
+
+  /**
+   * Builds the local snapshot reader using the selected backend, collection, model, and dimensions.
+   */
+  private static BookVectorSnapshot snapshot(Environment environment, SnapshotIdentity identity) {
+    String backend = identity.backend();
+    String collection = identity.collection();
     Path path =
         Path.of(
             environment.getProperty(
@@ -38,19 +43,36 @@ public class SnapshotConfiguration {
         environment.getProperty("embedding.dimensions", Integer.class, 1536));
   }
 
+  /** Resolves the backend and collection identity used for snapshot compatibility checks. */
   @Bean
-  BookVectorSnapshot bookVectorSnapshot(Environment environment) {
-    return snapshot(environment);
+  SnapshotIdentity snapshotIdentity(Environment environment) {
+    return SnapshotIdentity.from(environment);
   }
 
+  /** Builds a snapshot reader after checking that its source matches the configured identity. */
   @Bean
-  BookVectorSnapshot.Source snapshotSource(
-      Environment environment,
-      ObjectProvider<com.gen3.catalogue.solr.SolrAudiobookRepository> solr,
-      ObjectProvider<io.qdrant.client.QdrantClient> qdrant) {
-    return environment.getProperty("audiobook.database", "qdrant").equals("solr")
-        ? SnapshotSources.solr(solr.getObject())
-        : SnapshotSources.qdrant(
-            qdrant.getObject(), environment.getProperty("qdrant.collection", "audiobooks_hybrid"));
+  BookVectorSnapshot bookVectorSnapshot(
+      Environment environment, SnapshotIdentity identity, CatalogueSnapshotSource source) {
+    if (!identity.equals(new SnapshotIdentity(source.backend(), source.collection()))) {
+      throw new IllegalArgumentException("Snapshot source identity does not match configuration");
+    }
+    return snapshot(environment, identity);
+  }
+
+  /** Registers the Qdrant source for exporting existing catalogue vectors. */
+  @Bean
+  @ConditionalOnProperty(name = "audiobook.database", havingValue = "qdrant", matchIfMissing = true)
+  CatalogueSnapshotSource qdrantSnapshotSource(
+      io.qdrant.client.QdrantClient client, SnapshotIdentity identity) {
+    return SnapshotSources.qdrant(client, identity.collection());
+  }
+
+  /** Registers the Solr source for exporting existing catalogue vectors. */
+  @Bean
+  @ConditionalOnProperty(name = "audiobook.database", havingValue = "solr")
+  CatalogueSnapshotSource solrSnapshotSource(
+      com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository repository,
+      SnapshotIdentity identity) {
+    return SnapshotSources.solr(repository, identity.collection());
   }
 }

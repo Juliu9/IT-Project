@@ -1,6 +1,6 @@
 package com.gen3.recommenderagent.retrieval.plan;
 
-import com.gen3.catalogue.model.AudiobookFilters;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookFilters;
 
 /** Complete, database-ready interpretation of one audiobook retrieval request. */
 public record AudiobookRetrievalPlan(

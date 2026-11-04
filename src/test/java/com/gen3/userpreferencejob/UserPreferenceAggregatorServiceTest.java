@@ -6,11 +6,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.catalogue.port.AudiobookVectorRepository;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
-import com.gen3.userpreferencejob.model.UserFavourite;
-import com.gen3.userpreferencejob.model.UserHistory;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookVectorRepository;
+import com.gen3.shared.csv.model.UserFavourite;
+import com.gen3.shared.csv.model.UserHistory;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -48,7 +48,7 @@ class UserPreferenceAggregatorServiceTest {
             new UserHistory("user-1", "old", now.minus(180, ChronoUnit.DAYS))));
 
     ArgumentCaptor<List<UserPreferenceEmbedding>> saved = ArgumentCaptor.forClass(List.class);
-    verify(users).saveAll(saved.capture());
+    verify(users).saveAllPreservingMissing(saved.capture());
     verifyNoMoreInteractions(users);
     verify(audiobooks).findEmbeddingsByBookIds(Set.of("fav", "missing", "recent", "old"));
     assertArrayEquals(new float[] {1, 0}, saved.getValue().getFirst().favouritesVector(), 0.0001f);
@@ -56,8 +56,31 @@ class UserPreferenceAggregatorServiceTest {
         new float[] {0.8944272f, 0.4472136f}, saved.getValue().getFirst().historyVector(), 0.0001f);
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"1950-01-01T00:00:00Z", "0001-07-01T00:00:00Z"})
+  void oldHistoriesRetainRelativeWeightsWithoutUnderflow(String timestamp) throws IOException {
+    var books = mock(AudiobookVectorRepository.class);
+    var users = mock(UserPreferenceVectorRepository.class);
+    when(books.findEmbeddingsByBookIds(org.mockito.ArgumentMatchers.anyCollection()))
+        .thenReturn(Map.of("recent", new float[] {1, 0}, "older", new float[] {0, 1}));
+    Instant recent = Instant.parse(timestamp);
+    new UserPreferenceAggregatorService(books, users)
+        .aggregateAndSave(
+            List.of(),
+            List.of(
+                new UserHistory("u", "recent", recent),
+                new UserHistory("u", "older", recent.minus(180, ChronoUnit.DAYS)),
+                new UserHistory("u", "missing", Instant.parse("2026-01-01T00:00:00Z"))),
+            Instant.parse("2026-11-04T00:00:00Z"));
+    ArgumentCaptor<List<UserPreferenceEmbedding>> saved = ArgumentCaptor.forClass(List.class);
+    verify(users).saveAllPreservingMissing(saved.capture());
+    assertArrayEquals(
+        new float[] {0.8944272f, 0.4472136f}, saved.getValue().getFirst().historyVector(), 0.0001f);
+  }
+
   @Test
-  void reimportWithNoAvailableVectorsClearsBothPreviousTasteSignals() throws IOException {
+  void reimportWithNoAvailableVectorsLeavesPreviousTasteSignalsUnchanged() throws IOException {
     var books = mock(AudiobookVectorRepository.class);
     var users = mock(UserPreferenceVectorRepository.class);
     when(books.findEmbeddingsByBookIds(org.mockito.ArgumentMatchers.anyCollection()))
@@ -68,15 +91,14 @@ class UserPreferenceAggregatorServiceTest {
     service.aggregateAndSave(favourites, history);
     service.aggregateAndSave(favourites, history);
     ArgumentCaptor<List<UserPreferenceEmbedding>> saved = ArgumentCaptor.forClass(List.class);
-    verify(users).saveAll(saved.capture());
+    verify(users).saveAllPreservingMissing(saved.capture());
     assertArrayEquals(new float[] {1, 0}, saved.getValue().getFirst().favouritesVector());
     assertArrayEquals(new float[] {1, 0}, saved.getValue().getFirst().historyVector());
-    verify(users).clearAll(List.of("user"));
     verifyNoMoreInteractions(users);
   }
 
   @Test
-  void clearsMissingVectorsOncePerImportGroup() throws IOException {
+  void skipsMissingVectorsOncePerImportGroup() throws IOException {
     var books = mock(AudiobookVectorRepository.class);
     var users = mock(UserPreferenceVectorRepository.class);
     when(books.findEmbeddingsByBookIds(org.mockito.ArgumentMatchers.anyCollection()))
@@ -85,11 +107,7 @@ class UserPreferenceAggregatorServiceTest {
         .aggregateAndSave(
             List.of(new UserFavourite("one", "missing"), new UserFavourite("two", "missing")),
             List.of());
-    ArgumentCaptor<List<String>> cleared = ArgumentCaptor.forClass(List.class);
-    verify(users).clearAll(cleared.capture());
-    org.assertj.core.api.Assertions.assertThat(cleared.getValue())
-        .containsExactlyInAnyOrder("one", "two");
-    verifyNoMoreInteractions(users);
+    org.mockito.Mockito.verifyNoInteractions(users);
   }
 
   @Test
@@ -107,7 +125,7 @@ class UserPreferenceAggregatorServiceTest {
                 new UserFavourite("other", "a")),
             List.of());
     ArgumentCaptor<List<UserPreferenceEmbedding>> saved = ArgumentCaptor.forClass(List.class);
-    verify(users).saveAll(saved.capture());
+    verify(users).saveAllPreservingMissing(saved.capture());
     var byUser =
         saved.getValue().stream()
             .collect(
@@ -129,7 +147,7 @@ class UserPreferenceAggregatorServiceTest {
             .toList();
     new UserPreferenceAggregatorService(books, users).aggregateAndSave(favourites, List.of());
     ArgumentCaptor<List<UserPreferenceEmbedding>> saved = ArgumentCaptor.forClass(List.class);
-    verify(users, org.mockito.Mockito.times(21)).saveAll(saved.capture());
+    verify(users, org.mockito.Mockito.times(21)).saveAllPreservingMissing(saved.capture());
     verify(books).findEmbeddingsByBookIds(Set.of("book"));
     org.assertj.core.api.Assertions.assertThat(saved.getAllValues())
         .extracting(List::size)
@@ -138,7 +156,7 @@ class UserPreferenceAggregatorServiceTest {
   }
 
   @Test
-  void boundsClearsWhenManyUsersShareMissingBooks() throws IOException {
+  void skipsManyUsersWithMissingBooks() throws IOException {
     var books = mock(AudiobookVectorRepository.class);
     var users = mock(UserPreferenceVectorRepository.class);
     when(books.findEmbeddingsByBookIds(org.mockito.ArgumentMatchers.anyCollection()))
@@ -148,13 +166,8 @@ class UserPreferenceAggregatorServiceTest {
             .mapToObj(i -> new UserFavourite("user-" + i, "missing"))
             .toList();
     new UserPreferenceAggregatorService(books, users).aggregateAndSave(input, List.of());
-    ArgumentCaptor<List<String>> cleared = ArgumentCaptor.forClass(List.class);
-    verify(users, org.mockito.Mockito.times(3)).clearAll(cleared.capture());
     verify(books).findEmbeddingsByBookIds(Set.of("missing"));
-    org.assertj.core.api.Assertions.assertThat(cleared.getAllValues())
-        .extracting(List::size)
-        .containsExactly(500, 500, 1);
-    verifyNoMoreInteractions(users);
+    org.mockito.Mockito.verifyNoInteractions(users);
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -193,7 +206,7 @@ class UserPreferenceAggregatorServiceTest {
     org.assertj.core.api.Assertions.assertThat(requested)
         .containsExactly(Set.of("one", "two"), Set.of("three"));
     ArgumentCaptor<List<UserPreferenceEmbedding>> saved = ArgumentCaptor.forClass(List.class);
-    verify(users, org.mockito.Mockito.times(2)).saveAll(saved.capture());
+    verify(users, org.mockito.Mockito.times(2)).saveAllPreservingMissing(saved.capture());
     org.assertj.core.api.Assertions.assertThat(saved.getAllValues())
         .extracting(List::size)
         .containsExactly(2, 1);
@@ -243,7 +256,7 @@ class UserPreferenceAggregatorServiceTest {
       verify(books)
           .findEmbeddingsByBookIds(
               org.mockito.ArgumentMatchers.argThat(ids -> ids.size() == 100000));
-      verify(users).clearAll(List.of("user"));
+      org.mockito.Mockito.verifyNoInteractions(users);
     }
   }
 }

@@ -1,7 +1,7 @@
 package com.gen3.embeddingjob.store;
 
-import com.gen3.catalogue.solr.SolrAudiobookRepository;
 import com.gen3.embeddingjob.EmbeddingMode;
+import com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository;
 import java.io.IOException;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -13,10 +13,12 @@ import org.springframework.stereotype.Component;
 public class SolrEmbeddingStore implements AudiobookEmbeddingStore {
   private final SolrAudiobookRepository repository;
 
+  /** Creates an embedding store backed by the configured Solr catalogue repository. */
   public SolrEmbeddingStore(SolrAudiobookRepository repository) {
     this.repository = repository;
   }
 
+  /** {@inheritDoc} */
   @Override
   public Page embeddingPage(String cursor, int limit, EmbeddingMode mode) throws IOException {
     var records =
@@ -24,6 +26,7 @@ public class SolrEmbeddingStore implements AudiobookEmbeddingStore {
     return new Page(records, records.size() < limit ? null : records.getLast().record().id());
   }
 
+  /** {@inheritDoc} */
   @Override
   public void updateEmbeddings(List<Update> updates) throws IOException {
     var versions = new java.util.HashMap<String, Long>();

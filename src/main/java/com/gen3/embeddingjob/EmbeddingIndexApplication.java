@@ -1,11 +1,11 @@
 package com.gen3.embeddingjob;
 
-import com.gen3.catalogue.qdrant.Bm25SparseTextEncoder;
-import com.gen3.catalogue.qdrant.QdrantConfig;
-import com.gen3.catalogue.qdrant.QdrantPointMapper;
-import com.gen3.catalogue.solr.SolrAudiobookRepository;
-import com.gen3.catalogue.solr.SolrConfig;
 import com.gen3.embeddingjob.store.AudiobookEmbeddingStore;
+import com.gen3.shared.audiobookcatalogue.qdrant.Bm25SparseTextEncoder;
+import com.gen3.shared.audiobookcatalogue.qdrant.QdrantConfig;
+import com.gen3.shared.audiobookcatalogue.qdrant.QdrantPointMapper;
+import com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository;
+import com.gen3.shared.audiobookcatalogue.solr.SolrConfig;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
@@ -37,18 +37,25 @@ import org.springframework.core.env.Environment;
   Bm25SparseTextEncoder.class
 })
 public class EmbeddingIndexApplication {
+  /** Starts this application with the supplied command-line configuration. */
   public static void main(String[] args) {
     try (var context =
         new SpringApplicationBuilder(EmbeddingIndexApplication.class)
             .web(WebApplicationType.NONE)
+            .properties(com.gen3.shared.jobruntime.MaintenanceLogFile.property("embeddings"))
             .run(args)) {
       // Closing the dedicated process releases database clients after the runner completes.
     }
   }
 
+  /** Rejects incompatible job flags and missing opt-in settings before job execution. */
   @Bean
   static BeanFactoryPostProcessor validateJob(Environment environment) {
     return factory -> {
+      if (environment.getProperty("read-history.import.enabled", Boolean.class, false)) {
+        throw new IllegalArgumentException(
+            "Run read-history import separately with ReadHistoryApplication");
+      }
       if (environment.getProperty("user.preferences.import-on-startup", Boolean.class, false)) {
         throw new IllegalArgumentException("Run user-preference import separately");
       }
@@ -72,12 +79,13 @@ public class EmbeddingIndexApplication {
     };
   }
 
+  /** Builds the embedding runner and refreshes its local vector snapshot after indexing. */
   @Bean
   ApplicationRunner embeddingJob(
       AudiobookEmbeddingStore store,
       EmbeddingModel model,
-      com.gen3.catalogue.snapshot.BookVectorSnapshot snapshot,
-      com.gen3.catalogue.snapshot.BookVectorSnapshot.Source snapshotSource,
+      com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot snapshot,
+      com.gen3.snapshotjob.CatalogueSnapshotSource snapshotSource,
       @Value("${book.vector-snapshot.page-size:500}") int snapshotPageSize,
       @Value("${audiobook.embedding-index.page-size:100}") int pageSize,
       @Value("${audiobook.embedding-index.maximum-records:0}") int maximumRecords,

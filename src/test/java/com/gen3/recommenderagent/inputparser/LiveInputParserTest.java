@@ -21,13 +21,67 @@ import org.springframework.test.context.ActiveProfiles;
 /** Opt-in recognition checks using synthetic text and the configured parser model; no catalogue. */
 @Tag("external")
 @EnabledIfEnvironmentVariable(named = "RUN_LIVE_PARSER_TESTS", matches = "true")
-@EnabledIfEnvironmentVariable(named = "OPENAI_API_KEY", matches = ".+")
 @ActiveProfiles("live-parser-evaluation")
 @SpringBootTest(
     classes = LiveInputParserTest.Config.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class LiveInputParserTest {
   @Autowired private InputParser parser;
+
+  @org.junit.jupiter.api.RepeatedTest(3)
+  void explicitNegativePreferenceEditUsesNestedUpdateFields() {
+    var result = parser.parse("update my preferences to avoid romance");
+    assertThat(result.getIntent()).isEqualTo(ConversationAction.UPDATE_PREFERENCES);
+    assertThat(result.getPreferenceUpdates())
+        .as(
+            "parsed request: %s",
+            new tools.jackson.databind.ObjectMapper().writeValueAsString(result))
+        .isNotNull();
+    assertThat(result.getPreferenceUpdates().getNegativeSemanticQuery()).isNotNull();
+    assertThat(result.getPreferenceUpdates().getNegativeSemanticQuery().getGenres())
+        .contains("romance");
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "Add horror to my preferences,true,genres,horror",
+    "Avoid horror in my preferences,false,genres,horror",
+    "Remember I dont like horror,false,genres,horror",
+    "Remember I dont like books about penguins,false,topics,penguins",
+    "Remember I dislike penguins,false,topics,penguins"
+  })
+  void preferenceEditsPreservePolarityAndSemanticCategory(
+      String text, boolean positive, String field, String value) {
+    var result = parser.parse(text);
+    String parsed = new tools.jackson.databind.ObjectMapper().writeValueAsString(result);
+    assertThat(result.getIntent())
+        .as("%s -> %s", text, parsed)
+        .isEqualTo(ConversationAction.UPDATE_PREFERENCES);
+    assertThat(result.getPreferenceUpdates()).as("%s -> %s", text, parsed).isNotNull();
+    var updates = result.getPreferenceUpdates();
+    var query = positive ? updates.getPositiveSemanticQuery() : updates.getNegativeSemanticQuery();
+    assertThat(query).as("%s -> %s", text, parsed).isNotNull();
+    var values = field.equals("genres") ? query.getGenres() : query.getTopics();
+    assertThat(values).as("%s -> %s", text, parsed).isNotEmpty();
+    assertThat(String.join(" ", values).toLowerCase(java.util.Locale.ROOT))
+        .as("%s -> %s", text, parsed)
+        .contains(value);
+    assertThat(result.getPreferenceRemovalTerms()).as("%s -> %s", text, parsed).isEmpty();
+    var saved =
+        new com.gen3.recommenderagent.domain.session.SessionPreferences()
+            .updated(updates, result.getPreferenceRemovals(), result.getReplacePreferenceFields());
+    var savedQuery = positive ? saved.getPositiveSemanticQuery() : saved.getNegativeSemanticQuery();
+    assertThat(savedQuery).as("%s -> %s", text, parsed).isNotNull();
+    var savedValues = field.equals("genres") ? savedQuery.getGenres() : savedQuery.getTopics();
+    assertThat(savedValues).as("%s -> %s", text, parsed).isEqualTo(values);
+    var opposite = positive ? saved.getNegativeSemanticQuery() : saved.getPositiveSemanticQuery();
+    if (opposite != null) {
+      var oppositeValues = field.equals("genres") ? opposite.getGenres() : opposite.getTopics();
+      if (oppositeValues != null) {
+        assertThat(oppositeValues).as("%s -> %s", text, parsed).doesNotContain(value);
+      }
+    }
+  }
 
   @ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
@@ -41,7 +95,7 @@ class LiveInputParserTest {
     assertThat(result.getPositiveSemanticQuery()).isNotNull();
     var query = result.getPositiveSemanticQuery();
     var terms =
-        java.util.stream.Stream.of(query.getTopics(), query.getGenres(), query.getKeywords())
+        java.util.stream.Stream.of(query.getTopics(), query.getGenres())
             .filter(java.util.Objects::nonNull)
             .flatMap(java.util.Collection::stream)
             .collect(java.util.stream.Collectors.joining(" "));
@@ -106,11 +160,23 @@ class LiveInputParserTest {
   })
   void distinguishesReplacingAndAddingSearchGenres(String text, String genre, boolean replace) {
     var result = parser.parse(text);
-    assertThat(result.getIntent()).isEqualTo(ConversationAction.REFINE);
+    assertThat(result.getIntent())
+        .as("%s -> %s", text, new tools.jackson.databind.ObjectMapper().writeValueAsString(result))
+        .isEqualTo(ConversationAction.REFINE);
     assertThat(result.getPositiveSemanticQuery().getGenres()).contains(genre);
     assertThat(result.getReplaceSearchFields().contains("positiveSemanticQuery.genres"))
         .isEqualTo(replace);
     assertThat(result.getPreferenceUpdates()).isNull();
+  }
+
+  @org.junit.jupiter.api.Test
+  void replacingSavedGenresRemainsAPreferenceEdit() {
+    var result = parser.parse("Replace the genres in my preferences with romance");
+    assertThat(result.getIntent()).isEqualTo(ConversationAction.UPDATE_PREFERENCES);
+    assertThat(result.getPreferenceUpdates().getPositiveSemanticQuery().getGenres())
+        .containsExactly("romance");
+    assertThat(result.getReplacePreferenceFields()).containsExactly("positiveSemanticQuery.genres");
+    assertThat(result.getReplaceSearchFields()).isEmpty();
   }
 
   @org.junit.jupiter.api.Test
@@ -268,22 +334,30 @@ class LiveInputParserTest {
 
   @ParameterizedTest
   @CsvSource({
-    "Recommend fantasy audiobooks with a strong female protagonist.,",
-    "Recommend fantasy audiobooks by Suzanne Collins with a strong female protagonist.,Suzanne Collins"
+    "Recommend fantasy audiobooks with a strong female protagonist.,,fantasy,female",
+    "Recommend fantasy audiobooks by Suzanne Collins with a strong female protagonist.,Suzanne Collins,fantasy,female",
+    "Recommend mystery audiobooks with an elderly detective.,,mystery,elderly",
+    "Recommend mystery audiobooks by Agatha Christie with an elderly detective.,Agatha Christie,mystery,elderly",
+    "Recommend romance audiobooks with a shy male protagonist.,,romance,shy",
+    "Recommend horror audiobooks by Stephen King with a morally conflicted protagonist.,Stephen King,horror,morally"
   })
-  void characterTraitsStaySemanticWhileNamedAuthorsRemainExact(String text, String author) {
+  void characterTraitsStaySemanticWhileNamedAuthorsRemainExact(
+      String text, String author, String genre, String trait) {
     var result = parser.parse(text);
     assertThat(result.getIntent()).as(text).isEqualTo(ConversationAction.RECOMMENDATION);
-    assertThat(result.getPositiveSemanticQuery()).as(text).isNotNull();
-    assertThat(result.getPositiveSemanticQuery().getGenres()).contains("fantasy");
+    assertThat(result.getPositiveSemanticQuery())
+        .as("%s -> %s", text, new tools.jackson.databind.ObjectMapper().writeValueAsString(result))
+        .isNotNull();
+    assertThat(result.getPositiveSemanticQuery().getGenres())
+        .as("%s -> %s", text, new tools.jackson.databind.ObjectMapper().writeValueAsString(result))
+        .contains(genre);
     var themes = new java.util.ArrayList<String>();
-    if (result.getPositiveSemanticQuery().getKeywords() != null) {
-      themes.addAll(result.getPositiveSemanticQuery().getKeywords());
-    }
     if (result.getPositiveSemanticQuery().getTopics() != null) {
       themes.addAll(result.getPositiveSemanticQuery().getTopics());
     }
-    assertThat(String.join(" ", themes).toLowerCase(java.util.Locale.ROOT)).contains("female");
+    assertThat(String.join(" ", themes).toLowerCase(java.util.Locale.ROOT))
+        .as(text)
+        .contains(trait);
     if (author == null) {
       assertThat(
               result.getMustInclude() == null
@@ -298,6 +372,9 @@ class LiveInputParserTest {
     }
     assertThat(result.getPositiveSemanticQuery().getAuthors()).isNullOrEmpty();
     assertThat(result.getPositiveSemanticQuery().getNarrators()).isNullOrEmpty();
+    assertThat(result.getNegativeSemanticQuery())
+        .as("%s must not imply excluding opposite traits", text)
+        .isNull();
   }
 
   @org.junit.jupiter.api.Test
@@ -316,7 +393,7 @@ class LiveInputParserTest {
     var result = parser.parse("horror");
     assertThat(result.getIntent())
         .isIn(ConversationAction.RECOMMENDATION, ConversationAction.REFINE);
-    assertThat(result.isExplicitSearch()).isFalse();
+    assertThat(result.startsNewSearch()).isFalse();
     assertThat(result.getPositiveSemanticQuery()).isNotNull();
     assertThat(result.getPositiveSemanticQuery().getGenres()).contains("horror");
   }
@@ -405,8 +482,7 @@ class LiveInputParserTest {
     assertThat(result.getNegativeSemanticQuery()).isNotNull();
     var negative = result.getNegativeSemanticQuery();
     var terms =
-        java.util.stream.Stream.of(
-                negative.getGenres(), negative.getTopics(), negative.getKeywords())
+        java.util.stream.Stream.of(negative.getGenres(), negative.getTopics())
             .filter(java.util.Objects::nonNull)
             .flatMap(java.util.Collection::stream)
             .toList();
