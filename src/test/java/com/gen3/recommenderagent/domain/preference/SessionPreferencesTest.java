@@ -112,6 +112,35 @@ class SessionPreferencesTest {
         .hasMessageContaining("only one author and one narrator");
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.MethodSource("semanticFields")
+  void explicitAdditionRemovesTheMatchingOppositePreference(
+      java.util.function.BiConsumer<SemanticQuery, List<String>> field) {
+    var original = new SessionPreferences();
+    var negative = new SemanticQuery();
+    field.accept(negative, List.of("Horror"));
+    original.setNegativeSemanticQuery(negative);
+    var constraints = new ExactCriteria();
+    constraints.setLanguage("English");
+    original.setMustInclude(constraints);
+    var additions = new SessionPreferences();
+    var positive = new SemanticQuery();
+    field.accept(positive, List.of(" horror "));
+    additions.setPositiveSemanticQuery(positive);
+    var changed = original.updated(additions, null, List.of());
+    assertThat(changed.getPositiveSemanticQuery().hasValues()).isTrue();
+    assertThat(changed.getNegativeSemanticQuery().hasValues()).isFalse();
+    assertThat(changed.getMustInclude().getLanguage()).isEqualTo("English");
+    assertThat(original.getNegativeSemanticQuery().hasValues()).isTrue();
+    var reverse = new SessionPreferences();
+    var avoided = new SemanticQuery();
+    field.accept(avoided, List.of("HORROR"));
+    reverse.setNegativeSemanticQuery(avoided);
+    var reversed = changed.updated(reverse, null, List.of());
+    assertThat(reversed.getPositiveSemanticQuery().hasValues()).isFalse();
+    assertThat(reversed.getNegativeSemanticQuery().hasValues()).isTrue();
+  }
+
   @Test
   void changesAreCopiedDeduplicatedAndLimitedToTheNamedFields() {
     var original = new SessionPreferences();

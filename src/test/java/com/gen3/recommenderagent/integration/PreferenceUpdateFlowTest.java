@@ -204,6 +204,22 @@ class PreferenceUpdateFlowTest {
   }
 
   @Test
+  void positiveGenreUpdateReplacesSavedAvoidanceWithoutModelSuppliedRemovals() {
+    var avoided = new SessionPreferences();
+    var negative = new SemanticQuery();
+    negative.setGenres(List.of("horror", "romance"));
+    avoided.setNegativeSemanticQuery(negative);
+    process(update(avoided));
+    process(update(tastes("Horror")));
+    assertThat(saved().getPositiveSemanticQuery().getGenres()).containsExactly("Horror");
+    assertThat(saved().getNegativeSemanticQuery().getGenres()).containsExactly("romance");
+    process(update(avoided));
+    assertThat(saved().getPositiveSemanticQuery().getGenres()).isNullOrEmpty();
+    assertThat(saved().getNegativeSemanticQuery().getGenres()).containsExactly("romance", "horror");
+    verifyNoInteractions(vectors, retriever, ranker, users);
+  }
+
+  @Test
   void tasteReplyDoesNotPromotePendingSearchConstraintsOrSemanticsToSavedPreferences() {
     var search = request(ConversationAction.RECOMMENDATION);
     search.setPersonalised(true);

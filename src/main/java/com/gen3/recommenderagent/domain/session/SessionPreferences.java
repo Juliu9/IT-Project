@@ -97,14 +97,24 @@ public class SessionPreferences {
     var result = new SessionPreferences();
     result.positiveSemanticQuery =
         query(
-            positiveSemanticQuery,
+            query(
+                positiveSemanticQuery,
+                null,
+                get(additions, SessionPreferences::getNegativeSemanticQuery),
+                "positiveSemanticQuery",
+                List.of()),
             get(additions, SessionPreferences::getPositiveSemanticQuery),
             get(removals, SessionPreferences::getPositiveSemanticQuery),
             "positiveSemanticQuery",
             replace);
     result.negativeSemanticQuery =
         query(
-            negativeSemanticQuery,
+            query(
+                negativeSemanticQuery,
+                null,
+                get(additions, SessionPreferences::getPositiveSemanticQuery),
+                "negativeSemanticQuery",
+                List.of()),
             get(additions, SessionPreferences::getNegativeSemanticQuery),
             get(removals, SessionPreferences::getNegativeSemanticQuery),
             "negativeSemanticQuery",
