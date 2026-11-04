@@ -143,5 +143,4 @@ secrets/
 repomix-output.xml
 *.puml
 !/docs/diagrams/*.puml
-!/designdiagram.puml
 /data

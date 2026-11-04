@@ -15,8 +15,7 @@ Commands and guarantees belong to the [job runbooks](../jobs/README.md).
 
 ## View and edit
 
-Open SVG files directly, or open `.puml` files with a PlantUML renderer. The root
-[`designdiagram.puml`](../../designdiagram.puml) is an alternate entry point for the system overview.
+Open SVG files directly, or open `.puml` files with a PlantUML renderer.
 
 The Java-to-PlantUML parser plugin is unnecessary: the source files already contain PlantUML. The overview and maintenance
 views use Smetana layout and do not require Graphviz.
