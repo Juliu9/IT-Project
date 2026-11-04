@@ -235,7 +235,9 @@ punctuation, and supported courtesy wording. Commands with extra criteria go to 
 
 The AI parser receives bounded context: the current pending question, latest action, and at most five
 displayed titles. Its structured response is validated and converted to `UserIntent`; session state
-is not changed during parsing. The authoritative fast-path aliases live in
+is not changed during parsing. For `UPDATE_PREFERENCES` only, top-level preference values are copied
+into `preferenceUpdates` when that object is absent, before search-field normalization. Explicit
+nested updates take priority. The authoritative fast-path aliases live in
 [`CommandParser`](../src/main/java/com/gen3/recommenderagent/inputparser/CommandParser.java).
 
 To add an intent:

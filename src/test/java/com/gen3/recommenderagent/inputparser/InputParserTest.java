@@ -608,6 +608,59 @@ class InputParserTest {
   }
 
   @Test
+  void preferenceEditRecoversTopLevelTastesAndConstraints() {
+    var request =
+        parseModelJson(
+            "update my preferences to avoid romance",
+            """
+        {"intent":"UPDATE_PREFERENCES",
+         "negativeSemanticQuery":{"genres":["romance"]},
+         "positiveSemanticQuery":{"topics":["penguins"]},
+         "mustInclude":{"language":"English"}}
+        """);
+    assertEquals(
+        List.of("romance"), request.getPreferenceUpdates().getNegativeSemanticQuery().getGenres());
+    assertEquals(
+        List.of("penguins"), request.getPreferenceUpdates().getPositiveSemanticQuery().getTopics());
+    assertEquals("English", request.getPreferenceUpdates().getMustInclude().getLanguage());
+    assertEquals(null, request.getNegativeSemanticQuery());
+  }
+
+  @Test
+  void nestedPreferenceUpdatesTakePriorityOverTopLevelTastes() {
+    var request =
+        parseModelJson(
+            "remember that I like horror",
+            """
+        {"intent":"UPDATE_PREFERENCES",
+         "positiveSemanticQuery":{"genres":["romance"]},
+         "preferenceUpdates":{"positiveSemanticQuery":{"genres":["horror"]}}}
+        """);
+    assertEquals(
+        List.of("horror"), request.getPreferenceUpdates().getPositiveSemanticQuery().getGenres());
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = ConversationAction.class,
+      names = {"UPDATE_PREFERENCES"},
+      mode = org.junit.jupiter.params.provider.EnumSource.Mode.EXCLUDE)
+  void otherIntentsDoNotPromoteTopLevelTastesToPreferenceUpdates(ConversationAction action) {
+    var parsed = new UserIntent();
+    parsed.setIntent(action);
+    var query = new SemanticQuery();
+    query.setGenres(List.of("horror"));
+    parsed.setNegativeSemanticQuery(query);
+    var request = new InputParser(null, null).toSessionRequest("horror", parsed);
+    assertEquals(null, request.getPreferenceUpdates());
+    if (action == ConversationAction.RECOMMENDATION || action == ConversationAction.REFINE) {
+      assertSame(query, request.getNegativeSemanticQuery());
+    } else {
+      assertEquals(null, request.getNegativeSemanticQuery());
+    }
+  }
+
+  @Test
   void sparseRemovalAndClearingEditsDoNotNeedEmptyAdditionObjects() {
     var removal =
         parseModelJson(

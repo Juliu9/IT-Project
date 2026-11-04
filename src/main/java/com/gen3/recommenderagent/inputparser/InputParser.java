@@ -200,7 +200,14 @@ public class InputParser {
     request.setMustInclude(parsed.getMustInclude());
     request.setMustNotInclude(parsed.getMustNotInclude());
     // Validate stated people before normalization can discard unsupported control-intent fields.
-    com.gen3.recommenderagent.application.conversation.PreferenceRequestMapper.fromRequest(request);
+    var statedPreferences =
+        com.gen3.recommenderagent.application.conversation.PreferenceRequestMapper.fromRequest(
+            request);
+    if (request.getIntent() == ConversationAction.UPDATE_PREFERENCES
+        && request.getPreferenceUpdates() == null
+        && statedPreferences.hasValues()) {
+      request.setPreferenceUpdates(statedPreferences);
+    }
     if (request.getPreferenceUpdates() != null) {
       request.getPreferenceUpdates().copy();
     }
