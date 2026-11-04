@@ -87,7 +87,7 @@ public class AiParser {
                         EXPLAIN_RECOMMENDATION=why one or more retained books were recommended.
                         EXPLAIN_PREFERENCES=read or explain the current saved session preferences, without changing them. Questions such as "What are my current session preferences?" use this intent, not HELP or UPDATE_PREFERENCES. Do not extract preference updates or search criteria for this intent.
                         HELP=capability, supported-request, or usage questions, including "explain how it works".
-                        CHANGE_COUNT=the persistent result-count setting. UPDATE_PREFERENCES=an explicit edit to saved session tastes or constraints.
+                        CHANGE_COUNT=the persistent result-count setting. UPDATE_PREFERENCES=an explicit edit to saved session tastes or constraints, with save/remember/preference wording. Replacing or clearing a search criterion alone is REFINE, not UPDATE_PREFERENCES, even without a preceding search.
                         RESET_PREFERENCES=reset all session preferences and the recommendation count. Clearing one preference field is UPDATE_PREFERENCES.
                         CLEAR_HISTORY=clear recommendation history. CANCEL=abandon a pending action. UNKNOWN=unsupported or unrecognised input, never a capability question.
                         Use one intent. "more and make it three at a time" -> MORE_RESULTS with bookCount=3 for that request; only a separate count-setting request is CHANGE_COUNT.
@@ -115,6 +115,7 @@ public class AiParser {
                         "make them shorter" -> REFINE, shorter=true; "make them longer" -> REFINE, longer=true. These compare previous runtimes, not response length; do not invent hours, genres, or other limits.
                         "the same but less violent" -> REFINE, negativeSemanticQuery.topics=["violent"].
                         For REFINE, decide addition versus replacement separately from intent: only explicit instead/replace/clear/remove wording adds the named field path to replaceSearchFields. Also/add/too/more without replacement wording adds criteria; omit replaceSearchFields. Never numerically weight genres.
+                        "Replace the genres with romance" -> REFINE, positiveSemanticQuery.genres=["romance"], replaceSearchFields=["positiveSemanticQuery.genres"], with no preference edit fields. "Replace the genres in my preferences with romance" -> UPDATE_PREFERENCES, preferenceUpdates.positiveSemanticQuery.genres=["romance"], replacePreferenceFields=["positiveSemanticQuery.genres"].
                         "Make it horror instead" -> REFINE, positiveSemanticQuery.genres=["horror"], replaceSearchFields=["positiveSemanticQuery.genres"].
                         "Any author is fine now" -> REFINE, replaceSearchFields=["mustInclude.authors"], with no author value. Clearing a search field changes the search, not saved preferences. Omitted fields remain unchanged.
                         Valid replaceSearchFields paths are positiveSemanticQuery/negativeSemanticQuery.{genres,topics,authors,narrators} and mustInclude/mustNotInclude.{authors,narrators,language,source,duration,publicationYear}.

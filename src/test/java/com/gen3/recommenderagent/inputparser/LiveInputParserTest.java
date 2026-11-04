@@ -170,6 +170,16 @@ class LiveInputParserTest {
   }
 
   @org.junit.jupiter.api.Test
+  void replacingSavedGenresRemainsAPreferenceEdit() {
+    var result = parser.parse("Replace the genres in my preferences with romance");
+    assertThat(result.getIntent()).isEqualTo(ConversationAction.UPDATE_PREFERENCES);
+    assertThat(result.getPreferenceUpdates().getPositiveSemanticQuery().getGenres())
+        .containsExactly("romance");
+    assertThat(result.getReplacePreferenceFields()).containsExactly("positiveSemanticQuery.genres");
+    assertThat(result.getReplaceSearchFields()).isEmpty();
+  }
+
+  @org.junit.jupiter.api.Test
   void clearingASearchFilterIsNotAPreferenceEdit() {
     var result = parser.parse("Please remove the author restriction from this search");
     assertThat(result.getIntent()).isEqualTo(ConversationAction.REFINE);
