@@ -23,6 +23,11 @@ public class UserHistoryCsvReader {
   private static final DateTimeFormatter DATE_FORMATTER =
       DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss").withResolverStyle(ResolverStyle.STRICT);
 
+  /**
+   * Streams book interactions with normalized IDs and strictly validated UTC timestamps. A supplied
+   * update time replaces the creation time; invalid rows fail with their row number. Consumer failures
+   * propagate after any earlier records have already been delivered.
+   */
   public void read(Path path, CsvRecordConsumer<UserHistory> consumer) throws IOException {
 
     CSVFormat format =

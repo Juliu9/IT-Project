@@ -22,11 +22,13 @@ public class InputParser {
   private final CommandParser commandParser;
   private final AiParser aiParser;
 
+  /** Creates a parser with command recognition and AI interpretation kept separate. */
   public InputParser(CommandParser commandParser, AiParser aiParser) {
     this.commandParser = commandParser;
     this.aiParser = aiParser;
   }
 
+  /** Checks whether a validated search-field path has a supplied value before replacing it. */
   private boolean hasSearchValue(UserIntent parsed, String path) {
     String[] parts = path.split("\\.");
     Object value;
@@ -135,6 +137,7 @@ public class InputParser {
     return toRequest(rawText, parsed, parsed.isInvalidBookCount());
   }
 
+  /** Rejects missing or oversized messages before command parsing, AI calls, or session loading. */
   private void validateText(String rawText) {
     if (rawText == null || rawText.isBlank()) {
       throw new InvalidRequestException("I didn't catch that. What would you like to listen to?");
@@ -148,6 +151,9 @@ public class InputParser {
     }
   }
 
+  /**
+   * Marks invalid quantities and selects count-related actions without treating subjects as counts.
+   */
   private boolean normalizeCount(String rawText, CountInput.Check countInput, UserIntent parsed) {
     // A number retained as a stated subject is not also a quantity error.
     if (!countInput.invalid() && CountInput.describesZero(rawText, parsed)) {
@@ -176,6 +182,9 @@ public class InputParser {
     return invalidCount;
   }
 
+  /**
+   * Validates and maps parsed fields, recovering misplaced preference edits before normalization.
+   */
   private SessionRequest toRequest(String rawText, UserIntent parsed, boolean invalidCount) {
     SessionRequest request = new SessionRequest();
     request.setIntent(parsed.getIntent());
@@ -247,6 +256,9 @@ public class InputParser {
         || parsed.isSimilarToClarificationRequired();
   }
 
+  /**
+   * Validates search replacements and preserves supplied additions unless replacement is explicit.
+   */
   private void applySearchReplacements(String rawText, UserIntent parsed, SessionRequest request) {
     if (parsed.getIntent() == ConversationAction.RECOMMENDATION
         || parsed.getIntent() == ConversationAction.REFINE) {
@@ -266,6 +278,10 @@ public class InputParser {
     }
   }
 
+  /**
+   * Applies explicit reading-history references and direct person-search wording to
+   * personalisation.
+   */
   private void applyPersonalisation(String rawText, SessionRequest request) {
     String command =
         com.gen3.recommenderagent.inputparser.ConversationText.normalizeCommand(rawText);
@@ -284,7 +300,7 @@ public class InputParser {
     }
   }
 
-  // Keep oversized model numbers invalid without overflowing into a valid rank or count.
+  /** Keeps oversized model numbers invalid without overflowing into a valid rank or count. */
   private Integer boundedInteger(BigInteger value) {
     return value == null
         ? null
@@ -294,6 +310,7 @@ public class InputParser {
             .intValue();
   }
 
+  /** Creates a time-ordered version-7 request identifier using secure random bits. */
   private UUID createUuidV7() {
     long timestamp = System.currentTimeMillis() & 0xFFFFFFFFFFFFL;
     long randomA = RANDOM.nextLong() & 0x0FFFL;
