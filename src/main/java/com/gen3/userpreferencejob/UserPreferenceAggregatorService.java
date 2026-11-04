@@ -188,7 +188,7 @@ public class UserPreferenceAggregatorService {
 
       // 2. Process History (Time-Weighted Average)
       List<float[]> histVectors = new ArrayList<>();
-      List<Double> histWeights = new ArrayList<>();
+      List<Long> histAges = new ArrayList<>();
 
       for (UserHistory hist : histByUser.getOrDefault(userId, List.of())) {
         float[] vector = vectors.get(hist.bookId());
@@ -199,11 +199,13 @@ public class UserPreferenceAggregatorService {
           long daysAgo = Duration.between(hist.lastInteractionTime(), now).toDays();
           daysAgo = Math.max(0, daysAgo); // Prevent negative days if clocks are out of sync
 
-          // Exponential decay: weight halves every 180 days
-          double weight = Math.pow(0.5, daysAgo / 180.0);
-          histWeights.add(weight);
+          histAges.add(daysAgo);
         }
       }
+      // A common scale cancels after normalization; anchor decay to avoid all-zero old weights.
+      long newestAge = histAges.stream().mapToLong(Long::longValue).min().orElse(0);
+      var histWeights =
+          histAges.stream().map(age -> Math.pow(0.5, (age - newestAge) / 180.0)).toList();
       float[] aggregatedHist = VectorMath.weightedAverage(histVectors, histWeights);
 
       if (aggregatedFavs.length == 0 && aggregatedHist.length == 0) {

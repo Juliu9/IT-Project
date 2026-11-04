@@ -26,7 +26,8 @@ but it never changes profiles.
 The importer pins the last compatible snapshot, externally sorts unordered CSV rows, validates the
 complete input, then processes whole users. Duplicate favourites collapse; duplicate history keeps
 the latest interaction. Favourites use a normalized average, while history weights halve every
-180 days before normalization.
+180 days before normalization. Decay is anchored to the newest mapped interaction for each user
+to keep very old histories numerically usable without changing their relative weights.
 
 | Rule | Behaviour |
 | --- | --- |
@@ -65,7 +66,7 @@ book,demo-user,rnib:book:456,2026-10-01 12:00:00,NULL
 - `user` is the external user ID used by `X-User-Id`: nonblank and at most 256 Java characters.
 - `item` is `provider:book:id[:optional title]`; `rnib:book:123:Title` becomes `rnib_123`.
 - Dates use `yyyy-MM-dd HH:mm:ss` in UTC. `created_at` is required; a nonblank `updated_at` other
-  than `NULL` overrides it.
+  than `NULL` overrides it. Invalid calendar dates are rejected rather than adjusted.
 - Malformed input or an oversized user fails preparation before profile writes.
 
 The shared readers and normalization live in `com.gen3.shared.csv`. Missing snapshot books are
