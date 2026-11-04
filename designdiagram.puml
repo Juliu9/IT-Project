@@ -1,0 +1,4 @@
+@startuml
+' Compatibility entry point. Edit the maintained view in docs/diagrams instead.
+!include docs/diagrams/system-overview.puml
+@enduml

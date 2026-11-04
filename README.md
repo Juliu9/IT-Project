@@ -93,7 +93,10 @@ curl -X POST http://localhost:8080/api/v1/recommendations \
   -d "Recommend fantasy audiobooks under ten hours."
 ```
 
-Reuse both IDs for follow-ups such as “more”, “explain”, or “repeat the recommendations”.
+Reuse both IDs for follow-ups such as “more”, “explain”, or “repeat the recommendations”. Ask
+“show my preferences” to view saved session settings without changing the current search. The
+[architecture guide](docs/architecture.md#personalisation) explains how saved preferences affect
+recommendations and how preference updates are validated.
 
 ## Verification commands
 
@@ -101,9 +104,14 @@ Reuse both IDs for follow-ups such as “more”, “explain”, or “repeat th
 | --- | --- |
 | Local checks, unit and container tests; no live AI | `OPENAI_API_KEY=ci-placeholder ./mvnw clean verify -DexcludedGroups=external` |
 | Full Maven verification; external tests remain opt-in | `./mvnw clean verify` |
+| All suites, including paid live AI calls | `RUN_LIVE_PARSER_TESTS=true RUN_LIVE_RECOMMENDATION_TESTS=true ./mvnw clean verify` |
 | Apply Java formatting | `./mvnw spotless:apply` |
 | Opt into live parser evaluations | `RUN_LIVE_PARSER_TESTS=true ./mvnw test -Dtest=LiveInputParserTest` |
 | Opt into the configured live request path | `RUN_LIVE_RECOMMENDATION_TESTS=true ./mvnw test -Dtest=LiveRecommendationIntegrationTest` |
+
+`clean verify` is not unit-only: it includes local database integration tests. Exported live-test
+flags also enable paid suites; `-DexcludedGroups=external` excludes them even when those flags are
+set. The all-suites command needs live credentials and populated services.
 
 See [test prerequisites](docs/configuration.md#verification-and-live-test-prerequisites) for Docker,
 environment gates, API charges, and CI behaviour.

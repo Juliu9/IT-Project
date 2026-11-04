@@ -57,7 +57,7 @@ CSV --> Preferences : user interactions
 CSV --> History : history rows only
 History --> ReadHistoryStore : additive, deduplicated batches\nno catalogue or vector access
 Preferences --> LocalSnapshot : validate and load once\nno remote catalogue-vector lookup
-Preferences --> UserStore : explicit write: save or clear taste vectors\ndry-run: validating sink, no writes
+Preferences --> UserStore : explicit write: update mapped vector sides\npreserve absent/unmapped sides; skip unmapped users\ndry-run: validating sink, no writes
 
 note bottom of Shared
   Embedding and snapshot launchers share one publisher.

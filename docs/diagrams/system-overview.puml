@@ -26,7 +26,7 @@ package "recommenderagent — live requests" {
 component "shared.audiobookcatalogue\nAudiobook adapter: Qdrant OR Solr" as Adapter #FEF3C7
 component "shared.readhistory\nReadHistoryRepository\nPostgreSQL or client adapter" as ReadHistory #FEF3C7
 database "Selected database\nQdrant OR Solr\nCatalogue + book vectors\nUser preference vectors" as Qdrant
-database "Redis\nSearch context + last page\nPending recommendations + shown IDs" as Redis
+database "Redis\nSaved preferences + count\nSearch context + last outcome\nPending recommendations + shown IDs" as Redis
 database "Read-history database\nUser/book pairs; separate from sessions" as HistoryDatabase
 
 User -right-> Gateway : request / response
@@ -47,11 +47,12 @@ Workflow --> Ranking : rank candidates
 Gateway --> Response : 3. Generate response after commit
 
 note bottom of Session
-  IntentResolver applies session business rules after parsing.
-  ConversationDispatcher selects the intent handler.
-  RecommendationPager reuses or refills pending results.
-  Pager filters cached books against current read history.
-  Replay and explanation can reuse saved session data.
+  IntentResolver converts parsed intent to a session request.
+  Dispatcher selects handlers; pager reuses or refills pages.
+  Saved preferences stay separate from searches.
+  Preference reports use snapshots without retrieval or AI narration.
+  Preference edits replace matching saved opposite tastes.
+  Overflow replies preserve preferences and the pending question.
 end note
 note bottom of Adapter
   Exactly one complete database adapter set is selected.

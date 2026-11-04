@@ -142,9 +142,17 @@ user likes before retrieval. Exact constraints alone do not substitute for posit
 user vectors and session preferences are frozen in the search snapshot so `MORE_RESULTS` remains
 consistent; new searches and refinements load current preferences again.
 
+Adding a positive semantic preference removes a matching saved negative value in the same field;
+adding a negative preference removes the matching saved positive value. This is enforced by
+`SessionPreferences`, even when the model supplies no explicit removals. Genre/topic matching
+ignores case and surrounding whitespace; person fields use the existing name normalizer. Other
+saved values are retained unless explicitly edited; exact constraints follow the filter-validation
+rules above. Removing a preference alone does not add its opposite.
+
 Saved session preferences are bounded before an update commits: each value is at most 256 Java
-characters, each semantic field holds at most 10 values, the whole preference set holds at most 100
-values, and its JSON representation is at most 32 KiB. **An oversized update is rejected atomically;
+characters, genre and topic fields hold at most 10 values per polarity, and each author or narrator
+field accepts one person. The whole preference set holds at most 100 values, and its JSON
+representation is at most 32 KiB. **An oversized update is rejected atomically;
 existing preferences are neither truncated nor partially changed.**
 Category overflow during a preference edit returns a normal conversational response explaining the
 10-value limit, rather than an HTTP client error. The previous preferences and pending question
@@ -179,18 +187,18 @@ using a fixed template without AI narration or retrieval. Empty fields are skipp
 preference set is stated explicitly. All required and excluded constraints are listed first,
 followed by author/narrator styles, then positive and negative genres and topics as space permits.
 Reports target 150 words while preserving whole saved values; exact constraints are never omitted,
-even when listing them requires more than 150 words. Reports end with an invitation to edit;
-an omission notice precedes it when semantic preferences do not fit. This read-only action preserves
-pending clarifications and the active recommendation batch. `REPEAT` replays the saved report
-snapshot. The semantic category maximum is 10; the existing one-author/one-narrator rule
-also applies. Existing session data is not migrated.
+even when listing them requires more than 150 words. Required filters form one sentence joined
+with “and”; excluded filters form a separate sentence joined with “or”. Reports end with an
+invitation to edit; an omission notice precedes it when semantic preferences do not fit. This
+read-only action preserves pending clarifications and the active recommendation batch. `REPEAT`
+replays the saved report snapshot.
 
 ### Pending questions
 
 The session stores at most one typed pending question. Short replies such as a number, title, taste,
 or duration resolve that question before ordinary intent dispatch. `HELP`, `EXPLAIN_PREFERENCES`,
-`REPEAT`, `UNKNOWN`, and cache reloads preserve it. Another explicit action abandons it and may create a new question; there
-is no hidden question stack.
+`REPEAT`, `UNKNOWN`, and cache reloads preserve it. Another explicit action abandons it and may
+create a new question; there is no hidden question stack.
 
 Pending and completed state use structured snapshots, not raw user messages or final response text.
 Clear outdated development sessions or use a new session ID after changing the session schema.
@@ -206,10 +214,14 @@ Supported intents are:
 | Search | Navigation and replay | Preferences and session | Other |
 | --- | --- | --- | --- |
 | `RECOMMENDATION` | `MORE_RESULTS` | `UPDATE_PREFERENCES` | `EXPLAIN_RECOMMENDATION` |
-| `REFINE` | `REPEAT` | `EXPLAIN_PREFERENCES` | Reports saved preferences and count; preserves search and pending questions |
-| `RESET_PREFERENCES` | `HELP` |
-|  | `REPEAT_RECOMMENDATIONS` | `CHANGE_COUNT` | `CANCEL` |
-|  |  | `CLEAR_HISTORY` | `UNKNOWN` |
+| `REFINE` | `REPEAT` | `EXPLAIN_PREFERENCES` | `HELP` |
+|  | `REPEAT_RECOMMENDATIONS` | `RESET_PREFERENCES` | `CANCEL` |
+|  |  | `CHANGE_COUNT` | `UNKNOWN` |
+|  |  | `CLEAR_HISTORY` |  |
+
+Replacing a search criterion is `REFINE`; explicitly replacing a saved preference is
+`UPDATE_PREFERENCES`. Search replacements use `replaceSearchFields`; saved-preference replacements
+use `replacePreferenceFields`. A search change does not silently edit saved tastes.
 
 Only recommendation and refinement intents introduce new search semantics. Navigation and
 explanation actions inherit committed context. Preference edits use their own addition, removal, and
@@ -218,8 +230,8 @@ replacement fields instead of masquerading as searches.
 ### Input parsing
 
 `CommandParser` handles exact commands such as Help, More, repeat, page explanations, count changes,
-history clearing, and cancellation. It ignores harmless casing, spacing, punctuation, and supported
-courtesy wording. Commands with extra criteria go to `AiParser` instead of losing information.
+viewing saved preferences, history clearing, and cancellation. It ignores harmless casing, spacing,
+punctuation, and supported courtesy wording. Commands with extra criteria go to `AiParser` instead of losing information.
 
 The AI parser receives bounded context: the current pending question, latest action, and at most five
 displayed titles. Its structured response is validated and converted to `UserIntent`; session state

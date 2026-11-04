@@ -30,7 +30,8 @@ the reason is not obvious.
 
 ## Tests
 
-Add or update tests with behavior changes. We use JUnit 5, Mockito, and Testcontainers.
+Add or update tests with behavior changes. We use JUnit Jupiter 6, Mockito, and Testcontainers;
+versions follow the Maven build.
 
 Test the stable application contract separately from each technology adapter:
 
