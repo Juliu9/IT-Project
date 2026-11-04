@@ -16,6 +16,7 @@ import java.util.Map;
 
 /** Qdrant-only field names, index types, vector schema, and exact-filter translation. */
 final class QdrantAudiobookSchema {
+  /** Prevents instantiation of this utility class. */
   private QdrantAudiobookSchema() {}
 
   static final String ID = "id";
@@ -48,6 +49,7 @@ final class QdrantAudiobookSchema {
           SHORT_DESCRIPTION,
           FieldType.FieldTypeKeyword);
 
+  /** Builds the Qdrant catalogue collection schema with configured vector dimensions. */
   static Collections.CreateCollection collection(String collection, int dimension) {
     Collections.VectorParams denseParams =
         Collections.VectorParams.newBuilder()
@@ -87,6 +89,7 @@ final class QdrantAudiobookSchema {
     return builder.getMustCount() == 0 && builder.getMustNotCount() == 0 ? null : builder.build();
   }
 
+  /** Adds structured exact constraints to the Qdrant filter builder. */
   private static void addConditions(
       Filter.Builder builder, AudiobookFilterConditions conditions, boolean excluded) {
     if (conditions == null || !conditions.hasConditions()) {
@@ -139,6 +142,7 @@ final class QdrantAudiobookSchema {
     }
   }
 
+  /** Converts a publication boundary to Qdrant's timestamp representation. */
   private static com.google.protobuf.Timestamp timestamp(java.time.Instant instant) {
     return com.google.protobuf.Timestamp.newBuilder()
         .setSeconds(instant.getEpochSecond())
@@ -146,6 +150,7 @@ final class QdrantAudiobookSchema {
         .build();
   }
 
+  /** Adds a supplied numeric range to the Qdrant filter. */
   private static void addRangeCondition(
       Filter.Builder builder, String field, Integer minimum, Integer maximum, boolean excluded) {
     if (minimum == null && maximum == null) {
@@ -161,6 +166,7 @@ final class QdrantAudiobookSchema {
     addCondition(builder, range(field, range.build()), excluded);
   }
 
+  /** Adds a supplied exact-value condition to the Qdrant filter. */
   private static void addCondition(Filter.Builder builder, Condition condition, boolean excluded) {
     if (excluded) {
       builder.addMustNot(condition);

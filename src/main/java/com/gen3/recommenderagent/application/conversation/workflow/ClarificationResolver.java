@@ -23,6 +23,7 @@ public final class ClarificationResolver {
   private final List<PendingQuestionHandler<?>> pendingQuestionHandlers =
       List.of(new SimilarBookPendingQuestionHandler());
 
+  /** Interprets pending-question replies and cancellation before ordinary intent dispatch. */
   public ConversationDraft resolve(Session session, SessionRequest input) {
     ConversationDraft effective = copyOf(input);
     if (session == null) {
@@ -89,6 +90,7 @@ public final class ClarificationResolver {
     return effective;
   }
 
+  /** Recognizes cancellation and preference declines against the current unfinished action. */
   private ConversationDraft resolveCancellation(
       Session session, ConversationDraft effective, String reply) {
     if ((session.getPendingQuestionKind() == ConversationQuestion.SEARCH_CHANGE_OFFER)
@@ -116,6 +118,7 @@ public final class ClarificationResolver {
     return null;
   }
 
+  /** Applies a duration answer to the retained shorter-or-longer refinement request. */
   private ConversationDraft resolveDurationReply(
       Session session, ConversationDraft effective, String reply) {
     if (session.getPendingQuestionKind() == ConversationQuestion.SHORTER_DURATION_CLARIFICATION
@@ -168,6 +171,7 @@ public final class ClarificationResolver {
     return null;
   }
 
+  /** Restores an unfinished search when the user accepts or answers its clarification. */
   private ConversationDraft resolveSearchChangeReply(
       Session session, ConversationDraft effective, String reply) {
     if (ConversationText.isAffirmativeReply(reply)
@@ -203,6 +207,7 @@ public final class ClarificationResolver {
     return null;
   }
 
+  /** Treats invalid numeric selection replies as question answers rather than count changes. */
   private void resolveInvalidSelection(Session session, ConversationDraft effective, String reply) {
     if (effective.isInvalidBookCount()
         && (session.getPendingQuestionKind()
@@ -215,6 +220,7 @@ public final class ClarificationResolver {
     }
   }
 
+  /** Interprets supplied taste values as an explicit or pending saved-preference update. */
   private ConversationDraft resolvePreferenceReply(Session session, ConversationDraft effective) {
     if (effective.getIntent() == ConversationAction.UPDATE_PREFERENCES
         || (session.isAwaitingPreferenceUpdate()
@@ -235,6 +241,7 @@ public final class ClarificationResolver {
     return null;
   }
 
+  /** Resumes or cancels a proposed range change after the user's confirmation. */
   private ConversationDraft resolveRangeConfirmation(
       Session session, ConversationDraft effective, String reply) {
     if ((session.getPendingQuestionKind() == ConversationQuestion.RECENCY_RANGE_CONFIRMATION
@@ -259,6 +266,7 @@ public final class ClarificationResolver {
     return null;
   }
 
+  /** Resolves whole-page or replacement selections for a pending explanation. */
   private ConversationDraft resolveExplanationSelection(
       Session session, ConversationDraft effective, String reply) {
     // The parser has no session context; resolve short answers against the outstanding question.
@@ -307,6 +315,7 @@ public final class ClarificationResolver {
     return null;
   }
 
+  /** Maps numeric or relative selection replies to ranks on the displayed page. */
   private Integer resolveSelection(Session session, String reply) {
     Integer selection = ConversationText.selectionReply(reply);
     if (session.getPendingQuestionKind() == ConversationQuestion.EXPLANATION_TARGET_CLARIFICATION) {
@@ -332,6 +341,7 @@ public final class ClarificationResolver {
     return selection;
   }
 
+  /** Applies a year answer to an unfinished recency refinement. */
   private ConversationDraft resolveYearReply(
       Session session, ConversationDraft effective, String reply) {
     String yearReply = ConversationText.normalizeCommand(reply);
@@ -378,6 +388,7 @@ public final class ClarificationResolver {
     return null;
   }
 
+  /** Converts a pending rank or displayed-title answer into an explanation request. */
   private ConversationDraft resolveExplanationTarget(
       Session session, ConversationDraft effective, String reply, Integer selection) {
     if (session.getPendingQuestionKind() == ConversationQuestion.EXPLANATION_TARGET_CLARIFICATION
@@ -397,6 +408,7 @@ public final class ClarificationResolver {
     return null;
   }
 
+  /** Checks whether the reply answers the current question rather than starting another action. */
   private boolean isContextualReply(Session session, ConversationDraft request, String reply) {
     if (session.getPendingQuestion() == null) {
       return false;
@@ -417,6 +429,7 @@ public final class ClarificationResolver {
     return handler != null && handler.isContextualReply(session, request, reply);
   }
 
+  /** Reports whether the incoming action abandons the previous pending question. */
   private boolean isNewAction(ConversationDraft request) {
     return switch (request.getIntent()) {
       case UPDATE_PREFERENCES,
@@ -433,6 +446,7 @@ public final class ClarificationResolver {
     };
   }
 
+  /** Clears stale clarification state when the action no longer needs it. */
   private void clearAbandonedQuestions(Session session, ConversationDraft request) {
     if (request.getIntent() != ConversationAction.UNKNOWN
         && !session.isAwaitingPersonalisedPreferences()
@@ -441,6 +455,7 @@ public final class ClarificationResolver {
     }
   }
 
+  /** Restores explicit search criteria so current saved preferences can be applied again. */
   static ConversationDraft restoreSearchCriteria(ConversationTurn pending, SessionRequest reply) {
     var resumed = restoreSearchCriteria(pending);
     resumed.setRequestId(reply.getRequestId());
@@ -449,6 +464,7 @@ public final class ClarificationResolver {
     return resumed;
   }
 
+  /** Restores explicit search criteria so current saved preferences can be applied again. */
   static ConversationDraft restoreSearchCriteria(ConversationTurn pending) {
     var resumed = ConversationDraft.fromTurn(pending);
     resumed.setPendingQuestion(null);
@@ -466,6 +482,7 @@ public final class ClarificationResolver {
     return resumed;
   }
 
+  /** Finds the reply handler registered for the pending question's persisted type. */
   private PendingQuestionHandler<?> handlerFor(PendingQuestion question) {
     if (question == null) {
       return null;
@@ -476,6 +493,7 @@ public final class ClarificationResolver {
         .orElse(null);
   }
 
+  /** Reports whether an empty result should offer a change to the current search. */
   private static boolean offersSearchChange(ConversationDraft request) {
     return request.getOutcome() == ConversationOutcome.EMPTY_EXPLANATION_PAGE
         || (ConversationRules.isSearchContext(request)
@@ -483,6 +501,7 @@ public final class ClarificationResolver {
             && request.getRecommendations().isEmpty());
   }
 
+  /** Identifies pending questions that retain an unfinished search refinement. */
   private boolean isRefinementQuestion(ConversationQuestion decision) {
     return decision == ConversationQuestion.SEARCH_CLARIFICATION
         || decision == ConversationQuestion.SEARCH_CHANGE_CLARIFICATION
@@ -493,6 +512,7 @@ public final class ClarificationResolver {
         || decision == ConversationQuestion.DURATION_RANGE_CONFIRMATION;
   }
 
+  /** Copies retained question context into the outgoing conversation draft. */
   private void attachQuestion(Session session, ConversationDraft request) {
     request.setPendingQuestion(session.getPendingQuestionKind());
     if (session.getPendingQuestionKind() == ConversationQuestion.EXPLANATION_TARGET_CLARIFICATION) {
@@ -510,6 +530,7 @@ public final class ClarificationResolver {
     }
   }
 
+  /** Persists the next pending question while preserving it for read-only and replay actions. */
   public void complete(Session session, ConversationDraft request) {
     ConversationAction intent = request.getIntent();
     if (intent == ConversationAction.REPEAT || intent == ConversationAction.EXPLAIN_PREFERENCES) {

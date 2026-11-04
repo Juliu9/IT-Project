@@ -20,6 +20,7 @@ public class CandidateRetrievalService implements CandidateRetriever {
   private final QueryEmbeddingService embeddingIndexer;
   private final AudiobookRetrievalPlanner retrievalPlanner;
 
+  /** Connects retrieval planning and query embeddings to the selected catalogue search adapter. */
   public CandidateRetrievalService(
       String backend,
       AudiobookCandidateSearch candidateSearch,
@@ -31,6 +32,7 @@ public class CandidateRetrievalService implements CandidateRetriever {
     this.retrievalPlanner = retrievalPlanner;
   }
 
+  /** {@inheritDoc} */
   @Override
   public List<AudiobookCandidate> getCandidates(
       SessionRequest request,
@@ -63,6 +65,7 @@ public class CandidateRetrievalService implements CandidateRetriever {
     }
   }
 
+  /** Searches with combined vector evidence, falling back to keywords when no vector is usable. */
   private List<AudiobookCandidate> retrieveSemantic(
       AudiobookRetrievalPlan plan, SemanticQueryVectors vectors) throws IOException {
     float[] queryVector = embeddingIndexer.combineSemanticQueries(vectors);
@@ -72,6 +75,7 @@ public class CandidateRetrievalService implements CandidateRetriever {
     return candidateSearch.searchSemantic(queryVector, plan.filters(), plan.limit());
   }
 
+  /** Combines vector and keyword retrieval when both kinds of evidence are available. */
   private List<AudiobookCandidate> retrieveHybrid(
       AudiobookRetrievalPlan plan, SemanticQueryVectors vectors) throws IOException {
     float[] queryVector = embeddingIndexer.combineSemanticQueries(vectors);
@@ -85,6 +89,7 @@ public class CandidateRetrievalService implements CandidateRetriever {
         queryVector, plan.keywordText(), plan.filters(), plan.limit());
   }
 
+  /** Uses keyword retrieval only when the plan contains usable query text. */
   private List<AudiobookCandidate> retrieveKeywordFallback(AudiobookRetrievalPlan plan)
       throws IOException {
     if (plan.keywordText() == null || plan.keywordText().isBlank()) {

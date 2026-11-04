@@ -30,11 +30,13 @@ public class DemoWebsite {
   private final RequestGateway gateway;
   private final AudiobookDetailsLookup catalogue;
 
+  /** Connects the demo request endpoint to recommendation handling and catalogue details. */
   public DemoWebsite(RequestGateway gateway, AudiobookDetailsLookup catalogue) {
     this.gateway = gateway;
     this.catalogue = catalogue;
   }
 
+  /** Serves the development demonstration page. */
   @GetMapping(
       value = {"/", "/index.html"},
       produces = MediaType.TEXT_HTML_VALUE)
@@ -42,6 +44,9 @@ public class DemoWebsite {
     return new ClassPathResource("demo/index.html");
   }
 
+  /**
+   * Runs a demo recommendation request and returns response text with inspected request metadata.
+   */
   @PostMapping(value = "/api/v1/recommendations/demo", produces = MediaType.APPLICATION_JSON_VALUE)
   public DemoResponse recommend(
       @RequestHeader("X-Session-Id") String sessionId,
@@ -67,6 +72,7 @@ public class DemoWebsite {
         error);
   }
 
+  /** Removes vector data from the request representation returned to the demo client. */
   private ObjectNode withoutVectors(ConversationTurn request) {
     ObjectNode json = JSON.valueToTree(request);
     json.remove("similarityQueryVector");

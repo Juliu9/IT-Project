@@ -8,6 +8,7 @@ public record AudiobookFilters(
     AudiobookFilterConditions mustNotInclude,
     List<String> excludedBookIds) {
 
+  /** Normalizes absent filter conditions and copies excluded catalogue IDs. */
   public AudiobookFilters {
     excludedBookIds =
         excludedBookIds == null

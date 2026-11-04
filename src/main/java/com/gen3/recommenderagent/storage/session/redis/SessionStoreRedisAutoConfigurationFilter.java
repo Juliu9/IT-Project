@@ -24,6 +24,7 @@ public class SessionStoreRedisAutoConfigurationFilter
     this.environment = environment;
   }
 
+  /** {@inheritDoc} */
   @Override
   public boolean[] match(String[] autoConfigurationClasses, AutoConfigurationMetadata metadata) {
     boolean redis = "redis".equalsIgnoreCase(environment.getProperty("session.store", "redis"));

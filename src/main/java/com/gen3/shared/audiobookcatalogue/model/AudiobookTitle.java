@@ -8,10 +8,12 @@ public record AudiobookTitle(
     @com.fasterxml.jackson.annotation.JsonProperty("id") String bookId,
     String title,
     List<String> authors) {
+  /** Captures reference-book identity and title with a copied, null-safe author list. */
   public AudiobookTitle {
     authors = authors == null ? List.of() : List.copyOf(authors);
   }
 
+  /** Normalizes title text for consistent catalogue title matching. */
   public static String normalize(String text) {
     return text == null
         ? ""

@@ -8,5 +8,6 @@ import java.util.List;
 /** Builds a ranked batch; the session transition consumes it in API-sized pages. */
 public interface RecommendationWorkflow {
 
+  /** Retrieves and ranks a bounded batch of books for the resolved session search. */
   List<Recommendation> recommend(ConversationDraft request, Session session);
 }

@@ -66,6 +66,7 @@ public class QdrantAudiobookRepository
     this.vectorDimension = vectorDimension;
   }
 
+  /** {@inheritDoc} */
   @Override
   public List<com.gen3.shared.audiobookcatalogue.model.AudiobookRecord> findBooksByIds(
       List<String> bookIds) throws IOException {
@@ -76,6 +77,7 @@ public class QdrantAudiobookRepository
     return findRecordsByBookIds(bookIds, false).values().stream().map(mapper::toRecord).toList();
   }
 
+  /** {@inheritDoc} */
   @Override
   public List<com.gen3.shared.audiobookcatalogue.model.AudiobookTitle> findBooksByTitle(
       String title, String author, int limit) throws IOException {
@@ -329,6 +331,7 @@ public class QdrantAudiobookRepository
     return points.size() + updated;
   }
 
+  /** Reports whether a payload value contains usable catalogue data. */
   private boolean usable(io.qdrant.client.grpc.JsonWithInt.Value value) {
     if (value == null
         || value.hasNullValue()
@@ -375,6 +378,7 @@ public class QdrantAudiobookRepository
     return vectors;
   }
 
+  /** Rejects deterministic point-ID collisions before importing catalogue records. */
   private void requireAvailablePointIds(
       List<AudiobookEmbedding> incoming, Map<String, RetrievedPoint> existing) throws IOException {
     var ids =
@@ -399,6 +403,7 @@ public class QdrantAudiobookRepository
     }
   }
 
+  /** Rejects missing or duplicate catalogue IDs before writing an import batch. */
   private void validateUniqueBookIds(List<AudiobookEmbedding> records) throws IOException {
     var ids = new java.util.HashSet<String>();
     for (var record : records) {
@@ -415,6 +420,7 @@ public class QdrantAudiobookRepository
     return findRecordsByBookIds(ids, withVectors, !withVectors);
   }
 
+  /** Loads matching catalogue points and rejects ambiguous duplicate payload IDs. */
   private Map<String, RetrievedPoint> findRecordsByBookIds(
       List<String> ids, boolean withVectors, boolean fullPayload) throws IOException {
     Map<String, RetrievedPoint> records = new LinkedHashMap<>();
@@ -472,10 +478,12 @@ public class QdrantAudiobookRepository
     createPayloadIndex(QdrantAudiobookSchema.PUBDATE, FieldType.FieldTypeDatetime);
   }
 
+  /** Fails if the configured catalogue collection does not exist. */
   private void requireCollection() throws IOException {
     ensureCollection(false);
   }
 
+  /** Ensures the configured catalogue collection exists before a write requires it. */
   private void ensureCollection(boolean createIfMissing) throws IOException {
     if (initialized) {
       return;
@@ -552,6 +560,7 @@ public class QdrantAudiobookRepository
         .build();
   }
 
+  /** Creates the configured payload index and waits for the database operation. */
   private void createPayloadIndex(String field, FieldType type) throws IOException {
     CreateFieldIndexCollection request =
         CreateFieldIndexCollection.newBuilder()
@@ -585,6 +594,7 @@ public class QdrantAudiobookRepository
     return values;
   }
 
+  /** Extracts the stored dense vector from the retrieved catalogue point. */
   private float[] denseVector(RetrievedPoint point) {
     if (point == null || !point.hasVectors()) {
       return null;
@@ -605,6 +615,7 @@ public class QdrantAudiobookRepository
     return vector;
   }
 
+  /** Reports whether the supplied text contains a non-whitespace character. */
   private boolean hasText(String value) {
     return value != null && !value.isBlank();
   }

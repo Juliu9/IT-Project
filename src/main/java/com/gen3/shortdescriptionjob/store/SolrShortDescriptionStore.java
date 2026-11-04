@@ -24,6 +24,7 @@ public class SolrShortDescriptionStore implements AudiobookEnrichmentStore {
   private final SolrAudiobookRepository catalogue;
   private final String collection;
 
+  /** Connects summary updates to Solr while retaining catalogue version information. */
   public SolrShortDescriptionStore(
       SolrClient client,
       SolrAudiobookRepository catalogue,
@@ -33,6 +34,7 @@ public class SolrShortDescriptionStore implements AudiobookEnrichmentStore {
     this.collection = collection;
   }
 
+  /** {@inheritDoc} */
   @Override
   public List<StoredAudiobook> findRecordsForShortDescription(
       int maximumRecords, ShortDescriptionMode mode) throws IOException {
@@ -62,6 +64,7 @@ public class SolrShortDescriptionStore implements AudiobookEnrichmentStore {
     return missing;
   }
 
+  /** {@inheritDoc} */
   @Override
   public void updateShortDescriptions(
       List<ShortDescriptionUpdate> updates, ShortDescriptionMode mode) throws IOException {

@@ -25,6 +25,9 @@ public class QdrantUserPreferenceRepository implements UserPreferenceVectorRepos
   private final Object initializationLock = new Object();
   private volatile boolean initialized;
 
+  /**
+   * Configures separate Qdrant user storage and rejects invalid collection or dimension settings.
+   */
   public QdrantUserPreferenceRepository(
       QdrantClient client,
       QdrantUserPreferenceMapper mapper,
@@ -44,6 +47,7 @@ public class QdrantUserPreferenceRepository implements UserPreferenceVectorRepos
     this.vectorDimension = vectorDimension;
   }
 
+  /** {@inheritDoc} */
   @Override
   public void save(UserPreferenceEmbedding embedding) throws IOException {
     if (embedding == null) {
@@ -63,6 +67,7 @@ public class QdrantUserPreferenceRepository implements UserPreferenceVectorRepos
         "write user preference vectors to Qdrant");
   }
 
+  /** {@inheritDoc} */
   @Override
   public void clear(String userId) throws IOException {
     var pointId = mapper.pointId(userId);
@@ -83,6 +88,7 @@ public class QdrantUserPreferenceRepository implements UserPreferenceVectorRepos
         "clear user preference vectors");
   }
 
+  /** {@inheritDoc} */
   @Override
   public Optional<UserPreferenceEmbedding> findEmbeddingByUserId(String userId) throws IOException {
     if (userId == null || userId.isBlank()) {
@@ -112,6 +118,7 @@ public class QdrantUserPreferenceRepository implements UserPreferenceVectorRepos
     return Optional.of(new UserPreferenceEmbedding(userId, favs, hist));
   }
 
+  /** Creates the preference collection once when a write first requires it. */
   public void initialize() throws IOException {
     if (initialized) {
       return;
@@ -130,6 +137,7 @@ public class QdrantUserPreferenceRepository implements UserPreferenceVectorRepos
     }
   }
 
+  /** Checks for the preference collection without creating it during read-only requests. */
   private boolean collectionExists() throws IOException {
     if (initialized) {
       return true;
@@ -148,6 +156,7 @@ public class QdrantUserPreferenceRepository implements UserPreferenceVectorRepos
     }
   }
 
+  /** Creates separate named favourites and history vectors with the configured dimensions. */
   private void createCollection() throws IOException {
     Collections.VectorParams vectorParams =
         Collections.VectorParams.newBuilder()
@@ -173,16 +182,22 @@ public class QdrantUserPreferenceRepository implements UserPreferenceVectorRepos
     await(client.createCollectionAsync(request), "create Qdrant user preference collection");
   }
 
+  /** Rejects vectors whose size differs from the configured embedding dimension. */
   private void validateDimension(float[] vector) {
     if (vector.length != vectorDimension) {
       throw new IllegalArgumentException("Embedding dimension mismatch");
     }
   }
 
+  /** Reports whether a vector is present and nonempty. */
   private boolean hasVector(float[] vector) {
     return vector != null && vector.length > 0;
   }
 
+  /**
+   * Waits for the database operation, preserving interruption and translating failures to I/O
+   * errors.
+   */
   private <T> T await(java.util.concurrent.Future<T> future, String operation) throws IOException {
     try {
       return future.get();

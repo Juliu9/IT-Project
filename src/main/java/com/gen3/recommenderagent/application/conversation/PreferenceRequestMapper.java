@@ -5,8 +5,10 @@ import com.gen3.recommenderagent.domain.session.SessionPreferences;
 
 /** Maps the application request shape to durable session preference values. */
 public final class PreferenceRequestMapper {
+  /** Prevents instantiation of this utility class. */
   private PreferenceRequestMapper() {}
 
+  /** Copies and validates request taste fields as session preference values. */
   public static SessionPreferences fromRequest(SessionRequest request) {
     var preferences = new SessionPreferences();
     preferences.setPositiveSemanticQuery(request.getPositiveSemanticQuery());
@@ -16,6 +18,7 @@ public final class PreferenceRequestMapper {
     return preferences.copy();
   }
 
+  /** Copies saved preference values into a request-shaped search representation. */
   public static SessionRequest toRequest(SessionPreferences preferences) {
     var copy = preferences.copy();
     var request = new SessionRequest();

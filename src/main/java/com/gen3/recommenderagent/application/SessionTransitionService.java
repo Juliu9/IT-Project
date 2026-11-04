@@ -27,6 +27,9 @@ public class SessionTransitionService {
   private final IntentResolver intentResolver;
   private final SessionContextProjector contextProjector;
 
+  /**
+   * Connects session persistence to intent conversion, conversation execution, and parser context.
+   */
   public SessionTransitionService(
       SessionRepository sessions,
       ConversationEngine conversation,
@@ -38,16 +41,25 @@ public class SessionTransitionService {
     this.contextProjector = contextProjector;
   }
 
+  /** Loads a best-effort session snapshot and projects the bounded context used by the parser. */
   public SessionContext parserContext(String sessionId, String userId) {
     Session snapshot = sessions.snapshot(sessionId, userId);
     return contextProjector.project(snapshot);
   }
 
+  /**
+   * Applies one session transition under the repository update contract before returning its
+   * result.
+   */
   public ConversationTurn process(String sessionId, String userId, SessionRequest request) {
     return sessions.update(
         sessionId, userId, session -> transition(session, request.getIntent(), () -> request));
   }
 
+  /**
+   * Applies one session transition under the repository update contract before returning its
+   * result.
+   */
   public <T> T process(
       String sessionId,
       String userId,
@@ -65,6 +77,9 @@ public class SessionTransitionService {
         afterCommit);
   }
 
+  /**
+   * Executes conversation policy and turns preference category overflow into a repeatable response.
+   */
   private ConversationTurn transition(
       Session session, ConversationAction action, Supplier<SessionRequest> input) {
     var pending = session.getPendingQuestion();

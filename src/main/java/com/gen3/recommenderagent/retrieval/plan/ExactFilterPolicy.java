@@ -44,14 +44,17 @@ public class ExactFilterPolicy {
           "^(?:in |within |from )?(?:the )?(?:last|past) (?:([0-9]+|a|an|one|two|three|four|five|six|seven|eight|nine|ten) )?years?$");
   private final Clock clock;
 
+  /** Uses the UTC system clock to resolve relative publication-year constraints. */
   public ExactFilterPolicy() {
     this(Clock.systemUTC());
   }
 
+  /** Creates exact-filter policy using the UTC clock or an explicitly supplied clock. */
   ExactFilterPolicy(Clock clock) {
     this.clock = clock;
   }
 
+  /** Translates exact request constraints and excluded IDs into catalogue filter conditions. */
   public AudiobookFilters filters(SessionRequest request, Set<String> excludedBookIds) {
     return new AudiobookFilters(
         conditions(request == null ? null : request.getMustInclude()),
@@ -64,6 +67,7 @@ public class ExactFilterPolicy {
     resolveFilterCorrections(resolved, incoming, null);
   }
 
+  /** Validates new constraints and reconciles inherited conflicts using the explicit correction. */
   public void resolveFilterCorrections(
       SessionRequest resolved, SessionRequest incoming, SessionRequest previousSearch) {
     if ((resolved.getIntent() != ConversationAction.RECOMMENDATION
@@ -98,6 +102,7 @@ public class ExactFilterPolicy {
     requireCompatible(filters(resolved, Set.of()));
   }
 
+  /** Rejects exact requirements whose inclusion and exclusion leave no allowed value. */
   private void requireCompatible(AudiobookFilters filters) {
     var fields = conflicts(filters);
     if (!fields.isEmpty()) {
@@ -108,6 +113,7 @@ public class ExactFilterPolicy {
     }
   }
 
+  /** Identifies fields whose required values are completely forbidden by the exclusions. */
   private List<String> conflicts(AudiobookFilters filters) {
     var include = filters.mustInclude();
     var exclude = filters.mustNotInclude();
@@ -144,6 +150,7 @@ public class ExactFilterPolicy {
     return fields;
   }
 
+  /** Checks whether one bounded range completely excludes another supported range. */
   private boolean covers(
       Integer outerMin,
       Integer outerMax,
@@ -155,6 +162,7 @@ public class ExactFilterPolicy {
         && (outerMax == null ? ceiling : outerMax) >= (innerMax == null ? ceiling : innerMax);
   }
 
+  /** Returns normalized exact values for conflict checking in the selected field. */
   private List<String> exactValues(AudiobookFilterConditions filters, String field) {
     List<String> values =
         switch (field) {
@@ -172,12 +180,14 @@ public class ExactFilterPolicy {
         .toList();
   }
 
+  /** Normalizes names or scalar values for exact-constraint comparisons. */
   private String comparisonKey(String value, String field) {
     return field.equals("authors") || field.equals("narrators")
         ? PersonNameNormalizer.comparisonKey(value)
         : value.trim().toLowerCase(Locale.ROOT);
   }
 
+  /** Reports whether the selected exact-filter field contains a usable constraint. */
   private boolean supplied(AudiobookFilterConditions filters, String field) {
     return switch (field) {
       case "duration" ->
@@ -188,6 +198,7 @@ public class ExactFilterPolicy {
     };
   }
 
+  /** Removes values that match the explicit correction under the field's comparison rules. */
   private List<String> without(
       List<String> values, AudiobookFilterConditions correction, String field) {
     var removed = exactValues(correction, field);
@@ -198,6 +209,7 @@ public class ExactFilterPolicy {
             .toList();
   }
 
+  /** Removes a conflicting inherited constraint in the selected exact field. */
   private void clear(ExactCriteria criteria, String field, AudiobookFilterConditions correction) {
     switch (field) {
       case "authors" -> criteria.setAuthors(without(criteria.getAuthors(), correction, field));
@@ -211,6 +223,7 @@ public class ExactFilterPolicy {
     }
   }
 
+  /** Parses exact criteria into the catalogue's structured filter representation. */
   private AudiobookFilterConditions conditions(ExactCriteria filter) {
     if (filter == null) {
       return AudiobookFilterConditions.empty();
@@ -281,6 +294,7 @@ public class ExactFilterPolicy {
         "What publication year or year range would you like? You can also say 'after 2020' or 'in the last 5 years'.");
   }
 
+  /** Resolves recent-year wording against the configured UTC clock. */
   private RangeBounds relativeYearBounds(String normalized, Matcher relative) {
     int years;
     if (normalized.equals("recent") || normalized.equals("recently")) {
@@ -316,6 +330,7 @@ public class ExactFilterPolicy {
     return new RangeBounds(currentYear - years, currentYear);
   }
 
+  /** Rejects year bounds outside the supported calendar range. */
   private RangeBounds boundedYearRange(Integer lower, Integer upper) {
     if ((lower != null && (lower < 1 || lower > 9999))
         || (upper != null && (upper < 1 || upper > 9999))) {
@@ -335,11 +350,13 @@ public class ExactFilterPolicy {
   }
 
   private record RangeBounds(Integer minimum, Integer maximum) {
+    /** Returns an instance with no available values or evidence. */
     private static RangeBounds empty() {
       return new RangeBounds(null, null);
     }
   }
 
+  /** Resolves comparative publication wording against the latest displayed page. */
   private void resolveRecencyRefinement(ConversationDraft request, Session session) {
     if (request.getIntent() != ConversationAction.REFINE || request.getMustInclude() == null) {
       return;
@@ -371,6 +388,7 @@ public class ExactFilterPolicy {
     }
   }
 
+  /** Builds an older-publication bound and asks before crossing an inherited range. */
   private void resolveOlderRefinement(
       ConversationDraft request, Session session, ConversationDraft previous, List<Integer> years) {
     if (years.isEmpty()) {
@@ -398,6 +416,7 @@ public class ExactFilterPolicy {
     }
   }
 
+  /** Builds a newer-publication bound while respecting inherited upper limits. */
   private void resolveNewerRefinement(
       ConversationDraft request,
       Session session,
@@ -447,6 +466,7 @@ public class ExactFilterPolicy {
     setYear(request, bounded);
   }
 
+  /** Retains the unfinished refinement and marks its clarification question. */
   private void awaitRefinement(
       ConversationDraft request, Session session, ConversationQuestion question) {
     request.setPendingQuestion(question);
@@ -454,6 +474,7 @@ public class ExactFilterPolicy {
     session.setPendingRefinementRequest(ConversationDraft.toStoredTurn(request));
   }
 
+  /** Updates the effective publication year and any retained explicit search criteria. */
   private void setYear(ConversationDraft request, String value) {
     request.getMustInclude().setPublicationYear(value);
     if (request.getSearchCriteria() != null) {
@@ -464,6 +485,7 @@ public class ExactFilterPolicy {
     }
   }
 
+  /** Combines a duration answer with the unfinished refinement's existing bounds. */
   private void resolveDurationAnswer(ConversationDraft request, Session session) {
     if (session == null
         || request.getIntent() != ConversationAction.REFINE
@@ -500,6 +522,7 @@ public class ExactFilterPolicy {
     }
   }
 
+  /** Updates the effective duration and any retained explicit search criteria. */
   private void setDuration(ConversationDraft request, String value) {
     var include = request.getMustInclude() == null ? new ExactCriteria() : request.getMustInclude();
     include.setDuration(value);
@@ -512,6 +535,7 @@ public class ExactFilterPolicy {
     }
   }
 
+  /** Derives shorter-or-longer bounds from the displayed page and checks inherited limits. */
   private void resolveDurationRefinement(ConversationDraft request, Session session) {
     if (request.getIntent() != ConversationAction.REFINE
         || (!request.isShorter() && !request.isLonger())) {
@@ -564,6 +588,7 @@ public class ExactFilterPolicy {
     }
   }
 
+  /** Validates preference edits and resolves exact search corrections before retrieval. */
   public void validateTransition(
       ConversationDraft resolved, SessionRequest original, Session session) {
     if (resolved.getIntent() == ConversationAction.UPDATE_PREFERENCES) {

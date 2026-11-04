@@ -12,8 +12,12 @@ final class PreferenceResponse {
   private static final String CLOSING = " You can ask me to change any of these whenever you like.";
   private static final String OMITTED = " I left out a few more preferences to keep this brief.";
 
+  /** Prevents instantiation of this utility class. */
   private PreferenceResponse() {}
 
+  /**
+   * Reports the saved preference snapshot, preserving exact constraints within the response budget.
+   */
   static String render(ConversationTurn turn) {
     Map<String, List<String>> constraints = new LinkedHashMap<>();
     Map<String, List<String>> fields = new LinkedHashMap<>();
@@ -53,12 +57,14 @@ final class PreferenceResponse {
     return response + CLOSING;
   }
 
+  /** Builds preference sentences in constraint, style, genre, and topic priority order. */
   private static String sentences(Map<String, List<String>> fields) {
     return fields.entrySet().stream()
         .map(field -> " " + field.getKey() + " " + String.join(", ", field.getValue()) + ".")
         .collect(java.util.stream.Collectors.joining());
   }
 
+  /** Formats semantic preference values without splitting whole saved terms. */
   private static void semantic(
       Map<String, List<String>> fields,
       Map<String, List<String>> tastes,
@@ -74,6 +80,7 @@ final class PreferenceResponse {
     add(fields, lead + " narrator styles like", query.getNarrators());
   }
 
+  /** Formats required or excluded exact constraints as a single joined sentence. */
   private static void exact(
       Map<String, List<String>> fields, String label, ExactCriteria criteria) {
     if (criteria == null) {
@@ -99,6 +106,7 @@ final class PreferenceResponse {
     }
   }
 
+  /** Joins preference clauses using the supplied conjunction. */
   private static String joinClauses(List<String> clauses, String conjunction) {
     if (clauses.size() == 1) {
       return clauses.getFirst();
@@ -111,12 +119,14 @@ final class PreferenceResponse {
         + clauses.getLast();
   }
 
+  /** Adds a preference clause only when it contains usable values. */
   private static void add(Map<String, List<String>> fields, String label, String value) {
     if (value != null && !value.isBlank()) {
       add(fields, label, List.of(value));
     }
   }
 
+  /** Adds a preference clause only when it contains usable values. */
   private static void add(Map<String, List<String>> fields, String label, List<String> values) {
     if (values != null) {
       var populated = values.stream().filter(value -> value != null && !value.isBlank()).toList();

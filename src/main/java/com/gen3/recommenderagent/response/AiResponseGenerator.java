@@ -31,6 +31,9 @@ public class AiResponseGenerator {
   private final ChatClient chatClient;
   private final AiOperationObserver aiOperationObserver;
 
+  /**
+   * Creates the narration service with the configured chat client and optional operation observer.
+   */
   @Autowired
   public AiResponseGenerator(
       @Qualifier("responseGeneratorChatClient") ChatClient chatClient,
@@ -39,6 +42,9 @@ public class AiResponseGenerator {
     this.aiOperationObserver = aiOperationObserver;
   }
 
+  /**
+   * Creates the narration service with the configured chat client and optional operation observer.
+   */
   public AiResponseGenerator(ChatClient.Builder chatClientBuilder) {
     this(chatClientBuilder != null ? chatClientBuilder.build() : null, AiOperationObserver.noop());
   }
@@ -154,6 +160,7 @@ public class AiResponseGenerator {
     return text;
   }
 
+  /** Normalizes recommendation titles for matching and response checks. */
   private String normalizedTitle(String text) {
     return text == null
         ? ""
@@ -165,6 +172,7 @@ public class AiResponseGenerator {
   }
 
   // Turns structure Java objects into a text prompt
+  /** Builds narration instructions from the selected books and resolved request context. */
   String compilePrompt(
       List<Recommendation> recommendations, ConversationTurn currentRequest, String limitNotice) {
     // Extracts the original user text if available
@@ -205,6 +213,7 @@ public class AiResponseGenerator {
             recommendationsSummary);
   }
 
+  /** Formats the effective criteria used to retrieve and rank the displayed books. */
   private String resolvedCriteria(ConversationTurn request) {
     if (request == null) {
       return "";
@@ -247,6 +256,7 @@ public class AiResponseGenerator {
                     exclude.getSource()));
   }
 
+  /** Formats supplied semantic preference fields for explanation context. */
   private String semanticSummary(SemanticQuery query) {
     return query == null
         ? "none"
@@ -256,6 +266,7 @@ public class AiResponseGenerator {
   }
 
   // Turns one Reccomendation object into a readable text fragment
+  /** Formats retained book metadata as data for AI narration. */
   private String formatRecommendationForPrompt(Recommendation recommendation) {
     // Safeguard for null entries
     if (recommendation == null) {
@@ -274,6 +285,7 @@ public class AiResponseGenerator {
   }
 
   // Creates a clean message when AI is not used
+  /** Builds deterministic recommendation wording from stored book details. */
   private String buildHumanReadableResponse(
       List<Recommendation> recommendations, ConversationTurn currentRequest) {
     StringBuilder response = new StringBuilder();
@@ -319,6 +331,7 @@ public class AiResponseGenerator {
     return response.toString().trim();
   }
 
+  /** Selects the highest-ranked recommendations for the outgoing response. */
   private List<Recommendation> getTopRecommendations(List<Recommendation> recommendations) {
     if (recommendations == null || recommendations.isEmpty()) {
       return List.of();
@@ -331,10 +344,12 @@ public class AiResponseGenerator {
     return recommendations.subList(0, MAX_BOOK_COUNT);
   }
 
+  /** Builds a deterministic explanation when AI narration cannot be used. */
   private String explanationFallback(List<Recommendation> books) {
     return boundedNarration(books, true, "", MAX_EXPLANATION_WORDS);
   }
 
+  /** Explains retained recommendation evidence using built-in wording. */
   private String plainExplanation(String text) {
     return text == null
         ? ""
@@ -344,6 +359,7 @@ public class AiResponseGenerator {
             .trim();
   }
 
+  /** Builds a deterministic response that fits the supplied word budget. */
   String boundedFallback(
       List<Recommendation> books,
       ConversationTurn request,
@@ -359,6 +375,7 @@ public class AiResponseGenerator {
     return boundedNarration(books, explanation, notice, maximumWords);
   }
 
+  /** Formats recommendation labels and descriptions within the available word budget. */
   private String boundedNarration(
       List<Recommendation> books, boolean explanation, String notice, int maximumWords) {
     List<Recommendation> page = getTopRecommendations(books);

@@ -14,6 +14,7 @@ import java.util.stream.Stream;
  * Input normalization and fallback response decisions shared by parsing and conversation handlers.
  */
 public final class ConversationRules {
+  /** Prevents instantiation of this utility class. */
   private ConversationRules() {}
 
   /** Shared eligibility rule for parsed inputs and restored conversation requests. */
@@ -49,24 +50,29 @@ public final class ConversationRules {
     return request;
   }
 
+  /** Limits new search semantics to recommendation and refinement actions. */
   static boolean acceptsSemanticInformation(ConversationAction intent) {
     return intent == ConversationAction.RECOMMENDATION || intent == ConversationAction.REFINE;
   }
 
+  /** Identifies actions that browse or change the active recommendation search. */
   static boolean isRecommendationIntent(ConversationAction intent) {
     return intent == ConversationAction.RECOMMENDATION
         || intent == ConversationAction.REFINE
         || intent == ConversationAction.MORE_RESULTS;
   }
 
+  /** Checks whether the supplied request represents reusable recommendation search context. */
   static boolean isSearchContext(ConversationDraft request) {
     return request != null && isRecommendationIntent(request.getIntent());
   }
 
+  /** Checks whether the supplied request represents reusable recommendation search context. */
   static boolean isSearchContext(ConversationTurn turn) {
     return turn != null && isRecommendationIntent(turn.getIntent());
   }
 
+  /** Reports whether any usable semantic, exact, personalised, or reference-book criteria exist. */
   static boolean hasSearchCriteria(ConversationDraft request) {
     if (request == null) {
       return false;
@@ -97,14 +103,17 @@ public final class ConversationRules {
                     exclude.getSource())));
   }
 
+  /** Reports whether the semantic query contains any usable preference values. */
   static boolean hasQuery(SemanticQuery query) {
     return query != null && query.hasValues();
   }
 
+  /** Reports whether the supplied list contains at least one nonblank term. */
   static boolean hasTerms(List<String> terms) {
     return terms != null && terms.stream().anyMatch(value -> value != null && !value.isBlank());
   }
 
+  /** Reports whether the supplied text contains a non-whitespace character. */
   static boolean hasText(String... values) {
     return Stream.of(values).anyMatch(value -> value != null && !value.isBlank());
   }

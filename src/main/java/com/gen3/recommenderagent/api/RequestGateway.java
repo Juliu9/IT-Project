@@ -26,6 +26,7 @@ public class RequestGateway {
   private final ResponseGenerator responseGenerator;
   private final RequestTelemetry telemetry;
 
+  /** Connects input parsing, session transitions, response generation, and optional telemetry. */
   @Autowired
   public RequestGateway(
       InputParser inputParser,
@@ -38,6 +39,7 @@ public class RequestGateway {
     this.telemetry = telemetry;
   }
 
+  /** Connects input parsing, session transitions, response generation, and optional telemetry. */
   public RequestGateway(
       InputParser inputParser,
       SessionTransitionService sessionTransitionService,
@@ -61,6 +63,7 @@ public class RequestGateway {
     return process(sessionId, userId, rawText, false, (response, request) -> response);
   }
 
+  /** Runs the request pipeline and includes conversation details and telemetry for the demo. */
   public DemoResponse handleDemoRequest(
       @RequestHeader("X-Session-Id") String sessionId,
       @RequestHeader("X-User-Id") String userId,
@@ -77,6 +80,7 @@ public class RequestGateway {
   public record DemoResponse(
       String response, ConversationTurn sessionRequest, RequestTelemetry.Snapshot metrics) {}
 
+  /** Parses input, commits the session transition, then generates and formats the response. */
   private <T> T process(
       String sessionId,
       String userId,
@@ -125,6 +129,7 @@ public class RequestGateway {
     }
   }
 
+  /** Rejects blank or oversized caller-supplied user and session identifiers. */
   private static void validateId(String header, String value) {
     if (!OpaqueIds.isValid(value)) {
       throw new InvalidRequestException(header + " must be nonblank and at most 256 characters.");

@@ -7,8 +7,10 @@ import java.util.List;
 
 /** Validates stored Solr vectors without changing the catalogue values. */
 public final class SolrVectors {
+  /** Prevents instantiation of this utility class. */
   private SolrVectors() {}
 
+  /** Reads and validates a stored Solr vector with the expected dimensions. */
   public static float[] read(Object stored, int dimension) throws IOException {
     if (stored == null) {
       return null;
@@ -36,6 +38,7 @@ public final class SolrVectors {
     return vector;
   }
 
+  /** Converts a supplied vector to Solr field values after dimension and numeric validation. */
   public static List<Float> values(float[] vector, int dimension) {
     if (vector == null || vector.length == 0) {
       return null;
@@ -48,6 +51,7 @@ public final class SolrVectors {
     return values;
   }
 
+  /** Rejects vectors outside the supported dimension and finite-value requirements. */
   private static void validate(float[] vector, int dimension) {
     if (vector.length != dimension || dimension < 1) {
       throw new IllegalArgumentException("Solr vector dimension mismatch");

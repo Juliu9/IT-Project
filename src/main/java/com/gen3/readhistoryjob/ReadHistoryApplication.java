@@ -23,6 +23,7 @@ import org.springframework.core.env.Environment;
       org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration.class
     })
 public class ReadHistoryApplication {
+  /** Starts this application with the supplied command-line configuration. */
   public static void main(String[] args) {
     try (var context =
         new SpringApplicationBuilder(ReadHistoryApplication.class)
@@ -33,6 +34,7 @@ public class ReadHistoryApplication {
     }
   }
 
+  /** Rejects incompatible job flags and missing opt-in settings before job execution. */
   @Bean
   static BeanFactoryPostProcessor validateJob(Environment environment) {
     return factory -> {
@@ -52,6 +54,7 @@ public class ReadHistoryApplication {
     };
   }
 
+  /** Creates the history importer using the configured CSV, batch size, and database connection. */
   @Bean
   ApplicationRunner readHistoryImport(Environment environment) {
     return args -> {

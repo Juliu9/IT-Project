@@ -11,8 +11,10 @@ import java.util.UUID;
 
 /** Maintains the active search and latest outcome snapshots. */
 public final class ConversationHistory {
+  /** Prevents instantiation of this utility class. */
   private ConversationHistory() {}
 
+  /** Retains reusable search context and records the history update time. */
   public static void retainRequest(Session session, ConversationTurn request) {
     if (request == null) {
       return;
@@ -23,6 +25,7 @@ public final class ConversationHistory {
     session.setUpdatedAt(Instant.now());
   }
 
+  /** Fills missing request identity and creation time before retaining a completed action. */
   static void complete(ConversationDraft request) {
     if (request.getRequestId() == null) {
       request.setRequestId(UUID.randomUUID().toString());
@@ -33,12 +36,14 @@ public final class ConversationHistory {
   }
 
   // Persist only reusable context; raw text and the temporary decision stay out of history.
+  /** Creates a reusable turn snapshot without raw text or its temporary outcome field. */
   static ConversationTurn historyEntry(ConversationDraft request) {
     var entry = ConversationDraft.toStoredTurn(request);
     entry.setOutcome(null);
     return entry;
   }
 
+  /** Restores the retained active search, optionally requiring a completed displayed page. */
   public static ConversationDraft latestSearch(Session session) {
     return latestSearch(session, false);
   }
@@ -48,6 +53,7 @@ public final class ConversationHistory {
     return latestSearch(session, true);
   }
 
+  /** Restores the retained active search, optionally requiring a completed displayed page. */
   private static ConversationDraft latestSearch(Session session, boolean completedOnly) {
     ConversationTurn search = session.getActiveSearch().getSearch();
     if (search == null
@@ -60,6 +66,7 @@ public final class ConversationHistory {
     return ConversationDraft.fromTurn(search);
   }
 
+  /** Stores the completed action and outcome as the session's repeatable last result. */
   static void remember(Session session, ConversationDraft request) {
     session.setLastOutcome(new LastOutcome(historyEntry(request), request.getOutcome()));
   }

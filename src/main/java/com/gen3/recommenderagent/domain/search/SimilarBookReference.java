@@ -8,11 +8,13 @@ public record SimilarBookReference(
     String title,
     List<String> authors,
     float[] vector) {
+  /** Copies the selected reference book metadata and vector for reuse by later search pages. */
   public SimilarBookReference {
     authors = authors == null ? List.of() : List.copyOf(authors);
     vector = vector == null ? null : vector.clone();
   }
 
+  /** Returns a defensive copy of the retained reference-book vector. */
   @Override
   public float[] vector() {
     return vector == null ? null : vector.clone();

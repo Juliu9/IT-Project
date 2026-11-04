@@ -28,11 +28,13 @@ public class SimilarBookResolver {
   private final AudiobookTitleLookup titles;
   private final AudiobookVectorRepository vectors;
 
+  /** Connects catalogue title matching to stored reference-book vector lookup. */
   public SimilarBookResolver(AudiobookTitleLookup titles, AudiobookVectorRepository vectors) {
     this.titles = titles;
     this.vectors = vectors;
   }
 
+  /** Resolves the reference title and stored vector needed for a similar-book search. */
   public void resolve(Session session, ConversationDraft request) {
     if (request.getIntent() != ConversationAction.RECOMMENDATION
         && request.getIntent() != ConversationAction.REFINE
@@ -79,6 +81,7 @@ public class SimilarBookResolver {
     }
   }
 
+  /** Selects a unique reference title or retains bounded choices for clarification. */
   private void resolveTitleMatches(
       Session session, ConversationDraft request, String title, List<AudiobookTitle> matches) {
     boolean truncated = matches.size() > MAX_CHOICES;
@@ -138,6 +141,9 @@ public class SimilarBookResolver {
     return List.copyOf(unique.values());
   }
 
+  /**
+   * Loads the selected reference book's stored embedding without generating a new catalogue vector.
+   */
   private void loadVector(Session session, ConversationDraft request, AudiobookTitle book) {
     try {
       var vector = vectors.findEmbeddingByBookId(book.bookId()).orElse(null);
@@ -160,11 +166,13 @@ public class SimilarBookResolver {
     }
   }
 
+  /** Marks the reference book as unavailable for similarity retrieval. */
   private void unavailable(Session session, ConversationDraft request, AudiobookTitle book) {
     LOGGER.warn("similar.book.vector.unavailable bookId={}", book.bookId());
     clarify(session, request, ConversationQuestion.SIMILAR_BOOK_UNAVAILABLE, List.of());
   }
 
+  /** Retains the reference-book request and choices as the session's pending question. */
   private void clarify(
       Session session,
       ConversationDraft request,

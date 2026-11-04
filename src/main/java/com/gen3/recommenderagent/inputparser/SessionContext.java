@@ -14,6 +14,10 @@ public record SessionContext(
 
   public static final SessionContext EMPTY = new SessionContext(null, null, List.of());
 
+  /**
+   * Copies the bounded pending-question, last-action, and displayed-book context sent to the
+   * parser.
+   */
   public SessionContext {
     displayedBooks = displayedBooks == null ? List.of() : List.copyOf(displayedBooks);
   }

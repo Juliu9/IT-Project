@@ -37,6 +37,7 @@ import org.springframework.core.env.Environment;
   Bm25SparseTextEncoder.class
 })
 public class EmbeddingIndexApplication {
+  /** Starts this application with the supplied command-line configuration. */
   public static void main(String[] args) {
     try (var context =
         new SpringApplicationBuilder(EmbeddingIndexApplication.class)
@@ -47,6 +48,7 @@ public class EmbeddingIndexApplication {
     }
   }
 
+  /** Rejects incompatible job flags and missing opt-in settings before job execution. */
   @Bean
   static BeanFactoryPostProcessor validateJob(Environment environment) {
     return factory -> {
@@ -77,6 +79,7 @@ public class EmbeddingIndexApplication {
     };
   }
 
+  /** Builds the embedding runner and refreshes its local vector snapshot after indexing. */
   @Bean
   ApplicationRunner embeddingJob(
       AudiobookEmbeddingStore store,

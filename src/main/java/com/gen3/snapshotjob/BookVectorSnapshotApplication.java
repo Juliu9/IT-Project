@@ -29,6 +29,7 @@ import org.springframework.core.env.Environment;
   com.gen3.shared.audiobookcatalogue.qdrant.QdrantConfig.class
 })
 public class BookVectorSnapshotApplication {
+  /** Starts this application with the supplied command-line configuration. */
   public static void main(String[] args) {
     try (var context =
         new SpringApplicationBuilder(BookVectorSnapshotApplication.class)
@@ -39,6 +40,7 @@ public class BookVectorSnapshotApplication {
     }
   }
 
+  /** Rejects incompatible job flags and missing opt-in settings before job execution. */
   @Bean
   static BeanFactoryPostProcessor validateJob(Environment environment) {
     return factory -> {
@@ -56,6 +58,7 @@ public class BookVectorSnapshotApplication {
     };
   }
 
+  /** Builds the runner that exports existing catalogue vectors to the local snapshot. */
   @Bean
   ApplicationRunner snapshotJob(
       BookVectorSnapshot snapshot,

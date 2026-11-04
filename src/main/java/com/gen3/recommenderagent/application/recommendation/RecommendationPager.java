@@ -20,12 +20,16 @@ public class RecommendationPager {
   private final RecommendationWorkflow recommendationWorkflow;
   private final ReadHistoryExclusions readHistory;
 
+  /**
+   * Connects cached-page consumption to recommendation refills and current read-history exclusions.
+   */
   public RecommendationPager(
       RecommendationWorkflow recommendationWorkflow, ReadHistoryExclusions readHistory) {
     this.recommendationWorkflow = recommendationWorkflow;
     this.readHistory = readHistory;
   }
 
+  /** Consumes eligible cached recommendations and refills the queue when needed. */
   public List<Recommendation> page(ConversationDraft request, Session session) {
     int limit = clampOrDefault(request.getBookCount());
     request.setReadBookIds(readHistory.load(session.getUserId(), request.getRequestId()));
@@ -59,6 +63,9 @@ public class RecommendationPager {
         .toList();
   }
 
+  /**
+   * Removes queued books until the page is full, skipping read, shown, invalid, or duplicate IDs.
+   */
   private List<Recommendation> takePending(Session session, int limit, Set<String> readBookIds) {
     List<Recommendation> page = new ArrayList<>();
     Set<String> seen =

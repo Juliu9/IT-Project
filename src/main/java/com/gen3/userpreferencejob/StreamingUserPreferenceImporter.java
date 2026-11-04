@@ -29,6 +29,10 @@ public class StreamingUserPreferenceImporter {
   private final double maximumUnmappedUserRatio;
   private final boolean writeMode;
 
+  /**
+   * Configures input readers, aggregation, spill storage, limits, approval threshold, and import
+   * mode.
+   */
   public StreamingUserPreferenceImporter(
       UserFavouriteCsvReader favourites,
       UserHistoryCsvReader history,
@@ -56,10 +60,18 @@ public class StreamingUserPreferenceImporter {
     this.writeMode = "write".equals(mode);
   }
 
+  /**
+   * Prepares sorted CSV input, preflights all users, obtains approval, and writes only in write
+   * mode.
+   */
   public Result run(Path favouritesCsv, Path historyCsv) throws IOException {
     return run(favouritesCsv, historyCsv, plan -> {});
   }
 
+  /**
+   * Prepares sorted CSV input, preflights all users, obtains approval, and writes only in write
+   * mode.
+   */
   public Result run(Path favouritesCsv, Path historyCsv, Approval approval) throws IOException {
     try (var progress = new JobProgress("user.import.stream");
         var sort = new UserPreferenceExternalSort(workDirectory, maximumRows)) {
@@ -126,6 +138,9 @@ public class StreamingUserPreferenceImporter {
     }
   }
 
+  /**
+   * Checks complete sorted user groups against the configured distinct-book limit before writes.
+   */
   private Validation validate(Path path, JobProgress progress) throws IOException {
     progress.stage("validating complete user histories");
     progress.update(0, -1);
@@ -158,6 +173,7 @@ public class StreamingUserPreferenceImporter {
     return new Validation(users, records);
   }
 
+  /** Streams whole users into bounded aggregation batches for preflight or writing. */
   private UserPreferenceAggregatorService.Result aggregate(
       Path path, long totalUsers, JobProgress progress, boolean write) throws IOException {
     var batchFavourites = new ArrayList<UserFavourite>();
@@ -212,6 +228,7 @@ public class StreamingUserPreferenceImporter {
     return result;
   }
 
+  /** Writes one prepared interaction batch through the preference aggregator. */
   private UserPreferenceAggregatorService.Result save(
       java.util.List<UserFavourite> favourites, java.util.List<UserHistory> history, Instant asOf)
       throws IOException {
@@ -219,6 +236,10 @@ public class StreamingUserPreferenceImporter {
     return UserPreferenceAggregatorService.Result.empty();
   }
 
+  /**
+   * Writes unmapped user IDs to the work-directory report with owner-only permissions where
+   * supported.
+   */
   private Path writeUnmappedReport(java.util.List<String> userIds) throws IOException {
     if (userIds.isEmpty()) {
       return null;
@@ -238,6 +259,7 @@ public class StreamingUserPreferenceImporter {
     return report;
   }
 
+  /** Converts elapsed monotonic time since the supplied start into milliseconds. */
   private static long elapsedMs(long started) {
     return (System.nanoTime() - started) / 1_000_000;
   }
@@ -259,6 +281,7 @@ public class StreamingUserPreferenceImporter {
 
   @FunctionalInterface
   public interface Approval {
+    /** Approves the calculated import plan before write-mode profile updates are allowed. */
     void approve(UserPreferenceAggregatorService.Result plan) throws IOException;
   }
 }

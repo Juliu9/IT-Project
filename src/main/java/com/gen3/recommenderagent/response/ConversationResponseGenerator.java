@@ -20,10 +20,12 @@ public class ConversationResponseGenerator implements ResponseGenerator {
 
   private final AiResponseGenerator ai;
 
+  /** Connects built-in conversation wording to the book-narration generator. */
   public ConversationResponseGenerator(AiResponseGenerator ai) {
     this.ai = ai;
   }
 
+  /** {@inheritDoc} */
   @Override
   public String generate(List<Recommendation> recommendations, ConversationTurn currentRequest) {
     String response = render(recommendations, currentRequest, Integer.MAX_VALUE);
@@ -46,6 +48,9 @@ public class ConversationResponseGenerator implements ResponseGenerator {
     return ResponseBudget.limitWords(response, ResponseBudget.MAX_WORDS);
   }
 
+  /**
+   * Chooses fixed action, outcome, clarification, or AI narration wording for the completed turn.
+   */
   private String render(
       List<Recommendation> recommendations, ConversationTurn currentRequest, int labelWords) {
     // if both inputs are missing, the method returns a polite error message instead
@@ -138,6 +143,7 @@ public class ConversationResponseGenerator implements ResponseGenerator {
     return response;
   }
 
+  /** Explains unsupported recommendation counts while retaining the resolved page count. */
   private String limitNotice(ConversationTurn request) {
     if (request != null && request.isInvalidBookCount()) {
       return responseAction(request) == ConversationAction.CHANGE_COUNT
@@ -156,6 +162,7 @@ public class ConversationResponseGenerator implements ResponseGenerator {
     return "I can give up to " + MAX_BOOK_COUNT + " recommendations at a time. ";
   }
 
+  /** Formats the built-in response for a completed conversation outcome. */
   private String generateOutcomeResponse(
       ConversationOutcome outcome, ConversationTurn currentRequest) {
     return switch (outcome) {
@@ -184,6 +191,7 @@ public class ConversationResponseGenerator implements ResponseGenerator {
     };
   }
 
+  /** Formats built-in session-action responses without AI narration. */
   private String generateActionResponse(
       ConversationAction action, ConversationTurn currentRequest) {
     if (action == null) {
@@ -222,6 +230,7 @@ public class ConversationResponseGenerator implements ResponseGenerator {
     };
   }
 
+  /** Resolves the original response action when a retained turn is being replayed. */
   private static ConversationAction responseAction(ConversationTurn request) {
     if (request == null) {
       return null;
@@ -229,6 +238,7 @@ public class ConversationResponseGenerator implements ResponseGenerator {
     return request.getResponseAction() == null ? request.getIntent() : request.getResponseAction();
   }
 
+  /** Reports whether this response requires model-generated book narration. */
   private static boolean usesAi(List<Recommendation> recommendations, ConversationTurn request) {
     return request != null
         && request.getOutcome() == null
@@ -237,6 +247,7 @@ public class ConversationResponseGenerator implements ResponseGenerator {
         && !isDirectAction(responseAction(request));
   }
 
+  /** Identifies actions with built-in responses that do not require book narration. */
   private static boolean isDirectAction(ConversationAction action) {
     return switch (action) {
       case CHANGE_COUNT,
@@ -252,6 +263,7 @@ public class ConversationResponseGenerator implements ResponseGenerator {
     };
   }
 
+  /** Formats the active clarification question using retained request context. */
   private String generateQuestionResponse(
       ConversationQuestion question, ConversationTurn currentRequest, int labelWords) {
     return switch (question) {
@@ -300,12 +312,14 @@ public class ConversationResponseGenerator implements ResponseGenerator {
     };
   }
 
+  /** Reports whether the resolved request asks for older publication years. */
   private boolean olderRequest(ConversationTurn request) {
     return request.getMustInclude() != null
         && com.gen3.recommenderagent.inputparser.ConversationText.isOlderRefinement(
             request.getMustInclude().getPublicationYear());
   }
 
+  /** Builds clarification wording for unresolved recommendation selections. */
   private String explanationClarification(ConversationTurn request, int labelWords) {
     List<Recommendation> page =
         request.getRecommendations() == null ? List.of() : request.getRecommendations();
@@ -337,6 +351,7 @@ public class ConversationResponseGenerator implements ResponseGenerator {
   }
 
   // Safe node output
+  /** Builds deterministic wording when no recommendation narration is available. */
   private String generateFallbackResponse(ConversationTurn currentRequest, int labelWords) {
     if (currentRequest != null && currentRequest.isPersonalised()) {
       return "I couldn't find audiobooks matching your current search and saved preferences. "

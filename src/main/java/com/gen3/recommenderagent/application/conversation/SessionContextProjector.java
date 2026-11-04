@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 public class SessionContextProjector {
   private static final int MAX_DISPLAYED_BOOKS = 5;
 
+  /** Extracts bounded parser context from the pending question, last action, and displayed page. */
   public SessionContext project(Session session) {
     if (session == null) {
       return SessionContext.EMPTY;

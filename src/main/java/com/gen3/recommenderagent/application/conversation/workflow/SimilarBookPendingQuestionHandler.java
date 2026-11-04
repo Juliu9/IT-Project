@@ -16,17 +16,20 @@ import java.util.List;
 final class SimilarBookPendingQuestionHandler
     implements PendingQuestionHandler<PendingQuestion.SimilarBook> {
 
+  /** {@inheritDoc} */
   @Override
   public Class<PendingQuestion.SimilarBook> questionType() {
     return PendingQuestion.SimilarBook.class;
   }
 
+  /** {@inheritDoc} */
   @Override
   public boolean isContextualReply(Session session, ConversationDraft input, String reply) {
     return ConversationText.selectionReply(reply) != null
         || ConversationText.relativeSelectionReply(reply, 5) != null;
   }
 
+  /** {@inheritDoc} */
   @Override
   public ConversationDraft resolve(Session session, ConversationDraft input, String reply) {
     if (!(session.getPendingQuestion() instanceof PendingQuestion.SimilarBook pending)) {
@@ -86,6 +89,7 @@ final class SimilarBookPendingQuestionHandler
     return resumed;
   }
 
+  /** Restores the pending search with the selected reference book. */
   private AudiobookTitle select(List<AudiobookTitle> choices, String reply, Integer selection) {
     if (selection != null && selection > 0 && selection <= choices.size()) {
       return choices.get(selection - 1);
@@ -107,6 +111,7 @@ final class SimilarBookPendingQuestionHandler
     return matches.size() == 1 ? matches.getFirst() : null;
   }
 
+  /** Keeps the reference-book question active when the reply does not identify a choice. */
   private ConversationDraft unresolved(
       Session session,
       ConversationTurn pending,
@@ -137,6 +142,7 @@ final class SimilarBookPendingQuestionHandler
     return input;
   }
 
+  /** Interprets wording that supplies a different reference title. */
   private ConversationDraft anotherReference(ConversationTurn pending, ConversationDraft input) {
     var another = ClarificationResolver.restoreSearchCriteria(pending, input);
     another.setIntent(ConversationAction.RECOMMENDATION);

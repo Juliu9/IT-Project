@@ -6,5 +6,6 @@ import java.util.List;
 
 public interface ResponseGenerator {
 
+  /** Builds user-facing text from the selected recommendations and completed conversation turn. */
   String generate(List<Recommendation> recommendations, ConversationTurn currentRequest);
 }

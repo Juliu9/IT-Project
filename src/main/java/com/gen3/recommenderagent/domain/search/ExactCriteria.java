@@ -12,6 +12,7 @@ public class ExactCriteria {
   private String publicationYear;
   private String source;
 
+  /** Creates an empty instance for subsequent configuration or state restoration. */
   public ExactCriteria() {}
 
   public List<String> getAuthors() {

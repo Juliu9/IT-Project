@@ -6,8 +6,10 @@ import org.springframework.core.env.Environment;
 
 /** Explicit, small connection pool reused by history adapters; no eager database scan. */
 public final class ReadHistoryDataSource {
+  /** Prevents instantiation of this utility class. */
   private ReadHistoryDataSource() {}
 
+  /** Builds the explicit history connection pool without creating or migrating database schemas. */
   public static HikariDataSource create(Environment environment) {
     var config = new HikariConfig();
     config.setJdbcUrl(environment.getRequiredProperty("read-history.jdbc-url"));

@@ -17,6 +17,7 @@ public final class ConversationDispatcher {
       new EnumMap<>(ConversationAction.class);
   private final ClarificationResolver clarification = new ClarificationResolver();
 
+  /** Registers handlers and rejects duplicate or missing conversation-action mappings. */
   public ConversationDispatcher(Collection<ConversationHandler> handlers) {
     for (var handler : handlers) {
       for (var intent : handler.intents()) {
@@ -32,10 +33,12 @@ public final class ConversationDispatcher {
     }
   }
 
+  /** Resolves and validates an action before invalidating any cached recommendation batch. */
   public ConversationDraft begin(Session session, SessionRequest original) {
     return begin(session, original, request -> {});
   }
 
+  /** Resolves and validates an action before invalidating any cached recommendation batch. */
   public ConversationDraft begin(
       Session session, SessionRequest original, Consumer<ConversationDraft> validate) {
     var request = resolve(session, original);
@@ -50,23 +53,31 @@ public final class ConversationDispatcher {
     return request;
   }
 
+  /** Applies pending-question policy and delegates the effective action to its handler. */
   ConversationDraft resolve(Session session, SessionRequest original) {
     var input = clarification.resolve(session, original);
     return handler(input).resolve(session, input);
   }
 
+  /** Looks up the registered handler for the draft's effective intent. */
   private ConversationHandler handler(ConversationDraft request) {
     return handlers.get(request.getIntent());
   }
 
+  /** Returns the telemetry label describing how this action obtained its results. */
   public String retrievalMode(ConversationDraft request) {
     return handler(request).retrievalMode(request);
   }
 
+  /** Reports whether the resolved action requires a recommendation page. */
   public boolean needsRecommendations(ConversationDraft request) {
     return handler(request).needsRecommendations(request);
   }
 
+  /**
+   * Completes handler state, pending questions, retained search context, and the repeatable
+   * outcome.
+   */
   public void finish(Session session, ConversationDraft request, SessionRequest original) {
     var handler = handler(request);
     handler.finish(session, request, original);

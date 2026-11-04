@@ -6,8 +6,16 @@ import java.util.List;
 
 public interface Ranker {
 
+  /**
+   * Ranks eligible catalogue candidates up to the requested limit using any supplied search
+   * context.
+   */
   List<Recommendation> rank(List<AudiobookCandidate> candidates, int requestedLimit);
 
+  /**
+   * Ranks eligible catalogue candidates up to the requested limit using any supplied search
+   * context.
+   */
   List<Recommendation> rank(
       List<AudiobookCandidate> candidates, int requestedLimit, RankingContext context);
 }

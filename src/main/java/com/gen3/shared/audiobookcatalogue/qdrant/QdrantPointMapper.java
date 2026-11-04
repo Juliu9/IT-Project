@@ -85,6 +85,7 @@ public class QdrantPointMapper {
     return toRecord(point.getPayloadMap());
   }
 
+  /** Maps stored Qdrant payload fields into the shared catalogue record representation. */
   private AudiobookRecord toRecord(Map<String, Value> payload) {
     return new AudiobookRecord(
         stringValue(payload, ID),

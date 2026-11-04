@@ -121,6 +121,7 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
     return recommendations;
   }
 
+  /** Builds retrieval evidence from explicit semantics, stored taste, and any reference book. */
   private SemanticQueryVectors retrievalVectors(
       ConversationDraft request, UserPreferenceEmbedding preferences) {
     var context = request == null ? null : request.getSearchContext();
@@ -152,12 +153,14 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
     return new SemanticQueryVectors(List.of(combined), List.of());
   }
 
+  /** Adds nonempty vector evidence to the supplied collection. */
   private void addVector(List<float[]> vectors, float[] vector) {
     if (vector != null && vector.length > 0) {
       vectors.add(vector);
     }
   }
 
+  /** Loads stored user taste once per search and retains its snapshot for later pages. */
   private Optional<UserPreferenceEmbedding> userPreferences(Session session) {
     if (session == null || session.getUserId() == null || session.getUserId().isBlank()) {
       return Optional.empty();
@@ -170,6 +173,7 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
     }
   }
 
+  /** Collects book IDs already shown or excluded from the active search. */
   private Set<String> shownBooks(Session session) {
     if (session == null || session.getActiveSearch().getShownBookIds() == null) {
       return Set.of();

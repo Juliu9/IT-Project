@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Configuration;
     "'${audiobook.database:qdrant}' == 'solr' or '${audiobook.qdrant.migration.enabled:false}' == 'true'")
 public class SolrConfig {
 
+  /** Creates the Solr client using the configured endpoint and credentials. */
   @Bean
   public SolrClient solrClient(
       @Value("${solr.url}") String solrUrl,

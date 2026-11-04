@@ -26,11 +26,13 @@ public abstract class PendingQuestion {
     kind = value;
   }
 
+  /** Checks whether the question kind belongs to this persisted question subtype. */
   @JsonIgnore
   public boolean accepts(ConversationQuestion value) {
     return create(value).getClass() == getClass();
   }
 
+  /** Creates the persisted question subtype appropriate for the supplied clarification kind. */
   public static PendingQuestion create(ConversationQuestion kind) {
     PendingQuestion question =
         switch (kind) {
@@ -66,6 +68,7 @@ public abstract class PendingQuestion {
   public static final class Explanation extends PendingQuestion {
     private ExplanationSelection selection;
 
+    /** Creates an explanation question with the explanation-target clarification kind. */
     public Explanation() {
       setKind(ConversationQuestion.EXPLANATION_TARGET_CLARIFICATION);
     }

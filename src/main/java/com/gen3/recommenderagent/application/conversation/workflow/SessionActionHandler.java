@@ -8,6 +8,7 @@ import java.util.List;
 
 /** Groups simple session actions that need no retrieval or separate service. */
 public final class SessionActionHandler implements ConversationHandler {
+  /** Returns the conversation actions handled by this handler. */
   public java.util.Set<ConversationAction> intents() {
     return java.util.Set.of(
         ConversationAction.CHANGE_COUNT,
@@ -19,6 +20,7 @@ public final class SessionActionHandler implements ConversationHandler {
         ConversationAction.UNKNOWN);
   }
 
+  /** Applies session control policy without retrieving catalogue candidates. */
   public ConversationDraft resolve(Session session, ConversationDraft input) {
     if (input.getIntent() == ConversationAction.CHANGE_COUNT
         && (input.isInvalidBookCount()
@@ -30,10 +32,12 @@ public final class SessionActionHandler implements ConversationHandler {
     return input;
   }
 
+  /** Reports whether this handler retains reusable search context after completion. */
   public boolean retainsHistory() {
     return true;
   }
 
+  /** Completes session control changes after the resolved action has been validated. */
   public void finish(Session session, ConversationDraft request, SessionRequest original) {
     request.setRecommendations(List.of());
     switch (request.getIntent()) {

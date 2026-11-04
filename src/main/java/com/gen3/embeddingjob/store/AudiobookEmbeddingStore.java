@@ -8,8 +8,10 @@ import java.util.List;
 
 /** Paginates an existing catalogue and updates its vectors without replacing metadata. */
 public interface AudiobookEmbeddingStore {
+  /** Reads a bounded catalogue page eligible for the selected embedding mode. */
   Page embeddingPage(String cursor, int limit, EmbeddingMode mode) throws IOException;
 
+  /** Writes generated vectors back to their original catalogue records. */
   void updateEmbeddings(List<Update> updates) throws IOException;
 
   record Page(List<StoredAudiobook> books, String nextCursor) {}

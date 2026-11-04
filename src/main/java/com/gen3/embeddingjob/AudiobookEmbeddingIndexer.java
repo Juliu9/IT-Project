@@ -12,6 +12,7 @@ import org.springframework.ai.embedding.EmbeddingModel;
 public class AudiobookEmbeddingIndexer {
   private final EmbeddingModel model;
 
+  /** Creates the indexer with the embedding model used for catalogue text. */
   public AudiobookEmbeddingIndexer(EmbeddingModel model) {
     this.model = model;
   }

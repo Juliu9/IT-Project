@@ -13,10 +13,12 @@ import java.util.List;
 
 /** Applies profile edits without disturbing the current recommendation batch. */
 public final class PreferenceConversationHandler implements ConversationHandler {
+  /** Returns the conversation actions handled by this handler. */
   public java.util.Set<ConversationAction> intents() {
     return java.util.Set.of(ConversationAction.UPDATE_PREFERENCES);
   }
 
+  /** Calculates a saved-preference edit or asks for the missing update without retrieving books. */
   public ConversationDraft resolve(Session session, ConversationDraft effective) {
     if (!effective.getPreferenceRemovalTerms().isEmpty()) {
       var preferences =
@@ -49,6 +51,7 @@ public final class PreferenceConversationHandler implements ConversationHandler 
     return effective;
   }
 
+  /** Saves a resolved preference edit and leaves the current recommendation batch intact. */
   public void finish(Session session, ConversationDraft request, SessionRequest original) {
     boolean clarification =
         request.getPendingQuestion() == ConversationQuestion.PREFERENCE_UPDATE_CLARIFICATION;

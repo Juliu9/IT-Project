@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class RequestExceptionHandler {
 
+  /** Maps an unavailable AI provider to the API error response. */
   @ExceptionHandler(com.gen3.recommenderagent.ai.AiProviderException.class)
   public ResponseEntity<String> handleUnavailableAi(
       com.gen3.recommenderagent.ai.AiProviderException exception) {
@@ -24,6 +25,7 @@ public class RequestExceptionHandler {
             "I'm having trouble processing your request right now. Please try again in a moment.");
   }
 
+  /** Maps invalid user input to a client error with the request explanation. */
   @ExceptionHandler(InvalidRequestException.class)
   public ResponseEntity<String> handleInvalidRequest(InvalidRequestException exception) {
     return ResponseEntity.badRequest()
@@ -31,6 +33,7 @@ public class RequestExceptionHandler {
         .body(exception.getMessage());
   }
 
+  /** Maps a concurrent same-session request to the API busy response. */
   @ExceptionHandler(SessionBusyException.class)
   public ResponseEntity<String> handleBusySession(SessionBusyException exception) {
     return ResponseEntity.status(409)
@@ -39,6 +42,7 @@ public class RequestExceptionHandler {
         .body(exception.getMessage());
   }
 
+  /** Maps a rejected session commit to an error without returning uncommitted results. */
   @ExceptionHandler(SessionCommitException.class)
   public ResponseEntity<String> handleUnsafeSessionCommit(SessionCommitException exception) {
     return ResponseEntity.status(503)
@@ -46,6 +50,7 @@ public class RequestExceptionHandler {
         .body(exception.getMessage());
   }
 
+  /** Maps lost session ownership to an error rather than returning an unsafe result. */
   @ExceptionHandler(SessionLockLostException.class)
   public ResponseEntity<String> handleLostSessionLock(SessionLockLostException exception) {
     return ResponseEntity.status(503)
@@ -53,6 +58,7 @@ public class RequestExceptionHandler {
         .body(exception.getMessage());
   }
 
+  /** Maps catalogue retrieval failures to the API unavailable response. */
   @ExceptionHandler(CandidateRetrievalException.class)
   public ResponseEntity<String> handleUnavailableCandidateStore(
       CandidateRetrievalException exception) {

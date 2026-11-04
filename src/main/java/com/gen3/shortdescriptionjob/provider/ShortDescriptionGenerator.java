@@ -7,6 +7,7 @@ import java.util.Map;
 
 /** Generates summaries keyed by book ID without receiving database-specific references. */
 public interface ShortDescriptionGenerator {
+  /** Generates one summary per supplied book, keyed by its catalogue ID. */
   Map<String, String> generate(List<AudiobookRecord> books)
       throws IOException, InterruptedException;
 }

@@ -13,10 +13,12 @@ import org.springframework.stereotype.Component;
 public class SolrEmbeddingStore implements AudiobookEmbeddingStore {
   private final SolrAudiobookRepository repository;
 
+  /** Creates an embedding store backed by the configured Solr catalogue repository. */
   public SolrEmbeddingStore(SolrAudiobookRepository repository) {
     this.repository = repository;
   }
 
+  /** {@inheritDoc} */
   @Override
   public Page embeddingPage(String cursor, int limit, EmbeddingMode mode) throws IOException {
     var records =
@@ -24,6 +26,7 @@ public class SolrEmbeddingStore implements AudiobookEmbeddingStore {
     return new Page(records, records.size() < limit ? null : records.getLast().record().id());
   }
 
+  /** {@inheritDoc} */
   @Override
   public void updateEmbeddings(List<Update> updates) throws IOException {
     var versions = new java.util.HashMap<String, Long>();

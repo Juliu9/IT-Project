@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class RetrievalRelevanceScorer implements CandidateScorer {
 
+  /** {@inheritDoc} */
   @Override
   public ScoreResult score(AudiobookCandidate candidate, RankingContext context) {
     if (candidate == null

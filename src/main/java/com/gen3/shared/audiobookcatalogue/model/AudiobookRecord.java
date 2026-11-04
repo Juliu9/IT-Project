@@ -15,6 +15,7 @@ public record AudiobookRecord(
     String pubdate,
     String shortDescription) {
 
+  /** Captures catalogue metadata and normalizes its publication-date representation. */
   public AudiobookRecord {
     pubdate = PublicationDate.normalize(pubdate);
   }

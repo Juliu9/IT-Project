@@ -15,6 +15,7 @@ import org.springframework.core.env.Environment;
 @Configuration(proxyBeanMethods = false)
 public class CandidateRetrieverConfiguration {
 
+  /** Rejects incomplete backend selection and maintenance flags on the recommendation server. */
   @Bean
   static BeanFactoryPostProcessor validateDatabaseSelection(Environment environment) {
     return factory -> {
@@ -49,6 +50,7 @@ public class CandidateRetrieverConfiguration {
     };
   }
 
+  /** Builds retrieval from the configured backend's complete set of storage ports. */
   @Bean
   CandidateRetriever candidateRetriever(
       @Value("${audiobook.database:qdrant}") String backend,

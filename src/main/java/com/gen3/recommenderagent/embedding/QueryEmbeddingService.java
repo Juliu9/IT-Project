@@ -25,6 +25,7 @@ public class QueryEmbeddingService {
     this.aiOperationObserver = aiOperationObserver;
   }
 
+  /** Creates the query embedding service with the configured embedding model. */
   public QueryEmbeddingService(EmbeddingModel model) {
     this(model, AiOperationObserver.noop());
   }

@@ -9,6 +9,7 @@ public class SemanticQuery {
   private List<String> authors;
   private List<String> narrators;
 
+  /** Reports whether any criteria or preference values are present. */
   public boolean hasValues() {
     return java.util.stream.Stream.of(topics, genres, authors, narrators)
         .filter(java.util.Objects::nonNull)
@@ -16,6 +17,7 @@ public class SemanticQuery {
         .anyMatch(value -> value != null && !value.isBlank());
   }
 
+  /** Creates an empty instance for subsequent configuration or state restoration. */
   public SemanticQuery() {}
 
   public List<String> getTopics() {

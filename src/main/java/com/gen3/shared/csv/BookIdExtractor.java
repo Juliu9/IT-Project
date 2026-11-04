@@ -4,6 +4,9 @@ import java.io.IOException;
 
 public class BookIdExtractor {
 
+  /**
+   * Extracts the provider and book ID from a catalogue item reference or rejects malformed input.
+   */
   public static String extractAndNormalize(String itemField) throws IOException {
     if (itemField == null || itemField.isBlank()) {
       throw new IOException("Book item field must not be blank");

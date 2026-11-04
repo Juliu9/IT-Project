@@ -28,6 +28,7 @@ import org.springframework.core.env.Environment;
   com.gen3.migrationjob.SolrToQdrantMigrator.class
 })
 public class MigrationApplication {
+  /** Starts this application with the supplied command-line configuration. */
   public static void main(String[] args) {
     try (var context =
         new SpringApplicationBuilder(MigrationApplication.class)
@@ -38,6 +39,7 @@ public class MigrationApplication {
     }
   }
 
+  /** Rejects incompatible job flags and missing opt-in settings before job execution. */
   @Bean
   static BeanFactoryPostProcessor validateJob(Environment environment) {
     return factory -> {

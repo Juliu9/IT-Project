@@ -21,6 +21,7 @@ public class AiParser {
       new BeanOutputConverter<>(
           UserIntent.class,
           JsonMapper.builder().disable(DeserializationFeature.ACCEPT_FLOAT_AS_INT).build()) {
+        /** {@inheritDoc} */
         @Override
         protected String generateSchema() {
           var schema = (ObjectNode) getJsonMapper().readTree(super.generateSchema());
@@ -31,6 +32,7 @@ public class AiParser {
       };
 
   // Converter format guidance must allow omitted defaults, including nested criteria fields.
+  /** Marks supported omitted fields as optional in the generated request schema. */
   private static void optionalFields(JsonNode schema) {
     if (schema instanceof ObjectNode object) {
       object.remove("required");
@@ -43,6 +45,9 @@ public class AiParser {
   private final ChatClient chatClient;
   private final AiOperationObserver aiOperationObserver;
 
+  /**
+   * Creates the intent parser with the configured chat client and optional AI operation observer.
+   */
   @Autowired
   public AiParser(
       @Qualifier("inputParserChatClient") ChatClient chatClient,
@@ -51,10 +56,16 @@ public class AiParser {
     this.aiOperationObserver = aiOperationObserver;
   }
 
+  /**
+   * Creates the intent parser with the configured chat client and optional AI operation observer.
+   */
   public AiParser(ChatClient.Builder chatClientBuilder) {
     this(chatClientBuilder != null ? chatClientBuilder.build() : null, AiOperationObserver.noop());
   }
 
+  /**
+   * Extracts structured user intent using the configured chat client and optional session context.
+   */
   public UserIntent parse(String rawText) {
     return parse(rawText, SessionContext.EMPTY);
   }
@@ -186,6 +197,7 @@ public class AiParser {
     return aiResponse.entity();
   }
 
+  /** Combines the user's text with bounded session reference context for intent extraction. */
   private String userMessage(String rawText, SessionContext context) {
     if (context == null || context.isEmpty()) {
       return rawText;

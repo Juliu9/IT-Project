@@ -48,10 +48,16 @@ public class Recommendation {
   /** Required to read recommendations retained in Redis session JSON. */
   public Recommendation() {}
 
+  /**
+   * Creates a ranked book result with the supplied score, title, and optional stored description.
+   */
   public Recommendation(String bookId, Integer rank, Double score, String title) {
     this(bookId, rank, score, title, null);
   }
 
+  /**
+   * Creates a ranked book result with the supplied score, title, and optional stored description.
+   */
   public Recommendation(
       String bookId, Integer rank, Double score, String title, String shortDescription) {
     this.id = bookId;
@@ -101,6 +107,7 @@ public class Recommendation {
     this.score = score;
   }
 
+  /** Extracts usable catalogue IDs from the supplied recommendation list. */
   public static List<String> bookIds(List<Recommendation> recommendations) {
     return recommendations.stream()
         .filter(recommendation -> recommendation != null)

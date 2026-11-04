@@ -33,6 +33,9 @@ public class ConversationDraft extends SessionRequest {
     return turn;
   }
 
+  /**
+   * Snapshots the working draft into a conversation turn with copied search and preference state.
+   */
   public static ConversationTurn toTurn(ConversationDraft draft) {
     var turn = new ConversationTurn();
     turn.setSearchContext(draft.getSearchContext().copy());
@@ -60,6 +63,7 @@ public class ConversationDraft extends SessionRequest {
     return turn;
   }
 
+  /** Restores a working draft from a retained conversation snapshot. */
   public static ConversationDraft fromTurn(ConversationTurn turn) {
     var draft = new ConversationDraft();
     draft.setSearchContext(turn.getSearchContext().copy());
@@ -230,6 +234,7 @@ public class ConversationDraft extends SessionRequest {
     return searchContext.isPersonalised();
   }
 
+  /** {@inheritDoc} */
   @Override
   public boolean requiresSemanticRetrieval() {
     return isPersonalised() || searchContext.getSimilarBook() != null;

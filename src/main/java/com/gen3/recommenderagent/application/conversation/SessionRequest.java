@@ -194,6 +194,7 @@ public class SessionRequest {
     replacePreferenceFields = value;
   }
 
+  /** Reports whether this request explicitly starts or replaces a search. */
   public boolean startsNewSearch() {
     return startsNewSearch;
   }

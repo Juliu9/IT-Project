@@ -32,12 +32,14 @@ import org.springframework.core.env.Environment;
   com.gen3.shared.csv.UserHistoryCsvReader.class
 })
 public class UserPreferenceApplication {
+  /** Creates the compatible local vector snapshot used during preference imports. */
   @Bean
   com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot bookVectorSnapshot(
       Environment environment) {
     return com.gen3.snapshotjob.SnapshotConfiguration.snapshot(environment);
   }
 
+  /** Starts this application with the supplied command-line configuration. */
   public static void main(String[] args) {
     try (var context =
         new SpringApplicationBuilder(UserPreferenceApplication.class)
@@ -48,6 +50,7 @@ public class UserPreferenceApplication {
     }
   }
 
+  /** Rejects incompatible job flags and missing opt-in settings before job execution. */
   @Bean
   static BeanFactoryPostProcessor validateJob(Environment environment) {
     return factory -> {

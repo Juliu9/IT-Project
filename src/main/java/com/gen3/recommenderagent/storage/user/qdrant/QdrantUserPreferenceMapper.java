@@ -22,6 +22,7 @@ public class QdrantUserPreferenceMapper {
   public static final String FAVOURITES_VECTOR = "dense-user-favourites";
   public static final String HISTORY_VECTOR = "dense-user-history";
 
+  /** Maps the user ID and available taste vectors into a Qdrant preference point. */
   public PointStruct toPoint(UserPreferenceEmbedding embedding) {
     Map<String, io.qdrant.client.grpc.Points.Vector> vectorMap = new HashMap<>();
 
@@ -39,6 +40,7 @@ public class QdrantUserPreferenceMapper {
         .build();
   }
 
+  /** Derives a stable UUID from the exact external user ID. */
   public io.qdrant.client.grpc.Common.PointId pointId(String userId) {
     if (userId == null || userId.isBlank()) {
       throw new IllegalArgumentException("User ID must not be blank");
@@ -48,6 +50,7 @@ public class QdrantUserPreferenceMapper {
     return id(uuid);
   }
 
+  /** Reads the requested named dense vector from a retrieved preference point. */
   public float[] toVector(RetrievedPoint point, String vectorName) {
     if (point == null || !point.hasVectors()) {
       return null;
