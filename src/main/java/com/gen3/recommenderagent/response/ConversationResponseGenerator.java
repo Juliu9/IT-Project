@@ -27,7 +27,9 @@ public class ConversationResponseGenerator implements ResponseGenerator {
   @Override
   public String generate(List<Recommendation> recommendations, ConversationTurn currentRequest) {
     String response = render(recommendations, currentRequest, Integer.MAX_VALUE);
-    if (ResponseBudget.wordCount(response) <= ResponseBudget.MAX_WORDS) {
+    // Preference reports enforce their own budget so exact constraints are never cut off.
+    if (responseAction(currentRequest) == ConversationAction.EXPLAIN_PREFERENCES
+        || ResponseBudget.wordCount(response) <= ResponseBudget.MAX_WORDS) {
       return response;
     }
     if (usesAi(recommendations, currentRequest)) {

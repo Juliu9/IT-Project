@@ -7,32 +7,32 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Fixed session-preference report, bounded without splitting saved values. */
+/** Lists every exact constraint, then fits semantic preferences within the response budget. */
 final class PreferenceResponse {
+  private static final String CLOSING = " You can ask me to change any of these whenever you like.";
   private static final String OMITTED = " I left out a few more preferences to keep this brief.";
 
   private PreferenceResponse() {}
 
   static String render(ConversationTurn turn) {
+    Map<String, List<String>> constraints = new LinkedHashMap<>();
     Map<String, List<String>> fields = new LinkedHashMap<>();
+    Map<String, List<String>> tastes = new LinkedHashMap<>();
     var preferences = turn.getSessionPreferenceSnapshot();
     if (preferences != null) {
-      semantic(fields, "Preferred", preferences.getPositiveSemanticQuery());
-      semantic(fields, "Avoided", preferences.getNegativeSemanticQuery());
-      exact(fields, "Required", preferences.getMustInclude());
-      exact(fields, "Excluded", preferences.getMustNotInclude());
+      semantic(fields, tastes, "Preferred", preferences.getPositiveSemanticQuery());
+      semantic(fields, tastes, "Avoided", preferences.getNegativeSemanticQuery());
+      exact(constraints, "Required", preferences.getMustInclude());
+      exact(constraints, "Excluded", preferences.getMustNotInclude());
     }
+    fields.putAll(tastes);
     String response =
-        fields.isEmpty()
+        fields.isEmpty() && constraints.isEmpty()
             ? "You haven't saved any preferences for this session yet."
             : "Here are your preferences for this session.";
     response += " I'll give you " + turn.getBookCount() + " recommendations at a time.";
-    String complete =
-        response
-            + fields.entrySet().stream()
-                .map(
-                    field -> " " + field.getKey() + " " + String.join(", ", field.getValue()) + ".")
-                .collect(java.util.stream.Collectors.joining());
+    response += sentences(constraints);
+    String complete = response + sentences(fields) + CLOSING;
     if (ResponseBudget.wordCount(complete) <= ResponseBudget.MAX_WORDS) {
       return complete;
     }
@@ -43,24 +43,33 @@ final class PreferenceResponse {
       for (String value : field.getValue()) {
         String nextValues = values.isEmpty() ? value : values + ", " + value;
         String candidate = beforeField + prefix + nextValues + ".";
-        if (ResponseBudget.wordCount(candidate + OMITTED) > ResponseBudget.MAX_WORDS) {
-          return response + OMITTED;
+        if (ResponseBudget.wordCount(candidate + OMITTED + CLOSING) > ResponseBudget.MAX_WORDS) {
+          return response + OMITTED + CLOSING;
         }
         values = nextValues;
         response = candidate;
       }
     }
-    return response;
+    return response + CLOSING;
+  }
+
+  private static String sentences(Map<String, List<String>> fields) {
+    return fields.entrySet().stream()
+        .map(field -> " " + field.getKey() + " " + String.join(", ", field.getValue()) + ".")
+        .collect(java.util.stream.Collectors.joining());
   }
 
   private static void semantic(
-      Map<String, List<String>> fields, String label, SemanticQuery query) {
+      Map<String, List<String>> fields,
+      Map<String, List<String>> tastes,
+      String label,
+      SemanticQuery query) {
     if (query == null) {
       return;
     }
     String lead = label.equals("Preferred") ? "You enjoy" : "You'd rather avoid";
-    add(fields, lead + " genres like", query.getGenres());
-    add(fields, lead + " stories about", query.getTopics());
+    add(tastes, lead + " genres like", query.getGenres());
+    add(tastes, lead + " stories about", query.getTopics());
     add(fields, lead + " author styles like", query.getAuthors());
     add(fields, lead + " narrator styles like", query.getNarrators());
   }
@@ -70,13 +79,36 @@ final class PreferenceResponse {
     if (criteria == null) {
       return;
     }
-    String lead = label.equals("Required") ? "You want" : "You don't want";
-    add(fields, lead + " books by", criteria.getAuthors());
-    add(fields, lead + " books narrated by", criteria.getNarrators());
-    add(fields, lead + " books in", criteria.getLanguage());
-    add(fields, lead + " books that are", criteria.getDuration());
-    add(fields, lead + " books published", criteria.getPublicationYear());
-    add(fields, lead + " books from", criteria.getSource());
+    Map<String, List<String>> parts = new LinkedHashMap<>();
+    add(parts, "by", criteria.getAuthors());
+    add(parts, "narrated by", criteria.getNarrators());
+    add(parts, "in", criteria.getLanguage());
+    add(parts, "", criteria.getDuration());
+    add(parts, "published", criteria.getPublicationYear());
+    add(parts, "from", criteria.getSource());
+    var clauses =
+        parts.entrySet().stream()
+            .map(part -> (part.getKey() + " " + String.join(", ", part.getValue())).strip())
+            .toList();
+    if (!clauses.isEmpty()) {
+      boolean required = label.equals("Required");
+      add(
+          fields,
+          required ? "You want books" : "You don't want books",
+          joinClauses(clauses, required ? "and" : "or"));
+    }
+  }
+
+  private static String joinClauses(List<String> clauses, String conjunction) {
+    if (clauses.size() == 1) {
+      return clauses.getFirst();
+    }
+    String separator = clauses.size() == 2 ? " " : ", ";
+    return String.join(", ", clauses.subList(0, clauses.size() - 1))
+        + separator
+        + conjunction
+        + " "
+        + clauses.getLast();
   }
 
   private static void add(Map<String, List<String>> fields, String label, String value) {
