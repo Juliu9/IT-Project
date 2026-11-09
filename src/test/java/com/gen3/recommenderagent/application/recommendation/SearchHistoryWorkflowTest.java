@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.application.conversation.intent.MoreResultsHandler;
 import com.gen3.recommenderagent.application.conversation.intent.RecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RefineHandler;
 import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
 import com.gen3.recommenderagent.domain.search.SimilarBookReference;
@@ -62,7 +63,15 @@ class SearchHistoryWorkflowTest {
   }
 
   @Test
-  void tasteRanksMatchingBooksAfterThreeSearches() {
+  void explicitRefinementAddsToTheExistingTaste() {
+    searchForHorror(1);
+    workflow.recommend(request(RefineHandler.ACTION), session);
+
+    assertThat(history.profiles.get("user").searchCount()).isEqualTo(2);
+  }
+
+  @Test
+  void suppliesSearchTasteToRankingAfterThreeSearches() {
     searchForHorror(2);
     assertThat(lastRankingContext().searchHistoryTaste()).isNull();
 

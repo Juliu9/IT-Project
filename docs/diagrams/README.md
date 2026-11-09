@@ -6,8 +6,8 @@ These diagrams show responsibilities and execution order rather than every Java 
 
 | View | What it explains | Files |
 | --- | --- | --- |
-| System overview | Request pipeline, ordered retrieval strategies, weighted scorers, and storage adapters | [SVG](system-overview.svg) · [PlantUML](system-overview.puml) |
-| Request sequence | Session locking, saved-preference edits/reports, cached MORE, REPEAT, retrieval, and commit ordering | [SVG](recommendation-flow.svg) · [PlantUML](recommendation-flow.puml) |
+| System overview | Request pipeline, ordered retrieval strategies, weighted scorers, and storage adapters including search taste | [SVG](system-overview.svg) · [PlantUML](system-overview.puml) |
+| Request sequence | Session locking, saved-preference edits/reports, cached MORE, frozen search taste, REPEAT, retrieval, and commit ordering | [SVG](recommendation-flow.svg) · [PlantUML](recommendation-flow.puml) |
 | Maintenance jobs | Six launchers, snapshot publication, destination-bound import approval, and read-history imports | [SVG](maintenance-jobs.svg) · [PlantUML](maintenance-jobs.puml) |
 
 These are the maintained views. Class/member diagrams are omitted because they duplicate source.

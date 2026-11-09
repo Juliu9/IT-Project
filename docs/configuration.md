@@ -240,7 +240,10 @@ lookups log and continue without history exclusions, not with a claim that histo
 ### Search-history taste
 
 Optional and off by default. It reuses the Redis connection above and only runs when
-`SESSION_STORE=redis`. Nothing is stored while it is disabled.
+`SESSION_STORE=redis` with the default adapter. Disabling the feature stops recording and using
+search taste. Previously stored profiles follow their configured expiry. Set
+`RANKING_SCORING_SEARCH_HISTORY_WEIGHT=0` to omit the scorer while keeping learning and
+personalised retrieval enabled.
 
 | Property under `search-history.` | Environment variable | Default / purpose |
 | --- | --- | --- |
