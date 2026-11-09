@@ -34,8 +34,6 @@ import com.gen3.recommenderagent.ranker.Ranker;
 import com.gen3.recommenderagent.ranker.RankingContext;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
 import com.gen3.recommenderagent.response.ConversationResponseGenerator;
-import com.gen3.recommenderagent.retrieval.CandidateRetrievalService;
-import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
 import com.gen3.shared.audiobookcatalogue.model.AudiobookFilters;
@@ -78,8 +76,8 @@ class PersonalisedRecommendationFlowTest {
     QueryEmbeddingService indexer = new QueryEmbeddingService(embeddingModel);
     AudiobookRecommendationWorkflow workflow =
         new AudiobookRecommendationWorkflow(
-            new CandidateRetrievalService(
-                "qdrant", books, indexer, new AudiobookRetrievalPlanner()),
+            com.gen3.recommenderagent.testsupport.TestCandidateRetrievers.create(
+                "qdrant", books, indexer),
             ranker,
             new SemanticQueryVectorService(indexer),
             users,

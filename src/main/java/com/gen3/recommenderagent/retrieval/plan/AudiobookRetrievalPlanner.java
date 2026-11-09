@@ -39,20 +39,10 @@ public class AudiobookRetrievalPlanner {
     String keywordText = lexicalText(positive, "");
     AudiobookFilters filters = filterPolicy.filters(request, excludedBookIds);
     return new AudiobookRetrievalPlan(
-        modeFor(positive, negative, filters), keywordText, filters, Math.max(limit, 1));
-  }
-
-  /** Derives retrieval solely from searchable request content. */
-  RetrievalMode modeFor(SemanticQuery positive, SemanticQuery negative, AudiobookFilters filters) {
-    boolean hasSemantic = hasSemanticContent(positive) || hasSemanticContent(negative);
-    boolean hasFilters = filters != null && filters.hasConditions();
-    if (hasSemantic) {
-      return RetrievalMode.HYBRID;
-    }
-    if (hasFilters) {
-      return RetrievalMode.FILTER_ONLY;
-    }
-    return RetrievalMode.NONE;
+        hasSemanticContent(positive) || hasSemanticContent(negative),
+        keywordText,
+        filters,
+        Math.max(limit, 1));
   }
 
   /** Builds sparse-search input from fields intended to influence textual relevance. */

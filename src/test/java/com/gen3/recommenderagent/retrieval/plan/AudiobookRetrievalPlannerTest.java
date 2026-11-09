@@ -66,7 +66,7 @@ class AudiobookRetrievalPlannerTest {
     AudiobookRetrievalPlan plan =
         new AudiobookRetrievalPlanner().plan(50, request, Set.of("already-shown"));
 
-    assertThat(plan.mode()).isEqualTo(RetrievalMode.HYBRID);
+    assertThat(plan.hasSemanticContent()).isTrue();
     assertThat(plan.keywordText()).isEqualTo("deserts fantasy");
     assertThat(plan.filters().mustInclude().narrators()).containsExactly("Stephen Fry");
     assertThat(plan.filters().mustInclude().language()).isEqualTo("English");
@@ -80,34 +80,37 @@ class AudiobookRetrievalPlannerTest {
   }
 
   @Test
-  void choosesModeFromRequestContentRatherThanIntent() {
+  void preservesSearchEvidenceWithoutChoosingAnAlgorithm() {
     AudiobookRetrievalPlanner planner = new AudiobookRetrievalPlanner();
 
     ConversationDraft semanticOnly = new ConversationDraft();
     SemanticQuery query = new SemanticQuery();
     query.setTopics(List.of("horror"));
     semanticOnly.setPositiveSemanticQuery(query);
-    assertThat(planner.plan(10, semanticOnly, Set.of()).mode()).isEqualTo(RetrievalMode.HYBRID);
+    assertThat(planner.plan(10, semanticOnly, Set.of()).hasSemanticContent()).isTrue();
 
     ConversationDraft filterOnly = new ConversationDraft();
     ExactCriteria duration = new ExactCriteria();
     duration.setDuration("under 3 hours");
     filterOnly.setMustInclude(duration);
-    assertThat(planner.plan(10, filterOnly, Set.of()).mode()).isEqualTo(RetrievalMode.FILTER_ONLY);
+    var filterPlan = planner.plan(10, filterOnly, Set.of());
+    assertThat(filterPlan.hasSemanticContent()).isFalse();
+    assertThat(filterPlan.filters().hasConditions()).isTrue();
 
     ConversationDraft empty = new ConversationDraft();
-    assertThat(planner.plan(10, empty, Set.of()).mode()).isEqualTo(RetrievalMode.NONE);
+    var emptyPlan = planner.plan(10, empty, Set.of());
+    assertThat(emptyPlan.hasSemanticContent()).isFalse();
+    assertThat(emptyPlan.filters().hasConditions()).isFalse();
 
     ConversationDraft negativeAuthorOnly = new ConversationDraft();
     SemanticQuery negativeAuthor = new SemanticQuery();
     negativeAuthor.setAuthors(List.of("Unwanted Author"));
     negativeAuthorOnly.setNegativeSemanticQuery(negativeAuthor);
-    assertThat(planner.plan(10, negativeAuthorOnly, Set.of()).mode())
-        .isEqualTo(RetrievalMode.HYBRID);
+    assertThat(planner.plan(10, negativeAuthorOnly, Set.of()).hasSemanticContent()).isTrue();
   }
 
   @Test
-  void authorAndNarratorPreferencesSelectSemanticRetrieval() {
+  void authorAndNarratorPreferencesProvideSemanticContent() {
     for (boolean author : List.of(true, false)) {
       SemanticQuery query = new SemanticQuery();
       if (author) {
@@ -117,8 +120,8 @@ class AudiobookRetrievalPlannerTest {
       }
       ConversationDraft request = new ConversationDraft();
       request.setPositiveSemanticQuery(query);
-      assertThat(new AudiobookRetrievalPlanner().plan(50, request, Set.of()).mode())
-          .isEqualTo(RetrievalMode.HYBRID);
+      assertThat(new AudiobookRetrievalPlanner().plan(50, request, Set.of()).hasSemanticContent())
+          .isTrue();
     }
   }
 

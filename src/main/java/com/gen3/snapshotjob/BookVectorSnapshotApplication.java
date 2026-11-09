@@ -22,12 +22,7 @@ import org.springframework.core.env.Environment;
       org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoConfiguration.class,
       org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration.class
     })
-@Import({
-  SnapshotConfiguration.class,
-  com.gen3.shared.audiobookcatalogue.solr.SolrConfig.class,
-  com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository.class,
-  com.gen3.shared.audiobookcatalogue.qdrant.QdrantConfig.class
-})
+@Import(SnapshotConfiguration.class)
 public class BookVectorSnapshotApplication {
   /** Starts this application with the supplied command-line configuration. */
   public static void main(String[] args) {

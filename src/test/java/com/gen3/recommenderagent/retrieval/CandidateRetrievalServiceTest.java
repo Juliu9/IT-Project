@@ -13,7 +13,6 @@ import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.domain.search.SimilarBookReference;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectors;
-import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
 import com.gen3.shared.audiobookcatalogue.model.AudiobookCandidate;
 import com.gen3.shared.audiobookcatalogue.model.AudiobookFilterConditions;
 import com.gen3.shared.audiobookcatalogue.model.AudiobookFilters;
@@ -174,8 +173,8 @@ class CandidateRetrievalServiceTest {
       String backend,
       AudiobookCandidateSearch candidateSearch,
       QueryEmbeddingService embeddingIndexer) {
-    return new CandidateRetrievalService(
-        backend, candidateSearch, embeddingIndexer, new AudiobookRetrievalPlanner());
+    return com.gen3.recommenderagent.testsupport.TestCandidateRetrievers.create(
+        backend, candidateSearch, embeddingIndexer);
   }
 
   private ConversationDraft requestWithTopic(String topic) {

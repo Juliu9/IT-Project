@@ -14,6 +14,7 @@ import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.env.Environment;
@@ -26,11 +27,10 @@ import org.springframework.core.env.Environment;
       org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoConfiguration.class,
       org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration.class
     })
+@ComponentScan("com.gen3.embeddingjob.store")
 @Import({
   com.gen3.snapshotjob.SnapshotConfiguration.class,
   SolrConfig.class,
-  com.gen3.embeddingjob.store.SolrEmbeddingStore.class,
-  com.gen3.embeddingjob.store.QdrantEmbeddingStore.class,
   SolrAudiobookRepository.class,
   QdrantConfig.class,
   QdrantPointMapper.class,

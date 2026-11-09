@@ -108,6 +108,38 @@ class CandidateRetrieverConfigurationTest {
   }
 
   @Test
+  void discoveredStrategyCanHandleARequestWithoutFallingBack() throws Exception {
+    var strategy = mock(CandidateRetrievalStrategy.class);
+    var request = new com.gen3.recommenderagent.application.conversation.model.SessionRequest();
+    var query = new com.gen3.recommenderagent.domain.search.SemanticQuery();
+    query.setGenres(java.util.List.of("fantasy"));
+    request.setPositiveSemanticQuery(query);
+    org.mockito.Mockito.when(
+            strategy.tryRetrieve(
+                org.mockito.ArgumentMatchers.same(request),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.any()))
+        .thenReturn(java.util.Optional.of(java.util.List.of()));
+    org.mockito.Mockito.when(strategy.name()).thenReturn("PROBE");
+
+    replacement()
+        .withBean(CandidateRetrievalStrategy.class, () -> strategy)
+        .run(
+            context -> {
+              assertThat(
+                      context
+                          .getBean(CandidateRetriever.class)
+                          .getCandidates(request, null, 3, java.util.Set.of()))
+                  .isEmpty();
+              assertThat(context.getBeanProvider(CandidateRetrievalStrategy.class).orderedStream())
+                  .extracting(CandidateRetrievalStrategy::name)
+                  .containsExactly("PROBE", "SEMANTIC", "HYBRID", "KEYWORD", "FILTER_ONLY");
+              org.mockito.Mockito.verifyNoInteractions(
+                  context.getBean(AudiobookCandidateSearch.class));
+            });
+  }
+
+  @Test
   void incompleteReplacementFailsInsteadOfUsingQdrant() {
     runner
         .withPropertyValues("audiobook.database=other")

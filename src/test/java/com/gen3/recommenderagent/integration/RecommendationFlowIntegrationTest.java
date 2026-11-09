@@ -28,9 +28,7 @@ import com.gen3.recommenderagent.ranker.scorer.UserPreferenceScorer;
 import com.gen3.recommenderagent.ranker.scorer.WeightedScorer;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
 import com.gen3.recommenderagent.response.ConversationResponseGenerator;
-import com.gen3.recommenderagent.retrieval.CandidateRetrievalService;
 import com.gen3.recommenderagent.retrieval.CandidateRetriever;
-import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.testsupport.SolrContainerTestSupport;
 import com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository;
 import java.util.List;
@@ -156,8 +154,8 @@ class RecommendationFlowIntegrationTest {
     when(embeddingIndexer.embedSemanticQueries(anyList()))
         .thenReturn(List.of(new float[0], new float[0]));
     CandidateRetriever candidateRetriever =
-        new CandidateRetrievalService(
-            "solr", repository, embeddingIndexer, new AudiobookRetrievalPlanner());
+        com.gen3.recommenderagent.testsupport.TestCandidateRetrievers.create(
+            "solr", repository, embeddingIndexer);
     RankingService rankingService =
         new RankingService(
             new CompositeScorer(

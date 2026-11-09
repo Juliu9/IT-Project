@@ -20,8 +20,6 @@ import com.gen3.recommenderagent.ranker.scorer.UserPreferenceScorer;
 import com.gen3.recommenderagent.ranker.scorer.WeightedScorer;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
 import com.gen3.recommenderagent.response.ConversationResponseGenerator;
-import com.gen3.recommenderagent.retrieval.CandidateRetrievalService;
-import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.solr.SolrUserPreferenceRepository;
 import com.gen3.recommenderagent.testsupport.SolrContainerTestSupport;
@@ -148,8 +146,8 @@ class SolrBackendIntegrationTest {
                 List.of(new WeightedScorer(new UserPreferenceScorer(scoring), 1.0))));
     var workflow =
         new AudiobookRecommendationWorkflow(
-            new CandidateRetrievalService(
-                "solr", books(), embeddings, new AudiobookRetrievalPlanner()),
+            com.gen3.recommenderagent.testsupport.TestCandidateRetrievers.create(
+                "solr", books(), embeddings),
             ranking,
             new SemanticQueryVectorService(embeddings),
             users(),

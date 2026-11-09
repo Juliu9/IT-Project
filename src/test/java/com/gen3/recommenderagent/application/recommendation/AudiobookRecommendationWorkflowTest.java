@@ -37,11 +37,8 @@ class AudiobookRecommendationWorkflowTest {
     var model = mock(org.springframework.ai.embedding.EmbeddingModel.class);
     var queries = new com.gen3.recommenderagent.embedding.QueryEmbeddingService(model);
     var retriever =
-        new com.gen3.recommenderagent.retrieval.CandidateRetrievalService(
-            "test",
-            search,
-            queries,
-            new com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner());
+        com.gen3.recommenderagent.testsupport.TestCandidateRetrievers.create(
+            "test", search, queries);
     var ranker = mock(Ranker.class);
     when(ranker.rank(anyList(), eq(20), any(RankingContext.class))).thenReturn(List.of());
     var users = mock(UserPreferenceVectorRepository.class);

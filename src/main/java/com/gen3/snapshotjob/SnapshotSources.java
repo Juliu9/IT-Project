@@ -10,12 +10,13 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 /** Read-only scans of existing catalogue vectors; never generates embeddings. */
-final class SnapshotSources {
+public final class SnapshotSources {
   /** Prevents instantiation of this utility class. */
   private SnapshotSources() {}
 
   /** Creates a paginated snapshot source backed by existing Solr catalogue vectors. */
-  static CatalogueSnapshotSource solr(SolrAudiobookRepository repository, String collection) {
+  public static CatalogueSnapshotSource solr(
+      SolrAudiobookRepository repository, String collection) {
     return identified(
         "solr",
         collection,
@@ -30,7 +31,7 @@ final class SnapshotSources {
   }
 
   /** Creates a paginated snapshot source backed by existing Qdrant catalogue vectors. */
-  static CatalogueSnapshotSource qdrant(QdrantClient client, String collection) {
+  public static CatalogueSnapshotSource qdrant(QdrantClient client, String collection) {
     return identified(
         "qdrant",
         collection,
