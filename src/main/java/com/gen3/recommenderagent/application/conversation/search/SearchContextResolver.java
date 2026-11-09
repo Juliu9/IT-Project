@@ -327,8 +327,16 @@ public abstract class SearchContextResolver implements ConversationHandler {
       request.setPersonalised(true);
       return;
     }
-    if (command.matches(
-            "^(?:i want |give me |recommend |show me )?(?:a |an |some |[0-9]+ )?(?:books?|audiobooks?) (?:by|narrated by) .+")
+    var query = request.getPositiveSemanticQuery();
+    boolean personStyle =
+        query != null
+            && (ConversationRules.hasTerms(query.getAuthors())
+                || ConversationRules.hasTerms(query.getNarrators()))
+            && command.matches(".*\\bsimilar to\\b.*\\bstyle\\b.*");
+    boolean directPersonSearch =
+        command.matches(
+            "^(?:i want |give me |recommend |show me )?(?:a |an |some |[0-9]+ )?(?:books?|audiobooks?) (?:by|narrated by) .+");
+    if ((directPersonSearch || personStyle)
         && !command.matches(
             ".*\\b(?:for me|personalised|personalized|my preferences|my reading|my favourites|my favorites|my history|i would like|i'd like)\\b.*")) {
       request.setPersonalised(false);

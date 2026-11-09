@@ -56,7 +56,9 @@ public final class TestHandlers {
       com.gen3.recommenderagent.domain.session.Session session,
       com.gen3.recommenderagent.domain.conversation.ConversationTurn turn) {
     com.gen3.recommenderagent.application.conversation.ConversationHistory.retainRequest(
-        session, turn, registry().handler(turn.getIntent()).isSearchAction());
+        session,
+        turn,
+        turn.getIntent() != null && registry().handler(turn.getIntent()).isSearchAction());
   }
 
   public static com.gen3.recommenderagent.inputparser.SessionContext parserContext(

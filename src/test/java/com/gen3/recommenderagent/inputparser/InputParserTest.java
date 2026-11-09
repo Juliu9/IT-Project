@@ -458,6 +458,29 @@ class InputParserTest {
   }
 
   @Test
+  void authorStyleUsesSavedTastesOnlyWhenRequested() {
+    var ai = mock(AiParser.class);
+    var parsed = new UserIntent();
+    parsed.setIntent(RecommendationHandler.ACTION);
+    parsed.setPersonalised(true);
+    var query = new SemanticQuery();
+    query.setAuthors(List.of("Suzanne Collins"));
+    parsed.setPositiveSemanticQuery(query);
+    when(ai.parse(anyString())).thenReturn(parsed);
+    var handlers = com.gen3.recommenderagent.testsupport.TestHandlers.registry();
+    var parser = new InputParser(new CommandParser(handlers), ai, handlers);
+
+    var style = parser.parse("I want books similar to Suzanne Collins style");
+    assertEquals(false, style.isPersonalised());
+    assertEquals(List.of("Suzanne Collins"), style.getPositiveSemanticQuery().getAuthors());
+    assertEquals(
+        true,
+        parser
+            .parse("I want books similar to Suzanne Collins style based on my preferences")
+            .isPersonalised());
+  }
+
+  @Test
   void modelRecencyCriteriaNormalizeBeforeLeavingTheParser() {
     var ai = mock(AiParser.class);
     var parsed = new UserIntent();

@@ -220,7 +220,7 @@ public final class RecommendationHandler extends SearchContextResolver {
       return input;
     }
     var choices = pending.getRequest().getSimilarBookChoices();
-    if (!input.startsNewSearch() && input.getSimilarToTitle() != null) {
+    if (isReferenceTitleAnswer(input, reply)) {
       var named = anotherReference(pending.getRequest(), input);
       named.setSimilarToTitle(input.getSimilarToTitle());
       named.setSimilarToAuthor(input.getSimilarToAuthor());
@@ -349,10 +349,17 @@ public final class RecommendationHandler extends SearchContextResolver {
     }
   }
 
+  /** Recognizes a bare parsed title even when request normalization marks it as a new search. */
+  private boolean isReferenceTitleAnswer(ConversationDraft input, String reply) {
+    String title = input.getSimilarToTitle();
+    return title != null && (!input.startsNewSearch() || title.equalsIgnoreCase(reply));
+  }
+
   @Override
   public boolean isContextualReply(Session session, ConversationDraft input, String reply) {
     return session.getPendingQuestion() instanceof PendingQuestion.SimilarBook
-        && (ConversationText.selectionReply(reply) != null
+        && (isReferenceTitleAnswer(input, reply)
+            || ConversationText.selectionReply(reply) != null
             || ConversationText.relativeSelectionReply(reply, 5) != null);
   }
 

@@ -425,6 +425,49 @@ class PreferenceUpdateFlowTest {
     return sessions.getSession("session", "user").getPreferences();
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void complexPreferenceUpdateReplacesThePreferredGenreWithoutRecommending(
+      boolean genreInSearchFields) {
+    process(update(tastes("science fiction")));
+    String text =
+        "Please update my preferences to English mystery audiobooks under ten hours, and avoid horror. Do not recommend anything yet.";
+    var ai = mock(AiParser.class);
+    var parsed = new com.gen3.recommenderagent.inputparser.UserIntent();
+    parsed.setIntent(UpdatePreferencesHandler.ACTION);
+    var changes = tastes("mystery");
+    if (genreInSearchFields) {
+      parsed.setPositiveSemanticQuery(changes.getPositiveSemanticQuery());
+      changes.setPositiveSemanticQuery(null);
+    }
+    changes.setNegativeSemanticQuery(tastes("horror").getPositiveSemanticQuery());
+    var exact = new ExactCriteria();
+    exact.setLanguage("English");
+    exact.setDuration("under 10 hours");
+    changes.setMustInclude(exact);
+    parsed.setPreferenceUpdates(changes);
+    when(ai.parse(text)).thenReturn(parsed);
+    var handlers = com.gen3.recommenderagent.testsupport.TestHandlers.registry();
+    var parser = new InputParser(new CommandParser(handlers), ai, handlers);
+
+    var updated = service.process("session", "user", parser.parse(text));
+    assertThat(updated.getRecommendations()).isEmpty();
+    var explanation = service.process("session", "user", parser.parse("Explain my preferences."));
+    assertThat(saved().getPositiveSemanticQuery().getGenres()).containsExactly("mystery");
+    assertThat(explanation.getSessionPreferenceSnapshot().getPositiveSemanticQuery().getGenres())
+        .containsExactly("mystery");
+    assertThat(saved().getNegativeSemanticQuery().getGenres()).containsExactly("horror");
+    assertThat(saved().getMustInclude().getLanguage()).isEqualTo("English");
+    assertThat(saved().getMustInclude().getDuration()).isEqualTo("under 10 hours");
+    assertThat(
+            new ConversationResponseGenerator(new AiResponseGenerator(null), handlers)
+                .generate(explanation.getRecommendations(), explanation))
+        .containsIgnoringCase("mystery")
+        .containsIgnoringCase("horror")
+        .doesNotContainIgnoringCase("science fiction");
+    verifyNoInteractions(vectors, retriever, ranker, users);
+  }
+
   @Test
   void updatesAddReplaceAndRemoveOnlySpecifiedValuesWithoutSearching() {
     process(update(tastes("romance")));

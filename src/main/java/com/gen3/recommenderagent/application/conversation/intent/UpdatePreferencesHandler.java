@@ -1,5 +1,6 @@
 package com.gen3.recommenderagent.application.conversation.intent;
 
+import static com.gen3.recommenderagent.application.conversation.ConversationRules.hasTerms;
 import static com.gen3.recommenderagent.application.conversation.ConversationRules.normalizeInput;
 import static com.gen3.recommenderagent.inputparser.CommandValues.intent;
 
@@ -11,12 +12,15 @@ import com.gen3.recommenderagent.domain.conversation.ConversationAction;
 import com.gen3.recommenderagent.domain.conversation.ConversationOutcome;
 import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
+import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.LastOutcome;
 import com.gen3.recommenderagent.domain.session.PendingQuestion;
 import com.gen3.recommenderagent.domain.session.PreferenceLimitException;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.domain.session.SessionPreferences;
+import com.gen3.recommenderagent.inputparser.ConversationText;
 import com.gen3.recommenderagent.inputparser.UserIntent;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -26,6 +30,10 @@ import org.springframework.stereotype.Component;
 @Component
 @org.springframework.core.annotation.Order(10)
 public final class UpdatePreferencesHandler implements ConversationHandler {
+  private static final Pattern SET_PREFERENCES =
+      Pattern.compile("^(?:update|change|set) (?:my |the )?(?:session )?preferences to .+");
+  private static final String PREFERRED_GENRES = "positiveSemanticQuery.genres";
+
   public static final ConversationAction ACTION = ConversationAction.of("UPDATE_PREFERENCES");
   public static final ConversationOutcome PREFERENCE_LIMIT_EXCEEDED =
       ConversationOutcome.of("PREFERENCE_LIMIT_EXCEEDED");
@@ -53,7 +61,8 @@ public final class UpdatePreferencesHandler implements ConversationHandler {
       "Remember that I dislike tragic endings" -> {"intent":"UPDATE_PREFERENCES","preferenceUpdates":{"negativeSemanticQuery":{"topics":["tragic endings"]}},"preferenceRemovals":{"positiveSemanticQuery":{"topics":["tragic endings"]}}}.
       "Stop avoiding romance in my preferences" -> {"intent":"UPDATE_PREFERENCES","preferenceRemovals":{"negativeSemanticQuery":{"genres":["romance"]}}}. This removes an avoidance without adding a positive preference.
       "Remove X from my preferences" -> preferenceRemovalTerms=["X"]. "I no longer like X" also sets positivePreferenceRemovalOnly=true so negative preferences are not removed.
-      "Please update my preferences to English-language and science fiction. Do not recommend anything yet." -> {"intent":"UPDATE_PREFERENCES","preferenceUpdates":{"mustInclude":{"language":"English"},"positiveSemanticQuery":{"genres":["science fiction"]}}}.
+      "Set my preferences to English-language mystery audiobooks under ten hours, and avoid horror. Do not recommend anything yet." -> {"intent":"UPDATE_PREFERENCES","preferenceUpdates":{"mustInclude":{"language":"English","duration":"under 10 hours"},"positiveSemanticQuery":{"genres":["mystery"]},"negativeSemanticQuery":{"genres":["horror"]}},"replacePreferenceFields":["positiveSemanticQuery.genres"]}.
+      "Update/change/set my preferences to ..." replaces the stated positive genres and leaves unrelated fields untouched. "Add X to my preferences" adds X without replacing genres.
       Explicit preference replacement/clearing uses only the named replacePreferenceFields path, for example positiveSemanticQuery.genres or mustInclude.authors; clearing supplies no value. Empty edit commands leave edit fields empty so Java can ask for clarification.
       A standalone RECOMMENDATION/REFINE taste uses top-level search criteria; omit preferenceUpdates. Java may later interpret those criteria as an answer to a pending preference question.
       """;
@@ -129,6 +138,35 @@ public final class UpdatePreferencesHandler implements ConversationHandler {
       if (stated.hasValues()) {
         request.setPreferenceUpdates(stated);
       }
+    }
+    if (SET_PREFERENCES.matcher(ConversationText.normalizeCommand(rawText)).matches()) {
+      replaceStatedGenres(request);
+    }
+  }
+
+  /** Recovers misplaced genres and marks a stated preferred genre as a field replacement. */
+  private void replaceStatedGenres(SessionRequest request) {
+    var updates = request.getPreferenceUpdates();
+    if (updates == null) {
+      return;
+    }
+    var preferred = updates.getPositiveSemanticQuery();
+    if (preferred == null || !hasTerms(preferred.getGenres())) {
+      var search = request.getPositiveSemanticQuery();
+      if (search == null || !hasTerms(search.getGenres())) {
+        return;
+      }
+      var genres = new SemanticQuery();
+      genres.setGenres(search.getGenres());
+      var recovered = new SessionPreferences();
+      recovered.setPositiveSemanticQuery(genres);
+      request.setPreferenceUpdates(updates.updated(recovered, null, List.of()));
+    }
+    var fields = request.getReplacePreferenceFields();
+    var replacements = fields == null ? new ArrayList<String>() : new ArrayList<>(fields);
+    if (!replacements.contains(PREFERRED_GENRES)) {
+      replacements.add(PREFERRED_GENRES);
+      request.setReplacePreferenceFields(replacements);
     }
   }
 

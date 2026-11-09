@@ -22,7 +22,9 @@ public final class HelpHandler implements ConversationHandler {
   @Override
   public String instructions() {
     return """
-      HELP=capability, supported-request, or usage questions, including "explain how it works".
+      HELP=questions about the assistant's capabilities, supported request types, or how to use it.
+      "Could you describe what kinds of requests this service supports?" -> HELP.
+      A question about how to ask for recommendations is HELP; a request for actual books is RECOMMENDATION.
       """;
   }
 

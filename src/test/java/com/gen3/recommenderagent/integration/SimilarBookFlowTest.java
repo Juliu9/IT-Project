@@ -603,7 +603,6 @@ class SimilarBookFlowTest {
         .thenReturn(List.of(new AudiobookTitle("other", "Another Title", List.of("Writer"))));
     var reply = request(RecommendationHandler.ACTION, "Another Title");
     reply.setRawText("Another Title");
-    reply.setStartsNewSearch(false);
     var result = service.process("session", "user", reply);
     assertThat(result.getOutcome()).isNull();
     assertThat(result.getSimilarBook().bookId()).isEqualTo("other");

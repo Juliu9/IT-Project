@@ -3,6 +3,7 @@ package com.gen3.recommenderagent.inputparser;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gen3.recommenderagent.application.config.ChatClientConfiguration;
+import com.gen3.recommenderagent.application.config.ConversationConfiguration;
 import com.gen3.recommenderagent.application.conversation.intent.ExplainRecommendationHandler;
 import com.gen3.recommenderagent.application.conversation.intent.HelpHandler;
 import com.gen3.recommenderagent.application.conversation.intent.RecommendationHandler;
@@ -45,6 +46,26 @@ class LiveInputParserTest {
     assertThat(result.getPreferenceUpdates().getNegativeSemanticQuery()).isNotNull();
     assertThat(result.getPreferenceUpdates().getNegativeSemanticQuery().getGenres())
         .contains("romance");
+  }
+
+  @org.junit.jupiter.api.Test
+  void complexSetToRequestKeepsEachPreferenceEdit() {
+    var result =
+        parser.parse(
+            "Please update my preferences to English mystery audiobooks under ten hours, and avoid horror. Do not recommend anything yet.");
+    assertThat(result.getIntent()).isEqualTo(UpdatePreferencesHandler.ACTION);
+    assertThat(result.getReplacePreferenceFields()).contains("positiveSemanticQuery.genres");
+    var updates = result.getPreferenceUpdates();
+    assertThat(updates.getPositiveSemanticQuery().getGenres()).containsExactly("mystery");
+    assertThat(updates.getNegativeSemanticQuery().getGenres()).containsExactly("horror");
+    assertThat(updates.getMustInclude().getLanguage()).isEqualToIgnoringCase("English");
+    var filters =
+        new com.gen3.recommenderagent.retrieval.plan.ExactFilterPolicy()
+            .filters(
+                com.gen3.recommenderagent.application.conversation.model.PreferenceRequestMapper
+                    .toRequest(updates),
+                java.util.Set.of());
+    assertThat(filters.mustInclude().maximumDurationMinutes()).isEqualTo(599);
   }
 
   @ParameterizedTest
@@ -546,7 +567,13 @@ class LiveInputParserTest {
   @Configuration(proxyBeanMethods = false)
   @Profile("live-parser-evaluation")
   @EnableAutoConfiguration
-  @Import({ChatClientConfiguration.class, AiParser.class, InputParser.class, CommandParser.class})
+  @Import({
+    ChatClientConfiguration.class,
+    ConversationConfiguration.class,
+    AiParser.class,
+    InputParser.class,
+    CommandParser.class
+  })
   static class Config {
     @Bean
     AiOperationObserver aiOperationObserver() {
