@@ -31,13 +31,13 @@ not require Redis and run separately from the HTTP server.
 
 1. `RequestGateway` validates the text and opaque user/session IDs.
 2. `InputParser` uses an exact-command fast path or the parser model to produce a `UserIntent`.
-3. `SessionTransitionService` locks and loads the session. `IntentResolver` converts the intent into
-   an executable `SessionRequest`; `ConversationEngine` applies conversation rules.
+3. `SessionTransitionService` runs inside the session lock and calls `InputParser.toSessionRequest`.
+   `ConversationEngine` resolves the effective action, validates it, and completes the turn.
 4. When books are required, `AudiobookRecommendationWorkflow` prepares the query vector,
-   `AudiobookRetrievalPlanner` creates exact filters and a retrieval plan, and the selected database
-   adapter retrieves candidates.
-5. `RankingService` combines available retrieval relevance, stored reading-preference similarity,
-   and universal ranking rules.
+   `AudiobookRetrievalPlanner` supplies search evidence and filters. `CandidateRetrievalService`
+   dispatches to the first ordered strategy that handles the request.
+5. `RankingService` combines available weighted scoring signals. Default signals cover retrieval
+   relevance, stored reading-preference similarity, and universal ranking rules.
 6. The completed turn, active search, and queue changes commit together. Response generation then
    uses fixed wording or the response model. The response model never selects books.
 
@@ -87,9 +87,17 @@ Redis adapter and its Boot infrastructure.
 
 ### Retrieval and filtering
 
-The planner chooses semantic, keyword, or hybrid retrieval. Exact author, narrator, language,
-source, duration, and publication-year requirements remain mandatory database filters; they are
-never relaxed to fill a page. Semantic preferences influence vectors and ranking instead.
+The planner supplies semantic evidence, keyword text, exact filters, exclusions, and a result limit.
+The default strategy order is semantic, hybrid, then filter-only. Semantic retrieval handles
+personalised and reference-book requests with vector evidence. Hybrid retrieval uses the available
+semantic and keyword evidence. Both vector strategies use `KeywordRetriever` as a shared fallback
+when there is no usable combined vector. Exact filters remain mandatory and are never relaxed to
+fill a page.
+
+Add a `CandidateRetrievalStrategy` bean to extend retrieval. A strategy either declines or supplies
+the complete result, including an empty list. It must honor the plan's filters, exclusions, and
+limit. Lower order values run first, and custom strategies run before defaults unless configured
+otherwise. Add a `WeightedScorer` bean to extend ranking through the existing composite.
 
 Duration accepts hours/minutes and inclusive or strict ranges. Publication constraints use years;
 relative expressions are resolved against the current UTC year. Catalogue publication metadata is
@@ -145,9 +153,10 @@ consistent; new searches and refinements load current preferences again.
 Adding a positive semantic preference removes a matching saved negative value in the same field;
 adding a negative preference removes the matching saved positive value. This is enforced by
 `SessionPreferences`, even when the model supplies no explicit removals. Genre/topic matching
-ignores case and surrounding whitespace; person fields use the existing name normalizer. Other
-saved values are retained unless explicitly edited; exact constraints follow the filter-validation
-rules above. Removing a preference alone does not add its opposite.
+ignores case and surrounding whitespace. Person fields use the existing name normalizer. A request
+to update, change, or set preferences to a stated genre replaces the saved positive genre list.
+Other saved values are retained unless explicitly edited. Exact constraints follow the same
+filter-validation rules as search. Removing a preference alone does not add its opposite.
 
 Saved session preferences are bounded before an update commits: each value is at most 256 Java
 characters, genre and topic fields hold at most 10 values per polarity, and each author or narrator
@@ -205,9 +214,11 @@ Clear outdated development sessions or use a new session ID after changing the s
 
 ## Conversation policy
 
-`UserIntent` is parser output, not an executable command. `IntentResolver` and the registered
-conversation handlers apply session context, pending-question priority, exact-filter validation,
-and history rules inside the session transaction.
+`UserIntent` describes what the parser extracted. Inside the session transaction, the input parser
+maps it to a `SessionRequest`. `ClarificationResolver` gives registered interruptions such as
+cancellation priority when resolving a pending reply. The question's owner handles ordinary replies
+and attaches saved question context. `ConversationEngine` dispatches the effective action through
+`HandlerRegistry`.
 
 Supported intents are:
 
@@ -236,16 +247,17 @@ punctuation, and supported courtesy wording. Commands with extra criteria go to 
 The AI parser receives bounded context: the current pending question, latest action, and at most five
 displayed titles. Its structured response is validated and converted to `UserIntent`; session state
 is not changed during parsing. For `UPDATE_PREFERENCES` only, top-level preference values are copied
-into `preferenceUpdates` when that object is absent, before search-field normalization. Explicit
-nested updates take priority. The authoritative fast-path aliases live in
+into `preferenceUpdates` when that object is absent, before search-field normalization. For explicit
+set-to requests, a stated genre can also be recovered from the search fields when the nested
+update lacks it. The command fast path asks registered handlers to recognize input through
 [`CommandParser`](../src/main/java/com/gen3/recommenderagent/inputparser/CommandParser.java).
 
 To add an intent:
 
-1. extend the parser contract and validation;
-2. implement or extend a conversation handler and register it;
-3. reuse existing search, filter, paging, and history modules;
-4. add fresh-session, follow-up, failure, and replay tests.
+1. Add a Spring-discovered `ConversationHandler` that declares its action, parser guidance, and
+   any questions or outcomes it owns.
+2. Reuse existing search, filter, paging, and history modules.
+3. Add fresh-session, follow-up, failure, and replay tests.
 
 ### Explaining recommendations
 
@@ -333,7 +345,7 @@ Difficulty describes the contract and data-migration risk, not merely the number
 | Change | Difficulty | Starting points | Why / required work |
 | --- | --- | --- | --- |
 | Change an OpenAI chat model | Low | [`application.properties`](../src/main/resources/application.properties), [model configuration](configuration.md#ai-models-and-shared-vector-dimensions) | Change the role-specific model and verify structured parser output, narration, usage reporting, and fallbacks. No data migration. |
-| Replace the chat provider | Medium | [`ChatClientConfiguration`](../src/main/java/com/gen3/recommenderagent/application/ChatClientConfiguration.java), `inputparser`, `response`, `ai` | Supply both role-specific clients and preserve parser schema, retries, provider-error translation, usage telemetry, title coverage, and response fallbacks. |
+| Replace the chat provider | Medium | [`ChatClientConfiguration`](../src/main/java/com/gen3/recommenderagent/application/config/ChatClientConfiguration.java), `inputparser`, `response`, `ai` | Supply both role-specific clients and preserve parser schema, retries, provider-error translation, usage telemetry, title coverage, and response fallbacks. |
 | Change the embedding model or dimensions | High | [`application.properties`](../src/main/resources/application.properties), `embeddingjob`, database vector schemas, `snapshotjob`, `userpreferencejob` | **Requires compatible schemas, a complete catalogue reindex, a new snapshot, and regenerated user vectors.** A property-only change can mix incompatible vectors. |
 | Replace the short-description provider | Medium | [`ShortDescriptionGenerator`](../src/main/java/com/gen3/shortdescriptionjob/provider/ShortDescriptionGenerator.java), `shortdescriptionjob.provider`, provider tests | Preserve ten-book grouping, bounded concurrency, ID/response validation, word limits, retries, timeouts, and incremental writes. |
 | Add a catalogue database | High | [`shared.audiobookcatalogue.port`](../src/main/java/com/gen3/shared/audiobookcatalogue/port), backend configuration, `storage.user`, maintenance store interfaces, integration tests | Implement search modes, exact filters, title/details/vector lookup, identity and write guarantees, user preferences, and the maintenance operations the backend supports. Document schema and migration. |
@@ -383,8 +395,11 @@ flattened vector responses are not supported.
    `SnapshotIdentity` resolves these settings for both publishing and offline preference imports;
    startup rejects a source whose backend or collection differs from that identity.
 4. Implement the maintenance ports needed by the backend: `AudiobookEmbeddingStore` for embedding
-   writes and `AudiobookEnrichmentStore` for short-description updates. Register adapters in the
-   relevant launcher's composition without adding backend-specific branches to consumers.
+   writes and `AudiobookEnrichmentStore` for short-description updates. Register components in
+   `embeddingjob.store` or `shortdescriptionjob.store`. Snapshot source configuration is discovered
+   in `snapshotjob.source`, and the preference job discovers profile adapters in
+   `recommenderagent.storage.user`. For approved preference imports, configure
+   `<backend>.url` and `<backend>.user-preference-collection`.
 5. Add configuration, schema documentation, and integration coverage. Verify snapshot pagination,
    catalogue IDs and vectors, and publish/reopen compatibility through the offline reader. Include
    launcher checks that built-in backend beans are absent for a replacement backend and that an

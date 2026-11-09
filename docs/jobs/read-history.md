@@ -122,8 +122,10 @@ up to the requested number of distinct catalogue book IDs; unknown users return 
 storage failures throw `IOException`. The supplied PostgreSQL reader/pool backs off when a custom
 reader is registered. The client need not adopt the CSV importer or write interface.
 
-`ReadHistoryWriter` is the separate additive write contract. No book payload or preference-vector
-schema is changed. PostgreSQL schema ownership and database backups remain operational duties.
+`ReadHistoryWriter` is the separate additive write contract. Register a writer component in
+`com.gen3.readhistoryjob.writer` to replace the standalone importer's PostgreSQL writer. The
+default writer and its connection pool back off when a replacement is present. The import
+updates user/book pairs only.
 
 Both contracts live in `shared.readhistory.port`; PostgreSQL persistence and pool/configuration
 live in `shared.readhistory.postgres`. The launcher/importer remain in `readhistoryjob`. Both this
