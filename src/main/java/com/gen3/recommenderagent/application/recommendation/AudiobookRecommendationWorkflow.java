@@ -23,6 +23,7 @@ import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /** Runs the candidate retrieval and ranking steps shared by recommendation-producing intents. */
@@ -36,6 +37,7 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
   private final Ranker ranker;
   private final SemanticQueryVectorService semanticQueryVectorService;
   private final UserPreferenceVectorRepository userPreferenceVectorRepository;
+  private final SearchHistoryPreferences searchHistoryPreferences;
 
   /** Receives database-independent ports so handlers do not depend on storage adapters. */
   public AudiobookRecommendationWorkflow(
@@ -47,16 +49,34 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
     this.ranker = ranker;
     this.semanticQueryVectorService = semanticQueryVectorService;
     this.userPreferenceVectorRepository = userPreferenceVectorRepository;
+    // Callers that don't pass search history (like the older tests) get it switched off.
+    this.searchHistoryPreferences = new SearchHistoryPreferences(Optional.empty(), 0.2, 3);
+  }
+
+  @Autowired
+  public AudiobookRecommendationWorkflow(
+      CandidateRetriever candidateRetriever,
+      Ranker ranker,
+      SemanticQueryVectorService semanticQueryVectorService,
+      UserPreferenceVectorRepository userPreferenceVectorRepository,
+      SearchHistoryPreferences searchHistoryPreferences) {
+    this.candidateRetriever = candidateRetriever;
+    this.ranker = ranker;
+    this.semanticQueryVectorService = semanticQueryVectorService;
+    this.userPreferenceVectorRepository = userPreferenceVectorRepository;
+    this.searchHistoryPreferences = searchHistoryPreferences;
   }
 
   /** Builds retrieval text, lets the retriever select its mode, and ranks the candidates. */
   @Override
   public List<Recommendation> recommend(ConversationDraft request, Session session) {
     UserPreferenceEmbedding preferences;
+    float[] searchTaste;
     if (request != null
         && request.getIntent() == ConversationAction.MORE_RESULTS
         && request.isUserPreferencesLoaded()) {
       preferences = request.getUserPreferenceSnapshot();
+      searchTaste = request.getSearchContext().getSearchHistorySnapshot();
     } else {
       preferences =
           request != null
@@ -64,8 +84,15 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
                   && !request.isPersonalised()
               ? null
               : userPreferences(session).orElse(null);
+      searchTaste =
+          request != null
+                  && request.getSearchContext().getSimilarBook() != null
+                  && !request.isPersonalised()
+              ? null
+              : searchTaste(request, session);
       if (request != null) {
         request.setUserPreferenceSnapshot(preferences);
+        request.getSearchContext().setSearchHistorySnapshot(searchTaste);
         request.setUserPreferencesLoaded(true);
       }
     }
@@ -76,13 +103,16 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
         && request.isPersonalised()
         && request.getIntent() != ConversationAction.MORE_RESULTS
         && preferences == null
+        && searchTaste == null
         && !hasSavedPreferences
         && !answeringTasteQuestion) {
       request.setPreferenceClarificationRequired(true);
       return List.of();
     }
     SemanticQueryVectors vectors =
-        RequestTelemetry.measure("embedMs", () -> retrievalVectors(request, preferences));
+        RequestTelemetry.measure(
+            "embedMs", () -> retrievalVectors(request, preferences, searchTaste));
+    recordSearch(request, session, vectors);
     if (request != null && request.isPersonalised()) {
       boolean needsPreferences = vectors == null || vectors.isEmpty();
       request.setPreferenceClarificationRequired(needsPreferences);
@@ -107,7 +137,8 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
         "candidate.retrieval.completed durationMs={} candidateCount={}",
         (System.nanoTime() - retrievalStartedAt) / 1_000_000,
         candidates.size());
-    RankingContext rankingContext = new RankingContext(preferences, shownBookIds);
+    RankingContext rankingContext =
+        new RankingContext(preferences, shownBookIds).withSearchHistoryTaste(searchTaste);
     List<Recommendation> recommendations =
         RequestTelemetry.measure(
             "rankMs", () -> ranker.rank(candidates, RECOMMENDATION_BATCH_SIZE, rankingContext));
@@ -123,7 +154,7 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
 
   /** Builds retrieval evidence from explicit semantics, stored taste, and any reference book. */
   private SemanticQueryVectors retrievalVectors(
-      ConversationDraft request, UserPreferenceEmbedding preferences) {
+      ConversationDraft request, UserPreferenceEmbedding preferences, float[] searchTaste) {
     var context = request == null ? null : request.getSearchContext();
     var reference = context == null ? null : context.getSimilarBook();
     if (reference != null
@@ -140,10 +171,13 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
       List<float[]> tastes = new ArrayList<>();
       addVector(tastes, preferences.favouritesVector());
       addVector(tastes, preferences.historyVector());
+      addVector(tastes, searchTaste);
       // Stored taste remains one signal, independent of how many profile vectors are available.
       if (!tastes.isEmpty()) {
         positive.add(VectorMath.directionalAverage(tastes, List.of()));
       }
+    } else if (request != null && request.isPersonalised() && searchTaste != null) {
+      positive.add(searchTaste);
     }
     if (reference == null) {
       return new SemanticQueryVectors(positive, current.negative());
@@ -158,6 +192,33 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
     if (vector != null && vector.length > 0) {
       vectors.add(vector);
     }
+  }
+
+  private float[] searchTaste(ConversationDraft request, Session session) {
+    if (session == null) {
+      return null;
+    }
+    String requestId = request == null ? null : request.getRequestId();
+    return searchHistoryPreferences.load(session.getUserId(), requestId).orElse(null);
+  }
+
+  // Only fresh, explicit searches teach the taste: not "more", vague requests or "like this book".
+  private void recordSearch(
+      ConversationDraft request, Session session, SemanticQueryVectors vectors) {
+    if (request == null
+        || session == null
+        || (request.getIntent() != ConversationAction.RECOMMENDATION
+            && request.getIntent() != ConversationAction.REFINE)
+        || request.isPersonalised()
+        || request.getSearchContext().getSimilarBook() != null
+        || vectors == null
+        || vectors.positive().isEmpty()) {
+      return;
+    }
+    searchHistoryPreferences.record(
+        session.getUserId(),
+        request.getRequestId(),
+        VectorMath.directionalAverage(vectors.positive(), vectors.negative()));
   }
 
   /** Loads stored user taste once per search and retains its snapshot for later pages. */
