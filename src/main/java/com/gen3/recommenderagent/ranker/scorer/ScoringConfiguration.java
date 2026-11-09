@@ -2,6 +2,7 @@ package com.gen3.recommenderagent.ranker.scorer;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,11 +18,18 @@ public class ScoringConfiguration {
       RetrievalRelevanceScorer retrievalRelevanceScorer,
       UserPreferenceScorer userPreferenceScorer,
       UniversalRulesScorer universalRulesScorer,
-      RankingScoringProperties properties) {
+      SearchHistoryScorer searchHistoryScorer,
+      RankingScoringProperties properties,
+      @Value("${ranking.scoring.search-history-weight:0.5}") double searchHistoryWeight) {
+    if (!Double.isFinite(searchHistoryWeight) || searchHistoryWeight < 0.0) {
+      throw new IllegalArgumentException("search-history-weight must be finite and nonnegative");
+    }
     List<WeightedScorer> scorers = new ArrayList<>();
     add(scorers, retrievalRelevanceScorer, properties.retrievalRelevanceWeight());
     add(scorers, userPreferenceScorer, properties.userPreferenceWeight());
     add(scorers, universalRulesScorer, properties.universalRulesWeight());
+    // Only scores when a search taste was loaded, so it changes nothing while the feature is off.
+    add(scorers, searchHistoryScorer, searchHistoryWeight);
     return new CompositeScorer(scorers);
   }
 
