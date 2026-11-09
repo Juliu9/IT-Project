@@ -21,7 +21,7 @@ import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 class ReadHistoryPostgresIntegrationTest {
   @Container
   static GenericContainer<?> qdrant =
