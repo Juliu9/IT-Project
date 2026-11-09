@@ -1,6 +1,6 @@
 package com.gen3.recommenderagent.retrieval;
 
-import com.gen3.recommenderagent.application.conversation.SessionRequest;
+import com.gen3.recommenderagent.application.conversation.model.SessionRequest;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectors;
 import com.gen3.recommenderagent.observability.RequestTelemetry;

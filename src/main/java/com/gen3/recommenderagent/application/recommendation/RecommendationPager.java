@@ -3,7 +3,7 @@ package com.gen3.recommenderagent.application.recommendation;
 import static com.gen3.recommenderagent.domain.recommendation.Recommendation.bookIds;
 import static com.gen3.recommenderagent.domain.recommendation.RecommendationPolicy.clampOrDefault;
 
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.observability.RequestTelemetry;

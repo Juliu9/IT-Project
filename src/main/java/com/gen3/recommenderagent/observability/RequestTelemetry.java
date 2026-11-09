@@ -1,7 +1,7 @@
 package com.gen3.recommenderagent.observability;
 
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
-import com.gen3.recommenderagent.application.conversation.SessionRequest;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
+import com.gen3.recommenderagent.application.conversation.model.SessionRequest;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import java.time.Duration;
 import java.time.Instant;

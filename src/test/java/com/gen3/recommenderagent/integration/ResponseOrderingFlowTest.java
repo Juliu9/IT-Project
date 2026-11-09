@@ -4,9 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.gen3.recommenderagent.api.RequestGateway;
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
-import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.application.conversation.intent.MoreResultsHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.storage.session.SessionBusyException;
@@ -25,7 +26,7 @@ class ResponseOrderingFlowTest {
     session.setSessionId("session");
     session.setUserId("user");
     var search = new ConversationDraft();
-    search.setIntent(ConversationAction.RECOMMENDATION);
+    search.setIntent(RecommendationHandler.ACTION);
     search.setRecommendations(List.of());
     session.getActiveSearch().setSearch(ConversationDraft.toTurn(search));
     session
@@ -55,7 +56,7 @@ class ResponseOrderingFlowTest {
             invocation -> {
               String raw = invocation.getArgument(0);
               var intent = new com.gen3.recommenderagent.inputparser.UserIntent();
-              intent.setIntent(ConversationAction.MORE_RESULTS);
+              intent.setIntent(MoreResultsHandler.ACTION);
               return intent;
             });
     var gateway =

@@ -5,7 +5,7 @@ import java.util.regex.Pattern;
 
 /** Shared courtesy normalization for complete commands and short selection replies. */
 public final class ConversationText {
-  static final String GENRE_PATTERN =
+  public static final String GENRE_PATTERN =
       "romance|horror|fantasy|mystery|crime|comedy|science fiction|thrillers?";
 
   private static final Pattern SELECTION_REPLY =

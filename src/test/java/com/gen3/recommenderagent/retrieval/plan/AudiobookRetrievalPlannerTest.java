@@ -2,7 +2,7 @@ package com.gen3.recommenderagent.retrieval.plan;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.shared.audiobookcatalogue.model.AudiobookFilterConditions;

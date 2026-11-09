@@ -9,8 +9,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.application.conversation.intent.HelpHandler;
+import com.gen3.recommenderagent.application.conversation.intent.MoreResultsHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RecommendationHandler;
+import com.gen3.recommenderagent.application.session.SessionTransitionService;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.inputparser.AiParser;
 import com.gen3.recommenderagent.inputparser.CommandParser;
@@ -43,11 +45,12 @@ class RequestGatewayTest {
     var client = mock(org.springframework.ai.chat.client.ChatClient.class);
     var parser =
         new InputParser(
-            new CommandParser(),
-            new AiParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
+            new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     var completed = new ConversationTurn();
-    completed.setIntent(ConversationAction.HELP);
+    completed.setIntent(HelpHandler.ACTION);
     when(sessionTransitionService.process(
             org.mockito.ArgumentMatchers.eq("session"),
             org.mockito.ArgumentMatchers.eq("user"),
@@ -88,7 +91,7 @@ class RequestGatewayTest {
   @Test
   void standardApiDoesNotBuildOrCollectDemoMetrics() throws Exception {
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.MORE_RESULTS);
+    parsed.setIntent(MoreResultsHandler.ACTION);
     var completed = new ConversationTurn();
     when(inputParser.parseUserIntent(
             org.mockito.ArgumentMatchers.eq("more"),
@@ -152,11 +155,11 @@ class RequestGatewayTest {
   @Test
   void demoUsesTheExistingPipelineAndReturnsResolvedDetailsWithMetrics() throws Exception {
     UserIntent parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.MORE_RESULTS);
+    parsed.setIntent(MoreResultsHandler.ACTION);
     ConversationTurn resolved = new ConversationTurn();
     resolved.setRequestId("request-1");
     resolved.setPersonalised(true);
-    resolved.setIntent(ConversationAction.MORE_RESULTS);
+    resolved.setIntent(MoreResultsHandler.ACTION);
     when(inputParser.parseUserIntent(
             org.mockito.ArgumentMatchers.eq("more"),
             org.mockito.ArgumentMatchers
@@ -262,7 +265,11 @@ class RequestGatewayTest {
   void aiPathLoadsContextAndPassesTheSameIntentAndRawTextToTheTransition(boolean demo) {
     String rawText = "Find something like the Tolkien book you showed me";
     var ai = mock(AiParser.class);
-    var parser = new InputParser(new CommandParser(), ai);
+    var parser =
+        new InputParser(
+            new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+            ai,
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     var context =
         new com.gen3.recommenderagent.inputparser.SessionContext(
             null,
@@ -272,11 +279,11 @@ class RequestGatewayTest {
                     1, "The Hobbit")));
     when(sessionTransitionService.parserContext("session", "user")).thenReturn(context);
     var intent = new UserIntent();
-    intent.setIntent(ConversationAction.RECOMMENDATION);
+    intent.setIntent(RecommendationHandler.ACTION);
     intent.setSimilarToTitle("The Hobbit");
     when(ai.parse(rawText, context)).thenReturn(intent);
     var completed = new ConversationTurn();
-    completed.setIntent(ConversationAction.RECOMMENDATION);
+    completed.setIntent(RecommendationHandler.ACTION);
     when(sessionTransitionService.process(
             org.mockito.ArgumentMatchers.eq("session"),
             org.mockito.ArgumentMatchers.eq("user"),
@@ -368,7 +375,7 @@ class RequestGatewayTest {
                     "I'm having trouble processing your request right now. Please try again in a moment."));
     org.mockito.Mockito.reset(inputParser);
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    parsed.setIntent(RecommendationHandler.ACTION);
     when(inputParser.parseUserIntent(
             org.mockito.ArgumentMatchers.eq("fantasy"),
             org.mockito.ArgumentMatchers
@@ -404,9 +411,10 @@ class RequestGatewayTest {
     var model = mock(org.springframework.ai.chat.client.ChatClient.class);
     var realParser =
         new InputParser(
-            new CommandParser(),
-            new AiParser(
-                model, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
+            new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                model, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     RequestGateway gateway =
         new RequestGateway(realParser, sessionTransitionService, responseGenerator, telemetry);
     MockMvc mockMvc =
@@ -439,7 +447,7 @@ class RequestGatewayTest {
       strings = {"/api/v1/recommendations", "/api/v1/recommendations/demo"})
   void returnsServiceUnavailableWhenCandidateRetrievalFails(String endpoint) throws Exception {
     UserIntent parsedRequest = new UserIntent();
-    parsedRequest.setIntent(ConversationAction.RECOMMENDATION);
+    parsedRequest.setIntent(RecommendationHandler.ACTION);
     when(inputParser.parseUserIntent(
             org.mockito.ArgumentMatchers.eq("recommend science fiction"),
             org.mockito.ArgumentMatchers
@@ -483,7 +491,7 @@ class RequestGatewayTest {
       strings = {"/api/v1/recommendations", "/api/v1/recommendations/demo"})
   void returnsRetryAdviceWhenTheSessionIsBusy(String endpoint) throws Exception {
     UserIntent parsedRequest = new UserIntent();
-    parsedRequest.setIntent(ConversationAction.RECOMMENDATION);
+    parsedRequest.setIntent(RecommendationHandler.ACTION);
     when(inputParser.parseUserIntent(
             org.mockito.ArgumentMatchers.eq("recommend science fiction"),
             org.mockito.ArgumentMatchers
@@ -524,7 +532,7 @@ class RequestGatewayTest {
       strings = {"/api/v1/recommendations", "/api/v1/recommendations/demo"})
   void returnsServiceUnavailableWhenTheSessionCommitFails(String endpoint) throws Exception {
     UserIntent parsedRequest = new UserIntent();
-    parsedRequest.setIntent(ConversationAction.RECOMMENDATION);
+    parsedRequest.setIntent(RecommendationHandler.ACTION);
     when(inputParser.parseUserIntent(
             org.mockito.ArgumentMatchers.eq("recommend science fiction"),
             org.mockito.ArgumentMatchers

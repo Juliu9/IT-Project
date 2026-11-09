@@ -51,7 +51,10 @@ class SinglePersonFlowTest {
     var responses = mock(ResponseGenerator.class);
     var gateway =
         new RequestGateway(
-            new InputParser(new CommandParser(), ai),
+            new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                ai,
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
             ConversationTestSupport.transitions(sessions, workflow),
             responses);
     var mvc =

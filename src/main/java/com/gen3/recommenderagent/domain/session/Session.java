@@ -63,9 +63,9 @@ public class Session {
         : null;
   }
 
-  public void setPendingExplanation(ExplanationSelection value) {
+  public void setPendingExplanation(ConversationQuestion kind, ExplanationSelection value) {
     if (value != null) {
-      var question = new PendingQuestion.Explanation();
+      var question = (PendingQuestion.Explanation) PendingQuestion.create(kind);
       question.setSelection(value);
       pendingQuestion = question;
     } else if (pendingQuestion instanceof PendingQuestion.Explanation question) {
@@ -83,7 +83,8 @@ public class Session {
 
   @JsonIgnore
   public boolean isAwaitingPreferenceUpdate() {
-    return getPendingQuestionKind() == ConversationQuestion.PREFERENCE_UPDATE_CLARIFICATION;
+    return getPendingQuestionKind() != null
+        && getPendingQuestionKind().context() == ConversationQuestion.Context.PREFERENCE_UPDATE;
   }
 
   private Integer bookCount = MAX_BOOK_COUNT;
@@ -109,7 +110,8 @@ public class Session {
 
   @JsonIgnore
   public boolean isAwaitingPersonalisedPreferences() {
-    return getPendingQuestionKind() == ConversationQuestion.PREFERENCE_CLARIFICATION;
+    return getPendingQuestionKind() != null
+        && getPendingQuestionKind().context() == ConversationQuestion.Context.PREFERENCE;
   }
 
   @JsonIgnore

@@ -11,10 +11,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.gen3.recommenderagent.api.RequestGateway;
-import com.gen3.recommenderagent.application.SessionTransitionService;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.conversation.intent.RecommendationHandler;
 import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendationWorkflow;
-import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.application.session.SessionTransitionService;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
@@ -171,7 +171,8 @@ class RecommendationFlowIntegrationTest {
             candidateRetriever,
             rankingService,
             new SemanticQueryVectorService(embeddingIndexer),
-            userPreferences);
+            userPreferences,
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     SessionTransitionService applicationService =
         ConversationTestSupport.transitions(sessionRepository, workflow);
 
@@ -179,7 +180,9 @@ class RecommendationFlowIntegrationTest {
         new RequestGateway(
             inputParser,
             applicationService,
-            new ConversationResponseGenerator(new AiResponseGenerator(null)));
+            new ConversationResponseGenerator(
+                new AiResponseGenerator(null),
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry()));
 
     return MockMvcBuilders.standaloneSetup(gateway).build();
   }
@@ -198,7 +201,7 @@ class RecommendationFlowIntegrationTest {
     semanticQuery.setGenres(List.of("science fiction"));
 
     UserIntent request = new UserIntent();
-    request.setIntent(ConversationAction.RECOMMENDATION);
+    request.setIntent(RecommendationHandler.ACTION);
     request.setPositiveSemanticQuery(semanticQuery);
     request.setBookCount(java.math.BigInteger.valueOf(3));
     return request;

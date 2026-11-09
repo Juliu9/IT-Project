@@ -6,8 +6,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
-import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.application.conversation.intent.RecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -66,7 +66,7 @@ class RequestTelemetryTest {
   void logsTheCompleteRequestSummary() {
     ConversationDraft request = new ConversationDraft();
     request.setRequestId("request-1");
-    request.setIntent(ConversationAction.RECOMMENDATION);
+    request.setIntent(RecommendationHandler.ACTION);
 
     telemetry.start();
     RequestTelemetry.measure("parseMs", () -> request);

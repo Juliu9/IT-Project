@@ -10,12 +10,18 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.conversation.intent.ClearHistoryHandler;
+import com.gen3.recommenderagent.application.conversation.intent.HelpHandler;
+import com.gen3.recommenderagent.application.conversation.intent.MoreResultsHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RefineHandler;
+import com.gen3.recommenderagent.application.conversation.intent.UnknownHandler;
+import com.gen3.recommenderagent.application.conversation.intent.UpdatePreferencesHandler;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendationWorkflow;
+import com.gen3.recommenderagent.application.session.SessionTransitionService;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
@@ -56,7 +62,9 @@ class PersonalisedRecommendationFlowTest {
   private final RecommendationFlowTestSupport.InMemorySessionRepository sessions =
       new RecommendationFlowTestSupport.InMemorySessionRepository();
   private final ConversationResponseGenerator responseGenerator =
-      new ConversationResponseGenerator(new AiResponseGenerator(null));
+      new ConversationResponseGenerator(
+          new AiResponseGenerator(null),
+          com.gen3.recommenderagent.testsupport.TestHandlers.registry());
   private final SessionTransitionService application;
 
   PersonalisedRecommendationFlowTest() throws Exception {
@@ -74,7 +82,8 @@ class PersonalisedRecommendationFlowTest {
                 "qdrant", books, indexer, new AudiobookRetrievalPlanner()),
             ranker,
             new SemanticQueryVectorService(indexer),
-            users);
+            users,
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     application = ConversationTestSupport.transitions(sessions, workflow);
   }
 
@@ -83,7 +92,7 @@ class PersonalisedRecommendationFlowTest {
       strings = {"Recommend an audiobook", "Recommend an audiobook for me", "give me some books"})
   void genericRequestForNewUserAsksForTasteWithoutSearching(String text) {
     var request = new ConversationDraft();
-    request.setIntent(ConversationAction.RECOMMENDATION);
+    request.setIntent(RecommendationHandler.ACTION);
     request.setRawText(text);
     var result = process(request);
     assertThat(result.isPersonalised()).isTrue();
@@ -118,7 +127,7 @@ class PersonalisedRecommendationFlowTest {
         .isEqualTo("What genres do you like?");
     verifyNoInteractions(books, embeddingModel, ranker);
     var answer = new ConversationDraft();
-    answer.setIntent(ConversationAction.REFINE);
+    answer.setIntent(RefineHandler.ACTION);
     var taste = new SemanticQuery();
     taste.setGenres(List.of("adventure"));
     answer.setPositiveSemanticQuery(taste);
@@ -139,14 +148,17 @@ class PersonalisedRecommendationFlowTest {
     assertThat(process(personalisedRequest()).isPreferenceClarificationRequired()).isTrue();
     var ai = mock(com.gen3.recommenderagent.inputparser.AiParser.class);
     var parsed = new com.gen3.recommenderagent.inputparser.UserIntent();
-    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    parsed.setIntent(RecommendationHandler.ACTION);
     var query = new SemanticQuery();
     query.setGenres(List.of("horror"));
     parsed.setPositiveSemanticQuery(query);
     when(ai.parse("horror")).thenReturn(parsed);
     var parser =
         new com.gen3.recommenderagent.inputparser.InputParser(
-            new com.gen3.recommenderagent.inputparser.CommandParser(), ai);
+            new com.gen3.recommenderagent.inputparser.CommandParser(
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+            ai,
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     var result = application.process("session", "user", parser.parse("horror"));
     assertThat(result.getRecommendations()).hasSize(1);
     assertThat(result.isPreferenceClarificationRequired()).isFalse();
@@ -173,7 +185,7 @@ class PersonalisedRecommendationFlowTest {
         .thenReturn(
             Optional.of(new UserPreferenceEmbedding("user", new float[] {1, 0}, new float[0])));
     var request = new ConversationDraft();
-    request.setIntent(ConversationAction.RECOMMENDATION);
+    request.setIntent(RecommendationHandler.ACTION);
     request.setRawText("Recommend an audiobook");
     var result = process(request);
     assertThat(result.isPersonalised()).isTrue();
@@ -187,7 +199,7 @@ class PersonalisedRecommendationFlowTest {
       strings = {"CANCEL", "RESET_PREFERENCES", "no", "not now", "keep my preferences"})
   void abandoningANewTasteQuestionKeepsThePreviousSearchAndCachedBatch(String action) {
     var search = new ConversationDraft();
-    search.setIntent(ConversationAction.RECOMMENDATION);
+    search.setIntent(RecommendationHandler.ACTION);
     var genre = new SemanticQuery();
     genre.setGenres(List.of("fantasy"));
     search.setPositiveSemanticQuery(genre);
@@ -205,12 +217,12 @@ class PersonalisedRecommendationFlowTest {
     cancel.setIntent(
         action.equals("CANCEL") || action.equals("RESET_PREFERENCES")
             ? ConversationAction.valueOf(action)
-            : ConversationAction.UNKNOWN);
+            : UnknownHandler.ACTION);
     cancel.setRawText(action);
     process(cancel);
     org.mockito.Mockito.clearInvocations(books, embeddingModel, ranker);
     var more = new ConversationDraft();
-    more.setIntent(ConversationAction.MORE_RESULTS);
+    more.setIntent(MoreResultsHandler.ACTION);
     more.setBookCount(1);
     var result = process(more);
     assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");
@@ -231,7 +243,7 @@ class PersonalisedRecommendationFlowTest {
     request.setMustInclude(include);
     assertThat(process(request).isPreferenceClarificationRequired()).isTrue();
     var reply = new ConversationDraft();
-    reply.setIntent(ConversationAction.RECOMMENDATION);
+    reply.setIntent(RecommendationHandler.ACTION);
     reply.setRawText(genre);
     var query = new SemanticQuery();
     query.setGenres(List.of(genre));
@@ -257,7 +269,7 @@ class PersonalisedRecommendationFlowTest {
     session.setPreferences(saved);
     sessions.updateSession(session);
     var update = new ConversationDraft();
-    update.setIntent(ConversationAction.UPDATE_PREFERENCES);
+    update.setIntent(UpdatePreferencesHandler.ACTION);
     var changes = new SessionPreferences();
     var author = new ExactCriteria();
     author.setAuthors(List.of("jk rowling"));
@@ -274,7 +286,7 @@ class PersonalisedRecommendationFlowTest {
   void cancellationSurvivesSessionReloadAndDoesNotRestartThePreferenceQuestion() {
     process(personalisedRequest());
     var cancel = new ConversationDraft();
-    cancel.setIntent(ConversationAction.UNKNOWN);
+    cancel.setIntent(UnknownHandler.ACTION);
     cancel.setRawText("never mind");
     var result = process(cancel);
     assertThat(result.getOutcome()).isNull();
@@ -283,8 +295,8 @@ class PersonalisedRecommendationFlowTest {
     assertThat(sessions.getSession("session", "user").isAwaitingPersonalisedPreferences())
         .isFalse();
     var unknown = new ConversationDraft();
-    unknown.setIntent(ConversationAction.UNKNOWN);
-    assertThat(process(unknown).getIntent()).isEqualTo(ConversationAction.UNKNOWN);
+    unknown.setIntent(UnknownHandler.ACTION);
+    assertThat(process(unknown).getIntent()).isEqualTo(UnknownHandler.ACTION);
     verifyNoInteractions(books, embeddingModel, ranker);
   }
 
@@ -363,7 +375,7 @@ class PersonalisedRecommendationFlowTest {
             mapper.writeValueAsString(sessions.getSession("session", "user")), Session.class);
     sessions.updateSession(restored);
     ConversationDraft answer = new ConversationDraft();
-    answer.setIntent(ConversationAction.REFINE);
+    answer.setIntent(RefineHandler.ACTION);
     SemanticQuery taste = new SemanticQuery();
     taste.setGenres(List.of("fantasy"));
     taste.setAuthors(List.of("Ursula Le Guin"));
@@ -371,7 +383,7 @@ class PersonalisedRecommendationFlowTest {
 
     ConversationTurn result = process(answer);
 
-    assertThat(result.getIntent()).isEqualTo(ConversationAction.RECOMMENDATION);
+    assertThat(result.getIntent()).isEqualTo(RecommendationHandler.ACTION);
     assertThat(result.getRecommendations()).hasSize(1);
     restored = sessions.getSession("session", "user");
     assertThat(restored.isAwaitingPersonalisedPreferences()).isFalse();
@@ -391,13 +403,13 @@ class PersonalisedRecommendationFlowTest {
     session.getPreferences().setPositiveSemanticQuery(earlier);
     ConversationDraft pending = personalisedRequest();
     pending.setPreferenceClarificationRequired(true);
-    session.setPendingQuestionKind(ConversationQuestion.PREFERENCE_CLARIFICATION);
+    session.setPendingQuestionKind(RecommendationHandler.PREFERENCE_CLARIFICATION);
     ((com.gen3.recommenderagent.domain.session.PendingQuestion.Preference)
             session.getPendingQuestion())
         .setRequest(ConversationDraft.toTurn(pending));
     sessions.updateSession(session);
     ConversationDraft answer = new ConversationDraft();
-    answer.setIntent(ConversationAction.REFINE);
+    answer.setIntent(RefineHandler.ACTION);
     SemanticQuery taste = new SemanticQuery();
     taste.setAuthors(List.of("Ursula Le Guin"));
     answer.setPositiveSemanticQuery(taste);
@@ -409,7 +421,7 @@ class PersonalisedRecommendationFlowTest {
     assertThat(session.getPreferences().getPositiveSemanticQuery().getAuthors())
         .containsExactly("Ursula Le Guin");
     ConversationDraft more = new ConversationDraft();
-    more.setIntent(ConversationAction.MORE_RESULTS);
+    more.setIntent(MoreResultsHandler.ACTION);
     assertThat(process(more).isPersonalised()).isTrue();
   }
 
@@ -443,11 +455,11 @@ class PersonalisedRecommendationFlowTest {
   void unrelatedHelpKeepsPendingAndClearHistoryCancelsIt() {
     process(personalisedRequest());
     ConversationDraft help = new ConversationDraft();
-    help.setIntent(ConversationAction.HELP);
-    assertThat(process(help).getIntent()).isEqualTo(ConversationAction.HELP);
+    help.setIntent(HelpHandler.ACTION);
+    assertThat(process(help).getIntent()).isEqualTo(HelpHandler.ACTION);
     assertThat(sessions.getSession("session", "user").isAwaitingPersonalisedPreferences()).isTrue();
     ConversationDraft clear = new ConversationDraft();
-    clear.setIntent(ConversationAction.CLEAR_HISTORY);
+    clear.setIntent(ClearHistoryHandler.ACTION);
     process(clear);
     assertThat(sessions.getSession("session", "user").isAwaitingPersonalisedPreferences())
         .isFalse();
@@ -511,7 +523,7 @@ class PersonalisedRecommendationFlowTest {
         mapper.readValue(
             mapper.writeValueAsString(sessions.getSession("session", "user")), Session.class));
     var answer = new ConversationDraft();
-    answer.setIntent(ConversationAction.RECOMMENDATION);
+    answer.setIntent(RecommendationHandler.ACTION);
     var taste = new SemanticQuery();
     taste.setGenres(List.of("fantasy"));
     answer.setPositiveSemanticQuery(taste);
@@ -537,7 +549,7 @@ class PersonalisedRecommendationFlowTest {
     request.setMustInclude(include);
     process(request);
     var answer = new ConversationDraft();
-    answer.setIntent(ConversationAction.RECOMMENDATION);
+    answer.setIntent(RecommendationHandler.ACTION);
     answer.setStartsNewSearch(true);
     var taste = new SemanticQuery();
     taste.setGenres(List.of("horror"));
@@ -580,7 +592,7 @@ class PersonalisedRecommendationFlowTest {
     request.setMustInclude(include);
     process(request);
     var answer = new ConversationDraft();
-    answer.setIntent(ConversationAction.RECOMMENDATION);
+    answer.setIntent(RecommendationHandler.ACTION);
     var taste = new SemanticQuery();
     taste.setGenres(List.of("fantasy"));
     answer.setPositiveSemanticQuery(taste);
@@ -611,7 +623,7 @@ class PersonalisedRecommendationFlowTest {
     request.setMustInclude(include);
     process(request);
     var answer = new ConversationDraft();
-    answer.setIntent(ConversationAction.RECOMMENDATION);
+    answer.setIntent(RecommendationHandler.ACTION);
     var taste = new SemanticQuery();
     taste.setGenres(List.of("fantasy"));
     answer.setPositiveSemanticQuery(taste);
@@ -633,7 +645,7 @@ class PersonalisedRecommendationFlowTest {
 
   private ConversationDraft personalisedRequest() {
     ConversationDraft request = new ConversationDraft();
-    request.setIntent(ConversationAction.RECOMMENDATION);
+    request.setIntent(RecommendationHandler.ACTION);
     request.setPersonalised(true);
     request.setRawText("Give me books I would like");
     return request;

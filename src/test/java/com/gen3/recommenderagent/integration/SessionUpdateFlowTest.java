@@ -10,8 +10,8 @@ import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.api.RequestGateway;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.conversation.intent.RecommendationHandler;
 import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
-import com.gen3.recommenderagent.domain.conversation.ConversationAction;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.inputparser.UserIntent;
@@ -28,7 +28,7 @@ class SessionUpdateFlowTest {
     var sessions = new RecommendationFlowTestSupport.InMemorySessionRepository();
     InputParser parser = mock(InputParser.class);
     UserIntent request = new UserIntent();
-    request.setIntent(ConversationAction.RECOMMENDATION);
+    request.setIntent(RecommendationHandler.ACTION);
     when(parser.parseUserIntent(
             org.mockito.ArgumentMatchers.eq("recommend a book"),
             org.mockito.ArgumentMatchers
