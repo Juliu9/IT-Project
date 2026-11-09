@@ -96,7 +96,8 @@ curl -X POST http://localhost:8080/api/v1/recommendations \
 Reuse both IDs for follow-ups such as “more”, “explain”, or “repeat the recommendations”. Ask
 “show my preferences” to view saved session settings without changing the current search. The
 [architecture guide](docs/architecture.md#personalisation) explains how saved preferences affect
-recommendations and how preference updates are validated.
+recommendations and how preference updates are validated. To learn taste from prior searches, enable
+[optional search history](docs/configuration.md#search-history-taste) with Redis sessions.
 
 ## Verification commands
 

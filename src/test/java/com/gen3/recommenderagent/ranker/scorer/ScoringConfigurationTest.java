@@ -51,6 +51,31 @@ class ScoringConfigurationTest {
             });
   }
 
+  @Test
+  void discoversSearchHistoryWeightThroughTheScorerComponent() {
+    runner
+        .withUserConfiguration(SearchHistoryScorer.class)
+        .withPropertyValues("ranking.scoring.search-history-weight=0.25")
+        .run(
+            context -> {
+              assertThat(context).hasSingleBean(CompositeScorer.class);
+              var scorer = context.getBean("weightedSearchHistory", WeightedScorer.class);
+              assertThat(scorer.scorer()).isInstanceOf(SearchHistoryScorer.class);
+              assertThat(scorer.weight()).isEqualTo(0.25);
+            });
+  }
+
+  @Test
+  void omitsSearchHistoryWhenItsWeightIsZero() {
+    runner
+        .withUserConfiguration(SearchHistoryScorer.class)
+        .withPropertyValues("ranking.scoring.search-history-weight=0.0")
+        .run(
+            context ->
+                assertThat(context.getBeansOfType(WeightedScorer.class))
+                    .containsOnlyKeys("weightedRetrievalRelevance"));
+  }
+
   @Configuration(proxyBeanMethods = false)
   static class ExtensionConfiguration {
     @Bean

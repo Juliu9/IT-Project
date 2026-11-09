@@ -159,6 +159,9 @@ public abstract class SearchContextResolver implements ConversationHandler {
         target.setSearchCriteria(moreCriteria);
         target.setUserPreferenceSnapshot(previous.getUserPreferenceSnapshot());
         target.setUserPreferencesLoaded(previous.isUserPreferencesLoaded());
+        target
+            .getSearchContext()
+            .setSearchHistorySnapshot(previous.getSearchContext().getSearchHistorySnapshot());
       }
       return;
     }

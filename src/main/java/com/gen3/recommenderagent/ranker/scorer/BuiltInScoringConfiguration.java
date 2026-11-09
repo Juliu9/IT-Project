@@ -15,25 +15,20 @@ class BuiltInScoringConfiguration {
   @Order(Ordered.HIGHEST_PRECEDENCE)
   WeightedScorer weightedRetrievalRelevance(
       RetrievalRelevanceScorer scorer, RankingScoringProperties properties) {
-    return enabled(scorer, properties.retrievalRelevanceWeight());
+    return WeightedScorer.ifEnabled(scorer, properties.retrievalRelevanceWeight());
   }
 
   @Bean
   @Order(Ordered.HIGHEST_PRECEDENCE + 1)
   WeightedScorer weightedUserPreference(
       UserPreferenceScorer scorer, RankingScoringProperties properties) {
-    return enabled(scorer, properties.userPreferenceWeight());
+    return WeightedScorer.ifEnabled(scorer, properties.userPreferenceWeight());
   }
 
   @Bean
   @Order(Ordered.HIGHEST_PRECEDENCE + 2)
   WeightedScorer weightedUniversalRules(
       UniversalRulesScorer scorer, RankingScoringProperties properties) {
-    return enabled(scorer, properties.universalRulesWeight());
-  }
-
-  private WeightedScorer enabled(CandidateScorer scorer, double weight) {
-    // Spring omits null factory results from typed bean discovery.
-    return weight == 0.0 ? null : new WeightedScorer(scorer, weight);
+    return WeightedScorer.ifEnabled(scorer, properties.universalRulesWeight());
   }
 }

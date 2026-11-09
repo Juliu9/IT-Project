@@ -164,6 +164,7 @@ are normalized per result set. Exact filters remain mandatory regardless of rank
 | `retrieval-relevance-weight` | `RANKING_SCORING_RETRIEVAL_RELEVANCE_WEIGHT` | `1.0` |
 | `user-preference-weight` | `RANKING_SCORING_USER_PREFERENCE_WEIGHT` | `1.0` |
 | `universal-rules-weight` | `RANKING_SCORING_UNIVERSAL_RULES_WEIGHT` | `0.5` |
+| `search-history-weight` | `RANKING_SCORING_SEARCH_HISTORY_WEIGHT` | `0.5` |
 | `user-preference.favourites-weight` | `RANKING_SCORING_FAVOURITES_WEIGHT` | `0.6` |
 | `user-preference.history-weight` | `RANKING_SCORING_HISTORY_WEIGHT` | `0.4` |
 | `universal-rules.recency-weight` | `RANKING_SCORING_UNIVERSAL_RECENCY_WEIGHT` | `0.7` |
@@ -235,6 +236,21 @@ No history is loaded at startup or cached in Redis. Lookup requests at most the 
 one. Pool acquisition is bounded to two seconds, JDBC query timeout to five seconds, and driver
 socket timeout to ten seconds; these are operation bounds, not a total request deadline. Failed
 lookups log and continue without history exclusions, not with a claim that history was empty.
+
+### Search-history taste
+
+Optional and off by default. It reuses the Redis connection above and only runs when
+`SESSION_STORE=redis` with the default adapter. Disabling the feature stops recording and using
+search taste. Previously stored profiles follow their configured expiry. Set
+`RANKING_SCORING_SEARCH_HISTORY_WEIGHT=0` to omit the scorer while keeping learning and
+personalised retrieval enabled.
+
+| Property under `search-history.` | Environment variable | Default / purpose |
+| --- | --- | --- |
+| `enabled` | `SEARCH_HISTORY_ENABLED` | `false`; records and uses each user's search taste |
+| `new-search-share` | `SEARCH_HISTORY_NEW_SEARCH_SHARE` | `0.2`; how far each new search moves the taste, above 0 and at most 1 |
+| `minimum-searches` | `SEARCH_HISTORY_MINIMUM_SEARCHES` | `3`; searches needed before the taste is used |
+| `expire-after-days` | `SEARCH_HISTORY_EXPIRE_AFTER_DAYS` | `0`; keep until deleted, or delete a taste this many days after its last update |
 
 ### Qdrant
 

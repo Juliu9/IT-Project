@@ -168,6 +168,22 @@ Category overflow during a preference edit returns a normal conversational respo
 remain intact, and `REPEAT` can replay that explanation. Other invalid requests retain their
 existing error handling.
 
+### Search history
+
+When `search-history.enabled=true` and Redis is the session store, a fresh explicit search or
+refinement that builds a recommendation batch and has semantic evidence adds its vector to a per-user
+search taste in Redis (`search-history:<userId>`).
+The newest search takes `new-search-share` of the taste, so older searches fade. More results, vague
+personalised requests, and similar-book requests are not recorded. Only the user ID, the vector, a
+search count, and an update time are stored, never the request text.
+
+After `minimum-searches` searches, the taste behaves like stored taste: it joins the personalised
+taste signal during retrieval and counts as stored taste when deciding whether to ask what the
+user likes. During ranking, `SearchHistoryScorer` contributes through its own `WeightedScorer`
+bean. The active search stores a frozen copy for `MORE_RESULTS`, including across session reloads.
+Disabling the feature also stops using that copy for new batches. Search taste never sets the
+reading-preferences flag. Lookup and save failures log a structured warning and fail open.
+
 ### Paging, refinements, and replay
 
 Retrieval excludes recently shown IDs and returns candidates for ranking. Ranking removes duplicates,
@@ -180,7 +196,7 @@ embedding, retrieval, and ranking. The session retains at most 500 shown IDs.
 | `REFINE` | Inherits the active search and changes only the requested criteria |
 | `REPEAT` | Replays the last completed action without applying it again |
 | `REPEAT_RECOMMENDATIONS` | Replays the retained recommendation page without consuming the queue |
-| `CLEAR_HISTORY` | Removes active search, shown IDs, queue, and clarification state; keeps preferences |
+| `CLEAR_HISTORY` | Clears active search, shown IDs, queue, and clarification state. Keeps saved preferences and the per-user search taste |
 | `EXPLAIN_PREFERENCES` | Reports saved preferences and count; preserves search and pending questions |
 | `RESET_PREFERENCES` | Clears session preferences and resets the page count; keeps search history |
 

@@ -490,6 +490,7 @@ public final class RecommendationHandler extends SearchContextResolver {
   public static boolean needsSavedPreferences(ConversationDraft request, Session session) {
     return request.isPersonalised()
         && request.getUserPreferenceSnapshot() == null
+        && request.getSearchContext().getSearchHistorySnapshot() == null
         && !(session != null
             && session.getPreferences() != null
             && session.getPreferences().hasValues())

@@ -79,6 +79,11 @@ cached “More” pages. `read.history.exclusion.skipped` warnings identify a re
 `STORE_UNAVAILABLE` or `HISTORY_LIMIT_EXCEEDED`. They stay local; the Alloy collector exports only
 the existing request-summary schema. History import has its own progress and completion logs.
 
+`searchHistoryLoadMs` measures per-user search-taste lookups when the feature is enabled. Cached
+pages and refills that reuse the frozen taste skip this lookup. `search.history.load.skipped`
+and `search.history.record.skipped` warn on `STORE_UNAVAILABLE`. Recording can also warn on
+`INVALID_VECTOR`. These warnings include the request ID and stay local.
+
 Every parser invocation emits `parser.completed` with `durationMs`, `outcome=SUCCESS|FAILURE`,
 and `mode=FAST_PATH|AI`. Inputs rejected before either path use `mode=VALIDATION`.
 The request summary retains `stages.parseMs` even when the parser skips AI or completes in zero

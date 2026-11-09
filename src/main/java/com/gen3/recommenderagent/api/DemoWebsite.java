@@ -76,6 +76,7 @@ public class DemoWebsite {
   private ObjectNode withoutVectors(ConversationTurn request) {
     ObjectNode json = JSON.valueToTree(request);
     json.remove("similarityQueryVector");
+    json.remove("searchHistorySnapshot");
     if (json.get("similarBook") instanceof ObjectNode book) {
       book.remove("vector");
     }

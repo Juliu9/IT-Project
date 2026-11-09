@@ -128,6 +128,7 @@ class DemoWebsiteTest {
         new com.gen3.recommenderagent.domain.search.SimilarBookReference(
             "book", "Title", java.util.List.of("Author"), new float[] {1, 0}));
     turn.setSimilarityQueryVector(new float[] {0, 1});
+    turn.setSearchHistorySnapshot(new float[] {1, 0});
     turn.setUserPreferenceSnapshot(
         new com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding(
             "user", new float[] {1, 0}, new float[] {0, 1}));
@@ -136,6 +137,9 @@ class DemoWebsiteTest {
     var result = new DemoWebsite(gateway, catalogue).recommend("session", "user", "books");
     var json = result.sessionRequest();
     org.assertj.core.api.Assertions.assertThat(json.has("similarityQueryVector")).isFalse();
+    org.assertj.core.api.Assertions.assertThat(json.has("searchHistorySnapshot")).isFalse();
+    org.assertj.core.api.Assertions.assertThat(turn.getSearchHistorySnapshot())
+        .containsExactly(1, 0);
     org.assertj.core.api.Assertions.assertThat(json.path("similarBook").has("vector")).isFalse();
     org.assertj.core.api.Assertions.assertThat(json.path("similarBook").path("title").asText())
         .isEqualTo("Title");

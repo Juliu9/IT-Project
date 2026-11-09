@@ -13,6 +13,7 @@ participant SessionTransitionService as Transition
 participant "ConversationEngine\nIntent handlers + RecommendationPager" as Engine
 participant "SessionRepository\nRedis adapter" as Sessions
 participant "RecommendationWorkflow\nEmbedding → retrieval → ranking" as Workflow
+participant "SearchHistoryRepository\nOptional Redis adapter" as SearchHistory
 participant "ReadHistoryRepository\nOptional history adapter" as History
 participant "ConversationResponseGenerator\nAI narration when needed" as Response
 
@@ -68,7 +69,17 @@ else Recommendation, refinement, or MORE
   opt Page still needs books
     Engine -> Workflow : Build fresh batch, excluding read/shown IDs and cached tail
     activate Workflow
-    Workflow -> Workflow : Load user preference vectors\nBuild query vectors when needed
+    Workflow -> Workflow : Resolve user preference vectors
+    alt Fresh search needs an enabled taste lookup
+      Workflow -> SearchHistory : Load per-user search taste
+      SearchHistory --> Workflow : Taste if enough searches have been recorded
+    else Refill uses a frozen search
+      Workflow -> Workflow : Reuse the saved taste when enabled
+    end
+    Workflow -> Workflow : Build query vectors when needed
+    opt Enabled, fresh explicit search or refinement with semantic evidence
+      Workflow -> SearchHistory : Record the search vector
+    end
     alt Personalised request lacks usable preferences
       Workflow --> Engine : Ask for taste preferences
     else Search can proceed
