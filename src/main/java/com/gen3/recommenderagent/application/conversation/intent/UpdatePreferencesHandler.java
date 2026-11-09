@@ -163,8 +163,8 @@ public final class UpdatePreferencesHandler implements ConversationHandler {
       request.setPreferenceUpdates(updates.updated(recovered, null, List.of()));
     }
     var fields = request.getReplacePreferenceFields();
-    var replacements = fields == null ? new ArrayList<String>() : new ArrayList<>(fields);
-    if (!replacements.contains(PREFERRED_GENRES)) {
+    if (fields == null || !fields.contains(PREFERRED_GENRES)) {
+      var replacements = fields == null ? new ArrayList<String>() : new ArrayList<>(fields);
       replacements.add(PREFERRED_GENRES);
       request.setReplacePreferenceFields(replacements);
     }
@@ -247,26 +247,24 @@ public final class UpdatePreferencesHandler implements ConversationHandler {
     return null;
   }
 
-  /** Interprets supplied taste values as a reply to a pending saved-preference update. */
-  private ConversationDraft resolvePreferenceReply(Session session, ConversationDraft effective) {
-    if (session.isAwaitingPreferenceUpdate()
-        && !effective.startsNewSearch()
-        && (effective.getIntent() == RecommendationHandler.ACTION
-            || effective.getIntent() == RefineHandler.ACTION
-            || effective.getIntent() == UnknownHandler.ACTION)
-        && PreferenceRequestMapper.fromRequest(effective).hasValues()) {
-      effective.setIntent(ACTION);
-      if (effective.getPreferenceUpdates() == null) {
-        effective.setPreferenceUpdates(PreferenceRequestMapper.fromRequest(effective));
-      }
-    }
-    return null;
-  }
-
+  /** Maps a reply to a pending saved-preference update. */
   @Override
   public ConversationDraft resolvePendingReply(
       Session session, ConversationDraft input, String reply) {
-    return resolvePreferenceReply(session, input);
+    if (session.isAwaitingPreferenceUpdate()
+        && !input.startsNewSearch()
+        && (input.getIntent() == RecommendationHandler.ACTION
+            || input.getIntent() == RefineHandler.ACTION
+            || input.getIntent() == UnknownHandler.ACTION)) {
+      var stated = PreferenceRequestMapper.fromRequest(input);
+      if (stated.hasValues()) {
+        input.setIntent(ACTION);
+        if (input.getPreferenceUpdates() == null) {
+          input.setPreferenceUpdates(stated);
+        }
+      }
+    }
+    return null;
   }
 
   @Override
