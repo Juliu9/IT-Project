@@ -76,6 +76,7 @@ public class SessionTransitionService {
     var pending = session.getPendingQuestion();
     try {
       var request = input.get();
+      RequestTelemetry.captureRequest(request);
       return RequestTelemetry.measure("recommendMs", () -> conversation.process(session, request));
     } catch (com.gen3.recommenderagent.inputparser.InvalidRequestException exception) {
       var recovered = conversation.recoverFailure(session, action, pending, exception);

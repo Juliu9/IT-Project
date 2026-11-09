@@ -1,7 +1,7 @@
 package com.gen3.recommenderagent.observability;
 
-import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.model.SessionRequest;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import java.time.Duration;
 import java.time.Instant;
@@ -130,35 +130,38 @@ public class RequestTelemetry {
       Map<String, AiOperationObserver.AiUsage> operations,
       Map<String, Object> retrieval) {}
 
-  /** Finishes successful request telemetry using the completed conversation turn. */
-  public void complete(ConversationTurn request) {
-    finish(request == null ? null : ConversationDraft.fromTurn(request), "SUCCESS");
+  /** Captures resolved parser context before a session transition can fail. */
+  public static void captureRequest(SessionRequest request) {
+    RequestState state = CURRENT.get();
+    if (state != null) {
+      state.requestId = request.getRequestId();
+      state.intent = request.getIntent();
+    }
   }
 
-  /** Finishes failed request telemetry using any available request context. */
-  public void fail(SessionRequest request) {
-    var draft = new ConversationDraft();
-    if (request != null) {
-      draft.setRequestId(request.getRequestId());
-      draft.setIntent(request.getIntent());
-    }
-    finish(draft, "FAILURE");
+  /** Finishes successful request telemetry using the completed conversation turn. */
+  public void complete(ConversationTurn request) {
+    finish(request, "SUCCESS");
+  }
+
+  /** Finishes failed request telemetry using the captured request context. */
+  public void fail() {
+    finish(null, "FAILURE");
   }
 
   /** Completes request timing and emits the final telemetry event. */
-  private void finish(ConversationDraft request, String outcome) {
+  private void finish(ConversationTurn request, String outcome) {
     RequestState state = CURRENT.get();
     if (state == null) {
       return;
     }
     Map<String, Object> event = new LinkedHashMap<>();
     event.put("event", "recommendation.completed");
-    event.put("requestId", request == null ? null : request.getRequestId());
+    event.put("requestId", request == null ? state.requestId : request.getRequestId());
     event.put("outcome", outcome);
     event.put("durationMs", state.durationMillis());
-    event.put(
-        "intent",
-        request == null || request.getIntent() == null ? "UNKNOWN" : request.getIntent().name());
+    var intent = request == null ? state.intent : request.getIntent();
+    event.put("intent", intent == null ? "UNKNOWN" : intent.name());
     event.put("responseMode", state.responseMode);
     event.put("stages", state.stages);
     event.put("retrieval", state.retrieval);
@@ -198,6 +201,8 @@ public class RequestTelemetry {
     private final Map<String, Long> stages = new LinkedHashMap<>();
     private final Map<String, Object> retrieval = new LinkedHashMap<>();
     private final Map<String, Object> ai = new LinkedHashMap<>();
+    private String requestId;
+    private ConversationAction intent;
     private String responseMode = "UNKNOWN";
     private int aiCalls;
     private int aiAttempts;

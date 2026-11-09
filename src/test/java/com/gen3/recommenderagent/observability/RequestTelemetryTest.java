@@ -125,7 +125,7 @@ class RequestTelemetryTest {
   void logsACompletionEventForFailures() {
     telemetry.start();
 
-    telemetry.fail(null);
+    telemetry.fail();
 
     assertThat(lastMessage()).contains("\"outcome\":\"FAILURE\"");
   }
@@ -137,7 +137,7 @@ class RequestTelemetryTest {
     telemetry.complete(null);
 
     telemetry.start();
-    telemetry.fail(null);
+    telemetry.fail();
 
     assertThat(lastMessage()).contains("\"stages\":{}");
   }

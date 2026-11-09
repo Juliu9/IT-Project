@@ -256,7 +256,7 @@ class RequestGatewayTest {
         .isSameAs(exception);
 
     verify(telemetry).start();
-    verify(telemetry).fail(null);
+    verify(telemetry).fail();
     verifyNoInteractions(sessionTransitionService, responseGenerator);
   }
 
@@ -438,14 +438,17 @@ class RequestGatewayTest {
           .andExpect(status().isBadRequest())
           .andExpect(content().string("I didn't catch that. What would you like to listen to?"));
     }
-    verify(telemetry, org.mockito.Mockito.times(2)).fail(null);
+    verify(telemetry, org.mockito.Mockito.times(2)).fail();
     verifyNoInteractions(model, sessionTransitionService, responseGenerator);
   }
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {"/api/v1/recommendations", "/api/v1/recommendations/demo"})
-  void returnsServiceUnavailableWhenCandidateRetrievalFails(String endpoint) throws Exception {
+  @ExtendWith(org.springframework.boot.test.system.OutputCaptureExtension.class)
+  void returnsServiceUnavailableWhenCandidateRetrievalFails(
+      String endpoint, org.springframework.boot.test.system.CapturedOutput output)
+      throws Exception {
     UserIntent parsedRequest = new UserIntent();
     parsedRequest.setIntent(RecommendationHandler.ACTION);
     when(inputParser.parseUserIntent(
@@ -454,15 +457,34 @@ class RequestGatewayTest {
                 .<java.util.function.Supplier<com.gen3.recommenderagent.inputparser.SessionContext>>
                     any()))
         .thenReturn(parsedRequest);
-    when(sessionTransitionService.process(
-            org.mockito.ArgumentMatchers.eq("session"),
-            org.mockito.ArgumentMatchers.eq("user"),
-            org.mockito.ArgumentMatchers.eq("recommend science fiction"),
-            org.mockito.ArgumentMatchers.eq(parsedRequest),
+    var request = new com.gen3.recommenderagent.application.conversation.model.SessionRequest();
+    request.setIntent(RecommendationHandler.ACTION);
+    request.setRequestId("failed-request-1");
+    when(inputParser.toSessionRequest("recommend science fiction", parsedRequest))
+        .thenReturn(request);
+    var sessions = mock(com.gen3.recommenderagent.storage.session.SessionRepository.class);
+    when(sessions.update(
+            org.mockito.ArgumentMatchers.anyString(),
+            org.mockito.ArgumentMatchers.anyString(),
+            org.mockito.ArgumentMatchers.any(),
             org.mockito.ArgumentMatchers.any()))
+        .thenAnswer(
+            call -> {
+              java.util.function.Function<com.gen3.recommenderagent.domain.session.Session, ?>
+                  change = call.getArgument(2);
+              return change.apply(new com.gen3.recommenderagent.domain.session.Session());
+            });
+    var engine = mock(com.gen3.recommenderagent.application.conversation.ConversationEngine.class);
+    when(engine.process(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(request)))
         .thenThrow(new CandidateRetrievalException("Qdrant", new RuntimeException("timed out")));
-    RequestGateway gateway =
-        new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
+    var transitions = new SessionTransitionService(sessions, engine, inputParser);
+    var gateway =
+        new RequestGateway(
+            inputParser,
+            transitions,
+            responseGenerator,
+            new RequestTelemetry(new tools.jackson.databind.ObjectMapper()));
     MockMvc mockMvc =
         MockMvcBuilders.standaloneSetup(
                 gateway,
@@ -484,6 +506,10 @@ class RequestGatewayTest {
             content()
                 .string(
                     "I'm having trouble reaching the audiobook catalogue right now. Please try again in a moment."));
+    org.assertj.core.api.Assertions.assertThat(output.getOut())
+        .contains("\"requestId\":\"failed-request-1\"")
+        .contains("\"outcome\":\"FAILURE\"")
+        .contains("\"intent\":\"RECOMMENDATION\"");
   }
 
   @org.junit.jupiter.params.ParameterizedTest
