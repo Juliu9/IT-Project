@@ -24,7 +24,7 @@ They share catalogue code but run independently. **No scheduler is included.**
 | --- | --- | --- |
 | [Embeddings](embeddings.md) | `embeddingjob.EmbeddingIndexApplication` | Fills missing dense vectors by default; explicit `rebuild-all` replaces existing vectors; then publishes a full snapshot; paid embedding calls |
 | [Snapshots](snapshots.md) | `snapshotjob.BookVectorSnapshotApplication` | Local vector file for user imports; catalogue read-only; no AI calls |
-| [User preferences](user-preferences.md) | `userpreferencejob.UserPreferenceApplication` | `dry-run` by default; explicit `write` replaces mapped sides, preserves absent/unmapped sides, and skips users with no mapped vectors; no AI calls |
+| [User preferences](user-preferences.md) | `userpreferencejob.UserPreferenceApplication` | `dry-run` by default; approved `write` replaces usable vector sides and preserves stored values for missing or cancelled-out sides; no AI calls |
 | [Migration](migration.md) | `migrationjob.MigrationApplication` | Creates absent books and fills missing same-named fields from Solr to Qdrant; no AI calls |
 | [Short descriptions](short-descriptions.md) | `shortdescriptionjob.ShortDescriptionApplication` | Paid regular API calls; fills missing summaries by default; explicit `rebuild-all` replaces them |
 | [Read history](read-history.md) | `readhistoryjob.ReadHistoryApplication` | Optional CSV utility that adds unique user/book pairs to PostgreSQL; no AI or catalogue access |

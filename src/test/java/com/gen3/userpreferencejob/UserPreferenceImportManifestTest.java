@@ -28,11 +28,27 @@ class UserPreferenceImportManifestTest {
                     : List.of(),
                 null),
         10);
-    var manifest = new UserPreferenceImportManifest(directory.resolve("approved.properties"));
+    var environment =
+        new org.springframework.mock.env.MockEnvironment()
+            .withProperty("qdrant.url", "https://example.test")
+            .withProperty("qdrant.user-preference-collection", "users-staging");
+    var manifest =
+        new UserPreferenceImportManifest(directory.resolve("approved.properties"), environment);
     var plan = new UserPreferenceAggregatorService.Result(1, 0, List.of());
 
     manifest.approve("dry-run", favourites, history, snapshot, plan);
     manifest.approve("write", favourites, history, snapshot, plan);
+
+    environment.setProperty("qdrant.user-preference-collection", "users-production");
+    assertThatThrownBy(() -> manifest.approve("write", favourites, history, snapshot, plan))
+        .isInstanceOf(java.io.IOException.class)
+        .hasMessageContaining("destination.collection");
+    environment.setProperty("qdrant.user-preference-collection", "users-staging");
+    environment.setProperty("qdrant.grpc-port", "6335");
+    assertThatThrownBy(() -> manifest.approve("write", favourites, history, snapshot, plan))
+        .isInstanceOf(java.io.IOException.class)
+        .hasMessageContaining("destination.endpoint");
+    environment.setProperty("qdrant.grpc-port", "6334");
 
     Files.writeString(
         favourites, "book,user,r:book:changed\n", java.nio.file.StandardOpenOption.APPEND);

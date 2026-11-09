@@ -13,10 +13,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.conversation.intent.MoreResultsHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
-import com.gen3.recommenderagent.domain.conversation.ConversationAction;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
@@ -813,7 +814,7 @@ class RedisSessionRepositoryTest {
         USER_ID,
         session -> {
           ConversationDraft previous = new ConversationDraft();
-          previous.setIntent(ConversationAction.RECOMMENDATION);
+          previous.setIntent(RecommendationHandler.ACTION);
           session.getActiveSearch().setSearch(ConversationDraft.toTurn(previous));
           session
               .getActiveSearch()
@@ -853,7 +854,7 @@ class RedisSessionRepositoryTest {
     ExecutorService worker = Executors.newSingleThreadExecutor();
     try {
       ConversationDraft more = new ConversationDraft();
-      more.setIntent(ConversationAction.MORE_RESULTS);
+      more.setIntent(MoreResultsHandler.ACTION);
       Future<ConversationTurn> firstPage =
           worker.submit(() -> first.process("cached-pages", USER_ID, more));
       assertTrue(consumed.await(5, TimeUnit.SECONDS));

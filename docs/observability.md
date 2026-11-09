@@ -60,6 +60,7 @@ Show failed requests:
 
 | Field | Meaning |
 | --- | --- |
+| `requestId` / `intent` | Request identifier and action. Failures after request creation retain both fields. |
 | `durationMs` | Total request time |
 | `stages` | Stage timings; enclosing stages can overlap, so do not sum every value |
 | `retrieval` | Backend, retrieval mode, and candidate count |

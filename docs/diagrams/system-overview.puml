@@ -17,8 +17,8 @@ package "recommenderagent — live requests" {
   component "SessionTransitionService\nOwns session transaction" as Session #DBEAFE
   component "ConversationEngine + intent handlers\nResolve, validate and page" as Engine #DBEAFE
   component "AudiobookRecommendationWorkflow\nBuilds a new recommendation batch" as Workflow #DCFCE7
-  component "CandidateRetrievalService\nSelects and executes search" as Retrieval #DCFCE7
-  component "RankingService\nRanks up to 20 recommendations" as Ranking #DCFCE7
+  component "CandidateRetrievalService\nDispatches ordered search strategies" as Retrieval #DCFCE7
+  component "RankingService\nCombines weighted scorers\nRanks up to 20 recommendations" as Ranking #DCFCE7
   component "ConversationResponseGenerator\nFixed replies or AI narration" as Response #DBEAFE
   component "User preference adapter\nQdrant OR Solr" as UserAdapter #FEF3C7
   component "SessionRepository adapter\nCurrent runtime: Redis" as SessionStore #FEF3C7
@@ -47,8 +47,9 @@ Workflow --> Ranking : rank candidates
 Gateway --> Response : 3. Generate response after commit
 
 note bottom of Session
-  IntentResolver converts parsed intent to a session request.
-  Dispatcher selects handlers; pager reuses or refills pages.
+  InputParser maps intent to SessionRequest inside the lock.
+  Registered handlers own actions and pending replies.
+  RecommendationPager reuses or refills pages.
   Saved preferences stay separate from searches.
   Preference reports use snapshots without retrieval or AI narration.
   Preference edits replace matching saved opposite tastes.

@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.util.regex.Pattern;
 
 /** Checks explicit count wording before a model can round it or reinterpret zero as replay. */
-final class CountInput {
+public final class CountInput {
   private static final String WORD = "zero|one|two|three|four|five|six|seven|eight|nine|ten";
   private static final String NUMBER =
       "(?:minus\\s+(?:"
@@ -92,12 +92,12 @@ final class CountInput {
   }
 
   /** Reports whether the text requests an additional recommendation page. */
-  static boolean more(String text) {
+  public static boolean more(String text) {
     return text.toLowerCase(java.util.Locale.ROOT).matches("(?s).*\\b(?:more|another)\\b.*");
   }
 
   /** Reports whether the text changes the saved recommendation count. */
-  static boolean setting(String text) {
+  public static boolean setting(String text) {
     return text.toLowerCase(java.util.Locale.ROOT)
         .matches("(?s).*\\b(?:count|at a time|per page|per request)\\b.*");
   }

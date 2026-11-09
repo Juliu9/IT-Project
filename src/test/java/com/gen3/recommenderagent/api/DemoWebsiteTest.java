@@ -7,7 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.application.session.SessionTransitionService;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;

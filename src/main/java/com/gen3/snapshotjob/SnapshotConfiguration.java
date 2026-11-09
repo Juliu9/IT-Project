@@ -2,13 +2,14 @@ package com.gen3.snapshotjob;
 
 import com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot;
 import java.nio.file.Path;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 
 /** Snapshot publishing machinery, shared by the standalone rebuild and embedding workflow. */
 @Configuration(proxyBeanMethods = false)
+@ComponentScan("com.gen3.snapshotjob.source")
 public class SnapshotConfiguration {
   /**
    * Builds the local snapshot reader using the selected backend, collection, model, and dimensions.
@@ -57,22 +58,5 @@ public class SnapshotConfiguration {
       throw new IllegalArgumentException("Snapshot source identity does not match configuration");
     }
     return snapshot(environment, identity);
-  }
-
-  /** Registers the Qdrant source for exporting existing catalogue vectors. */
-  @Bean
-  @ConditionalOnProperty(name = "audiobook.database", havingValue = "qdrant", matchIfMissing = true)
-  CatalogueSnapshotSource qdrantSnapshotSource(
-      io.qdrant.client.QdrantClient client, SnapshotIdentity identity) {
-    return SnapshotSources.qdrant(client, identity.collection());
-  }
-
-  /** Registers the Solr source for exporting existing catalogue vectors. */
-  @Bean
-  @ConditionalOnProperty(name = "audiobook.database", havingValue = "solr")
-  CatalogueSnapshotSource solrSnapshotSource(
-      com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository repository,
-      SnapshotIdentity identity) {
-    return SnapshotSources.solr(repository, identity.collection());
   }
 }

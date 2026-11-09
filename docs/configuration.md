@@ -415,7 +415,7 @@ requirements and replacement semantics.
 | `import.max-records-in-memory` | `USER_PREFERENCES_IMPORT_MAX_RECORDS_IN_MEMORY` | `100000`; sort-run and whole-user batch target |
 | `import.work-directory` | `USER_PREFERENCES_IMPORT_WORK_DIRECTORY` | `./data/user-import-work`; temporary external-sort files |
 | `import.max-unmapped-user-ratio` | `USER_PREFERENCES_IMPORT_MAX_UNMAPPED_USER_RATIO` | `0.10`; write-mode abort threshold after full preflight |
-| `import.manifest-path` | `USER_PREFERENCES_IMPORT_MANIFEST_PATH` | `./data/user-import-work/approved.properties`; exact dry-run approval manifest |
+| `import.manifest-path` | `USER_PREFERENCES_IMPORT_MANIFEST_PATH` | `./data/user-import-work/approved.properties`; dry-run approval binds inputs, outcomes, and profile destination |
 
 ### Local book-vector snapshots
 

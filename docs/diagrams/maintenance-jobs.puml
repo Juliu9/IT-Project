@@ -22,12 +22,12 @@ package "userpreferencejob" {
   component "UserPreferenceApplication\nStreamingUserPreferenceImporter\nExternal sort + whole-user aggregation" as Preferences #DBEAFE
 }
 package "snapshotjob" {
-  component "BookVectorSnapshotApplication\nSnapshotConfiguration + SnapshotSources" as Snapshot #DBEAFE
+  component "BookVectorSnapshotApplication\nSnapshotConfiguration + discovered sources" as Snapshot #DBEAFE
 }
 package "readhistoryjob" {
-  component "ReadHistoryApplication\nReadHistoryImporter" as History #DBEAFE
+  component "ReadHistoryApplication\nReadHistoryImporter + selected writer" as History #DBEAFE
 }
-database "Read history\nPostgreSQL user/book pairs" as ReadHistoryStore
+database "Read history\nPostgreSQL by default" as ReadHistoryStore
 component "shared.audiobookcatalogue\nAudiobook ports, adapters and models" as Shared #FEF3C7
 database "Selected catalogue\nSolr OR Qdrant" as Catalogue
 database "Solr source" as SolrSource
@@ -57,11 +57,12 @@ CSV --> Preferences : user interactions
 CSV --> History : history rows only
 History --> ReadHistoryStore : additive, deduplicated batches\nno catalogue or vector access
 Preferences --> LocalSnapshot : validate and load once\nno remote catalogue-vector lookup
-Preferences --> UserStore : explicit write: update mapped vector sides\npreserve absent/unmapped sides; skip unmapped users\ndry-run: validating sink, no writes
+Preferences --> UserStore : approved write: update usable vector sides\npreserve absent, unmapped or cancelled-out sides\ndry-run: no profile writes
 
 note bottom of Shared
   Embedding and snapshot launchers share one publisher.
-  Daily user import consumes the last compatible snapshot.
+  User import consumes the last compatible snapshot.
+  Dry-run approval binds the profile destination.
   All jobs use shared.jobruntime.JobProgress for periodic reporting.
   CSV readers and input records live in shared.csv.
   History ports and adapters live in shared.readhistory.

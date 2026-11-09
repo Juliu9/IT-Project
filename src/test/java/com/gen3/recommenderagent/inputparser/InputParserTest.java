@@ -10,7 +10,17 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.application.conversation.SessionRequest;
+import com.gen3.recommenderagent.application.conversation.intent.ChangeCountHandler;
+import com.gen3.recommenderagent.application.conversation.intent.ExplainRecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.intent.HelpHandler;
+import com.gen3.recommenderagent.application.conversation.intent.MoreResultsHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RefineHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RepeatHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RepeatRecommendationsHandler;
+import com.gen3.recommenderagent.application.conversation.intent.UnknownHandler;
+import com.gen3.recommenderagent.application.conversation.intent.UpdatePreferencesHandler;
+import com.gen3.recommenderagent.application.conversation.model.SessionRequest;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
@@ -25,7 +35,7 @@ import tools.jackson.databind.ObjectMapper;
 class InputParserTest {
   @Test
   void semanticSchemaExposesTopicsWithoutKeywords() {
-    var schema = AiParser.REQUEST_CONVERTER.getJsonSchema();
+    var schema = com.gen3.recommenderagent.testsupport.TestHandlers.CONVERTER.getJsonSchema();
     org.assertj.core.api.Assertions.assertThat(schema)
         .contains("\"topics\"", "\"genres\"")
         .doesNotContain("\"keywords\"");
@@ -40,14 +50,19 @@ class InputParserTest {
   void explicitReferenceToPreviousLikesForcesPersonalisation() {
     String text = "Give me something similar to what I liked previously, but with more humour.";
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.REFINE);
+    parsed.setIntent(RefineHandler.ACTION);
     var query = new SemanticQuery();
     query.setTopics(List.of("humour"));
     parsed.setPositiveSemanticQuery(query);
     var ai = mock(AiParser.class);
     when(ai.parse(text)).thenReturn(parsed);
 
-    var result = new InputParser(new CommandParser(), ai).parse(text);
+    var result =
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                ai,
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .parse(text);
 
     assertEquals(true, result.isPersonalised());
   }
@@ -56,13 +71,17 @@ class InputParserTest {
   void aiReceivesExplicitPageRanksSeparatelyFromTheLatestAction() {
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.UNKNOWN);
+    parsed.setIntent(UnknownHandler.ACTION);
     when(client
             .prompt()
             .system(anyString())
             .user(anyString())
             .call()
-            .responseEntity(AiParser.REQUEST_CONVERTER))
+            .responseEntity(
+                org.mockito.ArgumentMatchers
+                    .<org.springframework.ai.converter.BeanOutputConverter<
+                            com.gen3.recommenderagent.inputparser.UserIntent>>
+                        any()))
         .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     var context =
         new SessionContext(
@@ -72,7 +91,8 @@ class InputParserTest {
                 new SessionContext.DisplayedBook(6, "The Hobbit"),
                 new SessionContext.DisplayedBook(8, "Dune")));
     org.mockito.Mockito.clearInvocations(client.prompt().system(anyString()));
-    new AiParser(client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
+    com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+            client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
         .parse("Find something like the Tolkien book you showed me", context);
     var message = org.mockito.ArgumentCaptor.forClass(String.class);
     org.mockito.Mockito.verify(client.prompt().system(anyString())).user(message.capture());
@@ -94,7 +114,7 @@ class InputParserTest {
   void descriptiveZeroPhrasesReachAiWithoutBeingRewritten(String text) {
     var ai = mock(AiParser.class);
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    parsed.setIntent(RecommendationHandler.ACTION);
     parsed.setInvalidBookCount(true);
     parsed.setBookCount(java.math.BigInteger.ZERO);
     var query = new SemanticQuery();
@@ -104,7 +124,12 @@ class InputParserTest {
     query.setTopics(List.of(subject));
     parsed.setPositiveSemanticQuery(query);
     when(ai.parse(text)).thenReturn(parsed);
-    var result = new InputParser(new CommandParser(), ai).parse(text);
+    var result =
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                ai,
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .parse(text);
     assertEquals(false, result.isInvalidBookCount());
     assertEquals(List.of(subject), result.getPositiveSemanticQuery().getTopics());
     assertEquals(null, result.getBookCount());
@@ -126,13 +151,18 @@ class InputParserTest {
   void zeroSubjectChecksIgnoreWhitespaceDifferences(String text) {
     var ai = mock(AiParser.class);
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    parsed.setIntent(RecommendationHandler.ACTION);
     parsed.setInvalidBookCount(true);
     var query = new SemanticQuery();
     query.setTopics(List.of("zero gravity"));
     parsed.setPositiveSemanticQuery(query);
     when(ai.parse(text)).thenReturn(parsed);
-    var result = new InputParser(new CommandParser(), ai).parse(text);
+    var result =
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                ai,
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .parse(text);
     assertEquals(false, result.isInvalidBookCount());
     assertEquals(text, result.getRawText());
   }
@@ -142,8 +172,13 @@ class InputParserTest {
       strings = {"explain .5", "explain 2.5", "why book .5"})
   void fractionalExplanationPositionsCannotBecomeWholeRanks(String text) {
     var ai = mock(AiParser.class);
-    var result = new InputParser(new CommandParser(), ai).parse(text);
-    assertEquals(ConversationAction.EXPLAIN_RECOMMENDATION, result.getIntent());
+    var result =
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                ai,
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .parse(text);
+    assertEquals(ExplainRecommendationHandler.ACTION, result.getIntent());
     assertEquals(0, result.getReferenceRank());
     verifyNoInteractions(ai);
   }
@@ -152,7 +187,7 @@ class InputParserTest {
   void zeroTopicComparisonDoesNotSuppressAnExplicitInvalidQuantityOrChangePeople() {
     var ai = mock(AiParser.class);
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    parsed.setIntent(RecommendationHandler.ACTION);
     var query = new SemanticQuery();
     query.setTopics(List.of("zero gravity"));
     parsed.setPositiveSemanticQuery(query);
@@ -161,7 +196,10 @@ class InputParserTest {
     parsed.setMustInclude(exact);
     when(ai.parse(anyString())).thenReturn(parsed);
     var result =
-        new InputParser(new CommandParser(), ai)
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                ai,
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
             .parse("Recommend 0 books about zero-gravity by Anne-Marie Smith");
     assertEquals(true, result.isInvalidBookCount());
     assertEquals(List.of("Anne-Marie Smith"), result.getMustInclude().getAuthors());
@@ -171,13 +209,18 @@ class InputParserTest {
   void genreRequestsWithZeroCountsAreRewrittenWithoutLosingCriteria() {
     var ai = mock(AiParser.class);
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    parsed.setIntent(RecommendationHandler.ACTION);
     parsed.setInvalidBookCount(true);
     var query = new SemanticQuery();
     query.setGenres(List.of("mystery"));
     parsed.setPositiveSemanticQuery(query);
     when(ai.parse("Give me some mystery books")).thenReturn(parsed);
-    var result = new InputParser(new CommandParser(), ai).parse("Give me zero mystery books");
+    var result =
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                ai,
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .parse("Give me zero mystery books");
     assertEquals(true, result.isInvalidBookCount());
     assertEquals(List.of("mystery"), result.getPositiveSemanticQuery().getGenres());
     org.mockito.Mockito.verify(ai).parse("Give me some mystery books");
@@ -188,8 +231,13 @@ class InputParserTest {
       strings = {"give me some books", "Give me some audiobooks please", "recommend some books"})
   void genericBookRequestsUsePersonalisedRecommendationsWithoutAi(String text) {
     var ai = mock(AiParser.class);
-    var result = new InputParser(new CommandParser(), ai).parse(text);
-    assertEquals(ConversationAction.RECOMMENDATION, result.getIntent());
+    var result =
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                ai,
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .parse(text);
+    assertEquals(RecommendationHandler.ACTION, result.getIntent());
     assertEquals(true, result.isPersonalised());
     assertEquals(true, result.startsNewSearch());
     assertEquals(null, result.getMustInclude());
@@ -206,8 +254,13 @@ class InputParserTest {
   })
   void clearingOneSearchFilterUsesTheFastPath(String text, String field) {
     var ai = mock(AiParser.class);
-    var result = new InputParser(new CommandParser(), ai).parse(text);
-    assertEquals(ConversationAction.REFINE, result.getIntent());
+    var result =
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                ai,
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .parse(text);
+    assertEquals(RefineHandler.ACTION, result.getIntent());
     assertEquals(List.of(field), result.getReplaceSearchFields());
     verifyNoInteractions(ai);
   }
@@ -226,13 +279,18 @@ class InputParserTest {
   void explicitAdditionsIgnoreErroneousModelReplacementFlags(String text) {
     var ai = mock(AiParser.class);
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.REFINE);
+    parsed.setIntent(RefineHandler.ACTION);
     parsed.setReplaceSearchFields(List.of("positiveSemanticQuery.genres"));
     var query = new SemanticQuery();
     query.setGenres(List.of("mystery"));
     parsed.setPositiveSemanticQuery(query);
     when(ai.parse(anyString())).thenReturn(parsed);
-    var result = new InputParser(new CommandParser(), ai).parse(text);
+    var result =
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                ai,
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .parse(text);
     assertEquals(List.of(), result.getReplaceSearchFields());
     assertEquals(List.of("mystery"), result.getPositiveSemanticQuery().getGenres());
   }
@@ -249,15 +307,20 @@ class InputParserTest {
   void invalidRecommendationCountsDoNotInventANumericCountForAi(String text, String modelText) {
     var ai = mock(AiParser.class);
     var countOnly = new UserIntent();
-    countOnly.setIntent(ConversationAction.CHANGE_COUNT);
+    countOnly.setIntent(ChangeCountHandler.ACTION);
     when(ai.parse(anyString())).thenReturn(countOnly);
     var recommendation = new UserIntent();
-    recommendation.setIntent(ConversationAction.RECOMMENDATION);
+    recommendation.setIntent(RecommendationHandler.ACTION);
     var query = new SemanticQuery();
     query.setGenres(List.of("mystery"));
     recommendation.setPositiveSemanticQuery(query);
     when(ai.parse(modelText)).thenReturn(recommendation);
-    var result = new InputParser(new CommandParser(), ai).parse(text);
+    var result =
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                ai,
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .parse(text);
     assertEquals(true, result.isInvalidBookCount());
     assertEquals(null, result.getBookCount());
     assertNotNull(result.getPositiveSemanticQuery());
@@ -291,10 +354,15 @@ class InputParserTest {
   void completeApproximateYearRequestsUseRecommendationsWithoutAi(String text) {
     var ai = mock(AiParser.class);
     var wrongIntent = new UserIntent();
-    wrongIntent.setIntent(ConversationAction.REFINE);
+    wrongIntent.setIntent(RefineHandler.ACTION);
     when(ai.parse(anyString())).thenReturn(wrongIntent);
-    var result = new InputParser(new CommandParser(), ai).parse(text);
-    assertEquals(ConversationAction.RECOMMENDATION, result.getIntent());
+    var result =
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                ai,
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .parse(text);
+    assertEquals(RecommendationHandler.ACTION, result.getIntent());
     assertEquals(true, result.startsNewSearch());
     assertEquals(false, result.isPersonalised());
     var bounds =
@@ -317,7 +385,10 @@ class InputParserTest {
         "books from around 2000 by Suzanne Collins"
       })
   void approximateYearFastPathDoesNotSwallowOtherCriteriaOrContext(String text) {
-    assertEquals(null, new CommandParser().parse(text));
+    assertEquals(
+        null,
+        new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .parse(text));
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -330,8 +401,13 @@ class InputParserTest {
     var ai = mock(AiParser.class);
     var parsed = new ObjectMapper().readValue(json, UserIntent.class);
     when(ai.parse(anyString())).thenReturn(parsed);
-    var result = new InputParser(new CommandParser(), ai).parse("an unrecognised request");
-    assertEquals(ConversationAction.UNKNOWN, result.getIntent());
+    var result =
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                ai,
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .parse("an unrecognised request");
+    assertEquals(UnknownHandler.ACTION, result.getIntent());
     assertEquals(null, result.getPositiveSemanticQuery());
   }
 
@@ -339,15 +415,19 @@ class InputParserTest {
   void invalidCountIntentCorrectionHappensBeforeSemanticFieldsCanBeCleared() {
     var ai = mock(AiParser.class);
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.CHANGE_COUNT);
+    parsed.setIntent(ChangeCountHandler.ACTION);
     parsed.setBookCount(java.math.BigInteger.ONE);
     var genre = new SemanticQuery();
     genre.setGenres(List.of("mystery"));
     parsed.setPositiveSemanticQuery(genre);
     when(ai.parse(anyString())).thenReturn(parsed);
     var result =
-        new InputParser(new CommandParser(), ai).parse("I want two and a half mystery books");
-    assertEquals(ConversationAction.RECOMMENDATION, result.getIntent());
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                ai,
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .parse("I want two and a half mystery books");
+    assertEquals(RecommendationHandler.ACTION, result.getIntent());
     assertEquals(true, result.isInvalidBookCount());
     assertEquals(List.of("mystery"), result.getPositiveSemanticQuery().getGenres());
   }
@@ -356,13 +436,17 @@ class InputParserTest {
   void plainAuthorRequestsCannotAccidentallyRequirePersonalisationButKeepNameCasing() {
     var ai = mock(AiParser.class);
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    parsed.setIntent(RecommendationHandler.ACTION);
     parsed.setPersonalised(true);
     var exact = new com.gen3.recommenderagent.domain.search.ExactCriteria();
     exact.setAuthors(List.of("Suzanne Collins"));
     parsed.setMustInclude(exact);
     when(ai.parse(anyString())).thenReturn(parsed);
-    var parser = new InputParser(new CommandParser(), ai);
+    var parser =
+        new InputParser(
+            new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+            ai,
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     var result = parser.parse("I want a book by Suzanne Collins");
     assertEquals(false, result.isPersonalised());
     assertEquals(List.of("Suzanne Collins"), result.getMustInclude().getAuthors());
@@ -374,18 +458,44 @@ class InputParserTest {
   }
 
   @Test
+  void authorStyleUsesSavedTastesOnlyWhenRequested() {
+    var ai = mock(AiParser.class);
+    var parsed = new UserIntent();
+    parsed.setIntent(RecommendationHandler.ACTION);
+    parsed.setPersonalised(true);
+    var query = new SemanticQuery();
+    query.setAuthors(List.of("Suzanne Collins"));
+    parsed.setPositiveSemanticQuery(query);
+    when(ai.parse(anyString())).thenReturn(parsed);
+    var handlers = com.gen3.recommenderagent.testsupport.TestHandlers.registry();
+    var parser = new InputParser(new CommandParser(handlers), ai, handlers);
+
+    var style = parser.parse("I want books similar to Suzanne Collins style");
+    assertEquals(false, style.isPersonalised());
+    assertEquals(List.of("Suzanne Collins"), style.getPositiveSemanticQuery().getAuthors());
+    assertEquals(
+        true,
+        parser
+            .parse("I want books similar to Suzanne Collins style based on my preferences")
+            .isPersonalised());
+  }
+
+  @Test
   void modelRecencyCriteriaNormalizeBeforeLeavingTheParser() {
     var ai = mock(AiParser.class);
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    parsed.setIntent(RecommendationHandler.ACTION);
     var exact = new com.gen3.recommenderagent.domain.search.ExactCriteria();
     exact.setPublicationYear("more recent");
     parsed.setMustInclude(exact);
     when(ai.parse(anyString())).thenReturn(parsed);
     var result =
-        new InputParser(new CommandParser(), ai)
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                ai,
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
             .parse("I want the same kinds of books but from more recent times");
-    assertEquals(ConversationAction.REFINE, result.getIntent());
+    assertEquals(RefineHandler.ACTION, result.getIntent());
     assertEquals("more recent", result.getMustInclude().getPublicationYear());
     assertEquals(true, result.startsNewSearch());
   }
@@ -394,12 +504,15 @@ class InputParserTest {
   void anAdditionCanAlsoExplicitlyReplaceAnotherField() {
     var ai = mock(AiParser.class);
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.REFINE);
+    parsed.setIntent(RefineHandler.ACTION);
     parsed.setReplaceSearchFields(List.of("mustInclude.duration"));
     when(ai.parse(anyString())).thenReturn(parsed);
     assertEquals(
         List.of("mustInclude.duration"),
-        new InputParser(new CommandParser(), ai)
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                ai,
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
             .parse("also remove the time limit")
             .getReplaceSearchFields());
   }
@@ -413,13 +526,18 @@ class InputParserTest {
   void compoundAdditionKeepsTheRemovalButCannotReplaceTheAddedGenre(String text) {
     var ai = mock(AiParser.class);
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.REFINE);
+    parsed.setIntent(RefineHandler.ACTION);
     parsed.setReplaceSearchFields(List.of("positiveSemanticQuery.genres", "mustInclude.duration"));
     var query = new SemanticQuery();
     query.setGenres(List.of("mystery"));
     parsed.setPositiveSemanticQuery(query);
     when(ai.parse(anyString())).thenReturn(parsed);
-    var result = new InputParser(new CommandParser(), ai).parse(text);
+    var result =
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                ai,
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .parse(text);
     assertEquals(List.of("mustInclude.duration"), result.getReplaceSearchFields());
     assertEquals(List.of("mystery"), result.getPositiveSemanticQuery().getGenres());
   }
@@ -428,7 +546,7 @@ class InputParserTest {
   void modelSearchReplacementsAreCopiedAndInvalidPathsAreRejected() {
     var ai = mock(AiParser.class);
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.REFINE);
+    parsed.setIntent(RefineHandler.ACTION);
     parsed.setReplaceSearchFields(List.of("positiveSemanticQuery.genres"));
     var query = new SemanticQuery();
     query.setGenres(List.of("horror"));
@@ -436,20 +554,34 @@ class InputParserTest {
     when(ai.parse(anyString())).thenReturn(parsed);
     assertEquals(
         List.of("positiveSemanticQuery.genres"),
-        new InputParser(new CommandParser(), ai)
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                ai,
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
             .parse("make it horror instead")
             .getReplaceSearchFields());
     parsed.setReplaceSearchFields(List.of("requestId"));
     assertThrows(
         InvalidRequestException.class,
-        () -> new InputParser(new CommandParser(), ai).parse("remove that filter"));
+        () ->
+            new InputParser(
+                    new CommandParser(
+                        com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                    ai,
+                    com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+                .parse("remove that filter"));
   }
 
   @Test
   void moreRecentIsARefinementComparedWithTheDisplayedPageWithoutAi() {
     var ai = mock(AiParser.class);
-    var result = new InputParser(new CommandParser(), ai).parse("more recent");
-    assertEquals(ConversationAction.REFINE, result.getIntent());
+    var result =
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                ai,
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .parse("more recent");
+    assertEquals(RefineHandler.ACTION, result.getIntent());
     assertEquals("more recent", result.getMustInclude().getPublicationYear());
     assertEquals(null, result.getPositiveSemanticQuery());
     assertEquals(false, result.isPersonalised());
@@ -461,8 +593,13 @@ class InputParserTest {
       strings = {"no", "keep my preferences", "nothing", "No, thanks!"})
   void preferenceDeclinesSkipAiButNeedContextToCancel(String text) {
     var ai = mock(AiParser.class);
-    var parsed = new InputParser(new CommandParser(), ai).parse(text);
-    assertEquals(ConversationAction.UNKNOWN, parsed.getIntent());
+    var parsed =
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                ai,
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .parse(text);
+    assertEquals(UnknownHandler.ACTION, parsed.getIntent());
     verifyNoInteractions(ai);
   }
 
@@ -472,8 +609,13 @@ class InputParserTest {
   void confirmationsSkipAiAndLetTheSessionResolveTheirMeaning(String text) {
     var ai = mock(AiParser.class);
     assertEquals(
-        ConversationAction.UNKNOWN,
-        new InputParser(new CommandParser(), ai).parse(text).getIntent());
+        UnknownHandler.ACTION,
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                ai,
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .parse(text)
+            .getIntent());
     verifyNoInteractions(ai);
   }
 
@@ -490,9 +632,11 @@ class InputParserTest {
     "only 2 audiobooks per page,2"
   })
   void explicitCountCommandsDoNotBecomePreferenceUpdates(String text, int count) {
-    var parsed = new CommandParser().parse(text);
+    var parsed =
+        new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .parse(text);
     assertNotNull(parsed);
-    assertEquals(ConversationAction.CHANGE_COUNT, parsed.getIntent());
+    assertEquals(ChangeCountHandler.ACTION, parsed.getIntent());
     assertEquals(count, parsed.getBookCount().intValue());
   }
 
@@ -506,9 +650,11 @@ class InputParserTest {
         "explain 999999999999999999999 more"
       })
   void explanationMoreSelectsOneOriginalRankWithoutAi(String text) {
-    var parsed = new CommandParser().parse(text);
+    var parsed =
+        new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .parse(text);
     assertNotNull(parsed);
-    assertEquals(ConversationAction.EXPLAIN_RECOMMENDATION, parsed.getIntent());
+    assertEquals(ExplainRecommendationHandler.ACTION, parsed.getIntent());
     assertEquals(
         text.contains("999") ? Integer.MAX_VALUE : 2, parsed.getReferenceRank().intValue());
     assertEquals(null, parsed.getBookCount());
@@ -518,7 +664,7 @@ class InputParserTest {
   void referencePromptDistinguishesPluralRecommendationsFromMultipleReferenceTitles() {
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    parsed.setIntent(RecommendationHandler.ACTION);
     parsed.setSimilarToTitle("The Hunger Games");
     String text = "books similar to The Hunger Games";
     when(client
@@ -526,11 +672,16 @@ class InputParserTest {
             .system(anyString())
             .user(text)
             .call()
-            .responseEntity(AiParser.REQUEST_CONVERTER))
+            .responseEntity(
+                org.mockito.ArgumentMatchers
+                    .<org.springframework.ai.converter.BeanOutputConverter<
+                            com.gen3.recommenderagent.inputparser.UserIntent>>
+                        any()))
         .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     org.mockito.Mockito.clearInvocations(client.prompt());
     var result =
-        new AiParser(client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
+        com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop())
             .parse(text);
     assertEquals("The Hunger Games", result.getSimilarToTitle());
     assertEquals(false, result.isSimilarToClarificationRequired());
@@ -563,7 +714,9 @@ class InputParserTest {
 
   @Test
   void parserSchemaRequiresOnlyIntentIncludingInsideNestedCriteria() {
-    var schema = new ObjectMapper().readTree(AiParser.REQUEST_CONVERTER.getJsonSchema());
+    var schema =
+        new ObjectMapper()
+            .readTree(com.gen3.recommenderagent.testsupport.TestHandlers.CONVERTER.getJsonSchema());
     org.assertj.core.api.Assertions.assertThat(schema.path("required"))
         .containsExactly(new ObjectMapper().readTree("\"intent\""));
     org.assertj.core.api.Assertions.assertThat(schema.findValues("required")).hasSize(1);
@@ -580,7 +733,7 @@ class InputParserTest {
         parseModelJson(
             "Tell me the reason for position two",
             "{\"intent\":\"EXPLAIN_RECOMMENDATION\",\"referenceRank\":2}");
-    assertEquals(ConversationAction.EXPLAIN_RECOMMENDATION, request.getIntent());
+    assertEquals(ExplainRecommendationHandler.ACTION, request.getIntent());
     assertEquals(2, request.getReferenceRank());
     assertEquals(null, request.getBookCount());
     assertEquals(null, request.getPositiveSemanticQuery());
@@ -641,19 +794,21 @@ class InputParserTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.EnumSource(
+  @com.gen3.recommenderagent.testsupport.ActionSource(
       value = ConversationAction.class,
       names = {"UPDATE_PREFERENCES"},
-      mode = org.junit.jupiter.params.provider.EnumSource.Mode.EXCLUDE)
+      mode = com.gen3.recommenderagent.testsupport.ActionSource.Mode.EXCLUDE)
   void otherIntentsDoNotPromoteTopLevelTastesToPreferenceUpdates(ConversationAction action) {
     var parsed = new UserIntent();
     parsed.setIntent(action);
     var query = new SemanticQuery();
     query.setGenres(List.of("horror"));
     parsed.setNegativeSemanticQuery(query);
-    var request = new InputParser(null, null).toSessionRequest("horror", parsed);
+    var request =
+        new InputParser(null, null, com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .toSessionRequest("horror", parsed);
     assertEquals(null, request.getPreferenceUpdates());
-    if (action == ConversationAction.RECOMMENDATION || action == ConversationAction.REFINE) {
+    if (action == RecommendationHandler.ACTION || action == RefineHandler.ACTION) {
       assertSame(query, request.getNegativeSemanticQuery());
     } else {
       assertEquals(null, request.getNegativeSemanticQuery());
@@ -689,15 +844,20 @@ class InputParserTest {
             .system(anyString())
             .user(text)
             .call()
-            .responseEntity(AiParser.REQUEST_CONVERTER))
+            .responseEntity(
+                org.mockito.ArgumentMatchers
+                    .<org.springframework.ai.converter.BeanOutputConverter<
+                            com.gen3.recommenderagent.inputparser.UserIntent>>
+                        any()))
         .thenReturn(
             new ResponseEntity<ChatResponse, UserIntent>(
-                null, AiParser.REQUEST_CONVERTER.convert(json)));
+                null, com.gen3.recommenderagent.testsupport.TestHandlers.CONVERTER.convert(json)));
     var request =
         new InputParser(
-                new CommandParser(),
-                new AiParser(
-                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
             .parse(text);
     org.mockito.Mockito.verify(client.prompt())
         .system(
@@ -711,7 +871,7 @@ class InputParserTest {
   @Test
   void mapsPreferenceEditsWithoutPuttingThemInControlSearchSemantics() {
     var parsed =
-        AiParser.REQUEST_CONVERTER.convert(
+        com.gen3.recommenderagent.testsupport.TestHandlers.CONVERTER.convert(
             """
         {"intent":"UPDATE_PREFERENCES",
          "preferenceUpdates":{"negativeSemanticQuery":{"genres":["romance"]}},
@@ -724,15 +884,20 @@ class InputParserTest {
             .system(anyString())
             .user("avoid romance and any language is fine")
             .call()
-            .responseEntity(AiParser.REQUEST_CONVERTER))
+            .responseEntity(
+                org.mockito.ArgumentMatchers
+                    .<org.springframework.ai.converter.BeanOutputConverter<
+                            com.gen3.recommenderagent.inputparser.UserIntent>>
+                        any()))
         .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     var result =
         new InputParser(
-                new CommandParser(),
-                new AiParser(
-                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
             .parse("avoid romance and any language is fine");
-    assertEquals(ConversationAction.UPDATE_PREFERENCES, result.getIntent());
+    assertEquals(UpdatePreferencesHandler.ACTION, result.getIntent());
     assertEquals(null, result.getPositiveSemanticQuery());
     assertEquals(null, result.getNegativeSemanticQuery());
     assertEquals(
@@ -745,22 +910,27 @@ class InputParserTest {
   @Test
   void routesStandaloneCriteriaWithTheCurrentSinglePersonPrompt() {
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    parsed.setIntent(RecommendationHandler.ACTION);
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(client
             .prompt()
             .system(anyString())
             .user("fantasy under five hours")
             .call()
-            .responseEntity(AiParser.REQUEST_CONVERTER))
+            .responseEntity(
+                org.mockito.ArgumentMatchers
+                    .<org.springframework.ai.converter.BeanOutputConverter<
+                            com.gen3.recommenderagent.inputparser.UserIntent>>
+                        any()))
         .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     var result =
         new InputParser(
-                new CommandParser(),
-                new AiParser(
-                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
             .parse("fantasy under five hours");
-    assertEquals(ConversationAction.RECOMMENDATION, result.getIntent());
+    assertEquals(RecommendationHandler.ACTION, result.getIntent());
     org.mockito.Mockito.verify(client.prompt())
         .system(
             org.mockito.ArgumentMatchers.<String>argThat(
@@ -866,9 +1036,10 @@ class InputParserTest {
     var client = mock(ChatClient.class);
     var parser =
         new InputParser(
-            new CommandParser(),
-            new AiParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
+            new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     for (String raw :
         List.of(
             text,
@@ -935,24 +1106,33 @@ class InputParserTest {
       })
   void requestsOutsideExactWhitelistStillUseAi(String text) {
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.UNKNOWN);
+    parsed.setIntent(UnknownHandler.ACTION);
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(client
             .prompt()
             .system(anyString())
             .user(text)
             .call()
-            .responseEntity(AiParser.REQUEST_CONVERTER))
+            .responseEntity(
+                org.mockito.ArgumentMatchers
+                    .<org.springframework.ai.converter.BeanOutputConverter<
+                            com.gen3.recommenderagent.inputparser.UserIntent>>
+                        any()))
         .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     var result =
         new InputParser(
-                new CommandParser(),
-                new AiParser(
-                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
             .parse(text);
-    assertEquals(ConversationAction.UNKNOWN, result.getIntent());
+    assertEquals(UnknownHandler.ACTION, result.getIntent());
     org.mockito.Mockito.verify(client.prompt().system(anyString()).user(text).call())
-        .responseEntity(AiParser.REQUEST_CONVERTER);
+        .responseEntity(
+            org.mockito.ArgumentMatchers
+                .<org.springframework.ai.converter.BeanOutputConverter<
+                        com.gen3.recommenderagent.inputparser.UserIntent>>
+                    any());
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -969,11 +1149,12 @@ class InputParserTest {
     var client = mock(ChatClient.class);
     var result =
         new InputParser(
-                new CommandParser(),
-                new AiParser(
-                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
             .parse(text);
-    assertEquals(ConversationAction.UNKNOWN, result.getIntent());
+    assertEquals(UnknownHandler.ACTION, result.getIntent());
     assertEquals(text, result.getRawText());
     assertEquals(null, result.getBookCount());
     assertEquals(null, result.getReferenceRank());
@@ -993,14 +1174,21 @@ class InputParserTest {
   })
   void javaDeterminesWhetherCriteriaStartANewSearch(String text, boolean expected) {
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    parsed.setIntent(RecommendationHandler.ACTION);
     var query = new SemanticQuery();
     query.setGenres(List.of("horror"));
     parsed.setPositiveSemanticQuery(query);
     var ai = mock(AiParser.class);
     when(ai.parse(anyString())).thenReturn(parsed);
 
-    assertEquals(expected, new InputParser(new CommandParser(), ai).parse(text).startsNewSearch());
+    assertEquals(
+        expected,
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                ai,
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .parse(text)
+            .startsNewSearch());
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -1018,11 +1206,12 @@ class InputParserTest {
     var client = mock(ChatClient.class);
     var result =
         new InputParser(
-                new CommandParser(),
-                new AiParser(
-                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
             .parse(text);
-    assertEquals(ConversationAction.REFINE, result.getIntent());
+    assertEquals(RefineHandler.ACTION, result.getIntent());
     assertEquals(true, result.isShorter());
     assertEquals(true, result.startsNewSearch());
     assertEquals(null, result.getPositiveSemanticQuery());
@@ -1036,14 +1225,15 @@ class InputParserTest {
     var client = mock(ChatClient.class);
     var parser =
         new InputParser(
-            new CommandParser(),
-            new AiParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
+            new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     assertEquals(
-        ConversationAction.REPEAT_RECOMMENDATIONS,
+        RepeatRecommendationsHandler.ACTION,
         parser.parse("repeat please the recommendations").getIntent());
     assertEquals(
-        ConversationAction.REPEAT, parser.parse("could you just repeat that, thanks").getIntent());
+        RepeatHandler.ACTION, parser.parse("could you just repeat that, thanks").getIntent());
     verifyNoInteractions(client);
   }
 
@@ -1052,7 +1242,7 @@ class InputParserTest {
       strings = {"the second one’s reason", "the second one's reason"})
   void ordinalExplanationGuidanceSeparatesRankFromCount(String text) {
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.EXPLAIN_RECOMMENDATION);
+    parsed.setIntent(ExplainRecommendationHandler.ACTION);
     parsed.setReferenceRank(java.math.BigInteger.valueOf(2));
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(client
@@ -1060,15 +1250,20 @@ class InputParserTest {
             .system(anyString())
             .user(text)
             .call()
-            .responseEntity(AiParser.REQUEST_CONVERTER))
+            .responseEntity(
+                org.mockito.ArgumentMatchers
+                    .<org.springframework.ai.converter.BeanOutputConverter<
+                            com.gen3.recommenderagent.inputparser.UserIntent>>
+                        any()))
         .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     var result =
         new InputParser(
-                new CommandParser(),
-                new AiParser(
-                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
             .parse(text);
-    assertEquals(ConversationAction.EXPLAIN_RECOMMENDATION, result.getIntent());
+    assertEquals(ExplainRecommendationHandler.ACTION, result.getIntent());
     assertEquals(2, result.getReferenceRank());
     assertEquals(null, result.getBookCount());
     org.mockito.Mockito.verify(client.prompt())
@@ -1082,7 +1277,7 @@ class InputParserTest {
   @Test
   void mapsExplanationSelectorsWithoutTreatingRankAsBookCount() {
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.EXPLAIN_RECOMMENDATION);
+    parsed.setIntent(ExplainRecommendationHandler.ACTION);
     parsed.setReferenceRank(java.math.BigInteger.valueOf(6));
     parsed.setReferenceTitle("Harry Potter");
     var client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
@@ -1091,15 +1286,20 @@ class InputParserTest {
             .system(anyString())
             .user("why")
             .call()
-            .responseEntity(AiParser.REQUEST_CONVERTER))
+            .responseEntity(
+                org.mockito.ArgumentMatchers
+                    .<org.springframework.ai.converter.BeanOutputConverter<
+                            com.gen3.recommenderagent.inputparser.UserIntent>>
+                        any()))
         .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     var result =
         new InputParser(
-                new CommandParser(),
-                new AiParser(
-                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
             .parse("why");
-    assertEquals(ConversationAction.EXPLAIN_RECOMMENDATION, result.getIntent());
+    assertEquals(ExplainRecommendationHandler.ACTION, result.getIntent());
     assertEquals(6, result.getReferenceRank());
     assertEquals("Harry Potter", result.getReferenceTitle());
     assertEquals(null, result.getBookCount());
@@ -1110,7 +1310,7 @@ class InputParserTest {
       strings = {"1008392481092349012389201382", "2147483648", "-2147483649"})
   void oversizedModelNumbersCannotOverflowRanksOrCounts(String number) {
     var parsed =
-        AiParser.REQUEST_CONVERTER.convert(
+        com.gen3.recommenderagent.testsupport.TestHandlers.CONVERTER.convert(
             "{\"intent\":\"EXPLAIN_RECOMMENDATION\",\"referenceRank\":"
                 + number
                 + ",\"bookCount\":"
@@ -1123,13 +1323,18 @@ class InputParserTest {
             .system(anyString())
             .user(raw)
             .call()
-            .responseEntity(AiParser.REQUEST_CONVERTER))
+            .responseEntity(
+                org.mockito.ArgumentMatchers
+                    .<org.springframework.ai.converter.BeanOutputConverter<
+                            com.gen3.recommenderagent.inputparser.UserIntent>>
+                        any()))
         .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     var result =
         new InputParser(
-                new CommandParser(),
-                new AiParser(
-                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
             .parse(raw);
     assertEquals(
         number.startsWith("-") ? Integer.MIN_VALUE : Integer.MAX_VALUE, result.getReferenceRank());
@@ -1147,12 +1352,16 @@ class InputParserTest {
               .system(anyString())
               .user("bad number")
               .call()
-              .responseEntity(AiParser.REQUEST_CONVERTER))
+              .responseEntity(
+                  org.mockito.ArgumentMatchers
+                      .<org.springframework.ai.converter.BeanOutputConverter<
+                              com.gen3.recommenderagent.inputparser.UserIntent>>
+                          any()))
           .thenAnswer(
               ignored ->
                   new ResponseEntity<>(
                       null,
-                      AiParser.REQUEST_CONVERTER.convert(
+                      com.gen3.recommenderagent.testsupport.TestHandlers.CONVERTER.convert(
                           "{\"intent\":\"EXPLAIN_RECOMMENDATION\",\""
                               + field
                               + "\":"
@@ -1160,9 +1369,10 @@ class InputParserTest {
                               + "}")));
       var parser =
           new InputParser(
-              new CommandParser(),
-              new AiParser(
-                  client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
+              new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+              com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                  client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+              com.gen3.recommenderagent.testsupport.TestHandlers.registry());
       assertThrows(InvalidRequestException.class, () -> parser.parse("bad number"));
     }
   }
@@ -1172,9 +1382,10 @@ class InputParserTest {
     var client = mock(ChatClient.class);
     var parser =
         new InputParser(
-            new CommandParser(),
-            new AiParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
+            new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     assertThrows(
         InvalidRequestException.class,
         () -> parser.parse("x".repeat(InputParser.MAX_REQUEST_CHARACTERS + 1)));
@@ -1182,7 +1393,7 @@ class InputParserTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.EnumSource(
+  @com.gen3.recommenderagent.testsupport.ActionSource(
       value = ConversationAction.class,
       names = {
         "MORE_RESULTS",
@@ -1211,11 +1422,20 @@ class InputParserTest {
             .system(anyString())
             .user("control")
             .call()
-            .responseEntity(AiParser.REQUEST_CONVERTER))
+            .responseEntity(
+                org.mockito.ArgumentMatchers
+                    .<org.springframework.ai.converter.BeanOutputConverter<
+                            com.gen3.recommenderagent.inputparser.UserIntent>>
+                        any()))
         .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     var builder = mock(ChatClient.Builder.class);
     when(builder.build()).thenReturn(client);
-    var result = new InputParser(new CommandParser(), new AiParser(builder)).parse("control");
+    var result =
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.ai(builder),
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .parse("control");
     assertEquals(null, result.getPositiveSemanticQuery());
     assertEquals(null, result.getNegativeSemanticQuery());
     assertEquals(false, result.isPersonalised());
@@ -1227,7 +1447,7 @@ class InputParserTest {
   void recordsProviderUsageWhileReturningOnlyTheRequest(
       org.springframework.boot.test.system.CapturedOutput output) {
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.HELP);
+    parsed.setIntent(HelpHandler.ACTION);
     var response = mock(ChatResponse.class, RETURNS_DEEP_STUBS);
     when(response.getMetadata().getModel()).thenReturn("parser-model");
     when(response.getMetadata().getUsage().getPromptTokens()).thenReturn(12);
@@ -1239,16 +1459,23 @@ class InputParserTest {
             .system(anyString())
             .user("Could you explain how this service works?")
             .call()
-            .responseEntity(AiParser.REQUEST_CONVERTER))
+            .responseEntity(
+                org.mockito.ArgumentMatchers
+                    .<org.springframework.ai.converter.BeanOutputConverter<
+                            com.gen3.recommenderagent.inputparser.UserIntent>>
+                        any()))
         .thenReturn(new ResponseEntity<>(response, parsed));
     var observer =
         new com.gen3.recommenderagent.observability.AiOperationObserver(
             new org.springframework.beans.factory.support.DefaultListableBeanFactory()
                 .getBeanProvider(org.springframework.core.retry.RetryTemplate.class));
     var result =
-        new InputParser(new CommandParser(), new AiParser(client, observer))
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.ai(client, observer),
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
             .parse("Could you explain how this service works?");
-    assertEquals(ConversationAction.HELP, result.getIntent());
+    assertEquals(HelpHandler.ACTION, result.getIntent());
     org.assertj.core.api.Assertions.assertThat(output.getOut())
         .contains(
             "parser.completed mode=AI outcome=SUCCESS durationMs=",
@@ -1275,11 +1502,12 @@ class InputParserTest {
     var client = mock(ChatClient.class);
     var result =
         new InputParser(
-                new CommandParser(),
-                new AiParser(
-                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
             .parse(text);
-    assertEquals(ConversationAction.MORE_RESULTS, result.getIntent());
+    assertEquals(MoreResultsHandler.ACTION, result.getIntent());
     assertEquals(2, result.getBookCount());
     assertEquals(null, result.getReferenceRank());
     assertEquals(null, result.getPositiveSemanticQuery());
@@ -1313,11 +1541,12 @@ class InputParserTest {
     var client = mock(ChatClient.class);
     var result =
         new InputParser(
-                new CommandParser(),
-                new AiParser(
-                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
             .parse(text);
-    assertEquals(ConversationAction.MORE_RESULTS, result.getIntent());
+    assertEquals(MoreResultsHandler.ACTION, result.getIntent());
     assertEquals(count, result.getBookCount());
     assertEquals(null, result.getReferenceRank());
     assertEquals(null, result.getPositiveSemanticQuery());
@@ -1334,7 +1563,7 @@ class InputParserTest {
   void preservesRelativePublicationWindowsForDeterministicFiltering(
       String raw, String window, int years) {
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    parsed.setIntent(RecommendationHandler.ACTION);
     var include = new ExactCriteria();
     include.setPublicationYear(window);
     parsed.setMustInclude(include);
@@ -1347,13 +1576,18 @@ class InputParserTest {
             .system(anyString())
             .user(raw)
             .call()
-            .responseEntity(AiParser.REQUEST_CONVERTER))
+            .responseEntity(
+                org.mockito.ArgumentMatchers
+                    .<org.springframework.ai.converter.BeanOutputConverter<
+                            com.gen3.recommenderagent.inputparser.UserIntent>>
+                        any()))
         .thenReturn(new ResponseEntity<>(null, parsed));
     var result =
         new InputParser(
-                new CommandParser(),
-                new AiParser(
-                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()))
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                    client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
             .parse(raw);
     assertEquals(window, result.getMustInclude().getPublicationYear());
     assertEquals(List.of("romance"), result.getPositiveSemanticQuery().getGenres());
@@ -1371,7 +1605,7 @@ class InputParserTest {
   void mapsPersonalisedRequestWithoutInventingSearchCriteria() {
     String rawText = "Give me books I would like";
     UserIntent parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    parsed.setIntent(RecommendationHandler.ACTION);
     parsed.setPersonalised(true);
     ChatClient client = mock(ChatClient.class, RETURNS_DEEP_STUBS);
     when(client
@@ -1379,13 +1613,21 @@ class InputParserTest {
             .system(anyString())
             .user(rawText)
             .call()
-            .responseEntity(AiParser.REQUEST_CONVERTER))
+            .responseEntity(
+                org.mockito.ArgumentMatchers
+                    .<org.springframework.ai.converter.BeanOutputConverter<
+                            com.gen3.recommenderagent.inputparser.UserIntent>>
+                        any()))
         .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsed));
     ChatClient.Builder builder = mock(ChatClient.Builder.class);
     when(builder.build()).thenReturn(client);
 
     SessionRequest result =
-        new InputParser(new CommandParser(), new AiParser(builder)).parse(rawText);
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.ai(builder),
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .parse(rawText);
 
     assertEquals(true, result.isPersonalised());
     assertEquals(null, result.getPositiveSemanticQuery());
@@ -1402,7 +1644,7 @@ class InputParserTest {
     UserIntent parsedRequest = new UserIntent();
     SemanticQuery negativeSemanticQuery = new SemanticQuery();
     negativeSemanticQuery.setTopics(List.of("romance"));
-    parsedRequest.setIntent(ConversationAction.RECOMMENDATION);
+    parsedRequest.setIntent(RecommendationHandler.ACTION);
     parsedRequest.setPositiveSemanticQuery(semanticQuery);
     parsedRequest.setNegativeSemanticQuery(negativeSemanticQuery);
     ExactCriteria mustInclude = new ExactCriteria();
@@ -1420,18 +1662,26 @@ class InputParserTest {
             .system(anyString())
             .user(rawText)
             .call()
-            .responseEntity(AiParser.REQUEST_CONVERTER))
+            .responseEntity(
+                org.mockito.ArgumentMatchers
+                    .<org.springframework.ai.converter.BeanOutputConverter<
+                            com.gen3.recommenderagent.inputparser.UserIntent>>
+                        any()))
         .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, parsedRequest));
 
     ChatClient.Builder builder = mock(ChatClient.Builder.class);
     when(builder.build()).thenReturn(chatClient);
 
     SessionRequest result =
-        new InputParser(new CommandParser(), new AiParser(builder)).parse(rawText);
+        new InputParser(
+                new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.ai(builder),
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .parse(rawText);
 
     assertNotNull(result);
     assertEquals(rawText, result.getRawText());
-    assertEquals(ConversationAction.RECOMMENDATION, result.getIntent());
+    assertEquals(RecommendationHandler.ACTION, result.getIntent());
     assertSame(semanticQuery, result.getPositiveSemanticQuery());
     assertSame(negativeSemanticQuery, result.getNegativeSemanticQuery());
     assertSame(mustInclude, result.getMustInclude());
@@ -1451,9 +1701,10 @@ class InputParserTest {
     var client = mock(ChatClient.class);
     var parser =
         new InputParser(
-            new CommandParser(),
-            new AiParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
+            new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     parser.parse("help");
     org.assertj.core.api.Assertions.assertThat(output.getOut())
         .containsPattern("parser.completed mode=FAST_PATH outcome=SUCCESS durationMs=[0-9]+")
@@ -1469,9 +1720,10 @@ class InputParserTest {
     var client = mock(ChatClient.class);
     var parser =
         new InputParser(
-            new CommandParser(),
-            new AiParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
+            new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     assertThrows(InvalidRequestException.class, () -> parser.parse(" "));
     org.assertj.core.api.Assertions.assertThat(output.getOut())
         .containsPattern("parser.completed mode=VALIDATION outcome=FAILURE durationMs=[0-9]+")
@@ -1484,9 +1736,10 @@ class InputParserTest {
     var client = mock(ChatClient.class);
     var parser =
         new InputParser(
-            new CommandParser(),
-            new AiParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
+            new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     assertThrows(
         InvalidRequestException.class,
         () -> parser.parse("help" + " ".repeat(InputParser.MAX_REQUEST_CHARACTERS)));
@@ -1499,7 +1752,11 @@ class InputParserTest {
     ChatClient.Builder builder = mock(ChatClient.Builder.class);
     when(builder.build()).thenReturn(chatClient);
 
-    InputParser parser = new InputParser(new CommandParser(), new AiParser(builder));
+    InputParser parser =
+        new InputParser(
+            new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.ai(builder),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
 
     InvalidRequestException exception =
         assertThrows(InvalidRequestException.class, () -> parser.parse("   "));
@@ -1521,7 +1778,11 @@ class InputParserTest {
             .system(anyString())
             .user(rawText)
             .call()
-            .responseEntity(AiParser.REQUEST_CONVERTER))
+            .responseEntity(
+                org.mockito.ArgumentMatchers
+                    .<org.springframework.ai.converter.BeanOutputConverter<
+                            com.gen3.recommenderagent.inputparser.UserIntent>>
+                        any()))
         .thenReturn(new ResponseEntity<ChatResponse, UserIntent>(null, null));
 
     ChatClient.Builder builder = mock(ChatClient.Builder.class);
@@ -1530,7 +1791,13 @@ class InputParserTest {
     IllegalStateException exception =
         assertThrows(
             IllegalStateException.class,
-            () -> new InputParser(new CommandParser(), new AiParser(builder)).parse(rawText));
+            () ->
+                new InputParser(
+                        new CommandParser(
+                            com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                        com.gen3.recommenderagent.testsupport.TestHandlers.ai(builder),
+                        com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+                    .parse(rawText));
 
     assertEquals("AI did not return a UserIntent", exception.getMessage());
     org.assertj.core.api.Assertions.assertThat(output.getOut())

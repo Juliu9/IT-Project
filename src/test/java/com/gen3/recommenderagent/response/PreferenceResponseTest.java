@@ -2,6 +2,8 @@ package com.gen3.recommenderagent.response;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.gen3.recommenderagent.application.conversation.intent.ExplainPreferencesHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RepeatHandler;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
@@ -11,7 +13,9 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class PreferenceResponseTest {
-  private final ConversationResponseGenerator generator = new ConversationResponseGenerator(null);
+  private final ConversationResponseGenerator generator =
+      new ConversationResponseGenerator(
+          null, com.gen3.recommenderagent.testsupport.TestHandlers.registry());
 
   @Test
   void emptyPreferencesShowCountWithoutEmptyFields() {
@@ -146,7 +150,7 @@ class PreferenceResponseTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.EnumSource(
+  @com.gen3.recommenderagent.testsupport.ActionSource(
       value = ConversationAction.class,
       names = {"EXPLAIN_PREFERENCES", "REPEAT"})
   void longConstraintsAreNeverTruncatedEvenWhenRepeated(ConversationAction action) {
@@ -161,8 +165,8 @@ class PreferenceResponseTest {
     preferences.setMustNotInclude(excluded);
     var turn = new ConversationTurn();
     turn.setIntent(action);
-    if (action == ConversationAction.REPEAT) {
-      turn.setResponseAction(ConversationAction.EXPLAIN_PREFERENCES);
+    if (action == RepeatHandler.ACTION) {
+      turn.setResponseAction(ExplainPreferencesHandler.ACTION);
     }
     turn.setSessionPreferenceSnapshot(preferences);
     turn.setBookCount(3);
@@ -195,7 +199,7 @@ class PreferenceResponseTest {
 
   private String render(SessionPreferences preferences) {
     var turn = new ConversationTurn();
-    turn.setIntent(ConversationAction.EXPLAIN_PREFERENCES);
+    turn.setIntent(ExplainPreferencesHandler.ACTION);
     turn.setBookCount(3);
     turn.setSessionPreferenceSnapshot(preferences);
     return generator.generate(List.of(), turn);

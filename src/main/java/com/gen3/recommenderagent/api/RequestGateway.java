@@ -1,7 +1,6 @@
 package com.gen3.recommenderagent.api;
 
-import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.application.conversation.SessionRequest;
+import com.gen3.recommenderagent.application.session.SessionTransitionService;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
@@ -96,7 +95,6 @@ public class RequestGateway {
         telemetry.start();
       }
     }
-    SessionRequest currentRequest = null;
     boolean completed = false;
     try {
       UserIntent parsedIntent =
@@ -124,7 +122,7 @@ public class RequestGateway {
       return payload;
     } finally {
       if (telemetry != null && !completed) {
-        telemetry.fail(currentRequest);
+        telemetry.fail();
       }
     }
   }

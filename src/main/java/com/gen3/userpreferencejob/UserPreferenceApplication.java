@@ -5,6 +5,7 @@ import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.PropertySource;
@@ -18,12 +19,10 @@ import org.springframework.core.env.Environment;
       org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoConfiguration.class,
       org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration.class
     })
+@ComponentScan("com.gen3.recommenderagent.storage.user")
 @Import({
   com.gen3.shared.audiobookcatalogue.qdrant.QdrantConfig.class,
-  com.gen3.recommenderagent.storage.user.qdrant.QdrantUserPreferenceRepository.class,
-  com.gen3.recommenderagent.storage.user.qdrant.QdrantUserPreferenceMapper.class,
   com.gen3.shared.audiobookcatalogue.solr.SolrConfig.class,
-  com.gen3.recommenderagent.storage.user.solr.SolrUserPreferenceRepository.class,
   com.gen3.userpreferencejob.UserPreferenceStartupImporter.class,
   com.gen3.userpreferencejob.StreamingUserPreferenceImporter.class,
   com.gen3.userpreferencejob.DryRunUserPreferenceRepository.class,

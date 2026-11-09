@@ -22,7 +22,7 @@ opt AI fallback needs reference context
   Parser -> Transition : Invoke supplied context callback:\nparserContext(sessionId, userId)
   Transition -> Sessions : snapshot(sessionId, userId)
   Sessions --> Transition : Read-only session snapshot
-  Transition -> Transition : SessionContextProjector.project(snapshot)
+  Transition -> Transition : Project bounded parser context
   Transition --> Parser : Pending question, last action, displayed book ranks/titles
 end
 Parser --> Gateway : UserIntent
@@ -41,8 +41,8 @@ note over Sessions
 end note
 Sessions -> Transition : Apply change to loaded session
 activate Transition
-Transition -> Transition : IntentResolver.resolve(session, text, intent)\nCreate SessionRequest and apply session guardrails
-Transition -> Engine : Resolve, validate and complete the turn
+Transition -> Transition : InputParser.toSessionRequest(text, intent)\nCapture request ID and intent for failure logs
+Transition -> Engine : Route pending reply or interruption\nResolve, validate and complete the turn
 activate Engine
 
 alt REPEAT
@@ -72,7 +72,7 @@ else Recommendation, refinement, or MORE
     alt Personalised request lacks usable preferences
       Workflow --> Engine : Ask for taste preferences
     else Search can proceed
-      Workflow -> Workflow : Retrieve up to 50 candidates\nRank up to 20 recommendations
+      Workflow -> Workflow : Run ordered retrieval strategies (up to 50 candidates)\nRank up to 20 recommendations with weighted scorers
       Workflow --> Engine : New batch for session queue
     end
     deactivate Workflow

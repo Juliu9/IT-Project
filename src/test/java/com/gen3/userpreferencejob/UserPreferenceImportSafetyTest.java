@@ -41,6 +41,34 @@ class UserPreferenceImportSafetyTest {
     assertThat(users.saved).doesNotContainKey("unmapped");
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void preservesExistingSideWhenVectorsCancel(boolean historyCancels) throws Exception {
+    var books = new Books(Map.of("one", new float[] {1, 0}, "opposite", new float[] {-1, 0}));
+    var users = new Users();
+    users.saved.put(
+        "user", new UserPreferenceEmbedding("user", new float[] {0, 1}, new float[] {0, 1}));
+    var service = new UserPreferenceAggregatorService(books, users);
+    var now = Instant.parse("2026-01-01T00:00:00Z");
+    var favourite = new UserFavourite("user", "one");
+    var history = new UserHistory("user", "one", now);
+
+    service.aggregateAndSave(
+        historyCancels
+            ? List.of(favourite)
+            : List.of(favourite, new UserFavourite("user", "opposite")),
+        historyCancels
+            ? List.of(history, new UserHistory("user", "opposite", now))
+            : List.of(history),
+        now);
+
+    var saved = users.saved.get("user");
+    assertThat(saved.favouritesVector())
+        .containsExactly(historyCancels ? 1 : 0, historyCancels ? 0 : 1);
+    assertThat(saved.historyVector())
+        .containsExactly(historyCancels ? 0 : 1, historyCancels ? 1 : 0);
+  }
+
   @Test
   void writeModeAbortsAfterCompletePreflightWhenUnmappedRatioExceedsLimit() throws Exception {
     var users = new Users();

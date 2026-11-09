@@ -8,7 +8,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
 import java.util.List;
@@ -27,11 +28,10 @@ class ResponseGeneratorFailureTest {
   private final ConversationDraft request = new ConversationDraft();
 
   @ParameterizedTest
-  @org.junit.jupiter.params.provider.EnumSource(
-      value = com.gen3.recommenderagent.domain.conversation.ConversationAction.class,
+  @com.gen3.recommenderagent.testsupport.ActionSource(
+      value = ConversationAction.class,
       names = {"RECOMMENDATION", "EXPLAIN_RECOMMENDATION"})
-  void incompleteNarrationFallsBackToEverySuppliedBook(
-      com.gen3.recommenderagent.domain.conversation.ConversationAction action) {
+  void incompleteNarrationFallsBackToEverySuppliedBook(ConversationAction action) {
     var page =
         java.util.stream.IntStream.rangeClosed(1, 5)
             .mapToObj(
@@ -53,7 +53,8 @@ class ResponseGeneratorFailureTest {
                         new AssistantMessage("Here are five books: Title 1 and Title 2.")))));
     String response =
         new ConversationResponseGenerator(
-                new AiResponseGenerator(client, AiOperationObserver.noop()))
+                new AiResponseGenerator(client, AiOperationObserver.noop()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
             .generate(page, ConversationDraft.toTurn(request));
     for (int rank = 1; rank <= 5; rank++) {
       assertThat(response).contains("Number " + rank + ", Title " + rank);
@@ -78,7 +79,8 @@ class ResponseGeneratorFailureTest {
         .thenReturn(new ChatResponse(List.of(new Generation(new AssistantMessage(text)))));
     assertThat(
             new ConversationResponseGenerator(
-                    new AiResponseGenerator(client, AiOperationObserver.noop()))
+                    new AiResponseGenerator(client, AiOperationObserver.noop()),
+                    com.gen3.recommenderagent.testsupport.TestHandlers.registry())
                 .generate(page, ConversationDraft.toTurn(request)))
         .isEqualTo(text);
   }
@@ -90,7 +92,8 @@ class ResponseGeneratorFailureTest {
         .thenReturn(new ChatResponse(List.of(new Generation(new AssistantMessage("Try Dunes.")))));
     assertThat(
             new ConversationResponseGenerator(
-                    new AiResponseGenerator(client, AiOperationObserver.noop()))
+                    new AiResponseGenerator(client, AiOperationObserver.noop()),
+                    com.gen3.recommenderagent.testsupport.TestHandlers.registry())
                 .generate(
                     List.of(new Recommendation("one", 1, 0.9, "Dune")),
                     ConversationDraft.toTurn(request)))
@@ -107,10 +110,13 @@ class ResponseGeneratorFailureTest {
                 "replacement provider unavailable"));
     assertThat(
             new ConversationResponseGenerator(
-                    new AiResponseGenerator(client, AiOperationObserver.noop()))
+                    new AiResponseGenerator(client, AiOperationObserver.noop()),
+                    com.gen3.recommenderagent.testsupport.TestHandlers.registry())
                 .generate(books, ConversationDraft.toTurn(request)))
         .isEqualTo(
-            new ConversationResponseGenerator(new AiResponseGenerator(null))
+            new ConversationResponseGenerator(
+                    new AiResponseGenerator(null),
+                    com.gen3.recommenderagent.testsupport.TestHandlers.registry())
                 .generate(books, ConversationDraft.toTurn(request)));
   }
 
@@ -122,10 +128,13 @@ class ResponseGeneratorFailureTest {
         .thenReturn(response);
     assertThat(
             new ConversationResponseGenerator(
-                    new AiResponseGenerator(client, AiOperationObserver.noop()))
+                    new AiResponseGenerator(client, AiOperationObserver.noop()),
+                    com.gen3.recommenderagent.testsupport.TestHandlers.registry())
                 .generate(books, ConversationDraft.toTurn(request)))
         .isEqualTo(
-            new ConversationResponseGenerator(new AiResponseGenerator(null))
+            new ConversationResponseGenerator(
+                    new AiResponseGenerator(null),
+                    com.gen3.recommenderagent.testsupport.TestHandlers.registry())
                 .generate(books, ConversationDraft.toTurn(request)));
   }
 
@@ -137,7 +146,8 @@ class ResponseGeneratorFailureTest {
     assertThatThrownBy(
             () ->
                 new ConversationResponseGenerator(
-                        new AiResponseGenerator(client, AiOperationObserver.noop()))
+                        new AiResponseGenerator(client, AiOperationObserver.noop()),
+                        com.gen3.recommenderagent.testsupport.TestHandlers.registry())
                     .generate(List.of(broken), ConversationDraft.toTurn(request)))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessage("invalid recommendation");
@@ -153,7 +163,8 @@ class ResponseGeneratorFailureTest {
     assertThatThrownBy(
             () ->
                 new ConversationResponseGenerator(
-                        new AiResponseGenerator(client, AiOperationObserver.noop()))
+                        new AiResponseGenerator(client, AiOperationObserver.noop()),
+                        com.gen3.recommenderagent.testsupport.TestHandlers.registry())
                     .generate(books, ConversationDraft.toTurn(request)))
         .isSameAs(failure);
   }

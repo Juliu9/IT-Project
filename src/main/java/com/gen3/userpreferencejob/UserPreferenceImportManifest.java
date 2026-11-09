@@ -1,9 +1,11 @@
 package com.gen3.userpreferencejob;
 
+import com.gen3.shared.audiobookcatalogue.qdrant.QdrantConfig;
 import com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
@@ -12,14 +14,17 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Properties;
 import java.util.Set;
+import org.springframework.core.env.Environment;
 
 /** Binds write mode to the exact inputs and outcome reviewed in a preceding dry run. */
 public class UserPreferenceImportManifest {
   private final Path path;
+  private final Environment environment;
 
   /** Selects the manifest file used to bind writes to an approved dry run. */
-  public UserPreferenceImportManifest(Path path) {
+  public UserPreferenceImportManifest(Path path, Environment environment) {
     this.path = path;
+    this.environment = environment;
   }
 
   /**
@@ -63,6 +68,12 @@ public class UserPreferenceImportManifest {
     var properties = new Properties();
     file(properties, "favourites", favourites);
     file(properties, "history", history);
+    String backend = snapshot.backend();
+    properties.setProperty("destination.backend", backend);
+    properties.setProperty("destination.endpoint", destinationEndpoint(backend));
+    properties.setProperty(
+        "destination.collection",
+        environment.getProperty(backend + ".user-preference-collection", "user"));
     properties.setProperty("snapshot.file", snapshot.file());
     properties.setProperty("snapshot.sha256", snapshot.sha256());
     properties.setProperty("snapshot.backend", snapshot.backend());
@@ -74,6 +85,32 @@ public class UserPreferenceImportManifest {
     properties.setProperty("outcome.partial-updates", Long.toString(plan.partialUpdates()));
     properties.setProperty("outcome.unmapped-users", Integer.toString(plan.unmappedUsers().size()));
     return properties;
+  }
+
+  /** Uses the actual Qdrant gRPC address or a credential-free profile server URL. */
+  private String destinationEndpoint(String backend) {
+    String url = environment.getRequiredProperty(backend + ".url");
+    try {
+      if ("qdrant".equals(backend)) {
+        URI uri = QdrantConfig.parseUrl(url);
+        String scheme = "https".equalsIgnoreCase(uri.getScheme()) ? "https" : "http";
+        return scheme
+            + "://"
+            + uri.getHost()
+            + ":"
+            + environment.getProperty("qdrant.grpc-port", Integer.class, 6334);
+      }
+      URI uri = URI.create(url);
+      if (uri.getHost() != null
+          && uri.getRawUserInfo() == null
+          && uri.getRawQuery() == null
+          && uri.getRawFragment() == null) {
+        return uri.toString();
+      }
+    } catch (IllegalArgumentException ignored) {
+      // URI parse errors can contain credentials from the supplied URL.
+    }
+    throw new IllegalArgumentException("Invalid profile destination URL for " + backend);
   }
 
   /** Adds the normalized input path and its checksum to the manifest properties. */

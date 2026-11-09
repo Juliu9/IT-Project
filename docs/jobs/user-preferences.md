@@ -32,8 +32,8 @@ to keep very old histories numerically usable without changing their relative we
 | Rule | Behaviour |
 | --- | --- |
 | Mapped favourites/history side | Replaces that stored side |
-| Missing or completely unmapped side | Preserves the existing stored side |
-| User with no mapped vectors | Skipped; existing profile is unchanged |
+| Missing side, unmapped side, or vectors that cancel to zero | Preserves the existing stored side |
+| User with no usable aggregate on either side | Skipped; existing profile is unchanged |
 | User absent from both files | Unchanged |
 | Maximum distinct books per user/group | 100,000 by default; excess fails before writes |
 | In-memory input target | About 100,000 rows; a user is never split |
@@ -90,7 +90,9 @@ AUDIOBOOK_DATABASE=qdrant USER_PREFERENCES_IMPORT_ON_STARTUP=true \
 Use `AUDIOBOOK_DATABASE=solr` for Solr. Review the logged full/partial/unmapped counts and restricted
 unmapped-user report. A successful dry run creates an owner-only approval manifest at
 `./data/user-import-work/approved.properties` by default. It records the input and snapshot hashes,
-snapshot identity, and projected outcomes.
+snapshot identity, projected outcomes, and the profile destination (backend, endpoint, and
+collection). Qdrant approval uses the gRPC port. The manifest omits credentials. Run a fresh dry
+run if your manifest predates the destination fields.
 
 ### 2. Write
 
@@ -106,8 +108,9 @@ AUDIOBOOK_DATABASE=qdrant USER_PREFERENCES_IMPORT_ON_STARTUP=true \
 ```
 
 **Write mode changes profiles.** It recomputes the preflight and refuses to write unless the exact
-files, snapshot, identity, and outcomes match the approved dry run. Run it separately from the
-recommendation server and other maintenance jobs. Any mode other than `dry-run` or `write` fails.
+files, snapshot identity, projected outcomes, and profile destination match the approved dry run.
+Run it separately from the recommendation server and other maintenance jobs. Any mode other than
+`dry-run` or `write` fails.
 
 ## Completion and recovery
 

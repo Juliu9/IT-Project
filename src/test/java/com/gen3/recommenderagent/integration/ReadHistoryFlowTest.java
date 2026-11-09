@@ -7,8 +7,12 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.conversation.intent.ExplainRecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.intent.MoreResultsHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RepeatRecommendationsHandler;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.application.recommendation.ReadHistoryExclusions;
 import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
@@ -35,7 +39,7 @@ class ReadHistoryFlowTest {
     var service =
         ConversationTestSupport.transitions(
             sessions, workflow, new ReadHistoryExclusions(Optional.of(history), 10000));
-    var search = request(ConversationAction.RECOMMENDATION);
+    var search = request(RecommendationHandler.ACTION);
     var tastes = new SemanticQuery();
     tastes.setGenres(List.of("mystery"));
     search.setPositiveSemanticQuery(tastes);
@@ -44,18 +48,18 @@ class ReadHistoryFlowTest {
         .containsExactly("book-1");
     assertThat(
             service
-                .process("session", "user", request(ConversationAction.REPEAT_RECOMMENDATIONS))
+                .process("session", "user", request(RepeatRecommendationsHandler.ACTION))
                 .getRecommendations())
         .extracting(Recommendation::getId)
         .containsExactly("book-1");
-    var explanation = request(ConversationAction.EXPLAIN_RECOMMENDATION);
+    var explanation = request(ExplainRecommendationHandler.ACTION);
     explanation.setReferenceRank(1);
     assertThat(service.process("session", "user", explanation).getRecommendations())
         .extracting(Recommendation::getId)
         .containsExactly("book-1");
     assertThat(
             service
-                .process("session", "user", request(ConversationAction.MORE_RESULTS))
+                .process("session", "user", request(MoreResultsHandler.ACTION))
                 .getRecommendations())
         .extracting(Recommendation::getId)
         .containsExactly("book-3");
