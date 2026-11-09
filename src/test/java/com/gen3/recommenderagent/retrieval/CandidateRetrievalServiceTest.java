@@ -7,13 +7,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.domain.search.SimilarBookReference;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectors;
-import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
 import com.gen3.shared.audiobookcatalogue.model.AudiobookCandidate;
 import com.gen3.shared.audiobookcatalogue.model.AudiobookFilterConditions;
 import com.gen3.shared.audiobookcatalogue.model.AudiobookFilters;
@@ -77,6 +76,24 @@ class CandidateRetrievalServiceTest {
                 AudiobookFilterConditions.empty(),
                 List.of()),
             5);
+  }
+
+  @Test
+  void exactFiltersReachTheAdapterWithoutCombiningEmbeddings() throws Exception {
+    var search = mock(AudiobookCandidateSearch.class);
+    var embeddings = mock(QueryEmbeddingService.class);
+    var request = new ConversationDraft();
+    var criteria = new ExactCriteria();
+    criteria.setLanguage("English");
+    request.setMustInclude(criteria);
+
+    service("test", search, embeddings).getCandidates(request, null, 5, Set.of("shown"));
+
+    var filters = org.mockito.ArgumentCaptor.forClass(AudiobookFilters.class);
+    verify(search).searchByFilters(filters.capture(), org.mockito.ArgumentMatchers.eq(5));
+    assertThat(filters.getValue().mustInclude().language()).isEqualTo("English");
+    assertThat(filters.getValue().excludedBookIds()).containsExactly("shown");
+    org.mockito.Mockito.verifyNoInteractions(embeddings);
   }
 
   @Test
@@ -174,8 +191,8 @@ class CandidateRetrievalServiceTest {
       String backend,
       AudiobookCandidateSearch candidateSearch,
       QueryEmbeddingService embeddingIndexer) {
-    return new CandidateRetrievalService(
-        backend, candidateSearch, embeddingIndexer, new AudiobookRetrievalPlanner());
+    return com.gen3.recommenderagent.testsupport.TestCandidateRetrievers.create(
+        backend, candidateSearch, embeddingIndexer);
   }
 
   private ConversationDraft requestWithTopic(String topic) {

@@ -1,15 +1,9 @@
 package com.gen3.recommenderagent.retrieval.plan;
 
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
-import com.gen3.recommenderagent.application.conversation.PreferenceRequestMapper;
-import com.gen3.recommenderagent.application.conversation.SessionRequest;
-import com.gen3.recommenderagent.application.conversation.workflow.ConversationHistory;
-import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationOutcome;
-import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
+import com.gen3.recommenderagent.application.conversation.model.PreferenceRequestMapper;
+import com.gen3.recommenderagent.application.conversation.model.SessionRequest;
 import com.gen3.recommenderagent.domain.search.DurationRange;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
-import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.inputparser.ConversationText;
 import com.gen3.recommenderagent.inputparser.DurationParser;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
@@ -70,12 +64,6 @@ public class ExactFilterPolicy {
   /** Validates new constraints and reconciles inherited conflicts using the explicit correction. */
   public void resolveFilterCorrections(
       SessionRequest resolved, SessionRequest incoming, SessionRequest previousSearch) {
-    if ((resolved.getIntent() != ConversationAction.RECOMMENDATION
-        && resolved.getIntent() != ConversationAction.REFINE
-        && resolved.getIntent() != ConversationAction.MORE_RESULTS
-        && resolved.getIntent() != ConversationAction.UPDATE_PREFERENCES)) {
-      return;
-    }
     if (incoming != null
         && incoming.getMustInclude() != null
         && ConversationText.isYearRefinement(incoming.getMustInclude().getPublicationYear())) {
@@ -242,7 +230,7 @@ public class ExactFilterPolicy {
   }
 
   /** Parses values such as "after 2020" and "before 2000". */
-  private RangeBounds yearBounds(String publicationYear) {
+  public RangeBounds yearBounds(String publicationYear) {
     if (!hasText(publicationYear)) {
       return RangeBounds.empty();
     }
@@ -349,303 +337,10 @@ public class ExactFilterPolicy {
     return value != null && !value.isBlank();
   }
 
-  private record RangeBounds(Integer minimum, Integer maximum) {
+  public record RangeBounds(Integer minimum, Integer maximum) {
     /** Returns an instance with no available values or evidence. */
     private static RangeBounds empty() {
       return new RangeBounds(null, null);
-    }
-  }
-
-  /** Resolves comparative publication wording against the latest displayed page. */
-  private void resolveRecencyRefinement(ConversationDraft request, Session session) {
-    if (request.getIntent() != ConversationAction.REFINE || request.getMustInclude() == null) {
-      return;
-    }
-    String expression = request.getMustInclude().getPublicationYear();
-    boolean older = ConversationText.isOlderRefinement(expression);
-    boolean relative = ConversationText.isYearRefinement(expression);
-    boolean answeringYear =
-        session != null
-            && session.getPendingQuestionKind() == ConversationQuestion.RECENCY_YEAR_CLARIFICATION;
-    if (!relative && !answeringYear) {
-      return;
-    }
-    var previous = session == null ? null : ConversationHistory.latestSearch(session);
-    var page = previous == null ? null : previous.getRecommendations();
-    var years =
-        page == null
-            ? List.<Integer>of()
-            : page.stream()
-                .map(
-                    com.gen3.recommenderagent.domain.recommendation.Recommendation
-                        ::getPublicationYear)
-                .filter(year -> year != null && year > 0 && year <= 9999)
-                .toList();
-    if (older) {
-      resolveOlderRefinement(request, session, previous, years);
-    } else {
-      resolveNewerRefinement(request, session, previous, years, relative);
-    }
-  }
-
-  /** Builds an older-publication bound and asks before crossing an inherited range. */
-  private void resolveOlderRefinement(
-      ConversationDraft request, Session session, ConversationDraft previous, List<Integer> years) {
-    if (years.isEmpty()) {
-      awaitRefinement(request, session, ConversationQuestion.RECENCY_YEAR_CLARIFICATION);
-      return;
-    }
-    int upper = years.stream().mapToInt(Integer::intValue).sum() / years.size() - 1;
-    if (upper < 1) {
-      request.setOutcome(ConversationOutcome.RECENCY_EXHAUSTED);
-      request.setSearchClarificationRequired(true);
-      return;
-    }
-    var old =
-        yearBounds(
-            previous != null && previous.getMustInclude() != null
-                ? previous.getMustInclude().getPublicationYear()
-                : null);
-    Integer lower = old.minimum();
-    boolean conflict = lower != null && lower > upper;
-    String bounded =
-        conflict || lower == null ? "before " + (upper + 1) : "between " + lower + " and " + upper;
-    setYear(request, bounded);
-    if (conflict) {
-      awaitRefinement(request, session, ConversationQuestion.RECENCY_RANGE_CONFIRMATION);
-    }
-  }
-
-  /** Builds a newer-publication bound while respecting inherited upper limits. */
-  private void resolveNewerRefinement(
-      ConversationDraft request,
-      Session session,
-      ConversationDraft previous,
-      List<Integer> years,
-      boolean relative) {
-    String expression = request.getMustInclude().getPublicationYear();
-    Integer lower =
-        relative
-            ? (years.isEmpty()
-                ? null
-                : years.stream().mapToInt(Integer::intValue).sum() / years.size())
-            : yearBounds(expression).minimum();
-    if (!relative && lower == null && yearBounds(expression).maximum() != null) {
-      return;
-    }
-    if (lower == null) {
-      awaitRefinement(request, session, ConversationQuestion.RECENCY_YEAR_CLARIFICATION);
-      return;
-    }
-    var previousBounds =
-        yearBounds(
-            previous == null || previous.getMustInclude() == null
-                ? null
-                : previous.getMustInclude().getPublicationYear());
-    Integer upper = previousBounds.maximum();
-    if (relative && previousBounds.minimum() != null && lower <= previousBounds.minimum()) {
-      lower = previousBounds.minimum() + 1;
-    }
-    if (lower > 9999 || (upper != null && lower > upper)) {
-      if (relative) {
-        request.setOutcome(ConversationOutcome.RECENCY_EXHAUSTED);
-      } else {
-        request.setPendingQuestion(ConversationQuestion.RECENCY_RANGE_CONFIRMATION);
-        session.setPendingRefinementRequest(ConversationDraft.toStoredTurn(request));
-      }
-      request.setSearchClarificationRequired(true);
-      return;
-    }
-    if (!relative) {
-      Integer specifiedUpper = yearBounds(expression).maximum();
-      if (specifiedUpper != null) {
-        upper = upper == null ? specifiedUpper : Math.min(upper, specifiedUpper);
-      }
-    }
-    String bounded = upper == null ? "from " + lower : "between " + lower + " and " + upper;
-    setYear(request, bounded);
-  }
-
-  /** Retains the unfinished refinement and marks its clarification question. */
-  private void awaitRefinement(
-      ConversationDraft request, Session session, ConversationQuestion question) {
-    request.setPendingQuestion(question);
-    request.setSearchClarificationRequired(true);
-    session.setPendingRefinementRequest(ConversationDraft.toStoredTurn(request));
-  }
-
-  /** Updates the effective publication year and any retained explicit search criteria. */
-  private void setYear(ConversationDraft request, String value) {
-    request.getMustInclude().setPublicationYear(value);
-    if (request.getSearchCriteria() != null) {
-      if (request.getSearchCriteria().getMustInclude() == null) {
-        request.getSearchCriteria().setMustInclude(new ExactCriteria());
-      }
-      request.getSearchCriteria().getMustInclude().setPublicationYear(value);
-    }
-  }
-
-  /** Combines a duration answer with the unfinished refinement's existing bounds. */
-  private void resolveDurationAnswer(ConversationDraft request, Session session) {
-    if (session == null
-        || request.getIntent() != ConversationAction.REFINE
-        || request.getMustInclude() == null
-        || request.getMustInclude().getDuration() == null
-        || (session.getPendingQuestionKind() != ConversationQuestion.SHORTER_DURATION_CLARIFICATION
-            && session.getPendingQuestionKind()
-                != ConversationQuestion.LONGER_DURATION_CLARIFICATION)
-        || session.getPendingRefinementRequest() == null) {
-      return;
-    }
-    var pending = session.getPendingRefinementRequest().getMustInclude();
-    var old = DurationParser.parse(pending == null ? null : pending.getDuration());
-    var supplied = DurationParser.parse(request.getMustInclude().getDuration());
-    Integer minimum = supplied.minimum() == null ? old.minimum() : supplied.minimum();
-    Integer maximum = supplied.maximum() == null ? old.maximum() : supplied.maximum();
-    if (minimum != null && maximum != null && minimum > maximum) {
-      minimum = supplied.minimum();
-      maximum = supplied.maximum();
-    }
-    if (!java.util.Objects.equals(minimum, supplied.minimum())
-        || !java.util.Objects.equals(maximum, supplied.maximum())) {
-      setDuration(
-          request,
-          minimum == null
-              ? "at most " + maximum + " minutes"
-              : maximum == null
-                  ? "at least " + minimum + " minutes"
-                  : "between " + minimum + " and " + maximum + " minutes");
-    }
-    if ((old.minimum() != null && (minimum == null || minimum < old.minimum()))
-        || (old.maximum() != null && (maximum == null || maximum > old.maximum()))) {
-      awaitRefinement(request, session, ConversationQuestion.DURATION_RANGE_CONFIRMATION);
-    }
-  }
-
-  /** Updates the effective duration and any retained explicit search criteria. */
-  private void setDuration(ConversationDraft request, String value) {
-    var include = request.getMustInclude() == null ? new ExactCriteria() : request.getMustInclude();
-    include.setDuration(value);
-    request.setMustInclude(include);
-    if (request.getSearchCriteria() != null) {
-      if (request.getSearchCriteria().getMustInclude() == null) {
-        request.getSearchCriteria().setMustInclude(new ExactCriteria());
-      }
-      request.getSearchCriteria().getMustInclude().setDuration(value);
-    }
-  }
-
-  /** Derives shorter-or-longer bounds from the displayed page and checks inherited limits. */
-  private void resolveDurationRefinement(ConversationDraft request, Session session) {
-    if (request.getIntent() != ConversationAction.REFINE
-        || (!request.isShorter() && !request.isLonger())) {
-      return;
-    }
-    var previous = session == null ? null : ConversationHistory.latestSearch(session);
-    var page = previous == null ? null : previous.getRecommendations();
-    boolean longer = request.isLonger();
-    if (page == null
-        || page.isEmpty()
-        || page.stream()
-            .anyMatch(
-                book -> book.getDurationMinutes() == null || book.getDurationMinutes() <= 1)) {
-      awaitRefinement(
-          request,
-          session,
-          longer
-              ? ConversationQuestion.LONGER_DURATION_CLARIFICATION
-              : ConversationQuestion.SHORTER_DURATION_CLARIFICATION);
-      return;
-    }
-    int boundary =
-        longer
-            ? page.stream().mapToInt(book -> book.getDurationMinutes()).max().orElseThrow()
-            : page.stream().mapToInt(book -> book.getDurationMinutes()).min().orElseThrow();
-    var include = request.getMustInclude() == null ? new ExactCriteria() : request.getMustInclude();
-    var old = DurationParser.parse(include.getDuration());
-    if (longer && boundary == Integer.MAX_VALUE) {
-      throw new InvalidRequestException(
-          "Could you give me a smaller minimum duration in hours or minutes?");
-    }
-    int next = longer ? boundary + 1 : boundary - 1;
-    boolean conflict =
-        longer
-            ? old.maximum() != null && next > old.maximum()
-            : old.minimum() != null && next < old.minimum();
-    String bounded =
-        longer
-            ? old.maximum() == null || conflict
-                ? "at least " + next + " minutes"
-                : "between " + next + " and " + old.maximum() + " minutes"
-            : old.minimum() == null || conflict
-                ? "under " + boundary + " minutes"
-                : "between " + old.minimum() + " and " + next + " minutes";
-    setDuration(request, bounded);
-    request.setShorter(false);
-    request.setLonger(false);
-    if (conflict) {
-      awaitRefinement(request, session, ConversationQuestion.DURATION_RANGE_CONFIRMATION);
-    }
-  }
-
-  /** Validates preference edits and resolves exact search corrections before retrieval. */
-  public void validateTransition(
-      ConversationDraft resolved, SessionRequest original, Session session) {
-    if (resolved.getIntent() == ConversationAction.UPDATE_PREFERENCES) {
-      if (resolved.getPendingQuestion() == ConversationQuestion.PREFERENCE_UPDATE_CLARIFICATION) {
-        return;
-      }
-      var proposed = PreferenceRequestMapper.toRequest(resolved.getPreferenceUpdates());
-      var updates =
-          original != null && original.getPreferenceUpdates() != null
-              ? PreferenceRequestMapper.toRequest(original.getPreferenceUpdates())
-              : original == null
-                  ? new SessionRequest()
-                  : PreferenceRequestMapper.toRequest(
-                      PreferenceRequestMapper.fromRequest(original));
-      resolveFilterCorrections(proposed, updates);
-      resolved.getPreferenceUpdates().setMustInclude(proposed.getMustInclude());
-      resolved.getPreferenceUpdates().setMustNotInclude(proposed.getMustNotInclude());
-      return;
-    }
-    if (resolved.isSearchClarificationRequired()) {
-      return;
-    }
-    resolveDurationAnswer(resolved, session);
-    if (resolved.isSearchClarificationRequired()) {
-      return;
-    }
-    resolveDurationRefinement(resolved, session);
-    if (resolved.isSearchClarificationRequired()) {
-      return;
-    }
-    resolveRecencyRefinement(resolved, session);
-    if (resolved.isSearchClarificationRequired()) {
-      return;
-    }
-    boolean awaitingTaste = session != null && session.isAwaitingPersonalisedPreferences();
-    var previousSearch =
-        original != null
-                && !(awaitingTaste && original.startsNewSearch())
-                && (original.getIntent() == ConversationAction.REFINE
-                    || original.getIntent() == ConversationAction.MORE_RESULTS
-                    || (awaitingTaste && !original.startsNewSearch()))
-            ? ConversationHistory.latestSearch(session)
-            : null;
-    SessionRequest previous =
-        previousSearch != null
-                && (original.getIntent() == ConversationAction.REFINE || awaitingTaste)
-                && previousSearch.getSearchCriteria() != null
-            ? PreferenceRequestMapper.toRequest(previousSearch.getSearchCriteria())
-            : previousSearch;
-    resolveFilterCorrections(resolved, original, previous);
-    if (resolved.getSearchCriteria() != null
-        && (resolved.getIntent() == ConversationAction.RECOMMENDATION
-            || resolved.getIntent() == ConversationAction.REFINE
-            || resolved.getIntent() == ConversationAction.MORE_RESULTS)) {
-      var criteria = PreferenceRequestMapper.toRequest(resolved.getSearchCriteria());
-      resolveFilterCorrections(criteria, original, previous);
-      resolved.setSearchCriteria(PreferenceRequestMapper.fromRequest(criteria));
     }
   }
 }

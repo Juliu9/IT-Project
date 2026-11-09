@@ -61,6 +61,7 @@ class UserPreferenceDryRunTest {
             .withBean("testSolrClient", SolrClient.class, () -> solr, bean -> bean.setPrimary(true))
             .withPropertyValues(
                 "audiobook.database=" + backend,
+                "qdrant.url=http://localhost:6333",
                 "qdrant.collection=books",
                 "book.vector-snapshot.directory=" + directory,
                 "embedding.dimensions=2",
@@ -145,6 +146,7 @@ class UserPreferenceDryRunTest {
             .withPropertyValues(
                 "audiobook.database=" + backend,
                 "book.vector-snapshot.directory=" + snapshotDirectory,
+                "qdrant.url=http://localhost:6333",
                 "qdrant.collection=books",
                 "embedding.dimensions=2",
                 "user.preferences.import-on-startup=true",

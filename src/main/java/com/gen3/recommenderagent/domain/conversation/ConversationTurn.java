@@ -214,6 +214,14 @@ public class ConversationTurn {
     searchContext.setSearchCriteria(value);
   }
 
+  public float[] getSearchHistorySnapshot() {
+    return searchContext.getSearchHistorySnapshot();
+  }
+
+  public void setSearchHistorySnapshot(float[] value) {
+    searchContext.setSearchHistorySnapshot(value);
+  }
+
   public UserPreferenceEmbedding getUserPreferenceSnapshot() {
     return searchContext.getUserPreferenceSnapshot();
   }

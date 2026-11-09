@@ -9,7 +9,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.application.conversation.intent.MoreResultsHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
 import com.gen3.recommenderagent.domain.search.SimilarBookReference;
 import com.gen3.recommenderagent.domain.session.Session;
@@ -21,6 +23,7 @@ import com.gen3.recommenderagent.retrieval.CandidateRetriever;
 import com.gen3.recommenderagent.storage.user.model.SearchHistoryProfile;
 import com.gen3.recommenderagent.storage.user.port.SearchHistoryRepository;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
+import com.gen3.recommenderagent.testsupport.TestHandlers;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
@@ -71,7 +74,7 @@ class SearchHistoryWorkflowTest {
   void vagueRequestFindsBooksNearTheTasteWithoutAsking() {
     searchForHorror(3);
     when(semantic.create(any())).thenReturn(SemanticQueryVectors.empty());
-    var vague = request(ConversationAction.RECOMMENDATION);
+    var vague = request(RecommendationHandler.ACTION);
     vague.setPersonalised(true);
 
     workflow.recommend(vague, session);
@@ -86,7 +89,7 @@ class SearchHistoryWorkflowTest {
   @Test
   void newUserIsStillAskedWhatTheyLike() {
     when(semantic.create(any())).thenReturn(SemanticQueryVectors.empty());
-    var vague = request(ConversationAction.RECOMMENDATION);
+    var vague = request(RecommendationHandler.ACTION);
     vague.setPersonalised(true);
 
     workflow.recommend(vague, session);
@@ -95,14 +98,20 @@ class SearchHistoryWorkflowTest {
   }
 
   @Test
-  void moreResultsKeepsTheFrozenTasteAndRecordsNothing() {
+  void moreResultsKeepsTheFrozenTasteAfterReloadingTheSessionAndRecordsNothing() {
     searchForHorror(3);
-    var search = request(ConversationAction.RECOMMENDATION);
+    var search = request(RecommendationHandler.ACTION);
     workflow.recommend(search, session);
+    session.getActiveSearch().setSearch(ConversationDraft.toStoredTurn(search));
+    var mapper = new tools.jackson.databind.ObjectMapper();
+    var reloaded = mapper.readValue(mapper.writeValueAsString(session), Session.class);
     history.profiles.clear();
 
-    search.setIntent(ConversationAction.MORE_RESULTS);
-    workflow.recommend(search, session);
+    var more =
+        TestHandlers.registry()
+            .handler(MoreResultsHandler.ACTION)
+            .resolve(reloaded, request(MoreResultsHandler.ACTION));
+    workflow.recommend(more, reloaded);
 
     assertThat(lastRankingContext().searchHistoryTaste()).containsExactly(HORROR, within(1e-6f));
     assertThat(history.profiles).isEmpty();
@@ -111,7 +120,7 @@ class SearchHistoryWorkflowTest {
   @Test
   void similarBookRequestsNeitherUseNorTeachTheTaste() {
     searchForHorror(3);
-    var likeThisBook = request(ConversationAction.RECOMMENDATION);
+    var likeThisBook = request(RecommendationHandler.ACTION);
     likeThisBook
         .getSearchContext()
         .setSimilarBook(new SimilarBookReference("b", "A Book", List.of(), new float[] {0, 1}));
@@ -124,12 +133,30 @@ class SearchHistoryWorkflowTest {
 
   @Test
   void switchedOffChangesNothing() {
-    workflow = new AudiobookRecommendationWorkflow(retriever, ranker, semantic, storedTaste);
+    workflow =
+        new AudiobookRecommendationWorkflow(
+            retriever, ranker, semantic, storedTaste, TestHandlers.registry());
 
     searchForHorror(3);
 
     assertThat(lastRankingContext().searchHistoryTaste()).isNull();
     assertThat(history.profiles).isEmpty();
+  }
+
+  @Test
+  void switchedOffIgnoresPreviouslyFrozenTaste() {
+    var more = request(MoreResultsHandler.ACTION);
+    more.setUserPreferencesLoaded(true);
+    more.getSearchContext().setSearchHistorySnapshot(HORROR);
+    when(semantic.create(any())).thenReturn(SemanticQueryVectors.empty());
+    workflow =
+        new AudiobookRecommendationWorkflow(
+            retriever, ranker, semantic, storedTaste, TestHandlers.registry());
+
+    workflow.recommend(more, session);
+
+    assertThat(lastRankingContext().searchHistoryTaste()).isNull();
+    assertThat(more.getSearchContext().getSearchHistorySnapshot()).isNull();
   }
 
   @Test
@@ -149,13 +176,14 @@ class SearchHistoryWorkflowTest {
         ranker,
         semantic,
         storedTaste,
+        TestHandlers.registry(),
         new SearchHistoryPreferences(Optional.of(repository), 0.2, 3));
   }
 
   private void searchForHorror(int times) {
     when(semantic.create(any())).thenReturn(new SemanticQueryVectors(List.of(HORROR), List.of()));
     for (int i = 0; i < times; i++) {
-      workflow.recommend(request(ConversationAction.RECOMMENDATION), session);
+      workflow.recommend(request(RecommendationHandler.ACTION), session);
     }
   }
 

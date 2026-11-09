@@ -1,7 +1,7 @@
 package com.gen3.recommenderagent.application.recommendation;
 
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
-import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.application.conversation.intent.RecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.domain.search.SimilarBookReference;
 import com.gen3.recommenderagent.domain.session.PendingQuestion;
@@ -35,22 +35,18 @@ public class SimilarBookResolver {
   }
 
   /** Resolves the reference title and stored vector needed for a similar-book search. */
-  public void resolve(Session session, ConversationDraft request) {
-    if (request.getIntent() != ConversationAction.RECOMMENDATION
-        && request.getIntent() != ConversationAction.REFINE
-        && request.getIntent() != ConversationAction.MORE_RESULTS) {
-      return;
-    }
-    if (request.getPendingQuestion() == ConversationQuestion.SIMILAR_BOOK_SELECTION
+  public void resolve(
+      Session session, ConversationDraft request, boolean clearQuestionWithoutReference) {
+    if (request.getPendingQuestion() == RecommendationHandler.SIMILAR_BOOK_SELECTION
         && request.isSearchClarificationRequired()) {
       return;
     }
-    if (request.getPendingQuestion() == ConversationQuestion.SIMILAR_BOOK_UNAVAILABLE) {
+    if (request.getPendingQuestion() == RecommendationHandler.SIMILAR_BOOK_UNAVAILABLE) {
       request.setSearchClarificationRequired(true);
       return;
     }
     if (request.isSimilarToClarificationRequired()) {
-      clarify(session, request, ConversationQuestion.SIMILAR_BOOK_REQUIRED, List.of());
+      clarify(session, request, RecommendationHandler.SIMILAR_BOOK_REQUIRED, List.of());
       return;
     }
     var reference = request.getSearchContext().getSimilarBook();
@@ -61,14 +57,14 @@ public class SimilarBookResolver {
             request,
             new AudiobookTitle(reference.bookId(), reference.title(), reference.authors()));
       }
-      if (request.getPendingQuestion() != ConversationQuestion.SIMILAR_BOOK_UNAVAILABLE) {
+      if (request.getPendingQuestion() != RecommendationHandler.SIMILAR_BOOK_UNAVAILABLE) {
         session.setPendingQuestion(null);
       }
       return;
     }
     String title = request.getSimilarToTitle();
     if (title == null || title.isBlank()) {
-      if (request.getIntent() == ConversationAction.RECOMMENDATION) {
+      if (clearQuestionWithoutReference) {
         session.setPendingQuestion(null);
       }
       return;
@@ -108,10 +104,10 @@ public class SimilarBookResolver {
     var unique = distinctTitleAndAuthors(candidates);
 
     if (matches.isEmpty()) {
-      clarify(session, request, ConversationQuestion.SIMILAR_BOOK_NOT_FOUND, List.of());
+      clarify(session, request, RecommendationHandler.SIMILAR_BOOK_NOT_FOUND, List.of());
     } else if (!truncated && unique.size() == 1) {
       loadVector(session, request, unique.getFirst());
-      if (request.getPendingQuestion() == ConversationQuestion.SIMILAR_BOOK_UNAVAILABLE) {
+      if (request.getPendingQuestion() == RecommendationHandler.SIMILAR_BOOK_UNAVAILABLE) {
         request.setSearchClarificationRequired(true);
       } else {
         session.setPendingQuestion(null);
@@ -120,7 +116,7 @@ public class SimilarBookResolver {
       clarify(
           session,
           request,
-          ConversationQuestion.SIMILAR_BOOK_SELECTION,
+          RecommendationHandler.SIMILAR_BOOK_SELECTION,
           unique.stream().limit(MAX_CHOICES).toList());
     }
   }
@@ -169,7 +165,7 @@ public class SimilarBookResolver {
   /** Marks the reference book as unavailable for similarity retrieval. */
   private void unavailable(Session session, ConversationDraft request, AudiobookTitle book) {
     LOGGER.warn("similar.book.vector.unavailable bookId={}", book.bookId());
-    clarify(session, request, ConversationQuestion.SIMILAR_BOOK_UNAVAILABLE, List.of());
+    clarify(session, request, RecommendationHandler.SIMILAR_BOOK_UNAVAILABLE, List.of());
   }
 
   /** Retains the reference-book request and choices as the session's pending question. */

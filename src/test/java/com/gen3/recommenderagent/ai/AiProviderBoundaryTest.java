@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
-import com.gen3.recommenderagent.inputparser.AiParser;
 import com.gen3.recommenderagent.inputparser.CommandParser;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
@@ -29,7 +28,11 @@ class AiProviderBoundaryTest {
     assertThatThrownBy(
             () ->
                 new InputParser(
-                        new CommandParser(), new AiParser(client, AiOperationObserver.noop()))
+                        new CommandParser(
+                            com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                        com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                            client, AiOperationObserver.noop()),
+                        com.gen3.recommenderagent.testsupport.TestHandlers.registry())
                     .parse("fantasy"))
         .isInstanceOf(AiProviderException.class)
         .hasCauseInstanceOf(ResourceAccessException.class);

@@ -1,12 +1,10 @@
 package com.gen3.recommenderagent.inputparser;
 
-import com.gen3.recommenderagent.application.conversation.SessionRequest;
-import com.gen3.recommenderagent.application.conversation.workflow.ConversationRules;
-import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.session.SessionPreferences;
+import com.gen3.recommenderagent.application.conversation.ConversationRules;
+import com.gen3.recommenderagent.application.conversation.intent.UnknownHandler;
+import com.gen3.recommenderagent.application.conversation.model.SessionRequest;
 import java.math.BigInteger;
 import java.security.SecureRandom;
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
@@ -21,53 +19,16 @@ public class InputParser {
   private static final SecureRandom RANDOM = new SecureRandom();
   private final CommandParser commandParser;
   private final AiParser aiParser;
+  private final com.gen3.recommenderagent.application.conversation.HandlerRegistry handlers;
 
   /** Creates a parser with command recognition and AI interpretation kept separate. */
-  public InputParser(CommandParser commandParser, AiParser aiParser) {
+  public InputParser(
+      CommandParser commandParser,
+      AiParser aiParser,
+      com.gen3.recommenderagent.application.conversation.HandlerRegistry handlers) {
     this.commandParser = commandParser;
     this.aiParser = aiParser;
-  }
-
-  /** Checks whether a validated search-field path has a supplied value before replacing it. */
-  private boolean hasSearchValue(UserIntent parsed, String path) {
-    String[] parts = path.split("\\.");
-    Object value;
-    if (parts[0].equals("mustInclude") || parts[0].equals("mustNotInclude")) {
-      var criteria =
-          parts[0].equals("mustInclude") ? parsed.getMustInclude() : parsed.getMustNotInclude();
-      if (criteria == null) {
-        return false;
-      }
-      value =
-          switch (parts[1]) {
-            case "authors" -> criteria.getAuthors();
-            case "narrators" -> criteria.getNarrators();
-            case "duration" -> criteria.getDuration();
-            case "publicationYear" -> criteria.getPublicationYear();
-            case "language" -> criteria.getLanguage();
-            case "source" -> criteria.getSource();
-            default -> null;
-          };
-    } else {
-      var query =
-          parts[0].equals("positiveSemanticQuery")
-              ? parsed.getPositiveSemanticQuery()
-              : parsed.getNegativeSemanticQuery();
-      if (query == null) {
-        return false;
-      }
-      value =
-          switch (parts[1]) {
-            case "authors" -> query.getAuthors();
-            case "narrators" -> query.getNarrators();
-            case "genres" -> query.getGenres();
-            case "topics" -> query.getTopics();
-            default -> null;
-          };
-    }
-    return value instanceof List<?> list
-        ? !list.isEmpty()
-        : value instanceof String text && !text.isBlank();
+    this.handlers = handlers;
   }
 
   /**
@@ -164,20 +125,23 @@ public class InputParser {
     }
 
     boolean invalidCount =
-        parsed.getIntent() != ConversationAction.EXPLAIN_RECOMMENDATION
+        !handlers
+                .handler(parsed.getIntent() == null ? UnknownHandler.ACTION : parsed.getIntent())
+                .retainsExplanationSelection()
             && (countInput.invalid()
                 || parsed.isInvalidBookCount()
                 || (parsed.getBookCount() != null && parsed.getBookCount().signum() <= 0));
-    if (invalidCount && countInput.invalid()) {
-      parsed.setIntent(
-          parsed.getIntent() == ConversationAction.MORE_RESULTS
-                  || parsed.getIntent() == ConversationAction.REFINE
-              ? parsed.getIntent()
-              : CountInput.setting(rawText) || countInput.modelText().equals("1")
-                  ? ConversationAction.CHANGE_COUNT
-                  : CountInput.more(rawText)
-                      ? ConversationAction.MORE_RESULTS
-                      : ConversationAction.RECOMMENDATION);
+    if (invalidCount
+        && countInput.invalid()
+        && !handlers
+            .handler(parsed.getIntent() == null ? UnknownHandler.ACTION : parsed.getIntent())
+            .retainsInvalidCountIntent()) {
+      for (var handler : handlers.definitions()) {
+        if (handler.recognizesInvalidCount(rawText, countInput.modelText())) {
+          parsed.setIntent(handler.intents().iterator().next());
+          break;
+        }
+      }
     }
     return invalidCount;
   }
@@ -187,7 +151,7 @@ public class InputParser {
    */
   private SessionRequest toRequest(String rawText, UserIntent parsed, boolean invalidCount) {
     SessionRequest request = new SessionRequest();
-    request.setIntent(parsed.getIntent());
+    request.setIntent(parsed.getIntent() == null ? UnknownHandler.ACTION : parsed.getIntent());
     request.setShorter(parsed.isShorter());
     request.setLonger(parsed.isLonger());
     request.setExplanationSelection(parsed.getExplanationSelection());
@@ -199,8 +163,6 @@ public class InputParser {
     request.setPreferenceUpdates(parsed.getPreferenceUpdates());
     request.setPreferenceRemovals(parsed.getPreferenceRemovals());
     request.setReplacePreferenceFields(parsed.getReplacePreferenceFields());
-    request.setStartsNewSearch(startsNewSearch(rawText, parsed));
-    applySearchReplacements(rawText, parsed, request);
     request.setReferenceRank(boundedInteger(parsed.getReferenceRank()));
     request.setReferenceTitle(parsed.getReferenceTitle());
     request.setPersonalised(parsed.isPersonalised());
@@ -209,95 +171,28 @@ public class InputParser {
     request.setMustInclude(parsed.getMustInclude());
     request.setMustNotInclude(parsed.getMustNotInclude());
     // Validate stated people before normalization can discard unsupported control-intent fields.
-    var statedPreferences =
-        com.gen3.recommenderagent.application.conversation.PreferenceRequestMapper.fromRequest(
-            request);
-    if (request.getIntent() == ConversationAction.UPDATE_PREFERENCES
-        && request.getPreferenceUpdates() == null
-        && statedPreferences.hasValues()) {
-      request.setPreferenceUpdates(statedPreferences);
-    }
+    handlers.handler(request.getIntent()).prepare(rawText, parsed, request);
+    com.gen3.recommenderagent.application.conversation.model.PreferenceRequestMapper.fromRequest(
+        request);
     if (request.getPreferenceUpdates() != null) {
       request.getPreferenceUpdates().copy();
     }
     if (request.getPreferenceRemovals() != null) {
       request.getPreferenceRemovals().copy();
     }
-    applyPersonalisation(rawText, request);
-    ConversationRules.normalizeInput(request);
+    ConversationRules.normalizeInput(request, handlers);
     request.setInvalidBookCount(invalidCount);
     request.setBookCount(
-        invalidCount || parsed.getIntent() == ConversationAction.EXPLAIN_RECOMMENDATION
+        invalidCount
+                || handlers
+                    .handler(
+                        parsed.getIntent() == null ? UnknownHandler.ACTION : parsed.getIntent())
+                    .retainsExplanationSelection()
             ? null
             : boundedInteger(parsed.getBookCount()));
     request.setRequestId(createUuidV7().toString());
     request.setRawText(rawText);
     return request;
-  }
-
-  /** Conversational precedence is application policy, not model output. */
-  private boolean startsNewSearch(String rawText, UserIntent parsed) {
-    if (parsed.getIntent() != ConversationAction.RECOMMENDATION
-        && parsed.getIntent() != ConversationAction.REFINE) {
-      return false;
-    }
-    String command = ConversationText.normalizeCommand(rawText);
-    return command.matches(
-            "^(?:(?:recommend|suggest|find|show me|give me|search for|look for|help me find)\\b.*"
-                + "|(?:i want|i'd like|i would like|i need|i'm looking for)\\b.*"
-                + "|(?:only )?(?:books?|audiobooks?|recommendations?)\\b.*"
-                + "|the same but\\b.*)$")
-        || parsed.isShorter()
-        || parsed.isLonger()
-        || !parsed.getReplaceSearchFields().isEmpty()
-        || ConversationText.isYearRefinement(
-            parsed.getMustInclude() == null ? null : parsed.getMustInclude().getPublicationYear())
-        || parsed.getSimilarToTitle() != null
-        || parsed.isSimilarToClarificationRequired();
-  }
-
-  /**
-   * Validates search replacements and preserves supplied additions unless replacement is explicit.
-   */
-  private void applySearchReplacements(String rawText, UserIntent parsed, SessionRequest request) {
-    if (parsed.getIntent() == ConversationAction.RECOMMENDATION
-        || parsed.getIntent() == ConversationAction.REFINE) {
-      new SessionPreferences().updated(null, null, parsed.getReplaceSearchFields());
-      request.setReplaceSearchFields(parsed.getReplaceSearchFields());
-      String command =
-          com.gen3.recommenderagent.inputparser.ConversationText.normalizeCommand(rawText);
-      if (command.matches("^(?:also|add|additionally|(?:make (?:it|them) )?more)\\b.*")
-          && !command.matches(".*\\b(?:instead|replace|rather than|switch)\\b.*")) {
-        // Keep field removals while protecting supplied additions from model replacement flags.
-        var search = parsed;
-        request.setReplaceSearchFields(
-            parsed.getReplaceSearchFields().stream()
-                .filter(path -> !hasSearchValue(search, path))
-                .toList());
-      }
-    }
-  }
-
-  /**
-   * Applies explicit reading-history references and direct person-search wording to
-   * personalisation.
-   */
-  private void applyPersonalisation(String rawText, SessionRequest request) {
-    String command =
-        com.gen3.recommenderagent.inputparser.ConversationText.normalizeCommand(rawText);
-    if ((request.getIntent() == ConversationAction.RECOMMENDATION
-            || request.getIntent() == ConversationAction.REFINE)
-        && command.matches(
-            ".*\\b(?:my preferences|my reading|my favourites|my favorites|my history|what i (?:liked|enjoyed|read|listened to) (?:before|previously))\\b.*")) {
-      request.setPersonalised(true);
-      return;
-    }
-    if (command.matches(
-            "^(?:i want |give me |recommend |show me )?(?:a |an |some |[0-9]+ )?(?:books?|audiobooks?) (?:by|narrated by) .+")
-        && !command.matches(
-            ".*\\b(?:for me|personalised|personalized|my preferences|my reading|my favourites|my favorites|my history|i would like|i'd like)\\b.*")) {
-      request.setPersonalised(false);
-    }
   }
 
   /** Keeps oversized model numbers invalid without overflowing into a valid rank or count. */

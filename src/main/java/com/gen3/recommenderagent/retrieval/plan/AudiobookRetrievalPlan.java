@@ -4,4 +4,4 @@ import com.gen3.shared.audiobookcatalogue.model.AudiobookFilters;
 
 /** Complete, database-ready interpretation of one audiobook retrieval request. */
 public record AudiobookRetrievalPlan(
-    RetrievalMode mode, String keywordText, AudiobookFilters filters, int limit) {}
+    boolean hasSemanticContent, String keywordText, AudiobookFilters filters, int limit) {}

@@ -6,14 +6,13 @@ import com.gen3.shared.audiobookcatalogue.qdrant.QdrantPointMapper;
 import com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository;
 import com.gen3.shared.audiobookcatalogue.solr.SolrConfig;
 import com.gen3.shortdescriptionjob.provider.OpenAiShortDescriptionGenerator;
-import com.gen3.shortdescriptionjob.store.QdrantShortDescriptionStore;
-import com.gen3.shortdescriptionjob.store.SolrShortDescriptionStore;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.PropertySource;
@@ -29,10 +28,9 @@ import org.springframework.core.env.Environment;
       org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoConfiguration.class,
       org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration.class
     })
+@ComponentScan("com.gen3.shortdescriptionjob.store")
 @Import({
   ShortDescriptionEnricher.class,
-  QdrantShortDescriptionStore.class,
-  SolrShortDescriptionStore.class,
   QdrantConfig.class,
   QdrantPointMapper.class,
   Bm25SparseTextEncoder.class,

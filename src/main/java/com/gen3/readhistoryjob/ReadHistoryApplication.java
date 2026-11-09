@@ -1,20 +1,23 @@
 package com.gen3.readhistoryjob;
 
 import com.gen3.shared.csv.UserHistoryCsvReader;
-import com.gen3.shared.readhistory.postgres.PostgresReadHistoryRepository;
-import com.gen3.shared.readhistory.postgres.ReadHistoryDataSource;
+import com.gen3.shared.readhistory.port.ReadHistoryWriter;
 import java.nio.file.Path;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.env.Environment;
 
 @Configuration(proxyBeanMethods = false)
+@ComponentScan("com.gen3.readhistoryjob.writer")
+@ImportAutoConfiguration(PostgresHistoryWriterConfiguration.class)
 @PropertySource("classpath:non-generative-jobs.properties")
 @EnableAutoConfiguration(
     exclude = {
@@ -54,16 +57,13 @@ public class ReadHistoryApplication {
     };
   }
 
-  /** Creates the history importer using the configured CSV, batch size, and database connection. */
+  /** Creates the history importer using the configured CSV, batch size, and selected writer. */
   @Bean
-  ApplicationRunner readHistoryImport(Environment environment) {
-    return args -> {
-      try (var pool = ReadHistoryDataSource.create(environment)) {
-        new ReadHistoryImporter(new UserHistoryCsvReader(), new PostgresReadHistoryRepository(pool))
+  ApplicationRunner readHistoryImport(Environment environment, ReadHistoryWriter writer) {
+    return args ->
+        new ReadHistoryImporter(new UserHistoryCsvReader(), writer)
             .run(
                 Path.of(environment.getRequiredProperty("read-history.import.csv-path")),
                 environment.getProperty("read-history.import.batch-size", Integer.class, 1000));
-      }
-    };
   }
 }

@@ -1,18 +1,19 @@
 package com.gen3.recommenderagent.retrieval;
 
-import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
-import com.gen3.shared.audiobookcatalogue.port.AudiobookCandidateSearch;
 import com.gen3.shared.audiobookcatalogue.port.AudiobookVectorRepository;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 
 /** Requires one complete database adapter set without naming database implementations. */
 @Configuration(proxyBeanMethods = false)
+@ComponentScan("com.gen3.recommenderagent.retrieval.strategy")
 public class CandidateRetrieverConfiguration {
 
   /** Rejects incomplete backend selection and maintenance flags on the recommendation server. */
@@ -54,12 +55,11 @@ public class CandidateRetrieverConfiguration {
   @Bean
   CandidateRetriever candidateRetriever(
       @Value("${audiobook.database:qdrant}") String backend,
-      AudiobookCandidateSearch candidateSearch,
       AudiobookVectorRepository vectors,
       UserPreferenceVectorRepository preferences,
-      QueryEmbeddingService embeddingIndexer,
-      AudiobookRetrievalPlanner retrievalPlanner) {
+      AudiobookRetrievalPlanner retrievalPlanner,
+      ObjectProvider<CandidateRetrievalStrategy> strategies) {
     return new CandidateRetrievalService(
-        backend, candidateSearch, embeddingIndexer, retrievalPlanner);
+        backend, retrievalPlanner, strategies.orderedStream().toList());
   }
 }

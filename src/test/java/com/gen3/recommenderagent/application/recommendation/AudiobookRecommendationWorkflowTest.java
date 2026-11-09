@@ -9,8 +9,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
-import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.application.conversation.intent.MoreResultsHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RefineHandler;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
@@ -35,20 +37,21 @@ class AudiobookRecommendationWorkflowTest {
     var model = mock(org.springframework.ai.embedding.EmbeddingModel.class);
     var queries = new com.gen3.recommenderagent.embedding.QueryEmbeddingService(model);
     var retriever =
-        new com.gen3.recommenderagent.retrieval.CandidateRetrievalService(
-            "test",
-            search,
-            queries,
-            new com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner());
+        com.gen3.recommenderagent.testsupport.TestCandidateRetrievers.create(
+            "test", search, queries);
     var ranker = mock(Ranker.class);
     when(ranker.rank(anyList(), eq(20), any(RankingContext.class))).thenReturn(List.of());
     var users = mock(UserPreferenceVectorRepository.class);
     var workflow =
         new AudiobookRecommendationWorkflow(
-            retriever, ranker, new SemanticQueryVectorService(queries), users);
+            retriever,
+            ranker,
+            new SemanticQueryVectorService(queries),
+            users,
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     var request = new ConversationDraft();
     request.setReadBookIds(Set.of("previously-read"));
-    request.setIntent(ConversationAction.RECOMMENDATION);
+    request.setIntent(RecommendationHandler.ACTION);
     request
         .getSearchContext()
         .setSimilarBook(
@@ -60,7 +63,7 @@ class AudiobookRecommendationWorkflowTest {
     var session = new Session();
     session.setUserId("user");
     workflow.recommend(request, session);
-    request.setIntent(ConversationAction.MORE_RESULTS);
+    request.setIntent(MoreResultsHandler.ACTION);
     workflow.recommend(request, session);
     var vector = ArgumentCaptor.forClass(float[].class);
     var filters =
@@ -85,9 +88,15 @@ class AudiobookRecommendationWorkflowTest {
     when(ranker.rank(anyList(), eq(20), any(RankingContext.class))).thenReturn(List.of());
     var semantic = mock(SemanticQueryVectorService.class);
     var users = mock(UserPreferenceVectorRepository.class);
-    var workflow = new AudiobookRecommendationWorkflow(retriever, ranker, semantic, users);
+    var workflow =
+        new AudiobookRecommendationWorkflow(
+            retriever,
+            ranker,
+            semantic,
+            users,
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     var request = new ConversationDraft();
-    request.setIntent(ConversationAction.REFINE);
+    request.setIntent(RefineHandler.ACTION);
     request
         .getSearchContext()
         .setSimilarBook(
@@ -102,7 +111,7 @@ class AudiobookRecommendationWorkflowTest {
     org.assertj.core.api.Assertions.assertThat(
             request.getSearchContext().getSimilarityQueryVector())
         .containsExactly(expected);
-    request.setIntent(ConversationAction.MORE_RESULTS);
+    request.setIntent(MoreResultsHandler.ACTION);
     org.mockito.Mockito.clearInvocations(semantic);
     workflow.recommend(request, new Session());
     org.mockito.Mockito.verifyNoInteractions(semantic, users);
@@ -122,7 +131,7 @@ class AudiobookRecommendationWorkflowTest {
         .thenReturn(Optional.of(new UserPreferenceEmbedding("user", new float[] {0, 1}, null)));
     var request = new ConversationDraft();
     request.setPersonalised(true);
-    request.setIntent(ConversationAction.RECOMMENDATION);
+    request.setIntent(RecommendationHandler.ACTION);
     if (withReference) {
       request
           .getSearchContext()
@@ -134,7 +143,12 @@ class AudiobookRecommendationWorkflowTest {
         .thenReturn(new SemanticQueryVectors(List.of(new float[] {1, 0}), List.of()));
     var session = new Session();
     session.setUserId("user");
-    new AudiobookRecommendationWorkflow(retriever, ranker, semantic, users)
+    new AudiobookRecommendationWorkflow(
+            retriever,
+            ranker,
+            semantic,
+            users,
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry())
         .recommend(request, session);
     var vectors = ArgumentCaptor.forClass(SemanticQueryVectors.class);
     verify(retriever).getCandidates(eq(request), vectors.capture(), eq(50), any());
@@ -170,7 +184,12 @@ class AudiobookRecommendationWorkflowTest {
     when(userPreferences.findEmbeddingByUserId("user-1")).thenReturn(Optional.of(preferences));
     when(ranker.rank(anyList(), eq(20), any(RankingContext.class))).thenReturn(recommendations);
     AudiobookRecommendationWorkflow workflow =
-        new AudiobookRecommendationWorkflow(retriever, ranker, vectorService, userPreferences);
+        new AudiobookRecommendationWorkflow(
+            retriever,
+            ranker,
+            vectorService,
+            userPreferences,
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
 
     List<Recommendation> result = workflow.recommend(request, session);
 

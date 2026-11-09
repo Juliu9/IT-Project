@@ -2,8 +2,10 @@ package com.gen3.recommenderagent.application.recommendation;
 
 import static com.gen3.recommenderagent.domain.recommendation.RecommendationPolicy.RECOMMENDATION_BATCH_SIZE;
 
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
-import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.application.conversation.ConversationHandler;
+import com.gen3.recommenderagent.application.conversation.HandlerRegistry;
+import com.gen3.recommenderagent.application.conversation.intent.UnknownHandler;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
@@ -33,6 +35,7 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
   private static final int CANDIDATE_LIMIT = 50;
   private static final Logger LOGGER =
       LoggerFactory.getLogger(AudiobookRecommendationWorkflow.class);
+  private final HandlerRegistry handlers;
   private final CandidateRetriever candidateRetriever;
   private final Ranker ranker;
   private final SemanticQueryVectorService semanticQueryVectorService;
@@ -44,13 +47,15 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
       CandidateRetriever candidateRetriever,
       Ranker ranker,
       SemanticQueryVectorService semanticQueryVectorService,
-      UserPreferenceVectorRepository userPreferenceVectorRepository) {
-    this.candidateRetriever = candidateRetriever;
-    this.ranker = ranker;
-    this.semanticQueryVectorService = semanticQueryVectorService;
-    this.userPreferenceVectorRepository = userPreferenceVectorRepository;
-    // Callers that don't pass search history (like the older tests) get it switched off.
-    this.searchHistoryPreferences = new SearchHistoryPreferences(Optional.empty(), 0.2, 3);
+      UserPreferenceVectorRepository userPreferenceVectorRepository,
+      HandlerRegistry handlers) {
+    this(
+        candidateRetriever,
+        ranker,
+        semanticQueryVectorService,
+        userPreferenceVectorRepository,
+        handlers,
+        new SearchHistoryPreferences(Optional.empty(), 0.2, 3));
   }
 
   @Autowired
@@ -59,7 +64,9 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
       Ranker ranker,
       SemanticQueryVectorService semanticQueryVectorService,
       UserPreferenceVectorRepository userPreferenceVectorRepository,
+      HandlerRegistry handlers,
       SearchHistoryPreferences searchHistoryPreferences) {
+    this.handlers = handlers;
     this.candidateRetriever = candidateRetriever;
     this.ranker = ranker;
     this.semanticQueryVectorService = semanticQueryVectorService;
@@ -70,51 +77,48 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
   /** Builds retrieval text, lets the retriever select its mode, and ranks the candidates. */
   @Override
   public List<Recommendation> recommend(ConversationDraft request, Session session) {
+    ConversationHandler handler =
+        handlers.handler(
+            request == null || request.getIntent() == null
+                ? UnknownHandler.ACTION
+                : request.getIntent());
     UserPreferenceEmbedding preferences;
     float[] searchTaste;
-    if (request != null
-        && request.getIntent() == ConversationAction.MORE_RESULTS
-        && request.isUserPreferencesLoaded()) {
+    if (request != null && handler.reusesSearchSnapshot() && request.isUserPreferencesLoaded()) {
       preferences = request.getUserPreferenceSnapshot();
-      searchTaste = request.getSearchContext().getSearchHistorySnapshot();
-    } else {
-      preferences =
-          request != null
-                  && request.getSearchContext().getSimilarBook() != null
-                  && !request.isPersonalised()
-              ? null
-              : userPreferences(session).orElse(null);
       searchTaste =
+          searchHistoryPreferences.isEnabled()
+              ? request.getSearchContext().getSearchHistorySnapshot()
+              : null;
+      if (searchTaste == null) {
+        request.getSearchContext().setSearchHistorySnapshot(null);
+      }
+    } else {
+      boolean referenceOnly =
           request != null
-                  && request.getSearchContext().getSimilarBook() != null
-                  && !request.isPersonalised()
-              ? null
-              : searchTaste(request, session);
+              && request.getSearchContext().getSimilarBook() != null
+              && !request.isPersonalised();
+      preferences = referenceOnly ? null : userPreferences(session).orElse(null);
+      searchTaste = referenceOnly ? null : searchTaste(request, session);
       if (request != null) {
         request.setUserPreferenceSnapshot(preferences);
         request.getSearchContext().setSearchHistorySnapshot(searchTaste);
         request.setUserPreferencesLoaded(true);
       }
     }
-    boolean answeringTasteQuestion = request != null && request.isPreferenceAnswer();
-    boolean hasSavedPreferences =
-        session != null && session.getPreferences() != null && session.getPreferences().hasValues();
-    if (request != null
-        && request.isPersonalised()
-        && request.getIntent() != ConversationAction.MORE_RESULTS
-        && preferences == null
-        && searchTaste == null
-        && !hasSavedPreferences
-        && !answeringTasteQuestion) {
+    if (request != null && handler.requiresSavedPreferences(request, session)) {
       request.setPreferenceClarificationRequired(true);
       return List.of();
     }
     SemanticQueryVectors vectors =
         RequestTelemetry.measure(
-            "embedMs", () -> retrievalVectors(request, preferences, searchTaste));
-    recordSearch(request, session, vectors);
-    if (request != null && request.isPersonalised()) {
-      boolean needsPreferences = vectors == null || vectors.isEmpty();
+            "embedMs",
+            () ->
+                retrievalVectors(
+                    request, preferences, searchTaste, handler.reusesSearchSnapshot()));
+    recordSearch(request, session, vectors, handler);
+    if (request != null) {
+      boolean needsPreferences = handler.requiresSemanticPreferences(request, vectors);
       request.setPreferenceClarificationRequired(needsPreferences);
       if (needsPreferences) {
         return List.of();
@@ -154,12 +158,13 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
 
   /** Builds retrieval evidence from explicit semantics, stored taste, and any reference book. */
   private SemanticQueryVectors retrievalVectors(
-      ConversationDraft request, UserPreferenceEmbedding preferences, float[] searchTaste) {
+      ConversationDraft request,
+      UserPreferenceEmbedding preferences,
+      float[] searchTaste,
+      boolean reusesSearchSnapshot) {
     var context = request == null ? null : request.getSearchContext();
     var reference = context == null ? null : context.getSimilarBook();
-    if (reference != null
-        && request.getIntent() == ConversationAction.MORE_RESULTS
-        && context.getSimilarityQueryVector() != null) {
+    if (reference != null && reusesSearchSnapshot && context.getSimilarityQueryVector() != null) {
       return new SemanticQueryVectors(List.of(context.getSimilarityQueryVector()), List.of());
     }
     var current = semanticQueryVectorService.create(request);
@@ -204,11 +209,14 @@ public class AudiobookRecommendationWorkflow implements RecommendationWorkflow {
 
   // Only fresh, explicit searches teach the taste: not "more", vague requests or "like this book".
   private void recordSearch(
-      ConversationDraft request, Session session, SemanticQueryVectors vectors) {
+      ConversationDraft request,
+      Session session,
+      SemanticQueryVectors vectors,
+      ConversationHandler handler) {
     if (request == null
         || session == null
-        || (request.getIntent() != ConversationAction.RECOMMENDATION
-            && request.getIntent() != ConversationAction.REFINE)
+        || !handler.isSearchAction()
+        || handler.reusesSearchSnapshot()
         || request.isPersonalised()
         || request.getSearchContext().getSimilarBook() != null
         || vectors == null

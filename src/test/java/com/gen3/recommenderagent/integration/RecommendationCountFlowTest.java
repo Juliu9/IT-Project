@@ -9,11 +9,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gen3.recommenderagent.application.conversation.ConversationEngine;
-import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.conversation.intent.ChangeCountHandler;
+import com.gen3.recommenderagent.application.conversation.intent.MoreResultsHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RefineHandler;
+import com.gen3.recommenderagent.application.conversation.intent.UnknownHandler;
 import com.gen3.recommenderagent.application.recommendation.RecommendationPager;
 import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
 import com.gen3.recommenderagent.application.recommendation.SimilarBookResolver;
-import com.gen3.recommenderagent.domain.conversation.ConversationAction;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.Session;
@@ -38,13 +41,17 @@ import tools.jackson.databind.json.JsonMapper;
 
 class RecommendationCountFlowTest {
   private final AiParser ai = mock(AiParser.class);
-  private final InputParser parser = new InputParser(new CommandParser(), ai);
+  private final InputParser parser =
+      new InputParser(
+          new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+          ai,
+          com.gen3.recommenderagent.testsupport.TestHandlers.registry());
   private final RecommendationWorkflow workflow = mock(RecommendationWorkflow.class);
   private final AudiobookTitleLookup titles = mock(AudiobookTitleLookup.class);
   private final AudiobookVectorRepository vectors = mock(AudiobookVectorRepository.class);
   private final ConversationEngine engine =
       new ConversationEngine(
-          ConversationTestSupport.dispatcher(),
+          com.gen3.recommenderagent.testsupport.TestHandlers.registry(),
           new RecommendationPager(
               workflow,
               new com.gen3.recommenderagent.application.recommendation.ReadHistoryExclusions(
@@ -52,7 +59,9 @@ class RecommendationCountFlowTest {
           new ExactFilterPolicy(),
           new SimilarBookResolver(titles, vectors));
   private final ConversationResponseGenerator responses =
-      new ConversationResponseGenerator(new AiResponseGenerator(null));
+      new ConversationResponseGenerator(
+          new AiResponseGenerator(null),
+          com.gen3.recommenderagent.testsupport.TestHandlers.registry());
   private Session session = new Session();
 
   RecommendationCountFlowTest() {
@@ -71,7 +80,7 @@ class RecommendationCountFlowTest {
 
   private UserIntent fantasy() {
     var intent = new UserIntent();
-    intent.setIntent(ConversationAction.RECOMMENDATION);
+    intent.setIntent(RecommendationHandler.ACTION);
     var query = new SemanticQuery();
     query.setGenres(List.of("fantasy"));
     intent.setPositiveSemanticQuery(query);
@@ -107,7 +116,7 @@ class RecommendationCountFlowTest {
       })
   void invalidSettingKeepsSavedCountAndDoesNotCreateAQuestion(String text) {
     var intent = new UserIntent();
-    intent.setIntent(ConversationAction.CHANGE_COUNT);
+    intent.setIntent(ChangeCountHandler.ACTION);
     when(ai.parse(anyString())).thenReturn(intent);
     var result = engine.process(session, parser.parse(text));
     assertThat(result.getOutcome()).isNull();
@@ -120,7 +129,7 @@ class RecommendationCountFlowTest {
                 + "Please try asking again with a number in this range. "
                 + "Your setting is still 3.");
     var next = engine.process(session, parser.parse("2"));
-    assertThat(next.getIntent()).isEqualTo(ConversationAction.UNKNOWN);
+    assertThat(next.getIntent()).isEqualTo(UnknownHandler.ACTION);
     assertThat(session.getBookCount()).isEqualTo(3);
     org.mockito.Mockito.verifyNoInteractions(workflow);
   }
@@ -160,7 +169,7 @@ class RecommendationCountFlowTest {
         .startsWith("I can give up to 5 recommendations at a time.");
 
     intent = new UserIntent();
-    intent.setIntent(ConversationAction.CHANGE_COUNT);
+    intent.setIntent(ChangeCountHandler.ACTION);
     intent.setBookCount(BigInteger.valueOf(count));
     when(ai.parse(anyString())).thenReturn(intent);
     var setting = engine.process(session, parser.parse("set count to " + words));
@@ -182,7 +191,7 @@ class RecommendationCountFlowTest {
     when(ai.parse(anyString())).thenReturn(fantasy());
     engine.process(session, parser.parse("Recommend fantasy books"));
     var result = engine.process(session, parser.parse(text));
-    assertThat(result.getIntent()).isEqualTo(ConversationAction.MORE_RESULTS);
+    assertThat(result.getIntent()).isEqualTo(MoreResultsHandler.ACTION);
     assertThat(result.getRecommendations())
         .extracting(Recommendation::getId)
         .containsExactly("book-4", "book-5", "book-6");
@@ -212,11 +221,11 @@ class RecommendationCountFlowTest {
     when(ai.parse(anyString())).thenReturn(fantasy());
     engine.process(session, parser.parse("Recommend fantasy books"));
     var intent = new UserIntent();
-    intent.setIntent(ConversationAction.REFINE);
+    intent.setIntent(RefineHandler.ACTION);
     intent.setShorter(true);
     when(ai.parse(anyString())).thenReturn(intent);
     var result = engine.process(session, parser.parse("Make these shorter and show 0 books"));
-    assertThat(result.getIntent()).isEqualTo(ConversationAction.REFINE);
+    assertThat(result.getIntent()).isEqualTo(RefineHandler.ACTION);
     assertThat(result.getRecommendations()).hasSize(3);
     assertThat(result.getMustInclude().getDuration()).isEqualTo("under 180 minutes");
     assertThat(result.getPositiveSemanticQuery().getGenres()).containsExactly("fantasy");

@@ -5,11 +5,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.application.conversation.intent.HelpHandler;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.application.recommendation.RecommendationPager;
 import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
-import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.application.session.SessionTransitionService;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.retrieval.plan.ExactFilterPolicy;
@@ -35,19 +35,14 @@ class SessionStoreConfigurationTest {
               RedisSessionRepository.class,
               SessionTransitionService.class,
               com.gen3.recommenderagent.application.conversation.ConversationEngine.class,
-              com.gen3.recommenderagent.application.conversation.ConversationConfiguration.class,
+              com.gen3.recommenderagent.application.config.ConversationConfiguration.class,
               AudiobookRetrievalPlanner.class,
               ExactFilterPolicy.class,
               com.gen3.recommenderagent.application.recommendation.ReadHistoryExclusions.class,
               RecommendationPager.class)
           .withBean(
-              com.gen3.recommenderagent.application.conversation.IntentResolver.class,
-              () ->
-                  new com.gen3.recommenderagent.application.conversation.IntentResolver(
-                      mock(com.gen3.recommenderagent.inputparser.InputParser.class)))
-          .withBean(
-              com.gen3.recommenderagent.application.conversation.SessionContextProjector.class,
-              com.gen3.recommenderagent.application.conversation.SessionContextProjector::new)
+              com.gen3.recommenderagent.inputparser.InputParser.class,
+              () -> mock(com.gen3.recommenderagent.inputparser.InputParser.class))
           .withBean(RecommendationWorkflow.class, () -> mock(RecommendationWorkflow.class))
           .withBean(
               com.gen3.recommenderagent.application.recommendation.SimilarBookResolver.class,
@@ -140,12 +135,12 @@ class SessionStoreConfigurationTest {
                   .doesNotHaveBean(RedisTemplate.class);
               assertThat(context.getBean(SessionRepository.class)).isSameAs(replacement);
               ConversationDraft request = new ConversationDraft();
-              request.setIntent(ConversationAction.HELP);
+              request.setIntent(HelpHandler.ACTION);
               var result =
                   context
                       .getBean(SessionTransitionService.class)
                       .process("session", "user", request);
-              assertThat(result.getIntent()).isEqualTo(ConversationAction.HELP);
+              assertThat(result.getIntent()).isEqualTo(HelpHandler.ACTION);
               assertThat(result.getRecommendations()).isEmpty();
             });
   }

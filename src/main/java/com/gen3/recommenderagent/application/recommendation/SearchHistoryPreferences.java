@@ -36,6 +36,10 @@ public class SearchHistoryPreferences {
     this.minimumSearches = minimumSearches;
   }
 
+  boolean isEnabled() {
+    return repository.isPresent();
+  }
+
   public Optional<float[]> load(String userId, String requestId) {
     if (repository.isEmpty() || userId == null || userId.isBlank()) {
       return Optional.empty();
