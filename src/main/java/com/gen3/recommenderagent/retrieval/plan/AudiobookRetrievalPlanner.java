@@ -65,16 +65,7 @@ public class AudiobookRetrievalPlanner {
 
   /** Reports whether the request contains semantic evidence usable by a retrieval plan. */
   private boolean hasSemanticContent(SemanticQuery query) {
-    return query != null
-        && (hasValues(query.getTopics())
-            || hasValues(query.getGenres())
-            || hasValues(query.getAuthors())
-            || hasValues(query.getNarrators()));
-  }
-
-  /** Reports whether any criteria or preference values are present. */
-  private boolean hasValues(List<String> values) {
-    return values != null && values.stream().anyMatch(this::hasText);
+    return query != null && query.hasValues();
   }
 
   /** Reports whether the supplied text contains a non-whitespace character. */

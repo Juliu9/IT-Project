@@ -28,11 +28,10 @@ abstract class VectorRetriever implements CandidateRetrievalStrategy {
       SemanticQueryVectors vectors, AudiobookRetrievalPlan plan, boolean hybrid)
       throws IOException {
     float[] queryVector = embeddings.combineSemanticQueries(vectors);
-    boolean hasKeywords = KeywordRetriever.hasKeywords(plan);
     if (queryVector == null || queryVector.length == 0) {
-      return hasKeywords ? keywords.retrieveKeywords(plan) : List.of();
+      return keywords.retrieveKeywords(plan);
     }
-    if (hybrid && hasKeywords) {
+    if (hybrid && KeywordRetriever.hasKeywords(plan)) {
       return search.searchHybrid(queryVector, plan.keywordText(), plan.filters(), plan.limit());
     }
     return search.searchSemantic(queryVector, plan.filters(), plan.limit());

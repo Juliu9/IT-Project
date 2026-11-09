@@ -133,7 +133,7 @@ class CandidateRetrieverConfigurationTest {
                   .isEmpty();
               assertThat(context.getBeanProvider(CandidateRetrievalStrategy.class).orderedStream())
                   .extracting(CandidateRetrievalStrategy::name)
-                  .containsExactly("PROBE", "SEMANTIC", "HYBRID", "KEYWORD", "FILTER_ONLY");
+                  .containsExactly("PROBE", "SEMANTIC", "HYBRID", "FILTER_ONLY");
               org.mockito.Mockito.verifyNoInteractions(
                   context.getBean(AudiobookCandidateSearch.class));
             });
@@ -196,7 +196,7 @@ class CandidateRetrieverConfigurationTest {
   }
 
   @Test
-  void rejectsSeparateLegacyDatabaseSelection() {
+  void rejectsRetiredPropertyInsteadOfSilentlySelectingAnotherBackend() {
     runner
         .withPropertyValues("audiobook.candidate-retriever=solr")
         .run(

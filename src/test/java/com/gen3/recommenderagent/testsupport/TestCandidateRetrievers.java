@@ -23,7 +23,6 @@ public final class TestCandidateRetrievers {
         List.of(
             new SemanticRetriever(search, embeddings, keywords),
             new HybridRetriever(search, embeddings, keywords),
-            keywords,
             new FilterOnlyRetriever(search)));
   }
 }

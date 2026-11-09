@@ -79,6 +79,24 @@ class CandidateRetrievalServiceTest {
   }
 
   @Test
+  void exactFiltersReachTheAdapterWithoutCombiningEmbeddings() throws Exception {
+    var search = mock(AudiobookCandidateSearch.class);
+    var embeddings = mock(QueryEmbeddingService.class);
+    var request = new ConversationDraft();
+    var criteria = new ExactCriteria();
+    criteria.setLanguage("English");
+    request.setMustInclude(criteria);
+
+    service("test", search, embeddings).getCandidates(request, null, 5, Set.of("shown"));
+
+    var filters = org.mockito.ArgumentCaptor.forClass(AudiobookFilters.class);
+    verify(search).searchByFilters(filters.capture(), org.mockito.ArgumentMatchers.eq(5));
+    assertThat(filters.getValue().mustInclude().language()).isEqualTo("English");
+    assertThat(filters.getValue().excludedBookIds()).containsExactly("shown");
+    org.mockito.Mockito.verifyNoInteractions(embeddings);
+  }
+
+  @Test
   void skipsRetrievalWhenRequestHasNoSearchContent() {
     AudiobookCandidateSearch candidateSearch = mock(AudiobookCandidateSearch.class);
     QueryEmbeddingService embeddingIndexer = mock(QueryEmbeddingService.class);
