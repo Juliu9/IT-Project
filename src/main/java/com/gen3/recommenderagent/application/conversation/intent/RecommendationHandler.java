@@ -343,12 +343,9 @@ public final class RecommendationHandler extends SearchContextResolver {
 
   @Override
   public void preparePendingReply(Session session, ConversationDraft input, String reply) {
-    if (session.getPendingQuestion() instanceof PendingQuestion.SimilarBook
-        && input.isInvalidBookCount()
-        && reply.matches("[-−]?(?:[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)")) {
-      input.setInvalidBookCount(false);
-      input.setIntent(UnknownHandler.ACTION);
-      input.setBookCount(null);
+    if (session.getPendingQuestion() instanceof PendingQuestion.SimilarBook) {
+      com.gen3.recommenderagent.application.conversation.ConversationRules
+          .reinterpretSelectionCount(input, reply);
     }
   }
 
@@ -374,7 +371,14 @@ public final class RecommendationHandler extends SearchContextResolver {
   public void attachQuestionContext(Session session, ConversationDraft request) {
     if (session.getPendingQuestion() instanceof PendingQuestion.SimilarBook pending) {
       request.setSimilarBookChoices(pending.getRequest().getSimilarBookChoices());
+    } else if (session.getPendingQuestionKind() == SEARCH_CLARIFICATION) {
+      attachPendingSearchCriteria(session, request);
     }
+  }
+
+  @Override
+  public boolean keepsUnansweredQuestion(ConversationQuestion question) {
+    return question == PREFERENCE_CLARIFICATION;
   }
 
   @Override

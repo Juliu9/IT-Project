@@ -49,11 +49,11 @@ public class CandidateRetrievalService implements CandidateRetriever {
               && !vectors.isEmpty();
       List<AudiobookCandidate> candidates =
           semanticRetrieval
-              ? retrieveSemantic(plan, vectors)
+              ? retrieveWithVectors(plan, vectors, false)
               : switch (plan.mode()) {
                 case KEYWORD ->
                     candidateSearch.searchKeyword(plan.keywordText(), plan.filters(), plan.limit());
-                case HYBRID -> retrieveHybrid(plan, vectors);
+                case HYBRID -> retrieveWithVectors(plan, vectors, true);
                 case FILTER_ONLY -> candidateSearch.searchByFilters(plan.filters(), plan.limit());
                 case NONE -> List.of();
               };
@@ -65,24 +65,15 @@ public class CandidateRetrievalService implements CandidateRetriever {
     }
   }
 
-  /** Searches with combined vector evidence, falling back to keywords when no vector is usable. */
-  private List<AudiobookCandidate> retrieveSemantic(
-      AudiobookRetrievalPlan plan, SemanticQueryVectors vectors) throws IOException {
+  /** Searches with combined vector evidence, including keyword evidence for hybrid retrieval. */
+  private List<AudiobookCandidate> retrieveWithVectors(
+      AudiobookRetrievalPlan plan, SemanticQueryVectors vectors, boolean hybrid)
+      throws IOException {
     float[] queryVector = embeddingIndexer.combineSemanticQueries(vectors);
     if (queryVector == null || queryVector.length == 0) {
       return retrieveKeywordFallback(plan);
     }
-    return candidateSearch.searchSemantic(queryVector, plan.filters(), plan.limit());
-  }
-
-  /** Combines vector and keyword retrieval when both kinds of evidence are available. */
-  private List<AudiobookCandidate> retrieveHybrid(
-      AudiobookRetrievalPlan plan, SemanticQueryVectors vectors) throws IOException {
-    float[] queryVector = embeddingIndexer.combineSemanticQueries(vectors);
-    if (queryVector == null || queryVector.length == 0) {
-      return retrieveKeywordFallback(plan);
-    }
-    if (plan.keywordText() == null || plan.keywordText().isBlank()) {
+    if (!hybrid || !hasKeywords(plan)) {
       return candidateSearch.searchSemantic(queryVector, plan.filters(), plan.limit());
     }
     return candidateSearch.searchHybrid(
@@ -92,9 +83,14 @@ public class CandidateRetrievalService implements CandidateRetriever {
   /** Uses keyword retrieval only when the plan contains usable query text. */
   private List<AudiobookCandidate> retrieveKeywordFallback(AudiobookRetrievalPlan plan)
       throws IOException {
-    if (plan.keywordText() == null || plan.keywordText().isBlank()) {
+    if (!hasKeywords(plan)) {
       return List.of();
     }
     return candidateSearch.searchKeyword(plan.keywordText(), plan.filters(), plan.limit());
+  }
+
+  /** Reports whether the plan contains searchable keyword text. */
+  private boolean hasKeywords(AudiobookRetrievalPlan plan) {
+    return plan.keywordText() != null && !plan.keywordText().isBlank();
   }
 }

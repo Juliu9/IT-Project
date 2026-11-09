@@ -442,12 +442,9 @@ public final class ExplainRecommendationHandler implements ConversationHandler {
 
   @Override
   public void preparePendingReply(Session session, ConversationDraft input, String reply) {
-    if (session.getPendingQuestionKind() == EXPLANATION_TARGET_CLARIFICATION
-        && input.isInvalidBookCount()
-        && reply.matches("[-−]?(?:[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)")) {
-      input.setInvalidBookCount(false);
-      input.setIntent(UnknownHandler.ACTION);
-      input.setBookCount(null);
+    if (session.getPendingQuestionKind() == EXPLANATION_TARGET_CLARIFICATION) {
+      com.gen3.recommenderagent.application.conversation.ConversationRules
+          .reinterpretSelectionCount(input, reply);
     }
   }
 

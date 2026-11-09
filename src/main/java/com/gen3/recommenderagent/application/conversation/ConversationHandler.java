@@ -130,7 +130,7 @@ public interface ConversationHandler {
     return null;
   }
 
-  /** Repairs context-dependent fields before deciding whether a reply starts a new action. */
+  /** Lets the pending question owner repair fields before classifying the reply. */
   default void preparePendingReply(Session session, ConversationDraft input, String reply) {}
 
   /** Reports whether this intent recognizes a reply to an unfinished action. */
@@ -138,7 +138,7 @@ public interface ConversationHandler {
     return false;
   }
 
-  /** Interprets an unfinished action's reply, or returns null to continue dispatch. */
+  /** Interprets an owned reply or a global interruption, or returns null to continue dispatch. */
   default ConversationDraft resolvePendingReply(
       Session session, ConversationDraft input, String reply) {
     return null;
@@ -146,6 +146,11 @@ public interface ConversationHandler {
 
   /** Gives cancellation precedence over abandoning the current question. */
   default boolean handlesInterruptions() {
+    return false;
+  }
+
+  /** Keeps an unanswered question when another action leaves it untouched. */
+  default boolean keepsUnansweredQuestion(ConversationQuestion question) {
     return false;
   }
 

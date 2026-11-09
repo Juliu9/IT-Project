@@ -376,23 +376,12 @@ public class SolrAudiobookRepository
   public List<AudiobookEmbedding> findStoredBooks(String afterId, int limit) throws IOException {
     List<AudiobookEmbedding> records = new ArrayList<>();
     for (SolrDocument document : cataloguePage(afterId, limit, true)) {
-      Object stored = document.getFieldValue(vectorField);
-      float[] vector = null;
-      if (stored instanceof float[] values) {
-        vector = values.clone();
-      } else if (stored instanceof java.util.Collection<?> values) {
-        vector = new float[values.size()];
-        int index = 0;
-        for (Object value : values) {
-          if (!(value instanceof Number number)) {
-            throw new IOException(
-                "Invalid stored Solr vector for book " + document.getFieldValue("id"));
-          }
-          vector[index++] = number.floatValue();
-        }
-      } else if (stored != null) {
+      float[] vector;
+      try {
+        vector = SolrVectors.decode(document.getFieldValue(vectorField));
+      } catch (IOException exception) {
         throw new IOException(
-            "Invalid stored Solr vector for book " + document.getFieldValue("id"));
+            "Invalid stored Solr vector for book " + document.getFieldValue("id"), exception);
       }
       records.add(new AudiobookEmbedding(toRecord(document), vector));
     }

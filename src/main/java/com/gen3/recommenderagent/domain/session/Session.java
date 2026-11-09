@@ -31,8 +31,11 @@ public class Session {
   public void setPendingQuestionKind(ConversationQuestion value) {
     if (value == null) {
       pendingQuestion = null;
-    } else if (pendingQuestion == null || !pendingQuestion.accepts(value)) {
-      pendingQuestion = PendingQuestion.create(value);
+      return;
+    }
+    var next = PendingQuestion.create(value);
+    if (pendingQuestion == null || pendingQuestion.getClass() != next.getClass()) {
+      pendingQuestion = next;
     } else {
       pendingQuestion.setKind(value);
     }

@@ -23,6 +23,14 @@ import java.util.List;
 
 /** Owns search inheritance, frozen MORE context, current preferences and search completion. */
 public abstract class SearchContextResolver implements ConversationHandler {
+  /** Copies retained exact constraints into a repeated search clarification. */
+  protected void attachPendingSearchCriteria(Session session, ConversationDraft request) {
+    var pending = session.getPendingRefinementRequest();
+    if (pending != null) {
+      request.setMustInclude(ConversationHistory.restoreSearchCriteria(pending).getMustInclude());
+    }
+  }
+
   @Override
   public void validate(
       Session session,

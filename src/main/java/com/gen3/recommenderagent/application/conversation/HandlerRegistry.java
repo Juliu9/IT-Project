@@ -6,6 +6,7 @@ import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.inputparser.UserIntent;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -18,6 +19,9 @@ import java.util.Set;
 public final class HandlerRegistry {
   private final Map<ConversationAction, ConversationHandler> handlers = new LinkedHashMap<>();
   private final List<ConversationHandler> definitions;
+  private final List<ConversationHandler> interruptionHandlers;
+  private final Map<ConversationOutcome, ConversationHandler> outcomeOwners = new HashMap<>();
+  private final Map<ConversationQuestion, ConversationHandler> questionOwners = new HashMap<>();
 
   public HandlerRegistry(Collection<ConversationHandler> definitions) {
     for (var handler : definitions) {
@@ -28,9 +32,9 @@ public final class HandlerRegistry {
       }
     }
     this.definitions = List.copyOf(new LinkedHashSet<>(handlers.values()));
-    var outcomeOwners = new java.util.HashMap<ConversationOutcome, ConversationHandler>();
-    var commandOwners = new java.util.HashMap<String, ConversationHandler>();
-    var questionOwners = new java.util.HashMap<ConversationQuestion, ConversationHandler>();
+    this.interruptionHandlers =
+        this.definitions.stream().filter(ConversationHandler::handlesInterruptions).toList();
+    var commandOwners = new HashMap<String, ConversationHandler>();
     for (var definition : this.definitions) {
       for (var outcome : definition.outcomes()) {
         if (outcomeOwners.putIfAbsent(outcome, definition) != null) {
@@ -60,16 +64,12 @@ public final class HandlerRegistry {
 
   /** Returns only outcomes declared by this application's discovered handlers. */
   public Set<ConversationOutcome> outcomes() {
-    return definitions.stream()
-        .flatMap(handler -> handler.outcomes().stream())
-        .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    return Collections.unmodifiableSet(outcomeOwners.keySet());
   }
 
   /** Returns only questions declared by this application's discovered handlers. */
   public Set<ConversationQuestion> questions() {
-    return definitions.stream()
-        .flatMap(handler -> handler.questions().stream())
-        .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    return Collections.unmodifiableSet(questionOwners.keySet());
   }
 
   public Set<ConversationAction> actions() {
@@ -79,6 +79,11 @@ public final class HandlerRegistry {
   /** Returns handlers in recognition and pending-reply priority order. */
   public java.util.List<ConversationHandler> definitions() {
     return definitions;
+  }
+
+  /** Returns the handlers explicitly registered to interrupt any outstanding question. */
+  List<ConversationHandler> interruptionHandlers() {
+    return interruptionHandlers;
   }
 
   public UserIntent recognize(String command) {
@@ -114,10 +119,11 @@ public final class HandlerRegistry {
 
   /** Resolves a completed result using its declared owner. */
   public ConversationHandler outcomeHandler(ConversationOutcome outcome) {
-    return definitions.stream()
-        .filter(handler -> handler.outcomes().contains(outcome))
-        .findFirst()
-        .orElseThrow(() -> new IllegalArgumentException("No handler for outcome: " + outcome));
+    var handler = outcomeOwners.get(outcome);
+    if (handler == null) {
+      throw new IllegalArgumentException("No handler for outcome: " + outcome);
+    }
+    return handler;
   }
 
   /** Gives handlers ownership of exhausted-search wording, including replay. */
@@ -134,10 +140,15 @@ public final class HandlerRegistry {
 
   /** Finds the single handler owning a question, including questions attached to other intents. */
   public ConversationHandler questionHandler(ConversationQuestion question) {
-    return definitions().stream()
-        .filter(handler -> handler.questions().contains(question))
-        .findFirst()
-        .orElseThrow(() -> new IllegalArgumentException("No handler for question: " + question));
+    var handler = findQuestionHandler(question);
+    if (handler == null) {
+      throw new IllegalArgumentException("No handler for question: " + question);
+    }
+    return handler;
+  }
+
+  ConversationHandler findQuestionHandler(ConversationQuestion question) {
+    return questionOwners.get(question);
   }
 
   public String instructions() {

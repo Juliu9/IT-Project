@@ -114,6 +114,11 @@ public final class ExtensionProbeHandler implements ConversationHandler {
     return Set.of(QUESTION);
   }
 
+  @Override
+  public void attachQuestionContext(Session session, ConversationDraft draft) {
+    draft.setReferenceRank(4);
+  }
+
   public String outcomeResponse(ConversationTurn turn) {
     return turn.getOutcome() == OUTCOME ? "Probe finished." : null;
   }

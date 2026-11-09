@@ -380,12 +380,7 @@ public final class RefineHandler extends SearchContextResolver {
 
   @Override
   public void attachQuestionContext(Session session, ConversationDraft request) {
-    if ((questions().contains(session.getPendingQuestionKind())
-            || session.getPendingQuestionKind() == RecommendationHandler.SEARCH_CLARIFICATION)
-        && session.getPendingRefinementRequest() != null) {
-      request.setMustInclude(
-          restoreSearchCriteria(session.getPendingRefinementRequest()).getMustInclude());
-    }
+    attachPendingSearchCriteria(session, request);
   }
 
   @Override

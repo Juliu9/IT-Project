@@ -2,7 +2,6 @@ package com.gen3.recommenderagent.application.conversation;
 
 import static com.gen3.recommenderagent.application.conversation.search.SearchCriteriaMerger.copyOf;
 
-import com.gen3.recommenderagent.application.conversation.intent.UnknownHandler;
 import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.model.SessionRequest;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
@@ -26,34 +25,29 @@ public final class ClarificationResolver {
       return effective;
     }
     String reply = effective.getRawText() == null ? "" : effective.getRawText().strip();
-    for (var handler : handlers.definitions()) {
-      handler.preparePendingReply(session, effective, reply);
+    var owner = handlers.findQuestionHandler(session.getPendingQuestionKind());
+    if (owner != null) {
+      owner.preparePendingReply(session, effective, reply);
     }
-    boolean contextual =
-        handlers.definitions().stream()
-            .anyMatch(handler -> handler.isContextualReply(session, effective, reply));
+    boolean contextual = owner != null && owner.isContextualReply(session, effective, reply);
     if (handlers.handler(effective.getIntent()).bypassesClarification() && !contextual) {
       return effective;
     }
     // Cancellation must be recognized before a new action abandons the question.
-    for (var handler : handlers.definitions()) {
-      if (handler.handlesInterruptions()) {
-        var resolved = handler.resolvePendingReply(session, effective, reply);
-        if (resolved != null) {
-          return normalizeResolved(resolved);
-        }
+    for (var handler : handlers.interruptionHandlers()) {
+      var resolved = handler.resolvePendingReply(session, effective, reply);
+      if (resolved != null) {
+        return normalizeResolved(resolved);
       }
     }
     if (isNewAction(effective) && !contextual) {
       session.setPendingQuestion(null);
       return effective;
     }
-    for (var handler : handlers.definitions()) {
-      if (!handler.handlesInterruptions()) {
-        var resolved = handler.resolvePendingReply(session, effective, reply);
-        if (resolved != null) {
-          return normalizeResolved(resolved);
-        }
+    if (owner != null && !owner.handlesInterruptions()) {
+      var resolved = owner.resolvePendingReply(session, effective, reply);
+      if (resolved != null) {
+        return normalizeResolved(resolved);
       }
     }
     if (handlers.handler(effective.getIntent()).questionPolicy()
@@ -79,21 +73,22 @@ public final class ClarificationResolver {
 
   /** Clears stale clarification state when the action no longer needs it. */
   private void clearAbandonedQuestions(Session session, ConversationDraft request) {
-    if (request.getIntent() != UnknownHandler.ACTION
-        && !session.isAwaitingPersonalisedPreferences()
-        && !session.isAwaitingPreferenceUpdate()) {
+    var incoming = handlers.handler(request.getIntent());
+    var kind = session.getPendingQuestionKind();
+    var owner = handlers.findQuestionHandler(kind);
+    if (incoming.questionPolicy() != ConversationHandler.QuestionPolicy.ATTACH
+        && (owner == null || !owner.keepsUnansweredQuestion(kind))) {
       session.setPendingQuestion(null);
     }
   }
 
   /** Copies retained question context into the outgoing conversation draft. */
   private void attachQuestion(Session session, ConversationDraft request) {
-    request.setPendingQuestion(session.getPendingQuestionKind());
-    if (session.getPendingQuestion() == null) {
-      return;
-    }
-    for (var handler : handlers.definitions()) {
-      handler.attachQuestionContext(session, request);
+    var kind = session.getPendingQuestionKind();
+    request.setPendingQuestion(kind);
+    var owner = handlers.findQuestionHandler(kind);
+    if (owner != null) {
+      owner.attachQuestionContext(session, request);
     }
   }
 

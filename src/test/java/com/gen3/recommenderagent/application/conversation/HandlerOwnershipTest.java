@@ -13,6 +13,8 @@ import com.gen3.recommenderagent.application.conversation.search.SearchCriteriaM
 import com.gen3.recommenderagent.application.recommendation.RecommendationPager;
 import com.gen3.recommenderagent.application.recommendation.SimilarBookResolver;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
+import com.gen3.recommenderagent.domain.session.PendingQuestion;
 import com.gen3.recommenderagent.domain.session.Session;
 import com.gen3.recommenderagent.inputparser.AiParser;
 import com.gen3.recommenderagent.inputparser.CommandParser;
@@ -21,8 +23,14 @@ import com.gen3.recommenderagent.response.AiResponseGenerator;
 import com.gen3.recommenderagent.response.ConversationResponseGenerator;
 import com.gen3.recommenderagent.retrieval.plan.ExactFilterPolicy;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import tools.jackson.databind.JacksonModule;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.jsontype.NamedType;
+import tools.jackson.databind.module.SimpleModule;
 
 class HandlerOwnershipTest {
   @Test
@@ -59,13 +67,19 @@ class HandlerOwnershipTest {
       var followUp = new com.gen3.recommenderagent.application.conversation.model.SessionRequest();
       followUp.setIntent(UnknownHandler.ACTION);
       followUp.setRawText("resume probe");
+      var unrelatedReply = new ClarificationResolver(registry).resolve(session, followUp);
+      assertThat(unrelatedReply.getIntent()).isSameAs(UnknownHandler.ACTION);
+      assertThat(session.getPendingQuestion()).isSameAs(pending);
+
+      session.setPendingQuestionKind(ExtensionProbeHandler.QUESTION);
+      var probeQuestion = session.getPendingQuestion();
       var resumed = engine.process(session, followUp);
       assertThat(resumed.getIntent()).isSameAs(ExtensionProbeHandler.ACTION);
       assertThat(resumed.getReferenceRank()).isEqualTo(3);
       assertThat(
               SearchCriteriaMerger.copyOf(ConversationDraft.fromTurn(resumed)).getReferenceRank())
           .isEqualTo(3);
-      assertThat(session.getPendingQuestion()).isSameAs(pending);
+      assertThat(session.getPendingQuestion()).isSameAs(probeQuestion);
       assertThat(
               new ConversationResponseGenerator(ai, registry)
                   .generate(resumed.getRecommendations(), resumed))
@@ -103,6 +117,11 @@ class HandlerOwnershipTest {
     var restored = mapper.readValue(mapper.writeValueAsString(session), Session.class);
     assertThat(restored.getPendingQuestionKind()).isSameAs(ExtensionProbeHandler.QUESTION);
     assertThat(restored.getLastOutcome().outcome()).isSameAs(ExtensionProbeHandler.OUTCOME);
+    var help = new ConversationDraft();
+    help.setIntent(com.gen3.recommenderagent.application.conversation.intent.HelpHandler.ACTION);
+    new ClarificationResolver(registry).complete(restored, help);
+    assertThat(help.getPendingQuestion()).isSameAs(ExtensionProbeHandler.QUESTION);
+    assertThat(help.getReferenceRank()).isEqualTo(4);
     assertThat(registry.outcomeHandler(ExtensionProbeHandler.OUTCOME))
         .isInstanceOf(ExtensionProbeHandler.class);
     assertThat(registry.questionHandler(ExtensionProbeHandler.QUESTION))
@@ -118,6 +137,44 @@ class HandlerOwnershipTest {
     assertThat(
             new ConversationResponseGenerator(null, registry).generate(java.util.List.of(), turn))
         .isEqualTo("Probe finished.");
+  }
+
+  @Test
+  void restoresAnIndependentlyRegisteredPendingPayloadWithTheApplicationMapper() {
+    var question =
+        ConversationQuestion.of(
+            "PAYLOAD_PROBE", ConversationQuestion.Context.SEARCH, ProbePayload::new);
+    new ApplicationContextRunner()
+        .withConfiguration(AutoConfigurations.of(JacksonAutoConfiguration.class))
+        .withBean(
+            JacksonModule.class,
+            () -> new SimpleModule().registerSubtypes(new NamedType(ProbePayload.class, "probe")))
+        .run(
+            context -> {
+              var mapper = context.getBean(ObjectMapper.class);
+              var session = new Session();
+              session.setPendingQuestionKind(question);
+              ((ProbePayload) session.getPendingQuestion()).setMarker("retained");
+              var json = mapper.writeValueAsString(session);
+              assertThat(mapper.readTree(json).path("pendingQuestion").path("type").asString())
+                  .isEqualTo("probe");
+              var restored = mapper.readValue(json, Session.class);
+              assertThat(restored.getPendingQuestionKind()).isSameAs(question);
+              assertThat(((ProbePayload) restored.getPendingQuestion()).getMarker())
+                  .isEqualTo("retained");
+            });
+  }
+
+  public static final class ProbePayload extends PendingQuestion {
+    private String marker;
+
+    public String getMarker() {
+      return marker;
+    }
+
+    public void setMarker(String value) {
+      marker = value;
+    }
   }
 
   @Test

@@ -12,6 +12,20 @@ public final class SolrVectors {
 
   /** Reads and validates a stored Solr vector with the expected dimensions. */
   public static float[] read(Object stored, int dimension) throws IOException {
+    float[] vector = decode(stored);
+    if (vector == null) {
+      return null;
+    }
+    try {
+      validate(vector, dimension);
+    } catch (IllegalArgumentException exception) {
+      throw new IOException("Invalid stored Solr vector", exception);
+    }
+    return vector;
+  }
+
+  /** Decodes the stored representation without applying write-time vector constraints. */
+  static float[] decode(Object stored) throws IOException {
     if (stored == null) {
       return null;
     }
@@ -29,11 +43,6 @@ public final class SolrVectors {
       }
     } else {
       throw new IOException("Unsupported stored Solr vector representation");
-    }
-    try {
-      validate(vector, dimension);
-    } catch (IllegalArgumentException exception) {
-      throw new IOException("Invalid stored Solr vector", exception);
     }
     return vector;
   }

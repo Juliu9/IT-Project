@@ -1,6 +1,5 @@
 package com.gen3.recommenderagent.domain.session;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
@@ -24,12 +23,6 @@ public abstract class PendingQuestion {
 
   public void setKind(ConversationQuestion value) {
     kind = value;
-  }
-
-  /** Checks whether the question kind belongs to this persisted question subtype. */
-  @JsonIgnore
-  public boolean accepts(ConversationQuestion value) {
-    return create(value).getClass() == getClass();
   }
 
   /** Creates the persisted question subtype appropriate for the supplied clarification kind. */

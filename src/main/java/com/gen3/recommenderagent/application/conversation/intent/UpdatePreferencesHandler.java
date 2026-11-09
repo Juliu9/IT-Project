@@ -209,15 +209,14 @@ public final class UpdatePreferencesHandler implements ConversationHandler {
     return null;
   }
 
-  /** Interprets supplied taste values as an explicit or pending saved-preference update. */
+  /** Interprets supplied taste values as a reply to a pending saved-preference update. */
   private ConversationDraft resolvePreferenceReply(Session session, ConversationDraft effective) {
-    if (effective.getIntent() == ACTION
-        || (session.isAwaitingPreferenceUpdate()
-            && !effective.startsNewSearch()
-            && (effective.getIntent() == RecommendationHandler.ACTION
-                || effective.getIntent() == RefineHandler.ACTION
-                || effective.getIntent() == UnknownHandler.ACTION)
-            && PreferenceRequestMapper.fromRequest(effective).hasValues())) {
+    if (session.isAwaitingPreferenceUpdate()
+        && !effective.startsNewSearch()
+        && (effective.getIntent() == RecommendationHandler.ACTION
+            || effective.getIntent() == RefineHandler.ACTION
+            || effective.getIntent() == UnknownHandler.ACTION)
+        && PreferenceRequestMapper.fromRequest(effective).hasValues()) {
       effective.setIntent(ACTION);
       if (effective.getPreferenceUpdates() == null) {
         effective.setPreferenceUpdates(PreferenceRequestMapper.fromRequest(effective));
@@ -230,6 +229,11 @@ public final class UpdatePreferencesHandler implements ConversationHandler {
   public ConversationDraft resolvePendingReply(
       Session session, ConversationDraft input, String reply) {
     return resolvePreferenceReply(session, input);
+  }
+
+  @Override
+  public boolean keepsUnansweredQuestion(ConversationQuestion question) {
+    return questions().contains(question);
   }
 
   @Override

@@ -45,6 +45,15 @@ public final class ConversationRules {
     return request;
   }
 
+  /** Lets a pending selection handle a numeric reply that parsing treated as an invalid count. */
+  public static void reinterpretSelectionCount(ConversationDraft request, String reply) {
+    if (request.isInvalidBookCount() && reply.matches("[-−]?(?:[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)")) {
+      request.setInvalidBookCount(false);
+      request.setIntent(UnknownHandler.ACTION);
+      request.setBookCount(null);
+    }
+  }
+
   /** Reports whether any usable semantic, exact, personalised, or reference-book criteria exist. */
   public static boolean hasSearchCriteria(ConversationDraft request) {
     if (request == null) {
