@@ -159,6 +159,20 @@ Category overflow during a preference edit returns a normal conversational respo
 remain intact, and `REPEAT` can replay that explanation. Other invalid requests retain their
 existing error handling.
 
+### Search history
+
+When `search-history.enabled=true` and Redis is the session store, each fresh explicit search or
+refinement adds its semantic vector to a per-user search taste in Redis (`search-history:<userId>`).
+The newest search takes `new-search-share` of the taste, so older searches fade. More results, vague
+personalised requests, and similar-book requests are not recorded. Only the user ID, the vector, a
+search count, and an update time are stored, never the request text.
+
+After `minimum-searches` searches, the taste behaves like stored taste: it joins the personalised
+taste signal during retrieval, is scored by `SearchHistoryScorer` during ranking, and counts as
+stored taste when deciding whether to ask what the user likes. It is frozen in the search snapshot
+for `MORE_RESULTS`. It never sets the reading-preferences flag, so explanations do not claim reading
+history. Lookup and save failures log a structured warning and fail open.
+
 ### Paging, refinements, and replay
 
 Retrieval excludes recently shown IDs and returns candidates for ranking. Ranking removes duplicates,
