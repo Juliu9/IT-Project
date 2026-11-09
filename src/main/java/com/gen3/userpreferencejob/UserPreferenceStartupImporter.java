@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -17,6 +18,7 @@ public class UserPreferenceStartupImporter implements ApplicationRunner {
   private static final Logger LOGGER = LoggerFactory.getLogger(UserPreferenceStartupImporter.class);
 
   private final StreamingUserPreferenceImporter importer;
+  private final Environment environment;
   private final com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot snapshot;
 
   @Value("${user.preferences.favourites-csv-path}")
@@ -34,9 +36,11 @@ public class UserPreferenceStartupImporter implements ApplicationRunner {
   /** Connects the streaming importer to the compatible local book-vector snapshot. */
   public UserPreferenceStartupImporter(
       StreamingUserPreferenceImporter importer,
-      com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot snapshot) {
+      com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot snapshot,
+      Environment environment) {
     this.importer = importer;
     this.snapshot = snapshot;
+    this.environment = environment;
   }
 
   /** {@inheritDoc} */
@@ -52,7 +56,7 @@ public class UserPreferenceStartupImporter implements ApplicationRunner {
     }
     Path favourites = Path.of(favouritesCsvPath);
     Path history = Path.of(historyCsvPath);
-    var manifest = new UserPreferenceImportManifest(manifestPath);
+    var manifest = new UserPreferenceImportManifest(manifestPath, environment);
     var result =
         importer.run(
             favourites,

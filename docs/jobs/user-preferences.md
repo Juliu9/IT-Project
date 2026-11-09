@@ -90,7 +90,8 @@ AUDIOBOOK_DATABASE=qdrant USER_PREFERENCES_IMPORT_ON_STARTUP=true \
 Use `AUDIOBOOK_DATABASE=solr` for Solr. Review the logged full/partial/unmapped counts and restricted
 unmapped-user report. A successful dry run creates an owner-only approval manifest at
 `./data/user-import-work/approved.properties` by default. It records the input and snapshot hashes,
-snapshot identity, and projected outcomes.
+snapshot identity, projected outcomes, and the profile destination (backend, endpoint, and
+collection). Run a fresh dry run if your manifest predates the destination fields.
 
 ### 2. Write
 

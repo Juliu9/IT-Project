@@ -100,10 +100,7 @@ public final class VectorMath {
     }
   }
 
-  /**
-   * Sums a list of vectors and normalizes the result. (Mathematically identical to averaging and
-   * then normalizing, but much faster).
-   */
+  /** Sums and normalizes the vectors, returning no signal when they cancel out. */
   public static float[] average(List<float[]> vectors) {
     if (vectors == null || vectors.isEmpty()) {
       return new float[0];
@@ -115,10 +112,10 @@ public final class VectorMath {
         combined[i] += vector[i]; // Just sum the values
       }
     }
-    return normalize(combined); // Normalization handles the scaling automatically
+    return combined.length > 0 && isZero(combined) ? new float[0] : normalize(combined);
   }
 
-  /** Calculates a weighted sum of vectors and normalizes the result. */
+  /** Normalizes the weighted sum, returning no signal when the vectors cancel out. */
   public static float[] weightedAverage(List<float[]> vectors, List<Double> weights) {
     if (vectors == null || vectors.isEmpty() || vectors.size() != weights.size()) {
       return new float[0];
@@ -134,6 +131,6 @@ public final class VectorMath {
         combined[i] += vector[i] * weight;
       }
     }
-    return normalize(combined);
+    return combined.length > 0 && isZero(combined) ? new float[0] : normalize(combined);
   }
 }

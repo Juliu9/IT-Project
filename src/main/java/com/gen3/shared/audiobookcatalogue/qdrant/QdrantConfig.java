@@ -39,7 +39,7 @@ public class QdrantConfig {
   }
 
   /** Ensures a scheme is present so local hostnames and full cloud URLs are both accepted. */
-  private URI parseUrl(String value) {
+  public static URI parseUrl(String value) {
     if (value == null || value.isBlank()) {
       throw new IllegalArgumentException("Qdrant URL must not be blank");
     }
