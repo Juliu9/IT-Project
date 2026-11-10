@@ -7,9 +7,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.catalogue.port.AudiobookVectorRepository;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookVectorRepository;
+import com.gen3.shared.csv.UserFavouriteCsvReader;
+import com.gen3.shared.csv.UserHistoryCsvReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -39,7 +41,9 @@ class StreamingUserPreferenceImporterTest {
         new UserPreferenceAggregatorService(books, users, bookLimit),
         directory.resolve("work"),
         rows,
-        bookLimit);
+        bookLimit,
+        0.10,
+        "write");
   }
 
   private Path csv(String file, String contents) throws Exception {
@@ -87,7 +91,7 @@ class StreamingUserPreferenceImporterTest {
                 csv("h.csv", "type,user,item,created_at,updated_at\n"));
     assertThat(result.users()).isEqualTo(1);
     ArgumentCaptor<List<UserPreferenceEmbedding>> saved = ArgumentCaptor.forClass(List.class);
-    org.mockito.Mockito.verify(users).saveAll(saved.capture());
+    org.mockito.Mockito.verify(users).saveAllPreservingMissing(saved.capture());
     assertThat(saved.getValue().getFirst().userId()).isEqualTo(id);
   }
 
@@ -107,7 +111,8 @@ class StreamingUserPreferenceImporterTest {
     assertThat(result.users()).isEqualTo(2);
     assertThat(result.uniqueRecords()).isEqualTo(5);
     ArgumentCaptor<List<UserPreferenceEmbedding>> saved = ArgumentCaptor.forClass(List.class);
-    org.mockito.Mockito.verify(users, org.mockito.Mockito.times(2)).saveAll(saved.capture());
+    org.mockito.Mockito.verify(users, org.mockito.Mockito.times(2))
+        .saveAllPreservingMissing(saved.capture());
     var profiles = saved.getAllValues().stream().flatMap(List::stream).toList();
     assertThat(profiles).extracting(UserPreferenceEmbedding::userId).containsExactly("a,one", "z");
     org.junit.jupiter.api.Assertions.assertArrayEquals(
@@ -131,7 +136,8 @@ class StreamingUserPreferenceImporterTest {
     assertThat(result.users()).isEqualTo(70);
     assertThat(result.uniqueRecords()).isEqualTo(70);
     ArgumentCaptor<List<UserPreferenceEmbedding>> saved = ArgumentCaptor.forClass(List.class);
-    org.mockito.Mockito.verify(users, org.mockito.Mockito.times(70)).saveAll(saved.capture());
+    org.mockito.Mockito.verify(users, org.mockito.Mockito.times(70))
+        .saveAllPreservingMissing(saved.capture());
     assertThat(
             saved.getAllValues().stream()
                 .flatMap(List::stream)
@@ -164,7 +170,9 @@ class StreamingUserPreferenceImporterTest {
     var history =
         csv("h.csv", "type,user,item,created_at,updated_at\nbook,z,r:book:a,not-a-date,NULL\n");
     assertThatThrownBy(() -> service.run(favourites, history))
-        .isInstanceOf(java.time.format.DateTimeParseException.class);
+        .isInstanceOf(java.io.IOException.class)
+        .hasMessageContaining("history CSV value at row 1")
+        .hasCauseInstanceOf(java.time.format.DateTimeParseException.class);
     verifyNoInteractions(books, users);
     assertClean();
   }

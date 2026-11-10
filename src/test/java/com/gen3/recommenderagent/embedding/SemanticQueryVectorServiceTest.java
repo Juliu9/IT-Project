@@ -6,7 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -39,9 +39,9 @@ class SemanticQueryVectorServiceTest {
     assertTrue(vectors.isEmpty());
   }
 
-  private SemanticQuery query(String keyword) {
+  private SemanticQuery query(String topic) {
     SemanticQuery query = new SemanticQuery();
-    query.setKeywords(List.of(keyword));
+    query.setTopics(List.of(topic));
     return query;
   }
 }

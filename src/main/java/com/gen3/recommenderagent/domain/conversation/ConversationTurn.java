@@ -14,6 +14,16 @@ import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ConversationTurn {
+  private SessionPreferences sessionPreferenceSnapshot;
+
+  public SessionPreferences getSessionPreferenceSnapshot() {
+    return sessionPreferenceSnapshot;
+  }
+
+  public void setSessionPreferenceSnapshot(SessionPreferences value) {
+    sessionPreferenceSnapshot = value;
+  }
+
   private boolean invalidBookCount;
 
   public boolean isInvalidBookCount() {
@@ -24,23 +34,25 @@ public class ConversationTurn {
     invalidBookCount = value;
   }
 
-  private ConversationDecision pendingQuestion;
+  private ConversationQuestion pendingQuestion;
 
-  public ConversationDecision getPendingQuestion() {
+  public ConversationQuestion getPendingQuestion() {
     return pendingQuestion;
   }
 
-  public void setPendingQuestion(ConversationDecision value) {
+  public void setPendingQuestion(ConversationQuestion value) {
     pendingQuestion = value;
   }
 
-  private List<com.gen3.catalogue.model.AudiobookTitle> similarBookChoices = List.of();
+  private List<com.gen3.shared.audiobookcatalogue.model.AudiobookTitle> similarBookChoices =
+      List.of();
 
-  public List<com.gen3.catalogue.model.AudiobookTitle> getSimilarBookChoices() {
+  public List<com.gen3.shared.audiobookcatalogue.model.AudiobookTitle> getSimilarBookChoices() {
     return similarBookChoices;
   }
 
-  public void setSimilarBookChoices(List<com.gen3.catalogue.model.AudiobookTitle> value) {
+  public void setSimilarBookChoices(
+      List<com.gen3.shared.audiobookcatalogue.model.AudiobookTitle> value) {
     similarBookChoices = value;
   }
 
@@ -68,10 +80,11 @@ public class ConversationTurn {
   private String rawText;
   private Instant createdAt;
   private ConversationAction intent;
+  private ConversationAction responseAction;
   private Integer referenceRank;
   private String referenceTitle;
   private Integer bookCount;
-  private ConversationDecision decision;
+  private ConversationOutcome outcome;
   private boolean preferenceClarificationRequired;
   private boolean searchClarificationRequired;
   private boolean noMoreRecommendations;
@@ -118,6 +131,16 @@ public class ConversationTurn {
     intent = value;
   }
 
+  /** Original action whose response is being replayed; null for ordinary turns. */
+  @JsonIgnore
+  public ConversationAction getResponseAction() {
+    return responseAction;
+  }
+
+  public void setResponseAction(ConversationAction value) {
+    responseAction = value;
+  }
+
   public Integer getReferenceRank() {
     return referenceRank;
   }
@@ -143,12 +166,12 @@ public class ConversationTurn {
   }
 
   @JsonIgnore
-  public ConversationDecision getDecision() {
-    return decision;
+  public ConversationOutcome getOutcome() {
+    return outcome;
   }
 
-  public void setDecision(ConversationDecision value) {
-    decision = value;
+  public void setOutcome(ConversationOutcome value) {
+    outcome = value;
   }
 
   public boolean isPreferenceClarificationRequired() {
@@ -189,6 +212,14 @@ public class ConversationTurn {
 
   public void setSearchCriteria(SessionPreferences value) {
     searchContext.setSearchCriteria(value);
+  }
+
+  public float[] getSearchHistorySnapshot() {
+    return searchContext.getSearchHistorySnapshot();
+  }
+
+  public void setSearchHistorySnapshot(float[] value) {
+    searchContext.setSearchHistorySnapshot(value);
   }
 
   public UserPreferenceEmbedding getUserPreferenceSnapshot() {

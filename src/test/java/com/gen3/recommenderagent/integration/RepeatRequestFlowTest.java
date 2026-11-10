@@ -8,12 +8,19 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.conversation.intent.ChangeCountHandler;
+import com.gen3.recommenderagent.application.conversation.intent.ClearHistoryHandler;
+import com.gen3.recommenderagent.application.conversation.intent.ExplainRecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.intent.HelpHandler;
+import com.gen3.recommenderagent.application.conversation.intent.MoreResultsHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RepeatHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RepeatRecommendationsHandler;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
+import com.gen3.recommenderagent.application.session.SessionTransitionService;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.session.Session;
@@ -23,7 +30,6 @@ import java.util.List;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import tools.jackson.databind.ObjectMapper;
 
 class RepeatRequestFlowTest {
@@ -33,16 +39,18 @@ class RepeatRequestFlowTest {
   private final SessionTransitionService service =
       ConversationTestSupport.transitions(sessions, workflow);
   private final ConversationResponseGenerator responses =
-      new ConversationResponseGenerator(new AiResponseGenerator(null));
+      new ConversationResponseGenerator(
+          new AiResponseGenerator(null),
+          com.gen3.recommenderagent.testsupport.TestHandlers.registry());
 
   @Test
   void helpCanBeRepeatedBeforeAnyRecommendationSearch() {
-    var help = process(request(ConversationAction.HELP));
-    var repeat = process(request(ConversationAction.REPEAT));
-    assertThat(repeat.getDecision()).isEqualTo(ConversationDecision.HELP);
+    var help = process(request(HelpHandler.ACTION));
+    var repeat = process(request(RepeatHandler.ACTION));
+    assertThat(repeat.getOutcome()).isNull();
     assertThat(responses.generate(repeat.getRecommendations(), repeat))
         .isEqualTo(responses.generate(help.getRecommendations(), help));
-    assertThat(saved().getLastOutcome().turn().getIntent()).isEqualTo(ConversationAction.HELP);
+    assertThat(saved().getLastOutcome().turn().getIntent()).isEqualTo(HelpHandler.ACTION);
     verifyNoInteractions(workflow);
   }
 
@@ -50,7 +58,7 @@ class RepeatRequestFlowTest {
   void repeatedExplanationKeepsItsSelectedRankAndTheMoreQueueAcrossSerialization()
       throws Exception {
     search();
-    var explanation = request(ConversationAction.EXPLAIN_RECOMMENDATION);
+    var explanation = request(ExplainRecommendationHandler.ACTION);
     explanation.setReferenceRank(4);
     explanation.setRawText("Why the fourth book?");
     var first = process(explanation);
@@ -59,19 +67,19 @@ class RepeatRequestFlowTest {
     sessions.updateSession(restored);
     assertThat(restored.getLastOutcome().turn().getRawText()).isNull();
     for (int i = 0; i < 2; i++) {
-      var repeated = process(request(ConversationAction.REPEAT));
-      assertThat(repeated.getIntent()).isEqualTo(ConversationAction.REPEAT);
-      assertThat(repeated.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+      var repeated = process(request(RepeatHandler.ACTION));
+      assertThat(repeated.getIntent()).isEqualTo(RepeatHandler.ACTION);
+      assertThat(repeated.getOutcome()).isNull();
       assertThat(repeated.getRecommendations())
           .extracting(Recommendation::getRank)
           .containsExactly(4);
       assertThat(responses.generate(repeated.getRecommendations(), repeated))
           .isEqualTo(responses.generate(first.getRecommendations(), first));
       assertThat(saved().getLastOutcome().turn().getIntent())
-          .isEqualTo(ConversationAction.EXPLAIN_RECOMMENDATION);
+          .isEqualTo(ExplainRecommendationHandler.ACTION);
       assertThat(saved().getActiveSearch().getPendingRecommendations()).hasSize(5);
     }
-    var more = process(request(ConversationAction.MORE_RESULTS));
+    var more = process(request(MoreResultsHandler.ACTION));
     assertThat(more.getRecommendations())
         .extracting(Recommendation::getId)
         .containsExactly("book-6", "book-7", "book-8", "book-9", "book-10");
@@ -79,13 +87,13 @@ class RepeatRequestFlowTest {
   }
 
   @ParameterizedTest
-  @EnumSource(
+  @com.gen3.recommenderagent.testsupport.ActionSource(
       value = ConversationAction.class,
       names = {"HELP", "CHANGE_COUNT", "UPDATE_PREFERENCES", "CLEAR_HISTORY", "UNKNOWN"})
   void repeatsActionsWithoutApplyingThemAgain(ConversationAction intent) throws Exception {
     search();
     var action = request(intent);
-    if (intent == ConversationAction.CHANGE_COUNT) {
+    if (intent == ChangeCountHandler.ACTION) {
       action.setBookCount(2);
     }
     var first = process(action);
@@ -98,9 +106,9 @@ class RepeatRequestFlowTest {
                     saved().getActiveSearch().getShownBookIds(),
                     saved().getBookCount(),
                     saved().getLastOutcome().turn(),
-                    saved().getLastOutcome().decision()));
-    var repeated = process(request(ConversationAction.REPEAT));
-    assertThat(repeated.getDecision()).isEqualTo(first.getDecision());
+                    saved().getLastOutcome().outcome()));
+    var repeated = process(request(RepeatHandler.ACTION));
+    assertThat(repeated.getOutcome()).isEqualTo(first.getOutcome());
     assertThat(responses.generate(repeated.getRecommendations(), repeated))
         .isEqualTo(responses.generate(first.getRecommendations(), first));
     assertThat(
@@ -112,7 +120,7 @@ class RepeatRequestFlowTest {
                         saved().getActiveSearch().getShownBookIds(),
                         saved().getBookCount(),
                         saved().getLastOutcome().turn(),
-                        saved().getLastOutcome().decision())))
+                        saved().getLastOutcome().outcome())))
         .isEqualTo(before);
     verify(workflow).recommend(any(), any());
   }
@@ -120,15 +128,15 @@ class RepeatRequestFlowTest {
   @Test
   void repeatsInvalidExplanationClarificationThenAllowsAnExplicitCorrection() {
     search();
-    var invalid = request(ConversationAction.EXPLAIN_RECOMMENDATION);
+    var invalid = request(ExplainRecommendationHandler.ACTION);
     invalid.setReferenceRank(6);
     var first = process(invalid);
-    var repeated = process(request(ConversationAction.REPEAT));
-    assertThat(repeated.getDecision())
-        .isEqualTo(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+    var repeated = process(request(RepeatHandler.ACTION));
+    assertThat(repeated.getPendingQuestion())
+        .isEqualTo(ExplainRecommendationHandler.EXPLANATION_TARGET_CLARIFICATION);
     assertThat(responses.generate(repeated.getRecommendations(), repeated))
         .isEqualTo(responses.generate(first.getRecommendations(), first));
-    var fourth = request(ConversationAction.EXPLAIN_RECOMMENDATION);
+    var fourth = request(ExplainRecommendationHandler.ACTION);
     fourth.setReferenceRank(4);
     assertThat(process(fourth).getRecommendations())
         .extracting(Recommendation::getRank)
@@ -138,9 +146,9 @@ class RepeatRequestFlowTest {
 
   @Test
   void repeatsSearchClarificationWithoutCreatingASearch() {
-    var first = process(request(ConversationAction.MORE_RESULTS));
-    var repeated = process(request(ConversationAction.REPEAT));
-    assertThat(repeated.getDecision()).isEqualTo(ConversationDecision.SEARCH_CLARIFICATION);
+    var first = process(request(MoreResultsHandler.ACTION));
+    var repeated = process(request(RepeatHandler.ACTION));
+    assertThat(repeated.getPendingQuestion()).isEqualTo(RecommendationHandler.SEARCH_CLARIFICATION);
     assertThat(responses.generate(repeated.getRecommendations(), repeated))
         .isEqualTo(responses.generate(first.getRecommendations(), first));
     verifyNoInteractions(workflow);
@@ -149,19 +157,19 @@ class RepeatRequestFlowTest {
   @Test
   void repeatsWholeBookPageAfterSelectedExplanationAndThenGenericRepeatRepeatsThatPage() {
     search();
-    var explain = request(ConversationAction.EXPLAIN_RECOMMENDATION);
+    var explain = request(ExplainRecommendationHandler.ACTION);
     explain.setReferenceRank(4);
     process(explain);
-    assertThat(process(request(ConversationAction.REPEAT)).getRecommendations()).hasSize(1);
-    var page = process(request(ConversationAction.REPEAT_RECOMMENDATIONS));
-    assertThat(page.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
+    assertThat(process(request(RepeatHandler.ACTION)).getRecommendations()).hasSize(1);
+    var page = process(request(RepeatRecommendationsHandler.ACTION));
+    assertThat(page.getOutcome()).isNull();
     assertThat(page.getRecommendations())
         .extracting(Recommendation::getRank)
         .containsExactly(1, 2, 3, 4, 5);
-    assertThat(process(request(ConversationAction.REPEAT)).getRecommendations()).hasSize(5);
+    assertThat(process(request(RepeatHandler.ACTION)).getRecommendations()).hasSize(5);
     assertThat(saved().getActiveSearch().getSearch()).isNotNull();
     assertThat(saved().getActiveSearch().getShownBookIds()).hasSize(5);
-    assertThat(process(request(ConversationAction.MORE_RESULTS)).getRecommendations())
+    assertThat(process(request(MoreResultsHandler.ACTION)).getRecommendations())
         .extracting(Recommendation::getId)
         .containsExactly("book-6", "book-7", "book-8", "book-9", "book-10");
     verify(workflow).recommend(any(), any());
@@ -170,26 +178,24 @@ class RepeatRequestFlowTest {
   @Test
   void distinguishesRepeatingHelpFromRepeatingTheBooks() {
     search();
-    process(request(ConversationAction.HELP));
-    assertThat(process(request(ConversationAction.REPEAT)).getDecision())
-        .isEqualTo(ConversationDecision.HELP);
-    assertThat(process(request(ConversationAction.REPEAT_RECOMMENDATIONS)).getRecommendations())
+    process(request(HelpHandler.ACTION));
+    assertThat(process(request(RepeatHandler.ACTION)).getOutcome()).isNull();
+    assertThat(process(request(RepeatRecommendationsHandler.ACTION)).getRecommendations())
         .hasSize(5);
-    assertThat(process(request(ConversationAction.REPEAT)).getDecision())
-        .isEqualTo(ConversationDecision.RECOMMENDATIONS);
+    assertThat(process(request(RepeatHandler.ACTION)).getOutcome()).isNull();
     verify(workflow).recommend(any(), any());
   }
 
   @Test
   void noPreviousSearchReturnsFixedMessageAndGenericRepeatCanReplayIt() {
-    process(request(ConversationAction.HELP));
-    var page = process(request(ConversationAction.REPEAT_RECOMMENDATIONS));
-    assertThat(page.getDecision()).isEqualTo(ConversationDecision.NO_RECOMMENDATIONS_TO_REPEAT);
+    process(request(HelpHandler.ACTION));
+    var page = process(request(RepeatRecommendationsHandler.ACTION));
+    assertThat(page.getOutcome())
+        .isEqualTo(RepeatRecommendationsHandler.NO_RECOMMENDATIONS_TO_REPEAT);
     assertThat(responses.generate(page.getRecommendations(), page))
         .isEqualTo(
             "I don't have a list of recommendations to repeat right now. What kind of audiobook would you like?");
-    assertThat(process(request(ConversationAction.REPEAT)).getDecision())
-        .isEqualTo(page.getDecision());
+    assertThat(process(request(RepeatHandler.ACTION)).getOutcome()).isEqualTo(page.getOutcome());
     verifyNoInteractions(workflow);
   }
 
@@ -197,25 +203,23 @@ class RepeatRequestFlowTest {
   void emptyMoreRepeatsExhaustionInsteadOfAnOlderNonemptyPage() {
     search();
     when(workflow.recommend(any(), any())).thenReturn(List.of());
-    process(request(ConversationAction.MORE_RESULTS));
-    process(request(ConversationAction.MORE_RESULTS));
-    process(request(ConversationAction.HELP));
-    var page = process(request(ConversationAction.REPEAT_RECOMMENDATIONS));
+    process(request(MoreResultsHandler.ACTION));
+    process(request(MoreResultsHandler.ACTION));
+    process(request(HelpHandler.ACTION));
+    var page = process(request(RepeatRecommendationsHandler.ACTION));
     assertThat(page.getRecommendations()).isEmpty();
-    assertThat(page.getDecision()).isEqualTo(ConversationDecision.NO_MORE_RESULTS);
-    assertThat(process(request(ConversationAction.REPEAT)).getDecision())
-        .isEqualTo(ConversationDecision.NO_MORE_RESULTS);
+    assertThat(page.getOutcome()).isNull();
+    assertThat(process(request(RepeatHandler.ACTION)).getOutcome()).isNull();
     verify(workflow, times(2)).recommend(any(), any());
   }
 
   @Test
   void clearingHistoryRemovesBookPageEvenThoughClearAcknowledgementCanBeRepeated() {
     search();
-    process(request(ConversationAction.CLEAR_HISTORY));
-    assertThat(process(request(ConversationAction.REPEAT)).getDecision())
-        .isEqualTo(ConversationDecision.HISTORY_CLEARED);
-    assertThat(process(request(ConversationAction.REPEAT_RECOMMENDATIONS)).getDecision())
-        .isEqualTo(ConversationDecision.NO_RECOMMENDATIONS_TO_REPEAT);
+    process(request(ClearHistoryHandler.ACTION));
+    assertThat(process(request(RepeatHandler.ACTION)).getOutcome()).isNull();
+    assertThat(process(request(RepeatRecommendationsHandler.ACTION)).getOutcome())
+        .isEqualTo(RepeatRecommendationsHandler.NO_RECOMMENDATIONS_TO_REPEAT);
     assertThat(saved().getActiveSearch().getPendingRecommendations()).isEmpty();
     verify(workflow).recommend(any(), any());
   }
@@ -229,7 +233,7 @@ class RepeatRequestFlowTest {
                         new Recommendation(
                             "book-" + i, i, 0.8, "Title " + i, "A magical adventure."))
                 .toList());
-    process(request(ConversationAction.RECOMMENDATION));
+    process(request(RecommendationHandler.ACTION));
   }
 
   private ConversationDraft request(ConversationAction intent) {

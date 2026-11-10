@@ -1,9 +1,9 @@
 package com.gen3.recommenderagent.embedding;
 
-import com.gen3.catalogue.vector.VectorMath;
 import com.gen3.recommenderagent.ai.AiProviderCalls;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
+import com.gen3.shared.vector.VectorMath;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -25,6 +25,7 @@ public class QueryEmbeddingService {
     this.aiOperationObserver = aiOperationObserver;
   }
 
+  /** Creates the query embedding service with the configured embedding model. */
   public QueryEmbeddingService(EmbeddingModel model) {
     this(model, AiOperationObserver.noop());
   }
@@ -88,8 +89,7 @@ public class QueryEmbeddingService {
             part("Topics", query.getTopics()),
             part("Genres", query.getGenres()),
             part("Authors", query.getAuthors()),
-            part("Narrators", query.getNarrators()),
-            part("Keywords", query.getKeywords()))
+            part("Narrators", query.getNarrators()))
         .stream()
         .filter(value -> !value.isBlank())
         .collect(Collectors.joining("\n"));

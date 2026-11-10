@@ -18,11 +18,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 
-/** Opt-in end-to-end check of the real OpenAI, Redis, and Qdrant request path. */
+/** Opt-in end-to-end check of the configured AI, session, catalogue, and history adapters. */
 @Tag("external")
-@EnabledIfEnvironmentVariable(named = "OPENAI_API_KEY", matches = ".+")
-@EnabledIfEnvironmentVariable(named = "QDRANT_URL", matches = ".+")
-@EnabledIfEnvironmentVariable(named = "QDRANT_API_KEY", matches = ".+")
+@EnabledIfEnvironmentVariable(named = "RUN_LIVE_RECOMMENDATION_TESTS", matches = "true")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class LiveRecommendationIntegrationTest {
 

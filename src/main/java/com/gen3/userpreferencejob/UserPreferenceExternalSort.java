@@ -26,6 +26,7 @@ final class UserPreferenceExternalSort implements AutoCloseable {
   private final List<Row> buffer = new ArrayList<>();
   private final List<Path> runs = new ArrayList<>();
 
+  /** Opens the binary interaction reader or creates bounded spill storage for an external sort. */
   UserPreferenceExternalSort(Path workDirectory, int maximumRows) throws IOException {
     if (maximumRows < 1) {
       throw new IllegalArgumentException("Import memory record limit must be positive");
@@ -35,6 +36,7 @@ final class UserPreferenceExternalSort implements AutoCloseable {
     directory = Files.createTempDirectory(workDirectory, "user-import-");
   }
 
+  /** Buffers a user interaction and spills a sorted run when the memory target is reached. */
   void add(Row row) throws IOException {
     buffer.add(row);
     if (buffer.size() == maximumRows) {
@@ -42,6 +44,7 @@ final class UserPreferenceExternalSort implements AutoCloseable {
     }
   }
 
+  /** Merges sorted runs into one deduplicated file for whole-user processing. */
   Path finish(JobProgress progress) throws IOException {
     flush();
     if (runs.isEmpty()) {
@@ -68,6 +71,7 @@ final class UserPreferenceExternalSort implements AutoCloseable {
     return runs.getFirst();
   }
 
+  /** Writes a sorted, deduplicated run and clears the in-memory buffer. */
   private void flush() throws IOException {
     if (buffer.isEmpty()) {
       return;
@@ -88,6 +92,7 @@ final class UserPreferenceExternalSort implements AutoCloseable {
     buffer.clear();
   }
 
+  /** Merges sorted input runs while retaining the newest duplicate history interaction. */
   private void merge(List<Path> sources, Path target, JobProgress progress) throws IOException {
     var readers = new ArrayList<Reader>();
     var queue =
@@ -132,6 +137,7 @@ final class UserPreferenceExternalSort implements AutoCloseable {
     }
   }
 
+  /** Compares interaction identity by user, book, and favourite-or-history source. */
   private static boolean sameKey(Row left, Row right) {
     return left != null
         && left.userId().equals(right.userId())
@@ -139,10 +145,12 @@ final class UserPreferenceExternalSort implements AutoCloseable {
         && left.history() == right.history();
   }
 
+  /** Opens a buffered binary stream for the temporary sorted interaction file. */
   private static DataOutputStream output(Path path) throws IOException {
     return new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(path)));
   }
 
+  /** Writes one interaction row in the temporary merge-sort format. */
   private static void write(DataOutputStream output, Row row) throws IOException {
     output.writeBoolean(true);
     output.writeUTF(row.userId());
@@ -151,6 +159,7 @@ final class UserPreferenceExternalSort implements AutoCloseable {
     output.writeLong(row.epochSecond());
   }
 
+  /** {@inheritDoc} */
   @Override
   public void close() throws IOException {
     // Only remove the unique temporary directory created by this import.
@@ -167,10 +176,14 @@ final class UserPreferenceExternalSort implements AutoCloseable {
     private final DataInputStream input;
     private Row current;
 
+    /**
+     * Opens the binary interaction reader or creates bounded spill storage for an external sort.
+     */
     Reader(Path path) throws IOException {
       input = new DataInputStream(new BufferedInputStream(Files.newInputStream(path)));
     }
 
+    /** Reads the next encoded row and reports whether another interaction is available. */
     boolean advance() throws IOException {
       if (!input.readBoolean()) {
         current = null;
@@ -180,10 +193,12 @@ final class UserPreferenceExternalSort implements AutoCloseable {
       return true;
     }
 
+    /** Returns the most recently decoded row for merge ordering and aggregation. */
     Row current() {
       return current;
     }
 
+    /** {@inheritDoc} */
     @Override
     public void close() throws IOException {
       input.close();

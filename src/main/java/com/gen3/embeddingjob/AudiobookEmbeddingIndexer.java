@@ -1,8 +1,8 @@
 package com.gen3.embeddingjob;
 
-import com.gen3.catalogue.model.AudiobookEmbedding;
-import com.gen3.catalogue.model.AudiobookRecord;
-import com.gen3.catalogue.vector.VectorMath;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookEmbedding;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookRecord;
+import com.gen3.shared.vector.VectorMath;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -12,6 +12,7 @@ import org.springframework.ai.embedding.EmbeddingModel;
 public class AudiobookEmbeddingIndexer {
   private final EmbeddingModel model;
 
+  /** Creates the indexer with the embedding model used for catalogue text. */
   public AudiobookEmbeddingIndexer(EmbeddingModel model) {
     this.model = model;
   }

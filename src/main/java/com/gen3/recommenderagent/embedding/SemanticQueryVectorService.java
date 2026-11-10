@@ -1,6 +1,6 @@
 package com.gen3.recommenderagent.embedding;
 
-import com.gen3.recommenderagent.application.conversation.SessionRequest;
+import com.gen3.recommenderagent.application.conversation.model.SessionRequest;
 import java.util.Arrays;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -11,6 +11,7 @@ public class SemanticQueryVectorService {
 
   private final QueryEmbeddingService embeddingIndexer;
 
+  /** Connects semantic query encoding to the shared query embedding service. */
   public SemanticQueryVectorService(QueryEmbeddingService embeddingIndexer) {
     this.embeddingIndexer = embeddingIndexer;
   }
@@ -29,6 +30,9 @@ public class SemanticQueryVectorService {
     return new SemanticQueryVectors(vectorOf(embedded.get(0)), vectorOf(embedded.get(1)));
   }
 
+  /**
+   * Wraps an available embedding as one evidence vector, or returns no evidence for missing values.
+   */
   private List<float[]> vectorOf(float[] vector) {
     return vector == null || vector.length == 0 ? List.of() : List.of(vector);
   }

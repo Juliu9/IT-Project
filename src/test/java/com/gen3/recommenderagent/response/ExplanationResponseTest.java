@@ -7,9 +7,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.application.conversation.intent.ExplainRecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.observability.AiOperationObserver;
@@ -34,7 +34,8 @@ class ExplanationResponseTest {
     var books = List.of(book(true), book(false));
     var generator =
         new ConversationResponseGenerator(
-            new AiResponseGenerator(client, AiOperationObserver.noop()));
+            new AiResponseGenerator(client, AiOperationObserver.noop()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     assertThat(generator.generate(books, ConversationDraft.toTurn(request)))
         .isEqualTo("Harry Potter fits your request.");
     var system = ArgumentCaptor.forClass(String.class);
@@ -65,7 +66,10 @@ class ExplanationResponseTest {
     assertThat(generator.compilePrompt(List.of(selected), snapshot, ""))
         .contains("rank=2 title=\"Harry Potter\"")
         .doesNotContain("rank=1 ");
-    assertThat(new ConversationResponseGenerator(generator).generate(List.of(selected), snapshot))
+    assertThat(
+            new ConversationResponseGenerator(
+                    generator, com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+                .generate(List.of(selected), snapshot))
         .startsWith("Number 2, Harry Potter");
   }
 
@@ -79,7 +83,8 @@ class ExplanationResponseTest {
     unknown.setShortDescription(null);
     var generator =
         new ConversationResponseGenerator(
-            new AiResponseGenerator(client, AiOperationObserver.noop()));
+            new AiResponseGenerator(client, AiOperationObserver.noop()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     String response =
         generator.generate(List.of(known, unknown), ConversationDraft.toTurn(request()));
     assertThat(response)
@@ -88,7 +93,9 @@ class ExplanationResponseTest {
             "school of magic",
             "enough detail in this book's description");
     assertThat(
-            new ConversationResponseGenerator(new AiResponseGenerator(null))
+            new ConversationResponseGenerator(
+                    new AiResponseGenerator(null),
+                    com.gen3.recommenderagent.testsupport.TestHandlers.registry())
                 .generate(List.of(unknown), ConversationDraft.toTurn(request())))
         .doesNotContain("I used your reading preferences to help choose this book");
   }
@@ -105,13 +112,14 @@ class ExplanationResponseTest {
                             "4. **Harry Potter** (rank 4): A school of magic fits your fantasy request.")))));
     String result =
         new ConversationResponseGenerator(
-                new AiResponseGenerator(client, AiOperationObserver.noop()))
+                new AiResponseGenerator(client, AiOperationObserver.noop()),
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
             .generate(List.of(book(false)), ConversationDraft.toTurn(request()));
     assertThat(result).isEqualTo("4. Harry Potter A school of magic fits your fantasy request.");
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.EnumSource(
+  @com.gen3.recommenderagent.testsupport.ActionSource(
       value = ConversationAction.class,
       names = {"RECOMMENDATION", "EXPLAIN_RECOMMENDATION"})
   void oversizedModelOutputUsesABoundedFallbackThatStillIncludesEveryBook(
@@ -138,7 +146,8 @@ class ExplanationResponseTest {
             .toList();
     var generator =
         new ConversationResponseGenerator(
-            new AiResponseGenerator(client, AiOperationObserver.noop()));
+            new AiResponseGenerator(client, AiOperationObserver.noop()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     var request = request();
     request.setIntent(intent);
     String result = generator.generate(books, ConversationDraft.toTurn(request));
@@ -148,7 +157,9 @@ class ExplanationResponseTest {
       assertThat(result).contains("Number " + rank + ", Title " + rank);
     }
     String offline =
-        new ConversationResponseGenerator(new AiResponseGenerator(null))
+        new ConversationResponseGenerator(
+                new AiResponseGenerator(null),
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
             .generate(books, ConversationDraft.toTurn(request));
     assertThat(offline).isEqualTo(result);
     assertThat(offline).contains(". Number 2,", ". Number 5,").endsWith(".");
@@ -156,8 +167,7 @@ class ExplanationResponseTest {
 
   private ConversationDraft request() {
     var request = new ConversationDraft();
-    request.setIntent(ConversationAction.EXPLAIN_RECOMMENDATION);
-    request.setDecision(ConversationDecision.EXPLANATION);
+    request.setIntent(ExplainRecommendationHandler.ACTION);
     request.setRawText("Why this book?");
     var query = new SemanticQuery();
     query.setGenres(List.of("fantasy"));

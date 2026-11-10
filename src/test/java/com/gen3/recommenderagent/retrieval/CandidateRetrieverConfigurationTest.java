@@ -3,19 +3,19 @@ package com.gen3.recommenderagent.retrieval;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import com.gen3.catalogue.port.AudiobookCandidateSearch;
-import com.gen3.catalogue.port.AudiobookVectorRepository;
-import com.gen3.catalogue.qdrant.Bm25SparseTextEncoder;
-import com.gen3.catalogue.qdrant.QdrantAudiobookRepository;
-import com.gen3.catalogue.qdrant.QdrantConfig;
-import com.gen3.catalogue.qdrant.QdrantPointMapper;
-import com.gen3.catalogue.solr.SolrAudiobookRepository;
-import com.gen3.catalogue.solr.SolrConfig;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.storage.user.port.UserPreferenceVectorRepository;
 import com.gen3.recommenderagent.storage.user.qdrant.QdrantUserPreferenceMapper;
 import com.gen3.recommenderagent.storage.user.qdrant.QdrantUserPreferenceRepository;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookCandidateSearch;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookVectorRepository;
+import com.gen3.shared.audiobookcatalogue.qdrant.Bm25SparseTextEncoder;
+import com.gen3.shared.audiobookcatalogue.qdrant.QdrantAudiobookRepository;
+import com.gen3.shared.audiobookcatalogue.qdrant.QdrantConfig;
+import com.gen3.shared.audiobookcatalogue.qdrant.QdrantPointMapper;
+import com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository;
+import com.gen3.shared.audiobookcatalogue.solr.SolrConfig;
 import com.gen3.shortdescriptionjob.store.AudiobookEnrichmentStore;
 import io.qdrant.client.QdrantClient;
 import org.junit.jupiter.api.Test;
@@ -108,6 +108,38 @@ class CandidateRetrieverConfigurationTest {
   }
 
   @Test
+  void discoveredStrategyCanHandleARequestWithoutFallingBack() throws Exception {
+    var strategy = mock(CandidateRetrievalStrategy.class);
+    var request = new com.gen3.recommenderagent.application.conversation.model.SessionRequest();
+    var query = new com.gen3.recommenderagent.domain.search.SemanticQuery();
+    query.setGenres(java.util.List.of("fantasy"));
+    request.setPositiveSemanticQuery(query);
+    org.mockito.Mockito.when(
+            strategy.tryRetrieve(
+                org.mockito.ArgumentMatchers.same(request),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.any()))
+        .thenReturn(java.util.Optional.of(java.util.List.of()));
+    org.mockito.Mockito.when(strategy.name()).thenReturn("PROBE");
+
+    replacement()
+        .withBean(CandidateRetrievalStrategy.class, () -> strategy)
+        .run(
+            context -> {
+              assertThat(
+                      context
+                          .getBean(CandidateRetriever.class)
+                          .getCandidates(request, null, 3, java.util.Set.of()))
+                  .isEmpty();
+              assertThat(context.getBeanProvider(CandidateRetrievalStrategy.class).orderedStream())
+                  .extracting(CandidateRetrievalStrategy::name)
+                  .containsExactly("PROBE", "SEMANTIC", "HYBRID", "FILTER_ONLY");
+              org.mockito.Mockito.verifyNoInteractions(
+                  context.getBean(AudiobookCandidateSearch.class));
+            });
+  }
+
+  @Test
   void incompleteReplacementFailsInsteadOfUsingQdrant() {
     runner
         .withPropertyValues("audiobook.database=other")
@@ -164,7 +196,7 @@ class CandidateRetrieverConfigurationTest {
   }
 
   @Test
-  void rejectsSeparateLegacyDatabaseSelection() {
+  void rejectsRetiredPropertyInsteadOfSilentlySelectingAnotherBackend() {
     runner
         .withPropertyValues("audiobook.candidate-retriever=solr")
         .run(

@@ -1,7 +1,7 @@
 package com.gen3.recommenderagent.observability;
 
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
-import com.gen3.recommenderagent.application.conversation.SessionRequest;
+import com.gen3.recommenderagent.application.conversation.model.SessionRequest;
+import com.gen3.recommenderagent.domain.conversation.ConversationAction;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import java.time.Duration;
 import java.time.Instant;
@@ -24,18 +24,22 @@ public class RequestTelemetry {
   private static final ThreadLocal<RequestState> CURRENT = new ThreadLocal<>();
   private final ObjectMapper objectMapper;
 
+  /** Initializes request telemetry dependencies or the per-request collection of demo metrics. */
   public RequestTelemetry(ObjectMapper objectMapper) {
     this.objectMapper = objectMapper;
   }
 
+  /** Begins synchronous request telemetry without enabling demo-only detail collection. */
   public void start() {
     CURRENT.set(new RequestState(false));
   }
 
+  /** Begins request telemetry with the details needed by the development demo. */
   public void startDemo() {
     CURRENT.set(new RequestState(true));
   }
 
+  /** Measures a synchronous pipeline stage while preserving the operation's result or failure. */
   public static <T> T measure(String stage, Supplier<T> action) {
     RequestState state = CURRENT.get();
     if (state == null) {
@@ -49,6 +53,7 @@ public class RequestTelemetry {
     }
   }
 
+  /** Records the response-generation mode for the current request. */
   public static void responseMode(String responseMode) {
     RequestState state = CURRENT.get();
     if (state != null) {
@@ -56,6 +61,7 @@ public class RequestTelemetry {
     }
   }
 
+  /** Records the retrieval mode and returned candidate count for the current request. */
   public static void retrieval(String mode, int candidates) {
     RequestState state = CURRENT.get();
     if (state != null) {
@@ -64,6 +70,7 @@ public class RequestTelemetry {
     }
   }
 
+  /** Records the selected catalogue backend for the current request. */
   public static void retrievalBackend(String backend) {
     RequestState state = CURRENT.get();
     if (state != null) {
@@ -71,6 +78,7 @@ public class RequestTelemetry {
     }
   }
 
+  /** Adds observed provider usage and attempt counts to the current request. */
   public static void ai(String operation, int attempts, AiOperationObserver.AiUsage usage) {
     RequestState state = CURRENT.get();
     if (state == null) {
@@ -104,6 +112,7 @@ public class RequestTelemetry {
     }
   }
 
+  /** Returns the collected request metrics in a client-facing immutable representation. */
   public Snapshot snapshot() {
     RequestState state = CURRENT.get();
     return state == null
@@ -121,32 +130,38 @@ public class RequestTelemetry {
       Map<String, AiOperationObserver.AiUsage> operations,
       Map<String, Object> retrieval) {}
 
-  public void complete(ConversationTurn request) {
-    finish(request == null ? null : ConversationDraft.fromTurn(request), "SUCCESS");
-  }
-
-  public void fail(SessionRequest request) {
-    var draft = new ConversationDraft();
-    if (request != null) {
-      draft.setRequestId(request.getRequestId());
-      draft.setIntent(request.getIntent());
+  /** Captures resolved parser context before a session transition can fail. */
+  public static void captureRequest(SessionRequest request) {
+    RequestState state = CURRENT.get();
+    if (state != null) {
+      state.requestId = request.getRequestId();
+      state.intent = request.getIntent();
     }
-    finish(draft, "FAILURE");
   }
 
-  private void finish(ConversationDraft request, String outcome) {
+  /** Finishes successful request telemetry using the completed conversation turn. */
+  public void complete(ConversationTurn request) {
+    finish(request, "SUCCESS");
+  }
+
+  /** Finishes failed request telemetry using the captured request context. */
+  public void fail() {
+    finish(null, "FAILURE");
+  }
+
+  /** Completes request timing and emits the final telemetry event. */
+  private void finish(ConversationTurn request, String outcome) {
     RequestState state = CURRENT.get();
     if (state == null) {
       return;
     }
     Map<String, Object> event = new LinkedHashMap<>();
     event.put("event", "recommendation.completed");
-    event.put("requestId", request == null ? null : request.getRequestId());
+    event.put("requestId", request == null ? state.requestId : request.getRequestId());
     event.put("outcome", outcome);
     event.put("durationMs", state.durationMillis());
-    event.put(
-        "intent",
-        request == null || request.getIntent() == null ? "UNKNOWN" : request.getIntent().name());
+    var intent = request == null ? state.intent : request.getIntent();
+    event.put("intent", intent == null ? "UNKNOWN" : intent.name());
     event.put("responseMode", state.responseMode);
     event.put("stages", state.stages);
     event.put("retrieval", state.retrieval);
@@ -160,6 +175,7 @@ public class RequestTelemetry {
     CURRENT.remove();
   }
 
+  /** Emits the structured summary for the completed request. */
   private void log(Map<String, Object> event) {
     try {
       LOGGER.info("{}", objectMapper.writeValueAsString(event));
@@ -168,6 +184,7 @@ public class RequestTelemetry {
     }
   }
 
+  /** Reads an available telemetry value without requiring a populated entry. */
   private static int value(Integer tokenCount) {
     return tokenCount == null ? 0 : tokenCount;
   }
@@ -176,6 +193,7 @@ public class RequestTelemetry {
     private final Instant startedAt = Instant.now();
     private final Map<String, AiOperationObserver.AiUsage> operations;
 
+    /** Initializes request telemetry dependencies or the per-request collection of demo metrics. */
     private RequestState(boolean demo) {
       operations = demo ? new LinkedHashMap<>() : null;
     }
@@ -183,6 +201,8 @@ public class RequestTelemetry {
     private final Map<String, Long> stages = new LinkedHashMap<>();
     private final Map<String, Object> retrieval = new LinkedHashMap<>();
     private final Map<String, Object> ai = new LinkedHashMap<>();
+    private String requestId;
+    private ConversationAction intent;
     private String responseMode = "UNKNOWN";
     private int aiCalls;
     private int aiAttempts;
@@ -190,6 +210,7 @@ public class RequestTelemetry {
     private int outputTokens;
     private boolean usageAvailable = true;
 
+    /** Converts elapsed request time into milliseconds. */
     private long durationMillis() {
       return Duration.between(startedAt, Instant.now()).toMillis();
     }

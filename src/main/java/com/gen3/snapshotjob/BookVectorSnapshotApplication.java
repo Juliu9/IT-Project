@@ -1,6 +1,6 @@
 package com.gen3.snapshotjob;
 
-import com.gen3.catalogue.snapshot.BookVectorSnapshot;
+import com.gen3.shared.audiobookcatalogue.snapshot.BookVectorSnapshot;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.boot.ApplicationRunner;
@@ -22,25 +22,27 @@ import org.springframework.core.env.Environment;
       org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoConfiguration.class,
       org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration.class
     })
-@Import({
-  SnapshotConfiguration.class,
-  com.gen3.catalogue.solr.SolrConfig.class,
-  com.gen3.catalogue.solr.SolrAudiobookRepository.class,
-  com.gen3.catalogue.qdrant.QdrantConfig.class
-})
+@Import(SnapshotConfiguration.class)
 public class BookVectorSnapshotApplication {
+  /** Starts this application with the supplied command-line configuration. */
   public static void main(String[] args) {
     try (var context =
         new SpringApplicationBuilder(BookVectorSnapshotApplication.class)
             .web(WebApplicationType.NONE)
+            .properties(com.gen3.shared.jobruntime.MaintenanceLogFile.property("snapshot"))
             .run(args)) {
       // Release catalogue clients after publishing the snapshot.
     }
   }
 
+  /** Rejects incompatible job flags and missing opt-in settings before job execution. */
   @Bean
   static BeanFactoryPostProcessor validateJob(Environment environment) {
     return factory -> {
+      if (environment.getProperty("read-history.import.enabled", Boolean.class, false)) {
+        throw new IllegalArgumentException(
+            "Run read-history import separately with ReadHistoryApplication");
+      }
       if (environment.getProperty("user.preferences.import-on-startup", Boolean.class, false)
           || environment.getProperty("audiobook.embedding-index.enabled", Boolean.class, false)
           || environment.getProperty("audiobook.qdrant.migration.enabled", Boolean.class, false)
@@ -51,10 +53,11 @@ public class BookVectorSnapshotApplication {
     };
   }
 
+  /** Builds the runner that exports existing catalogue vectors to the local snapshot. */
   @Bean
   ApplicationRunner snapshotJob(
       BookVectorSnapshot snapshot,
-      BookVectorSnapshot.Source source,
+      CatalogueSnapshotSource source,
       @Value("${book.vector-snapshot.page-size:500}") int pageSize) {
     return args -> snapshot.rebuild(source, pageSize);
   }

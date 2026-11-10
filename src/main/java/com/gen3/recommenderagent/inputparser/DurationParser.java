@@ -21,8 +21,10 @@ public final class DurationParser {
       Pattern.compile(
           "^(under|less than|below|over|more than|above|at most|no more than|up to|maximum(?: of)?|at least|no less than|minimum(?: of)?|exactly)\\s+(.+)$");
 
+  /** Prevents instantiation of this utility class. */
   private DurationParser() {}
 
+  /** Normalizes supported duration wording before conversion to minute bounds. */
   public static String normalize(String text) {
     String value = text.strip().toLowerCase(Locale.ROOT).replaceAll("(?U)\\s+", " ");
     value = normalizeNumberWords(value);
@@ -30,6 +32,7 @@ public final class DurationParser {
     return normalizeFractions(value);
   }
 
+  /** Converts supported written quantities to numeric duration wording. */
   private static String normalizeNumberWords(String value) {
     var words =
         java.util.List.of(
@@ -76,6 +79,7 @@ public final class DurationParser {
     return value;
   }
 
+  /** Normalizes supported numeric expressions for duration parsing. */
   private static String normalizeQuantities(String value) {
     value = value.replaceAll("\\b(?:a|an) (hundred|thousand)\\b", "1 $1");
     value =
@@ -107,6 +111,7 @@ public final class DurationParser {
     return value;
   }
 
+  /** Converts supported fractional duration wording to numeric quantities. */
   private static String normalizeFractions(String value) {
     value =
         Pattern.compile("([0-9]+) and (?:a )?(half|quarter)\\b")
@@ -148,6 +153,7 @@ public final class DurationParser {
     return value;
   }
 
+  /** Parses supported duration expressions into validated minimum and maximum minute bounds. */
   public static DurationRange parse(String text) {
     if (text == null || text.isBlank()) {
       return new DurationRange(null, null);
@@ -182,6 +188,7 @@ public final class DurationParser {
     }
   }
 
+  /** Converts a parsed duration quantity and unit into minute precision. */
   private static BigDecimal minutes(String text) {
     Matcher terms = TERM.matcher(text);
     BigDecimal total = BigDecimal.ZERO;
@@ -212,14 +219,17 @@ public final class DurationParser {
     return total;
   }
 
+  /** Builds a duration range after checking its numeric bounds. */
   private static DurationRange bounded(BigDecimal minimum, BigDecimal maximum) {
     return checked(whole(minimum, RoundingMode.CEILING), whole(maximum, RoundingMode.FLOOR));
   }
 
+  /** Converts a duration quantity to the required whole-minute representation. */
   private static int whole(BigDecimal value, RoundingMode rounding) {
     return value.setScale(0, rounding).intValueExact();
   }
 
+  /** Rejects duration values outside the supported numeric range. */
   private static DurationRange checked(Integer minimum, Integer maximum) {
     if ((minimum != null && minimum < 1)
         || (maximum != null && maximum < 1)
@@ -229,6 +239,7 @@ public final class DurationParser {
     return new DurationRange(minimum, maximum);
   }
 
+  /** Creates the clarification error for unsupported or invalid duration wording. */
   private static InvalidRequestException invalidDuration() {
     return new InvalidRequestException(
         "Could you give me a duration in hours or minutes? For example, 'under 1.5 hours' or 'between 2 and 3 hours'.");

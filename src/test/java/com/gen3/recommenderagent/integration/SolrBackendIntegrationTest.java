@@ -4,15 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import com.gen3.catalogue.model.AudiobookFilterConditions;
-import com.gen3.catalogue.model.AudiobookFilters;
-import com.gen3.catalogue.solr.SolrAudiobookRepository;
 import com.gen3.recommenderagent.api.RequestGateway;
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.conversation.intent.ExplainRecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.intent.MoreResultsHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.application.recommendation.AudiobookRecommendationWorkflow;
-import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
 import com.gen3.recommenderagent.embedding.QueryEmbeddingService;
 import com.gen3.recommenderagent.embedding.SemanticQueryVectorService;
 import com.gen3.recommenderagent.ranker.RankingService;
@@ -22,14 +20,15 @@ import com.gen3.recommenderagent.ranker.scorer.UserPreferenceScorer;
 import com.gen3.recommenderagent.ranker.scorer.WeightedScorer;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
 import com.gen3.recommenderagent.response.ConversationResponseGenerator;
-import com.gen3.recommenderagent.retrieval.CandidateRetrievalService;
-import com.gen3.recommenderagent.retrieval.plan.AudiobookRetrievalPlanner;
 import com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding;
 import com.gen3.recommenderagent.storage.user.solr.SolrUserPreferenceRepository;
 import com.gen3.recommenderagent.testsupport.SolrContainerTestSupport;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookFilterConditions;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookFilters;
+import com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository;
+import com.gen3.shared.csv.model.UserFavourite;
+import com.gen3.shared.csv.model.UserHistory;
 import com.gen3.userpreferencejob.UserPreferenceAggregatorService;
-import com.gen3.userpreferencejob.model.UserFavourite;
-import com.gen3.userpreferencejob.model.UserHistory;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -147,14 +146,18 @@ class SolrBackendIntegrationTest {
                 List.of(new WeightedScorer(new UserPreferenceScorer(scoring), 1.0))));
     var workflow =
         new AudiobookRecommendationWorkflow(
-            new CandidateRetrievalService(
-                "solr", books(), embeddings, new AudiobookRetrievalPlanner()),
+            com.gen3.recommenderagent.testsupport.TestCandidateRetrievers.create(
+                "solr", books(), embeddings),
             ranking,
             new SemanticQueryVectorService(embeddings),
-            users());
+            users(),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     var sessions = new RecommendationFlowTestSupport.InMemorySessionRepository();
     var service = ConversationTestSupport.transitions(sessions, workflow);
-    var responses = new ConversationResponseGenerator(new AiResponseGenerator(null));
+    var responses =
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(null),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     var parser = org.mockito.Mockito.mock(com.gen3.recommenderagent.inputparser.InputParser.class);
     org.mockito.Mockito.when(
             parser.parseUserIntent(
@@ -169,9 +172,7 @@ class SolrBackendIntegrationTest {
               var request = new com.gen3.recommenderagent.inputparser.UserIntent();
               request.setBookCount(java.math.BigInteger.valueOf(2));
               request.setIntent(
-                  raw.equals("2 more")
-                      ? ConversationAction.MORE_RESULTS
-                      : ConversationAction.RECOMMENDATION);
+                  raw.equals("2 more") ? MoreResultsHandler.ACTION : RecommendationHandler.ACTION);
               return request;
             });
     var gateway = new RequestGateway(parser, service, responses);
@@ -202,14 +203,14 @@ class SolrBackendIntegrationTest {
     }
     assertThat(sessions.getSession("session", user).getActiveSearch().getShownBookIds()).hasSize(4);
     var explain = new ConversationDraft();
-    explain.setIntent(ConversationAction.EXPLAIN_RECOMMENDATION);
+    explain.setIntent(ExplainRecommendationHandler.ACTION);
     var explanation = service.process("session", user, explain);
-    assertThat(explanation.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(explanation.getOutcome()).isNull();
     assertThat(explanation.getRecommendations()).hasSize(2);
     var fresh = new ConversationDraft();
-    fresh.setIntent(ConversationAction.RECOMMENDATION);
-    assertThat(service.process("new-session", "new-user", fresh).getDecision())
-        .isEqualTo(ConversationDecision.PREFERENCE_CLARIFICATION);
+    fresh.setIntent(RecommendationHandler.ACTION);
+    assertThat(service.process("new-session", "new-user", fresh).getPendingQuestion())
+        .isEqualTo(RecommendationHandler.PREFERENCE_CLARIFICATION);
     verifyNoInteractions(model);
   }
 

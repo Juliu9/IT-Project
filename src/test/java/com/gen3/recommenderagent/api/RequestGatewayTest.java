@@ -9,8 +9,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.domain.conversation.ConversationAction;
+import com.gen3.recommenderagent.application.conversation.intent.HelpHandler;
+import com.gen3.recommenderagent.application.conversation.intent.MoreResultsHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RecommendationHandler;
+import com.gen3.recommenderagent.application.session.SessionTransitionService;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.inputparser.AiParser;
 import com.gen3.recommenderagent.inputparser.CommandParser;
@@ -43,11 +45,12 @@ class RequestGatewayTest {
     var client = mock(org.springframework.ai.chat.client.ChatClient.class);
     var parser =
         new InputParser(
-            new CommandParser(),
-            new AiParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
+            new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     var completed = new ConversationTurn();
-    completed.setIntent(ConversationAction.HELP);
+    completed.setIntent(HelpHandler.ACTION);
     when(sessionTransitionService.process(
             org.mockito.ArgumentMatchers.eq("session"),
             org.mockito.ArgumentMatchers.eq("user"),
@@ -88,7 +91,7 @@ class RequestGatewayTest {
   @Test
   void standardApiDoesNotBuildOrCollectDemoMetrics() throws Exception {
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.MORE_RESULTS);
+    parsed.setIntent(MoreResultsHandler.ACTION);
     var completed = new ConversationTurn();
     when(inputParser.parseUserIntent(
             org.mockito.ArgumentMatchers.eq("more"),
@@ -109,7 +112,9 @@ class RequestGatewayTest {
     when(responseGenerator.generate(null, completed)).thenReturn("No more recommendations.");
     var gateway =
         new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
-    var catalogue = org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class);
+    var catalogue =
+        org.mockito.Mockito.mock(
+            com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class);
     MockMvcBuilders.standaloneSetup(gateway, new DemoWebsite(gateway, catalogue))
         .build()
         .perform(
@@ -150,11 +155,11 @@ class RequestGatewayTest {
   @Test
   void demoUsesTheExistingPipelineAndReturnsResolvedDetailsWithMetrics() throws Exception {
     UserIntent parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.MORE_RESULTS);
+    parsed.setIntent(MoreResultsHandler.ACTION);
     ConversationTurn resolved = new ConversationTurn();
     resolved.setRequestId("request-1");
     resolved.setPersonalised(true);
-    resolved.setIntent(ConversationAction.MORE_RESULTS);
+    resolved.setIntent(MoreResultsHandler.ACTION);
     when(inputParser.parseUserIntent(
             org.mockito.ArgumentMatchers.eq("more"),
             org.mockito.ArgumentMatchers
@@ -188,7 +193,8 @@ class RequestGatewayTest {
             gateway,
             new DemoWebsite(
                 gateway,
-                org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
+                org.mockito.Mockito.mock(
+                    com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class)))
         .build()
         .perform(
             post("/api/v1/recommendations/demo")
@@ -221,7 +227,8 @@ class RequestGatewayTest {
             gateway,
             new DemoWebsite(
                 gateway,
-                org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
+                org.mockito.Mockito.mock(
+                    com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class)))
         .build()
         .perform(
             post("/api/v1/recommendations")
@@ -249,7 +256,7 @@ class RequestGatewayTest {
         .isSameAs(exception);
 
     verify(telemetry).start();
-    verify(telemetry).fail(null);
+    verify(telemetry).fail();
     verifyNoInteractions(sessionTransitionService, responseGenerator);
   }
 
@@ -258,7 +265,11 @@ class RequestGatewayTest {
   void aiPathLoadsContextAndPassesTheSameIntentAndRawTextToTheTransition(boolean demo) {
     String rawText = "Find something like the Tolkien book you showed me";
     var ai = mock(AiParser.class);
-    var parser = new InputParser(new CommandParser(), ai);
+    var parser =
+        new InputParser(
+            new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+            ai,
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     var context =
         new com.gen3.recommenderagent.inputparser.SessionContext(
             null,
@@ -268,11 +279,11 @@ class RequestGatewayTest {
                     1, "The Hobbit")));
     when(sessionTransitionService.parserContext("session", "user")).thenReturn(context);
     var intent = new UserIntent();
-    intent.setIntent(ConversationAction.RECOMMENDATION);
+    intent.setIntent(RecommendationHandler.ACTION);
     intent.setSimilarToTitle("The Hobbit");
     when(ai.parse(rawText, context)).thenReturn(intent);
     var completed = new ConversationTurn();
-    completed.setIntent(ConversationAction.RECOMMENDATION);
+    completed.setIntent(RecommendationHandler.ACTION);
     when(sessionTransitionService.process(
             org.mockito.ArgumentMatchers.eq("session"),
             org.mockito.ArgumentMatchers.eq("user"),
@@ -364,7 +375,7 @@ class RequestGatewayTest {
                     "I'm having trouble processing your request right now. Please try again in a moment."));
     org.mockito.Mockito.reset(inputParser);
     var parsed = new UserIntent();
-    parsed.setIntent(ConversationAction.RECOMMENDATION);
+    parsed.setIntent(RecommendationHandler.ACTION);
     when(inputParser.parseUserIntent(
             org.mockito.ArgumentMatchers.eq("fantasy"),
             org.mockito.ArgumentMatchers
@@ -400,9 +411,10 @@ class RequestGatewayTest {
     var model = mock(org.springframework.ai.chat.client.ChatClient.class);
     var realParser =
         new InputParser(
-            new CommandParser(),
-            new AiParser(
-                model, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
+            new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                model, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     RequestGateway gateway =
         new RequestGateway(realParser, sessionTransitionService, responseGenerator, telemetry);
     MockMvc mockMvc =
@@ -410,7 +422,8 @@ class RequestGatewayTest {
                 gateway,
                 new DemoWebsite(
                     gateway,
-                    org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
+                    org.mockito.Mockito.mock(
+                        com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class)))
             .setControllerAdvice(new RequestExceptionHandler())
             .build();
 
@@ -425,37 +438,60 @@ class RequestGatewayTest {
           .andExpect(status().isBadRequest())
           .andExpect(content().string("I didn't catch that. What would you like to listen to?"));
     }
-    verify(telemetry, org.mockito.Mockito.times(2)).fail(null);
+    verify(telemetry, org.mockito.Mockito.times(2)).fail();
     verifyNoInteractions(model, sessionTransitionService, responseGenerator);
   }
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {"/api/v1/recommendations", "/api/v1/recommendations/demo"})
-  void returnsServiceUnavailableWhenCandidateRetrievalFails(String endpoint) throws Exception {
+  @ExtendWith(org.springframework.boot.test.system.OutputCaptureExtension.class)
+  void returnsServiceUnavailableWhenCandidateRetrievalFails(
+      String endpoint, org.springframework.boot.test.system.CapturedOutput output)
+      throws Exception {
     UserIntent parsedRequest = new UserIntent();
-    parsedRequest.setIntent(ConversationAction.RECOMMENDATION);
+    parsedRequest.setIntent(RecommendationHandler.ACTION);
     when(inputParser.parseUserIntent(
             org.mockito.ArgumentMatchers.eq("recommend science fiction"),
             org.mockito.ArgumentMatchers
                 .<java.util.function.Supplier<com.gen3.recommenderagent.inputparser.SessionContext>>
                     any()))
         .thenReturn(parsedRequest);
-    when(sessionTransitionService.process(
-            org.mockito.ArgumentMatchers.eq("session"),
-            org.mockito.ArgumentMatchers.eq("user"),
-            org.mockito.ArgumentMatchers.eq("recommend science fiction"),
-            org.mockito.ArgumentMatchers.eq(parsedRequest),
+    var request = new com.gen3.recommenderagent.application.conversation.model.SessionRequest();
+    request.setIntent(RecommendationHandler.ACTION);
+    request.setRequestId("failed-request-1");
+    when(inputParser.toSessionRequest("recommend science fiction", parsedRequest))
+        .thenReturn(request);
+    var sessions = mock(com.gen3.recommenderagent.storage.session.SessionRepository.class);
+    when(sessions.update(
+            org.mockito.ArgumentMatchers.anyString(),
+            org.mockito.ArgumentMatchers.anyString(),
+            org.mockito.ArgumentMatchers.any(),
             org.mockito.ArgumentMatchers.any()))
+        .thenAnswer(
+            call -> {
+              java.util.function.Function<com.gen3.recommenderagent.domain.session.Session, ?>
+                  change = call.getArgument(2);
+              return change.apply(new com.gen3.recommenderagent.domain.session.Session());
+            });
+    var engine = mock(com.gen3.recommenderagent.application.conversation.ConversationEngine.class);
+    when(engine.process(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(request)))
         .thenThrow(new CandidateRetrievalException("Qdrant", new RuntimeException("timed out")));
-    RequestGateway gateway =
-        new RequestGateway(inputParser, sessionTransitionService, responseGenerator, telemetry);
+    var transitions = new SessionTransitionService(sessions, engine, inputParser);
+    var gateway =
+        new RequestGateway(
+            inputParser,
+            transitions,
+            responseGenerator,
+            new RequestTelemetry(new tools.jackson.databind.ObjectMapper()));
     MockMvc mockMvc =
         MockMvcBuilders.standaloneSetup(
                 gateway,
                 new DemoWebsite(
                     gateway,
-                    org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
+                    org.mockito.Mockito.mock(
+                        com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class)))
             .setControllerAdvice(new RequestExceptionHandler())
             .build();
 
@@ -470,6 +506,10 @@ class RequestGatewayTest {
             content()
                 .string(
                     "I'm having trouble reaching the audiobook catalogue right now. Please try again in a moment."));
+    org.assertj.core.api.Assertions.assertThat(output.getOut())
+        .contains("\"requestId\":\"failed-request-1\"")
+        .contains("\"outcome\":\"FAILURE\"")
+        .contains("\"intent\":\"RECOMMENDATION\"");
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -477,7 +517,7 @@ class RequestGatewayTest {
       strings = {"/api/v1/recommendations", "/api/v1/recommendations/demo"})
   void returnsRetryAdviceWhenTheSessionIsBusy(String endpoint) throws Exception {
     UserIntent parsedRequest = new UserIntent();
-    parsedRequest.setIntent(ConversationAction.RECOMMENDATION);
+    parsedRequest.setIntent(RecommendationHandler.ACTION);
     when(inputParser.parseUserIntent(
             org.mockito.ArgumentMatchers.eq("recommend science fiction"),
             org.mockito.ArgumentMatchers
@@ -498,7 +538,8 @@ class RequestGatewayTest {
             gateway,
             new DemoWebsite(
                 gateway,
-                org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
+                org.mockito.Mockito.mock(
+                    com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class)))
         .setControllerAdvice(new RequestExceptionHandler())
         .build()
         .perform(
@@ -517,7 +558,7 @@ class RequestGatewayTest {
       strings = {"/api/v1/recommendations", "/api/v1/recommendations/demo"})
   void returnsServiceUnavailableWhenTheSessionCommitFails(String endpoint) throws Exception {
     UserIntent parsedRequest = new UserIntent();
-    parsedRequest.setIntent(ConversationAction.RECOMMENDATION);
+    parsedRequest.setIntent(RecommendationHandler.ACTION);
     when(inputParser.parseUserIntent(
             org.mockito.ArgumentMatchers.eq("recommend science fiction"),
             org.mockito.ArgumentMatchers
@@ -538,7 +579,8 @@ class RequestGatewayTest {
             gateway,
             new DemoWebsite(
                 gateway,
-                org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
+                org.mockito.Mockito.mock(
+                    com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class)))
         .setControllerAdvice(new RequestExceptionHandler())
         .build()
         .perform(

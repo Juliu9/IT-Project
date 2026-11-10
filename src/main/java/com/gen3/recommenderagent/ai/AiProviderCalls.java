@@ -7,8 +7,12 @@ import org.springframework.web.client.RestClientException;
 
 /** Translates supported provider failures; programming errors pass through unchanged. */
 public final class AiProviderCalls {
+  /** Prevents instantiation of this utility class. */
   private AiProviderCalls() {}
 
+  /**
+   * Executes an AI request and translates provider failures to the application exception contract.
+   */
   public static <T> T call(Supplier<T> request) {
     try {
       return request.get();

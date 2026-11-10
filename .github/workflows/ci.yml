@@ -72,6 +72,7 @@ jobs:
 
       - name: Run all unit and integration tests
         env:
+          RUN_LIVE_RECOMMENDATION_TESTS: "true"
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           QDRANT_URL: ${{ secrets.QDRANT_URL }}
           QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}

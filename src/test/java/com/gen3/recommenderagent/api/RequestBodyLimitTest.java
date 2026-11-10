@@ -7,7 +7,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.application.session.SessionTransitionService;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.response.ResponseGenerator;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -59,7 +59,8 @@ class RequestBodyLimitTest {
                 gateway,
                 new DemoWebsite(
                     gateway,
-                    org.mockito.Mockito.mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
+                    org.mockito.Mockito.mock(
+                        com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class)))
             .setControllerAdvice(new RequestBodyLimit(), new RequestExceptionHandler())
             .build();
     var request =

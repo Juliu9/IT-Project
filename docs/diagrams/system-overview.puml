@@ -17,15 +17,18 @@ package "recommenderagent — live requests" {
   component "SessionTransitionService\nOwns session transaction" as Session #DBEAFE
   component "ConversationEngine + intent handlers\nResolve, validate and page" as Engine #DBEAFE
   component "AudiobookRecommendationWorkflow\nBuilds a new recommendation batch" as Workflow #DCFCE7
-  component "CandidateRetrievalService\nSelects and executes search" as Retrieval #DCFCE7
-  component "RankingService\nRanks up to 20 recommendations" as Ranking #DCFCE7
+  component "CandidateRetrievalService\nDispatches ordered search strategies" as Retrieval #DCFCE7
+  component "RankingService\nCombines weighted scorers\nRanks up to 20 recommendations" as Ranking #DCFCE7
   component "ConversationResponseGenerator\nFixed replies or AI narration" as Response #DBEAFE
   component "User preference adapter\nQdrant OR Solr" as UserAdapter #FEF3C7
+  component "SearchHistoryRepository\nOptional Redis adapter" as SearchHistory #FEF3C7
   component "SessionRepository adapter\nCurrent runtime: Redis" as SessionStore #FEF3C7
 }
-component "catalogue\nAudiobook adapter: Qdrant OR Solr" as Adapter #FEF3C7
+component "shared.audiobookcatalogue\nAudiobook adapter: Qdrant OR Solr" as Adapter #FEF3C7
+component "shared.readhistory\nReadHistoryRepository\nPostgreSQL or client adapter" as ReadHistory #FEF3C7
 database "Selected database\nQdrant OR Solr\nCatalogue + book vectors\nUser preference vectors" as Qdrant
-database "Redis\nSearch context + last page\nPending recommendations + shown IDs" as Redis
+database "Redis\nSaved preferences + count\nSearch context + last outcome\nPending recommendations + shown IDs" as Redis
+database "Read-history database\nUser/book pairs; separate from sessions" as HistoryDatabase
 
 User -right-> Gateway : request / response
 Gateway --> Parser : 1. Parse
@@ -33,8 +36,12 @@ Gateway --> Session : 2. Apply session transition
 Session --> SessionStore : lock / load / commit / release
 SessionStore --> Redis
 Session --> Engine : apply within session update
+Engine --> ReadHistory : one bounded user lookup\nfor new recommendation pages
+ReadHistory --> HistoryDatabase
 Engine --> Workflow : only when a new batch is needed
 Workflow --> UserAdapter : load user preferences
+Workflow --> SearchHistory : load search taste / record eligible search
+SearchHistory --> Redis : per-user taste
 UserAdapter --> Qdrant
 Workflow --> Retrieval : retrieve up to 50 candidates
 Retrieval --> Adapter : semantic / keyword / hybrid / filters
@@ -43,10 +50,13 @@ Workflow --> Ranking : rank candidates
 Gateway --> Response : 3. Generate response after commit
 
 note bottom of Session
-  IntentResolver applies session business rules after parsing.
-  ConversationDispatcher selects the intent handler.
-  RecommendationPager reuses or refills pending results.
-  Replay and explanation can reuse saved session data.
+  InputParser maps intent to SessionRequest inside the lock.
+  Registered handlers own actions and pending replies.
+  RecommendationPager reuses or refills pages.
+  Saved preferences stay separate from searches.
+  Preference reports use snapshots without retrieval or AI narration.
+  Preference edits replace matching saved opposite tastes.
+  Overflow replies preserve preferences and the pending question.
 end note
 note bottom of Adapter
   Exactly one complete database adapter set is selected.

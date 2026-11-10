@@ -19,6 +19,9 @@ public class SearchContext {
   private SimilarBookReference similarBook;
   private float[] similarityQueryVector;
 
+  // The search taste loaded for this search, reused for "more results" (MAPA-30).
+  private float[] searchHistorySnapshot;
+
   public SimilarBookReference getSimilarBook() {
     return similarBook;
   }
@@ -33,6 +36,14 @@ public class SearchContext {
 
   public void setSimilarityQueryVector(float[] value) {
     similarityQueryVector = value == null ? null : value.clone();
+  }
+
+  public float[] getSearchHistorySnapshot() {
+    return searchHistorySnapshot == null ? null : searchHistorySnapshot.clone();
+  }
+
+  public void setSearchHistorySnapshot(float[] value) {
+    searchHistorySnapshot = value == null ? null : value.clone();
   }
 
   private SessionPreferences searchCriteria;
@@ -108,11 +119,13 @@ public class SearchContext {
     mustNotInclude = value;
   }
 
+  /** Copies explicit and effective criteria, including frozen vector evidence, for safe reuse. */
   public SearchContext copy() {
     var copy = new SearchContext();
     copy.setReplaceSearchFields(replaceSearchFields);
     copy.similarBook = similarBook;
     copy.setSimilarityQueryVector(similarityQueryVector);
+    copy.setSearchHistorySnapshot(searchHistorySnapshot);
     var values = new SessionPreferences();
     values.setPositiveSemanticQuery(positiveSemanticQuery);
     values.setNegativeSemanticQuery(negativeSemanticQuery);

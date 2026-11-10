@@ -9,18 +9,24 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.catalogue.model.AudiobookTitle;
-import com.gen3.catalogue.port.AudiobookTitleLookup;
-import com.gen3.catalogue.port.AudiobookVectorRepository;
-import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationEngine;
-import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.conversation.intent.CancelHandler;
+import com.gen3.recommenderagent.application.conversation.intent.ChangeCountHandler;
+import com.gen3.recommenderagent.application.conversation.intent.ExplainRecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.intent.HelpHandler;
+import com.gen3.recommenderagent.application.conversation.intent.MoreResultsHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RefineHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RepeatHandler;
+import com.gen3.recommenderagent.application.conversation.intent.ResetPreferencesHandler;
+import com.gen3.recommenderagent.application.conversation.intent.UnknownHandler;
+import com.gen3.recommenderagent.application.conversation.intent.UpdatePreferencesHandler;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.application.recommendation.RecommendationPager;
 import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
 import com.gen3.recommenderagent.application.recommendation.SimilarBookResolver;
+import com.gen3.recommenderagent.application.session.SessionTransitionService;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
@@ -28,6 +34,9 @@ import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import com.gen3.recommenderagent.response.AiResponseGenerator;
 import com.gen3.recommenderagent.response.ConversationResponseGenerator;
 import com.gen3.recommenderagent.retrieval.plan.ExactFilterPolicy;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookTitle;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookTitleLookup;
+import com.gen3.shared.audiobookcatalogue.port.AudiobookVectorRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.IntStream;
@@ -42,20 +51,23 @@ class SimilarBookFlowTest {
       new RecommendationFlowTestSupport.InMemorySessionRepository();
   private final ConversationEngine engine =
       new ConversationEngine(
-          ConversationTestSupport.dispatcher(),
-          new RecommendationPager(workflow),
+          com.gen3.recommenderagent.testsupport.TestHandlers.registry(),
+          new RecommendationPager(
+              workflow,
+              new com.gen3.recommenderagent.application.recommendation.ReadHistoryExclusions(
+                  java.util.Optional.empty(), 10000)),
           new ExactFilterPolicy(),
           new SimilarBookResolver(titles, vectors));
   private final SessionTransitionService service =
       new SessionTransitionService(
           sessions,
           engine,
-          new com.gen3.recommenderagent.application.conversation.IntentResolver(
-              new com.gen3.recommenderagent.inputparser.InputParser(
-                  new com.gen3.recommenderagent.inputparser.CommandParser(),
-                  new com.gen3.recommenderagent.inputparser.AiParser(
-                      (org.springframework.ai.chat.client.ChatClient.Builder) null))),
-          new com.gen3.recommenderagent.application.conversation.SessionContextProjector());
+          new com.gen3.recommenderagent.inputparser.InputParser(
+              new com.gen3.recommenderagent.inputparser.CommandParser(
+                  com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+              com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                  (org.springframework.ai.chat.client.ChatClient.Builder) null),
+              com.gen3.recommenderagent.testsupport.TestHandlers.registry()));
   private final AudiobookTitle book =
       new AudiobookTitle("hunger", "The Hunger Games", List.of("Suzanne Collins"));
 
@@ -74,7 +86,7 @@ class SimilarBookFlowTest {
     var request = new ConversationDraft();
     request.setIntent(intent);
     request.setSimilarToTitle(title);
-    request.setExplicitSearch(true);
+    request.setStartsNewSearch(true);
     request.setRawText(title == null ? intent.name() : "books similar to " + title);
     return request;
   }
@@ -84,7 +96,7 @@ class SimilarBookFlowTest {
         .thenReturn(
             List.of(
                 book, new AudiobookTitle("other", "The Hunger Games", List.of("Other Author"))));
-    service.process("session", "user", request(ConversationAction.RECOMMENDATION, "hunger games"));
+    service.process("session", "user", request(RecommendationHandler.ACTION, "hunger games"));
   }
 
   @Test
@@ -103,7 +115,7 @@ class SimilarBookFlowTest {
         .thenReturn(
             List.of(
                 book, new AudiobookTitle("other", "The Hunger Games", List.of("Other Author"))));
-    var search = request(ConversationAction.RECOMMENDATION, "hunger games");
+    var search = request(RecommendationHandler.ACTION, "hunger games");
     var include = new com.gen3.recommenderagent.domain.search.ExactCriteria();
     include.setAuthors(List.of("Author B"));
     include.setNarrators(List.of("Narrator B"));
@@ -119,35 +131,37 @@ class SimilarBookFlowTest {
     assertThat(savedPreferences.getNarrators()).containsExactly("Narrator A");
   }
 
-  private com.gen3.recommenderagent.application.conversation.SessionRequest parsedReply(
+  private com.gen3.recommenderagent.application.conversation.model.SessionRequest parsedReply(
       String text) {
     return new com.gen3.recommenderagent.inputparser.InputParser(
-            new com.gen3.recommenderagent.inputparser.CommandParser(),
-            mock(com.gen3.recommenderagent.inputparser.AiParser.class))
+            new com.gen3.recommenderagent.inputparser.CommandParser(
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+            mock(com.gen3.recommenderagent.inputparser.AiParser.class),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry())
         .parse(text);
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.EnumSource(
+  @com.gen3.recommenderagent.testsupport.ActionSource(
       value = ConversationAction.class,
       names = {"CHANGE_COUNT", "RESET_PREFERENCES"})
   void settingsAbandonPendingReferenceAcrossHelpAndReload(ConversationAction action)
       throws Exception {
     ambiguousReference();
-    var change = request(ConversationAction.CHANGE_COUNT, null);
+    var change = request(ChangeCountHandler.ACTION, null);
     change.setBookCount(2);
     service.process("session", "user", change);
-    if (action == ConversationAction.RESET_PREFERENCES) {
+    if (action == ResetPreferencesHandler.ACTION) {
       service.process("session", "user", request(action, null));
     }
-    service.process("session", "user", request(ConversationAction.HELP, null));
+    service.process("session", "user", request(HelpHandler.ACTION, null));
     var mapper = new tools.jackson.databind.ObjectMapper();
     sessions.updateSession(
         mapper.readValue(
             mapper.writeValueAsString(sessions.getSession("session", "user")),
             com.gen3.recommenderagent.domain.session.Session.class));
     var result = service.process("session", "user", parsedReply("1"));
-    assertThat(result.getIntent()).isEqualTo(ConversationAction.UNKNOWN);
+    assertThat(result.getIntent()).isEqualTo(UnknownHandler.ACTION);
     assertThat(result.getSimilarBook()).isNull();
     assertThat(sessions.getSession("session", "user").getPendingQuestion()).isNull();
   }
@@ -161,7 +175,7 @@ class SimilarBookFlowTest {
   })
   void preferenceChangesDiscardTheUnfinishedReferenceSearch(
       ConversationAction action, boolean explicitAuthor) throws Exception {
-    service.process("session", "user", request(ConversationAction.HELP, null));
+    service.process("session", "user", request(HelpHandler.ACTION, null));
     var old = new SessionPreferences();
     var oldFilter = new ExactCriteria();
     oldFilter.setAuthors(List.of("Old Writer"));
@@ -177,7 +191,7 @@ class SimilarBookFlowTest {
         .thenReturn(
             List.of(
                 book, new AudiobookTitle("other", "The Hunger Games", List.of("Other Author"))));
-    var search = request(ConversationAction.RECOMMENDATION, "hunger games");
+    var search = request(RecommendationHandler.ACTION, "hunger games");
     search.setPersonalised(true);
     var criteria = new ExactCriteria();
     criteria.setDuration("under 5 hours");
@@ -187,7 +201,7 @@ class SimilarBookFlowTest {
     search.setMustInclude(criteria);
     service.process("session", "user", search);
     var edit = request(action, null);
-    if (action == ConversationAction.UPDATE_PREFERENCES) {
+    if (action == UpdatePreferencesHandler.ACTION) {
       var next = new SessionPreferences();
       var filter = new ExactCriteria();
       filter.setAuthors(List.of("New Writer"));
@@ -207,11 +221,11 @@ class SimilarBookFlowTest {
             mapper.writeValueAsString(sessions.getSession("session", "user")),
             com.gen3.recommenderagent.domain.session.Session.class));
     var result = service.process("session", "user", parsedReply("1"));
-    assertThat(result.getIntent()).isEqualTo(ConversationAction.UNKNOWN);
+    assertThat(result.getIntent()).isEqualTo(UnknownHandler.ACTION);
     assertThat(result.getSimilarBook()).isNull();
     assertThat(sessions.getSession("session", "user").getPendingQuestion()).isNull();
     assertThat(sessions.getSession("session", "user").getPreferences() == null)
-        .isEqualTo(action == ConversationAction.RESET_PREFERENCES);
+        .isEqualTo(action == ResetPreferencesHandler.ACTION);
   }
 
   @Test
@@ -220,7 +234,7 @@ class SimilarBookFlowTest {
         .thenReturn(
             List.of(
                 new AudiobookTitle("hunger", "The Hunger Games", List.of("Collins, Suzanne."))));
-    var search = request(ConversationAction.RECOMMENDATION, "The Hunger Games");
+    var search = request(RecommendationHandler.ACTION, "The Hunger Games");
     search.setSimilarToAuthor("Suzanne Collins");
     assertThat(service.process("session", "user", search).getSimilarBook().bookId())
         .isEqualTo("hunger");
@@ -229,10 +243,10 @@ class SimilarBookFlowTest {
             List.of(
                 new AudiobookTitle("hunger", "The Hunger Games", List.of("Collins, Suzanne.")),
                 new AudiobookTitle("other", "The Hunger Games", List.of("Other Author"))));
-    service.process("session", "user", request(ConversationAction.RECOMMENDATION, "hunger games"));
-    var reply = request(ConversationAction.UNKNOWN, null);
+    service.process("session", "user", request(RecommendationHandler.ACTION, "hunger games"));
+    var reply = request(UnknownHandler.ACTION, null);
     reply.setRawText("Suzanne Collins");
-    reply.setExplicitSearch(false);
+    reply.setStartsNewSearch(false);
     assertThat(service.process("session", "user", reply).getSimilarBook().bookId())
         .isEqualTo("hunger");
   }
@@ -244,17 +258,17 @@ class SimilarBookFlowTest {
     ambiguousReference();
     org.mockito.Mockito.clearInvocations(workflow, vectors, titles);
     var result = service.process("session", "user", parsedReply(text));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.SIMILAR_BOOK_REQUIRED);
+    assertThat(result.getPendingQuestion()).isEqualTo(RecommendationHandler.SIMILAR_BOOK_REQUIRED);
     assertThat(result.getSimilarBookChoices()).isEmpty();
     verifyNoInteractions(workflow, vectors, titles);
     when(titles.findBooksByTitle(anyString(), any(), anyInt()))
         .thenReturn(
             List.of(new AudiobookTitle("hunger", "Another Book", List.of("Another Author"))));
-    var named = request(ConversationAction.RECOMMENDATION, "Another Book");
+    var named = request(RecommendationHandler.ACTION, "Another Book");
     named.setRawText("Another Book");
-    named.setExplicitSearch(false);
+    named.setStartsNewSearch(false);
     var resumed = service.process("session", "user", named);
-    assertThat(resumed.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
+    assertThat(resumed.getOutcome()).isNull();
     assertThat(resumed.getSimilarBook().title()).isEqualTo("Another Book");
   }
 
@@ -269,8 +283,8 @@ class SimilarBookFlowTest {
     when(titles.findBooksByTitle(anyString(), any(), anyInt())).thenReturn(matches);
     var result =
         service.process(
-            "session", "user", request(ConversationAction.RECOMMENDATION, "The Hunger Games"));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.SIMILAR_BOOK_SELECTION);
+            "session", "user", request(RecommendationHandler.ACTION, "The Hunger Games"));
+    assertThat(result.getPendingQuestion()).isEqualTo(RecommendationHandler.SIMILAR_BOOK_SELECTION);
     assertThat(result.getSimilarBookChoices()).hasSize(5);
     assertThat(result.getSimilarBookChoices().getFirst().bookId()).isEqualTo("hunger");
     var selected = service.process("session", "user", parsedReply("1"));
@@ -291,8 +305,8 @@ class SimilarBookFlowTest {
         service.process(
             "session",
             "user",
-            request(ConversationAction.RECOMMENDATION, "Lord of the Rings Fellowship of the Ring"));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
+            request(RecommendationHandler.ACTION, "Lord of the Rings Fellowship of the Ring"));
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getSimilarBook().bookId()).isEqualTo("one");
     assertThat(result.getSimilarBookChoices()).isEmpty();
   }
@@ -313,8 +327,8 @@ class SimilarBookFlowTest {
         service.process(
             "session",
             "user",
-            request(ConversationAction.RECOMMENDATION, "Lord of the Rings Fellowship of the Ring"));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.SIMILAR_BOOK_SELECTION);
+            request(RecommendationHandler.ACTION, "Lord of the Rings Fellowship of the Ring"));
+    assertThat(result.getPendingQuestion()).isEqualTo(RecommendationHandler.SIMILAR_BOOK_SELECTION);
     assertThat(result.getSimilarBookChoices())
         .extracting(AudiobookTitle::bookId)
         .containsExactly("one", "adaptation");
@@ -331,8 +345,8 @@ class SimilarBookFlowTest {
                 new AudiobookTitle("other", "The Hunger Games", List.of("Other Author"))));
     var result =
         service.process(
-            "session", "user", request(ConversationAction.RECOMMENDATION, "The Hunger Games"));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.SIMILAR_BOOK_SELECTION);
+            "session", "user", request(RecommendationHandler.ACTION, "The Hunger Games"));
+    assertThat(result.getPendingQuestion()).isEqualTo(RecommendationHandler.SIMILAR_BOOK_SELECTION);
     assertThat(result.getSimilarBookChoices())
         .extracting(AudiobookTitle::bookId)
         .containsExactly("hunger", "other");
@@ -350,8 +364,8 @@ class SimilarBookFlowTest {
                 .toList());
     var result =
         service.process(
-            "session", "user", request(ConversationAction.RECOMMENDATION, "The Hunger Games"));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.SIMILAR_BOOK_SELECTION);
+            "session", "user", request(RecommendationHandler.ACTION, "The Hunger Games"));
+    assertThat(result.getPendingQuestion()).isEqualTo(RecommendationHandler.SIMILAR_BOOK_SELECTION);
     assertThat(result.getSimilarBookChoices()).hasSize(1);
     verifyNoInteractions(workflow, vectors);
   }
@@ -360,20 +374,19 @@ class SimilarBookFlowTest {
   void exactReferenceSurvivesMoreRefineExplainAndSessionSerialization() throws Exception {
     var first =
         service.process(
-            "session", "user", request(ConversationAction.RECOMMENDATION, "the hunger games"));
+            "session", "user", request(RecommendationHandler.ACTION, "the hunger games"));
     assertThat(first.getSimilarBook().bookId()).isEqualTo("hunger");
     assertThat(first.isPersonalised()).isFalse();
     assertThat(first.getRecommendations()).hasSize(5);
-    var more = service.process("session", "user", request(ConversationAction.MORE_RESULTS, null));
+    var more = service.process("session", "user", request(MoreResultsHandler.ACTION, null));
     assertThat(more.getSimilarBook().bookId()).isEqualTo("hunger");
     assertThat(more.getRecommendations())
         .extracting(Recommendation::getId)
         .containsExactly("book-6", "book-7", "book-8", "book-9", "book-10");
     var explain =
-        service.process(
-            "session", "user", request(ConversationAction.EXPLAIN_RECOMMENDATION, null));
+        service.process("session", "user", request(ExplainRecommendationHandler.ACTION, null));
     assertThat(explain.getSimilarBook().bookId()).isEqualTo("hunger");
-    var refine = request(ConversationAction.REFINE, null);
+    var refine = request(RefineHandler.ACTION, null);
     var criteria = new ExactCriteria();
     criteria.setDuration("under 5 hours");
     refine.setMustInclude(criteria);
@@ -382,7 +395,7 @@ class SimilarBookFlowTest {
     assertThat(refined.getMustInclude().getDuration()).isEqualTo("under 5 hours");
     verify(titles).findBooksByTitle(anyString(), any(), anyInt());
     verify(vectors).findEmbeddingByBookId("hunger");
-    var fresh = request(ConversationAction.RECOMMENDATION, null);
+    var fresh = request(RecommendationHandler.ACTION, null);
     var tastes = new com.gen3.recommenderagent.domain.search.SemanticQuery();
     tastes.setGenres(List.of("mystery"));
     fresh.setPositiveSemanticQuery(tastes);
@@ -395,23 +408,24 @@ class SimilarBookFlowTest {
         .thenReturn(
             List.of(
                 book, new AudiobookTitle("edition", "The Hunger Games", List.of("Other Author"))));
-    var search = request(ConversationAction.RECOMMENDATION, "The Hunger Games");
+    var search = request(RecommendationHandler.ACTION, "The Hunger Games");
     var exact = new ExactCriteria();
     exact.setDuration("under 10 hours");
     search.setMustInclude(exact);
     var choices = service.process("session", "user", search);
-    assertThat(choices.getDecision()).isEqualTo(ConversationDecision.SIMILAR_BOOK_SELECTION);
+    assertThat(choices.getPendingQuestion())
+        .isEqualTo(RecommendationHandler.SIMILAR_BOOK_SELECTION);
     verifyNoInteractions(workflow, vectors);
-    var invalid = request(ConversationAction.UNKNOWN, null);
+    var invalid = request(UnknownHandler.ACTION, null);
     invalid.setRawText("999999999999999999999th");
-    invalid.setExplicitSearch(false);
-    assertThat(service.process("session", "user", invalid).getDecision())
-        .isEqualTo(ConversationDecision.SIMILAR_BOOK_SELECTION);
-    var reply = request(ConversationAction.UNKNOWN, null);
+    invalid.setStartsNewSearch(false);
+    assertThat(service.process("session", "user", invalid).getPendingQuestion())
+        .isEqualTo(RecommendationHandler.SIMILAR_BOOK_SELECTION);
+    var reply = request(UnknownHandler.ACTION, null);
     reply.setRawText("the second one");
-    reply.setExplicitSearch(false);
+    reply.setStartsNewSearch(false);
     var result = service.process("session", "user", reply);
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getSimilarBook().bookId()).isEqualTo("edition");
     assertThat(result.getMustInclude().getDuration()).isEqualTo("under 10 hours");
   }
@@ -423,13 +437,13 @@ class SimilarBookFlowTest {
         .thenReturn(
             List.of(
                 book, new AudiobookTitle("other", "The hunger games", List.of("Other Author"))));
-    service.process("session", "user", request(ConversationAction.RECOMMENDATION, "hunger games"));
-    var reply = request(ConversationAction.REPEAT, "1");
+    service.process("session", "user", request(RecommendationHandler.ACTION, "hunger games"));
+    var reply = request(RepeatHandler.ACTION, "1");
     reply.setRawText(text);
-    reply.setExplicitSearch(true);
+    reply.setStartsNewSearch(true);
     reply.setSimilarToClarificationRequired(true);
     var result = service.process("session", "user", reply);
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getSimilarBook().bookId()).isEqualTo("hunger");
     verify(vectors).findEmbeddingByBookId("hunger");
   }
@@ -441,54 +455,53 @@ class SimilarBookFlowTest {
         .thenReturn(
             List.of(
                 book, new AudiobookTitle("other", "The hunger games", List.of("Other Author"))));
-    service.process("session", "user", request(ConversationAction.RECOMMENDATION, "hunger games"));
+    service.process("session", "user", request(RecommendationHandler.ACTION, "hunger games"));
     var client = mock(org.springframework.ai.chat.client.ChatClient.class);
     var parser =
         new com.gen3.recommenderagent.inputparser.InputParser(
-            new com.gen3.recommenderagent.inputparser.CommandParser(),
-            new com.gen3.recommenderagent.inputparser.AiParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
+            new com.gen3.recommenderagent.inputparser.CommandParser(
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     var result = service.process("session", "user", parser.parse(text));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getSimilarBook().bookId()).isEqualTo("hunger");
     verifyNoInteractions(client);
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.EnumSource(
+  @com.gen3.recommenderagent.testsupport.ActionSource(
       value = ConversationAction.class,
       names = {"EXPLAIN_RECOMMENDATION", "CHANGE_COUNT"})
   void latestClarificationOwnsSelectionWithoutLoadingAnOlderReferenceVector(
       ConversationAction intent) throws Exception {
-    service.process("session", "user", request(ConversationAction.RECOMMENDATION, null));
+    service.process("session", "user", request(RecommendationHandler.ACTION, null));
     when(titles.findBooksByTitle(anyString(), any(), anyInt()))
         .thenReturn(
             List.of(
                 book, new AudiobookTitle("other", "The Hunger Games", List.of("Other Author"))));
-    service.process("session", "user", request(ConversationAction.RECOMMENDATION, "hunger games"));
+    service.process("session", "user", request(RecommendationHandler.ACTION, "hunger games"));
     var question = request(intent, null);
-    if (intent == ConversationAction.EXPLAIN_RECOMMENDATION) {
+    if (intent == ExplainRecommendationHandler.ACTION) {
       question.setReferenceRank(6);
     }
     var clarification = service.process("session", "user", question);
-    assertThat(clarification.getDecision())
-        .isEqualTo(
-            intent == ConversationAction.EXPLAIN_RECOMMENDATION
-                ? ConversationDecision.EXPLANATION_TARGET_CLARIFICATION
-                : ConversationDecision.COUNT_UNCHANGED);
+    if (intent == ExplainRecommendationHandler.ACTION) {
+      assertThat(clarification.getPendingQuestion())
+          .isEqualTo(ExplainRecommendationHandler.EXPLANATION_TARGET_CLARIFICATION);
+    } else {
+      assertThat(clarification.getOutcome()).isNull();
+    }
     when(vectors.findEmbeddingByBookId(anyString()))
         .thenThrow(new java.io.IOException("unrelated catalogue unavailable"));
-    var reply = request(ConversationAction.UNKNOWN, null);
+    var reply = request(UnknownHandler.ACTION, null);
     reply.setRawText("1");
-    reply.setExplicitSearch(false);
+    reply.setStartsNewSearch(false);
     var result = service.process("session", "user", reply);
-    assertThat(result.getDecision())
-        .isEqualTo(
-            intent == ConversationAction.EXPLAIN_RECOMMENDATION
-                ? ConversationDecision.EXPLANATION
-                : ConversationDecision.UNKNOWN);
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getSimilarBook()).isNull();
-    if (intent == ConversationAction.EXPLAIN_RECOMMENDATION) {
+    if (intent == ExplainRecommendationHandler.ACTION) {
       assertThat(result.getRecommendations())
           .extracting(Recommendation::getId)
           .containsExactly("book-1");
@@ -507,10 +520,8 @@ class SimilarBookFlowTest {
                     "hunger", "The Hunger Games $b Volume 1", List.of("Suzanne Collins"))));
     var result =
         service.process(
-            "session",
-            "user",
-            request(ConversationAction.RECOMMENDATION, "the hunger games volume 1"));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
+            "session", "user", request(RecommendationHandler.ACTION, "the hunger games volume 1"));
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getSimilarBook().bookId()).isEqualTo("hunger");
   }
 
@@ -522,15 +533,15 @@ class SimilarBookFlowTest {
                 .mapToObj(i -> new Recommendation("old-" + i, i, 1.0, "Old " + i))
                 .toList(),
             List.of(new Recommendation("similar-book", 1, 1.0, "Similar Book")));
-    service.process("session", "user", request(ConversationAction.RECOMMENDATION, null));
+    service.process("session", "user", request(RecommendationHandler.ACTION, null));
     when(titles.findBooksByTitle(anyString(), any(), anyInt()))
         .thenReturn(
             List.of(
                 book, new AudiobookTitle("other", "The Hunger Games", List.of("Other Author"))));
-    service.process("session", "user", request(ConversationAction.RECOMMENDATION, "hunger games"));
-    var reply = request(ConversationAction.UNKNOWN, null);
+    service.process("session", "user", request(RecommendationHandler.ACTION, "hunger games"));
+    var reply = request(UnknownHandler.ACTION, null);
     reply.setRawText("1");
-    reply.setExplicitSearch(false);
+    reply.setStartsNewSearch(false);
     var result = service.process("session", "user", reply);
     assertThat(result.getRecommendations())
         .extracting(Recommendation::getId)
@@ -544,7 +555,7 @@ class SimilarBookFlowTest {
         .thenReturn(
             List.of(
                 book, new AudiobookTitle("other", "The Hunger Games", List.of("Other Author"))));
-    var search = request(ConversationAction.RECOMMENDATION, "The Hunger Games");
+    var search = request(RecommendationHandler.ACTION, "The Hunger Games");
     search.setSimilarToAuthor("suzanne collins");
     var result = service.process("session", "user", search);
     assertThat(result.getSimilarBook().bookId()).isEqualTo("hunger");
@@ -561,14 +572,14 @@ class SimilarBookFlowTest {
   void relativeReferenceSelectionsUseTheDisplayedChoices(String text, String expected)
       throws Exception {
     ambiguousReference();
-    service.process("session", "user", request(ConversationAction.HELP, null));
+    service.process("session", "user", request(HelpHandler.ACTION, null));
     var json = new tools.jackson.databind.ObjectMapper();
     sessions.updateSession(
         json.readValue(
             json.writeValueAsString(sessions.getSession("session", "user")),
             com.gen3.recommenderagent.domain.session.Session.class));
     var result = service.process("session", "user", parsedReply(text));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getSimilarBook().bookId()).isEqualTo(expected);
   }
 
@@ -577,42 +588,43 @@ class SimilarBookFlowTest {
   void unavailableReferenceAcceptsAnotherTitleAndRetainsConstraints(boolean saysYes)
       throws Exception {
     when(vectors.findEmbeddingByBookId("hunger")).thenReturn(Optional.empty());
-    var search = request(ConversationAction.RECOMMENDATION, "The Hunger Games");
+    var search = request(RecommendationHandler.ACTION, "The Hunger Games");
     var exact = new ExactCriteria();
     exact.setDuration("under 5 hours");
     search.setMustInclude(exact);
-    assertThat(service.process("session", "user", search).getDecision())
-        .isEqualTo(ConversationDecision.SIMILAR_BOOK_UNAVAILABLE);
-    service.process("session", "user", request(ConversationAction.HELP, null));
+    assertThat(service.process("session", "user", search).getPendingQuestion())
+        .isEqualTo(RecommendationHandler.SIMILAR_BOOK_UNAVAILABLE);
+    service.process("session", "user", request(HelpHandler.ACTION, null));
     if (saysYes) {
-      assertThat(service.process("session", "user", parsedReply("yes")).getDecision())
-          .isEqualTo(ConversationDecision.SIMILAR_BOOK_REQUIRED);
+      assertThat(service.process("session", "user", parsedReply("yes")).getPendingQuestion())
+          .isEqualTo(RecommendationHandler.SIMILAR_BOOK_REQUIRED);
     }
     when(titles.findBooksByTitle(anyString(), any(), anyInt()))
         .thenReturn(List.of(new AudiobookTitle("other", "Another Title", List.of("Writer"))));
-    var reply = request(ConversationAction.RECOMMENDATION, "Another Title");
+    var reply = request(RecommendationHandler.ACTION, "Another Title");
     reply.setRawText("Another Title");
-    reply.setExplicitSearch(false);
     var result = service.process("session", "user", reply);
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getSimilarBook().bookId()).isEqualTo("other");
     assertThat(result.getMustInclude().getDuration()).isEqualTo("under 5 hours");
   }
 
   @Test
   void missingVectorPreservesPreviousSearchAndPendingPage() throws Exception {
-    service.process(
-        "session", "user", request(ConversationAction.RECOMMENDATION, "The Hunger Games"));
+    service.process("session", "user", request(RecommendationHandler.ACTION, "The Hunger Games"));
     when(vectors.findEmbeddingByBookId("hunger")).thenReturn(Optional.empty());
     var failed =
         service.process(
-            "session", "user", request(ConversationAction.RECOMMENDATION, "The Hunger Games"));
-    assertThat(failed.getDecision()).isEqualTo(ConversationDecision.SIMILAR_BOOK_UNAVAILABLE);
+            "session", "user", request(RecommendationHandler.ACTION, "The Hunger Games"));
+    assertThat(failed.getPendingQuestion())
+        .isEqualTo(RecommendationHandler.SIMILAR_BOOK_UNAVAILABLE);
     assertThat(
-            new ConversationResponseGenerator(new AiResponseGenerator(null))
+            new ConversationResponseGenerator(
+                    new AiResponseGenerator(null),
+                    com.gen3.recommenderagent.testsupport.TestHandlers.registry())
                 .generate(failed.getRecommendations(), failed))
         .contains("can't use that book");
-    var more = service.process("session", "user", request(ConversationAction.MORE_RESULTS, null));
+    var more = service.process("session", "user", request(MoreResultsHandler.ACTION, null));
     assertThat(more.getRecommendations()).extracting(Recommendation::getId).startsWith("book-6");
     assertThat(more.getSimilarBook().bookId()).isEqualTo("hunger");
     verify(workflow).recommend(any(), any());
@@ -624,16 +636,16 @@ class SimilarBookFlowTest {
     session.setSessionId("waiting");
     session.setUserId("user");
     var previous = new ConversationTurn();
-    previous.setIntent(ConversationAction.RECOMMENDATION);
+    previous.setIntent(RecommendationHandler.ACTION);
     previous.setPreferenceClarificationRequired(true);
     session.getActiveSearch().setSearch(previous);
     sessions.updateSession(session);
-    var search = request(ConversationAction.RECOMMENDATION, "The Hunger Games");
-    search.setExplicitSearch(false);
-    com.gen3.recommenderagent.application.conversation.workflow.ConversationRules.normalizeInput(
-        search);
+    var search = request(RecommendationHandler.ACTION, "The Hunger Games");
+    search.setStartsNewSearch(false);
+    com.gen3.recommenderagent.application.conversation.ConversationRules.normalizeInput(
+        search, com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     var result = service.process("waiting", "user", search);
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getSimilarBook().bookId()).isEqualTo("hunger");
     assertThat(result.isPersonalised()).isFalse();
   }
@@ -654,7 +666,7 @@ class SimilarBookFlowTest {
     sessions.updateSession(session);
     var result =
         service.process(
-            "preferences", "user", request(ConversationAction.RECOMMENDATION, "The Hunger Games"));
+            "preferences", "user", request(RecommendationHandler.ACTION, "The Hunger Games"));
     assertThat(result.getPositiveSemanticQuery()).isNull();
     assertThat(result.getMustInclude().getLanguage()).isEqualTo("English");
   }
@@ -662,18 +674,18 @@ class SimilarBookFlowTest {
   @Test
   void missingBookTasteReplyKeepsOriginalConstraintsAndDropsUnresolvedReference() throws Exception {
     when(titles.findBooksByTitle(anyString(), any(), anyInt())).thenReturn(List.of());
-    var search = request(ConversationAction.RECOMMENDATION, "Unknown Book");
+    var search = request(RecommendationHandler.ACTION, "Unknown Book");
     var exact = new ExactCriteria();
     exact.setDuration("under 5 hours");
     search.setMustInclude(exact);
     service.process("session", "user", search);
-    var reply = request(ConversationAction.REFINE, null);
-    reply.setExplicitSearch(false);
+    var reply = request(RefineHandler.ACTION, null);
+    reply.setStartsNewSearch(false);
     var tastes = new com.gen3.recommenderagent.domain.search.SemanticQuery();
     tastes.setGenres(List.of("fantasy"));
     reply.setPositiveSemanticQuery(tastes);
     var result = service.process("session", "user", reply);
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.RECOMMENDATIONS);
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getMustInclude().getDuration()).isEqualTo("under 5 hours");
     assertThat(result.getSimilarBook()).isNull();
     verify(workflow).recommend(any(), any());
@@ -683,24 +695,22 @@ class SimilarBookFlowTest {
   void missingBookAsksAboutAspectsWithoutRetrieval() throws Exception {
     when(titles.findBooksByTitle(anyString(), any(), anyInt())).thenReturn(List.of());
     var result =
-        service.process(
-            "session", "user", request(ConversationAction.RECOMMENDATION, "Unknown Book"));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.SIMILAR_BOOK_NOT_FOUND);
+        service.process("session", "user", request(RecommendationHandler.ACTION, "Unknown Book"));
+    assertThat(result.getPendingQuestion()).isEqualTo(RecommendationHandler.SIMILAR_BOOK_NOT_FOUND);
     verifyNoInteractions(workflow, vectors);
   }
 
   @Test
   void seriesRequiresAnIndividualBookAndCancelClearsPendingSelection() throws Exception {
-    var series = request(ConversationAction.RECOMMENDATION, "The Hunger Games");
+    var series = request(RecommendationHandler.ACTION, "The Hunger Games");
     series.setSimilarToClarificationRequired(true);
-    assertThat(service.process("session", "user", series).getDecision())
-        .isEqualTo(ConversationDecision.SIMILAR_BOOK_REQUIRED);
+    assertThat(service.process("session", "user", series).getPendingQuestion())
+        .isEqualTo(RecommendationHandler.SIMILAR_BOOK_REQUIRED);
     verifyNoInteractions(titles, vectors, workflow);
-    service.process("session", "user", request(ConversationAction.CANCEL, null));
-    var reply = request(ConversationAction.UNKNOWN, null);
+    service.process("session", "user", request(CancelHandler.ACTION, null));
+    var reply = request(UnknownHandler.ACTION, null);
     reply.setRawText("2");
-    reply.setExplicitSearch(false);
-    assertThat(service.process("session", "user", reply).getDecision())
-        .isEqualTo(ConversationDecision.UNKNOWN);
+    reply.setStartsNewSearch(false);
+    assertThat(service.process("session", "user", reply).getOutcome()).isNull();
   }
 }

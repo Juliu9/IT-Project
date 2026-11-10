@@ -2,18 +2,20 @@
 
 [README](../README.md) · [Setup](#setup) · [Queries](#queries) · [Interpreting results](#interpreting-results)
 
-The optional Alloy collector exports only structured `recommendation.completed` summaries.
-Request text, session contents, and other application log lines remain local.
+The optional Alloy collector exports **only** structured `recommendation.completed` summaries.
+**Request text, session contents, and other application log lines remain local.**
 Maintenance heartbeats and import timing logs are not shipped by this collector. See
 [job progress](maintenance.md#automatic-progress-reporting) and
-[import logs/timings](jobs/user-preferences.md#read-only-dry-run-solr-or-qdrant).
+[import logs/timings](jobs/user-preferences.md#completion-and-recovery).
 
 ## Setup
 
 ### 1. Set Grafana credentials
 
-Create a Grafana Cloud access-policy token with `logs:write`. Put these values in the repository's
-`.env` file, which Docker Compose reads. Never commit this file.
+Follow Grafana's [send logs](https://grafana.com/docs/grafana-cloud/send-data/logs/) and
+[Alloy setup](https://grafana.com/docs/grafana-cloud/send-data/alloy/set-up/) documentation, then
+create a Grafana Cloud access-policy token with `logs:write`. Put these values in the root `.env`,
+which Docker Compose reads. **Never commit this file or token.**
 
 ```dotenv
 GRAFANA_LOKI_URL=https://<loki-host>/loki/api/v1/push
@@ -38,7 +40,7 @@ docker compose -f compose.yaml -f compose.observability.yaml up -d
 docker compose -f compose.yaml -f compose.observability.yaml logs -f alloy
 ```
 
-Alloy retains its file position and resumes shipping events written while it was stopped.
+Alloy retains its file position and resumes after restart.
 
 ## Queries
 
@@ -58,6 +60,7 @@ Show failed requests:
 
 | Field | Meaning |
 | --- | --- |
+| `requestId` / `intent` | Request identifier and action. Failures after request creation retain both fields. |
 | `durationMs` | Total request time |
 | `stages` | Stage timings; enclosing stages can overlap, so do not sum every value |
 | `retrieval` | Backend, retrieval mode, and candidate count |
@@ -66,10 +69,20 @@ Show failed requests:
 | `ai.inputTokens` / `ai.outputTokens` | Reported token usage; incomplete when usage is unavailable |
 | `outcome` / `responseMode` | Request success/failure and how the response was produced |
 
-A successful built-in response after model failure can have outcome `SUCCESS`. Token totals are
-reported usage, not a complete billing total when an operation's usage is unavailable.
+A built-in fallback after model failure can still have outcome `SUCCESS`. **Token totals are not a
+complete billing total when provider usage is unavailable.**
 
 ## Local parser timing
+
+When read-history lookup is enabled, request stage timings also include `historyLoadMs`, including
+cached “More” pages. `read.history.exclusion.skipped` warnings identify a request and either
+`STORE_UNAVAILABLE` or `HISTORY_LIMIT_EXCEEDED`. They stay local; the Alloy collector exports only
+the existing request-summary schema. History import has its own progress and completion logs.
+
+`searchHistoryLoadMs` measures per-user search-taste lookups when the feature is enabled. Cached
+pages and refills that reuse the frozen taste skip this lookup. `search.history.load.skipped`
+and `search.history.record.skipped` warn on `STORE_UNAVAILABLE`. Recording can also warn on
+`INVALID_VECTOR`. These warnings include the request ID and stay local.
 
 Every parser invocation emits `parser.completed` with `durationMs`, `outcome=SUCCESS|FAILURE`,
 and `mode=FAST_PATH|AI`. Inputs rejected before either path use `mode=VALIDATION`.

@@ -4,7 +4,7 @@ import static com.gen3.recommenderagent.domain.recommendation.RecommendationPoli
 import static com.gen3.recommenderagent.domain.recommendation.RecommendationPolicy.clampOrDefault;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.domain.conversation.ExplanationSelection;
 import java.time.Instant;
@@ -24,17 +24,20 @@ public class Session {
   }
 
   @JsonIgnore
-  public ConversationDecision getPendingDecision() {
-    return pendingQuestion == null ? null : pendingQuestion.getDecision();
+  public ConversationQuestion getPendingQuestionKind() {
+    return pendingQuestion == null ? null : pendingQuestion.getKind();
   }
 
-  public void setPendingDecision(ConversationDecision value) {
+  public void setPendingQuestionKind(ConversationQuestion value) {
     if (value == null) {
       pendingQuestion = null;
-    } else if (pendingQuestion == null || !pendingQuestion.accepts(value)) {
-      pendingQuestion = PendingQuestion.create(value);
+      return;
+    }
+    var next = PendingQuestion.create(value);
+    if (pendingQuestion == null || pendingQuestion.getClass() != next.getClass()) {
+      pendingQuestion = next;
     } else {
-      pendingQuestion.setDecision(value);
+      pendingQuestion.setKind(value);
     }
   }
 
@@ -63,9 +66,9 @@ public class Session {
         : null;
   }
 
-  public void setPendingExplanation(ExplanationSelection value) {
+  public void setPendingExplanation(ConversationQuestion kind, ExplanationSelection value) {
     if (value != null) {
-      var question = new PendingQuestion.Explanation();
+      var question = (PendingQuestion.Explanation) PendingQuestion.create(kind);
       question.setSelection(value);
       pendingQuestion = question;
     } else if (pendingQuestion instanceof PendingQuestion.Explanation question) {
@@ -83,7 +86,8 @@ public class Session {
 
   @JsonIgnore
   public boolean isAwaitingPreferenceUpdate() {
-    return getPendingDecision() == ConversationDecision.PREFERENCE_UPDATE_CLARIFICATION;
+    return getPendingQuestionKind() != null
+        && getPendingQuestionKind().context() == ConversationQuestion.Context.PREFERENCE_UPDATE;
   }
 
   private Integer bookCount = MAX_BOOK_COUNT;
@@ -109,7 +113,8 @@ public class Session {
 
   @JsonIgnore
   public boolean isAwaitingPersonalisedPreferences() {
-    return getPendingDecision() == ConversationDecision.PREFERENCE_CLARIFICATION;
+    return getPendingQuestionKind() != null
+        && getPendingQuestionKind().context() == ConversationQuestion.Context.PREFERENCE;
   }
 
   @JsonIgnore
@@ -119,6 +124,7 @@ public class Session {
         : null;
   }
 
+  /** Creates an empty instance for subsequent configuration or state restoration. */
   public Session() {}
 
   public String getSessionId() {
@@ -192,12 +198,16 @@ public class Session {
     return current.updated(additions, removals, replacementFields);
   }
 
+  /** Clears an unfinished preference question without disturbing other question types. */
   public void clearPreferenceQuestions() {
     if (pendingQuestion instanceof PendingQuestion.Preference) {
       pendingQuestion = null;
     }
   }
 
+  /**
+   * Clears search, replay, and pending-question state while retaining saved preferences and count.
+   */
   public void clearHistory() {
     pendingQuestion = null;
     this.lastOutcome = null;

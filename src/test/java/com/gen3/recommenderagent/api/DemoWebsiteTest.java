@@ -7,7 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.gen3.recommenderagent.application.SessionTransitionService;
+import com.gen3.recommenderagent.application.session.SessionTransitionService;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.inputparser.InputParser;
 import com.gen3.recommenderagent.inputparser.InvalidRequestException;
@@ -74,7 +74,7 @@ class DemoWebsiteTest {
   void addsCatalogueMetadataWithoutChangingTheTurnAndSurvivesLookupFailure(boolean failure)
       throws Exception {
     var gateway = mock(RequestGateway.class);
-    var catalogue = mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class);
+    var catalogue = mock(com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class);
     var turn = new ConversationTurn();
     var book =
         new com.gen3.recommenderagent.domain.recommendation.Recommendation("id", 1, 0.7, "Title");
@@ -82,7 +82,7 @@ class DemoWebsiteTest {
     when(gateway.handleDemoRequest("session", "user", "books"))
         .thenReturn(new RequestGateway.DemoResponse("Your books", turn, null));
     var stored =
-        new com.gen3.catalogue.model.AudiobookRecord(
+        new com.gen3.shared.audiobookcatalogue.model.AudiobookRecord(
             "id", "source", "Title", java.util.List.of("Author"), "Description");
     if (failure) {
       when(catalogue.findBooksByIds(java.util.List.of("id")))
@@ -110,7 +110,7 @@ class DemoWebsiteTest {
   @org.junit.jupiter.api.Test
   void skipsCatalogueLookupWhenThereAreNoRecommendations() throws Exception {
     var gateway = mock(RequestGateway.class);
-    var catalogue = mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class);
+    var catalogue = mock(com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class);
     var turn = new ConversationTurn();
     when(gateway.handleDemoRequest("session", "user", "help"))
         .thenReturn(new RequestGateway.DemoResponse("Help", turn, null));
@@ -122,12 +122,13 @@ class DemoWebsiteTest {
   @org.junit.jupiter.api.Test
   void omitsVectorsFromDevPayloadWithoutChangingSessionData() {
     var gateway = mock(RequestGateway.class);
-    var catalogue = mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class);
+    var catalogue = mock(com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class);
     var turn = new ConversationTurn();
     turn.setSimilarBook(
         new com.gen3.recommenderagent.domain.search.SimilarBookReference(
             "book", "Title", java.util.List.of("Author"), new float[] {1, 0}));
     turn.setSimilarityQueryVector(new float[] {0, 1});
+    turn.setSearchHistorySnapshot(new float[] {1, 0});
     turn.setUserPreferenceSnapshot(
         new com.gen3.recommenderagent.storage.user.model.UserPreferenceEmbedding(
             "user", new float[] {1, 0}, new float[] {0, 1}));
@@ -136,6 +137,9 @@ class DemoWebsiteTest {
     var result = new DemoWebsite(gateway, catalogue).recommend("session", "user", "books");
     var json = result.sessionRequest();
     org.assertj.core.api.Assertions.assertThat(json.has("similarityQueryVector")).isFalse();
+    org.assertj.core.api.Assertions.assertThat(json.has("searchHistorySnapshot")).isFalse();
+    org.assertj.core.api.Assertions.assertThat(turn.getSearchHistorySnapshot())
+        .containsExactly(1, 0);
     org.assertj.core.api.Assertions.assertThat(json.path("similarBook").has("vector")).isFalse();
     org.assertj.core.api.Assertions.assertThat(json.path("similarBook").path("title").asText())
         .isEqualTo("Title");
@@ -160,8 +164,8 @@ class DemoWebsiteTest {
   @Import({RequestGateway.class, DemoWebsite.class, RequestExceptionHandler.class})
   static class TestConfiguration {
     @Bean
-    com.gen3.catalogue.port.AudiobookDetailsLookup catalogue() {
-      return mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class);
+    com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup catalogue() {
+      return mock(com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class);
     }
 
     @Bean

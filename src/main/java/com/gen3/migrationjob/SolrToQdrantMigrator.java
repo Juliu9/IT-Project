@@ -1,8 +1,8 @@
 package com.gen3.migrationjob;
 
-import com.gen3.catalogue.model.AudiobookEmbedding;
-import com.gen3.catalogue.qdrant.QdrantAudiobookRepository;
-import com.gen3.catalogue.solr.SolrAudiobookRepository;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookEmbedding;
+import com.gen3.shared.audiobookcatalogue.qdrant.QdrantAudiobookRepository;
+import com.gen3.shared.audiobookcatalogue.solr.SolrAudiobookRepository;
 import com.gen3.shared.jobruntime.JobProgress;
 import java.util.List;
 import org.slf4j.Logger;
@@ -33,8 +33,14 @@ public class SolrToQdrantMigrator implements ApplicationRunner {
       @Value("${audiobook.qdrant.migration.max-records:0}") int maximumRecords) {
     this.source = source;
     this.destination = destination;
-    this.batchSize = Math.max(batchSize, 1);
-    this.maximumRecords = Math.max(maximumRecords, 0);
+    if (batchSize < 1) {
+      throw new IllegalArgumentException("Qdrant migration batch size must be positive");
+    }
+    if (maximumRecords < 0) {
+      throw new IllegalArgumentException("Qdrant migration maximum records cannot be negative");
+    }
+    this.batchSize = batchSize;
+    this.maximumRecords = maximumRecords;
   }
 
   /** Reads every Solr ID and inserts or completes the corresponding Qdrant payload. */

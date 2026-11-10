@@ -22,9 +22,13 @@ package "userpreferencejob" {
   component "UserPreferenceApplication\nStreamingUserPreferenceImporter\nExternal sort + whole-user aggregation" as Preferences #DBEAFE
 }
 package "snapshotjob" {
-  component "BookVectorSnapshotApplication\nSnapshotConfiguration + SnapshotSources" as Snapshot #DBEAFE
+  component "BookVectorSnapshotApplication\nSnapshotConfiguration + discovered sources" as Snapshot #DBEAFE
 }
-component "catalogue\nAudiobook ports, adapters,\nmodels and vector utilities" as Shared #FEF3C7
+package "readhistoryjob" {
+  component "ReadHistoryApplication\nReadHistoryImporter + selected writer" as History #DBEAFE
+}
+database "Read history\nPostgreSQL by default" as ReadHistoryStore
+component "shared.audiobookcatalogue\nAudiobook ports, adapters and models" as Shared #FEF3C7
 database "Selected catalogue\nSolr OR Qdrant" as Catalogue
 database "Solr source" as SolrSource
 database "Qdrant destination" as QdrantTarget
@@ -50,20 +54,25 @@ Summary --> SummaryModel : generate missing summaries (regular API)
 Migration --> SolrSource : read existing fields and vectors
 Migration --> QdrantTarget : create/fill books matched by payload id
 CSV --> Preferences : user interactions
+CSV --> History : history rows only
+History --> ReadHistoryStore : additive, deduplicated batches\nno catalogue or vector access
 Preferences --> LocalSnapshot : validate and load once\nno remote catalogue-vector lookup
-Preferences --> UserStore : explicit write: save or clear taste vectors\ndry-run: validating sink, no writes
+Preferences --> UserStore : approved write: update usable vector sides\npreserve absent, unmapped or cancelled-out sides\ndry-run: no profile writes
 
 note bottom of Shared
   Embedding and snapshot launchers share one publisher.
-  Daily user import consumes the last compatible snapshot.
+  User import consumes the last compatible snapshot.
+  Dry-run approval binds the profile destination.
   All jobs use shared.jobruntime.JobProgress for periodic reporting.
+  CSV readers and input records live in shared.csv.
+  History ports and adapters live in shared.readhistory.
   recommenderagent does not depend on the jobs.
   Catalogue code has no dependency on recommenderagent.
   User-preference storage remains in recommenderagent.storage.user.
 end note
 legend bottom
   Migration copies existing data; it generates no embeddings or summaries.
-  Five non-web launchers; snapshot launcher needs no enable flag.
+  Six non-web launchers; snapshot launcher needs no enable flag.
   Jobs never run during ordinary recommendation-server startup.
   Run maintenance writers separately against a stable catalogue.
 endlegend

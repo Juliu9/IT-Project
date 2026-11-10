@@ -9,12 +9,22 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gen3.recommenderagent.application.SessionTransitionService;
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.conversation.intent.ChangeCountHandler;
+import com.gen3.recommenderagent.application.conversation.intent.ClearHistoryHandler;
+import com.gen3.recommenderagent.application.conversation.intent.ExplainRecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.intent.HelpHandler;
+import com.gen3.recommenderagent.application.conversation.intent.MoreResultsHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RefineHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RepeatHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RepeatRecommendationsHandler;
+import com.gen3.recommenderagent.application.conversation.intent.UnknownHandler;
+import com.gen3.recommenderagent.application.conversation.intent.UpdatePreferencesHandler;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
+import com.gen3.recommenderagent.application.session.SessionTransitionService;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
@@ -40,7 +50,9 @@ class ExplanationFlowTest {
   private final SessionTransitionService service =
       ConversationTestSupport.transitions(sessions, workflow);
   private final ConversationResponseGenerator responses =
-      new ConversationResponseGenerator(new AiResponseGenerator(null));
+      new ConversationResponseGenerator(
+          new AiResponseGenerator(null),
+          com.gen3.recommenderagent.testsupport.TestHandlers.registry());
 
   @ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
@@ -53,20 +65,28 @@ class ExplanationFlowTest {
   void relativeSelectionsUseTheDisplayedPageAfterHelpAndReload(
       int count, String text, int expectedRank) {
     var setting = new ConversationDraft();
-    setting.setIntent(ConversationAction.CHANGE_COUNT);
+    setting.setIntent(ChangeCountHandler.ACTION);
     setting.setBookCount(count);
     service.process("session", "user", setting);
     search();
     explain(99, null);
-    process(ConversationAction.HELP);
+    process(HelpHandler.ACTION);
     var mapper = new ObjectMapper();
     sessions.updateSession(
         mapper.readValue(
             mapper.writeValueAsString(sessions.getSession("session", "user")), Session.class));
     var ai = mock(AiParser.class);
     var result =
-        service.process("session", "user", new InputParser(new CommandParser(), ai).parse(text));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+        service.process(
+            "session",
+            "user",
+            new InputParser(
+                    new CommandParser(
+                        com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                    ai,
+                    com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+                .parse(text));
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getRecommendations())
         .extracting(Recommendation::getRank)
         .containsExactly(expectedRank);
@@ -81,8 +101,13 @@ class ExplanationFlowTest {
         service.process(
             "session",
             "user",
-            new InputParser(new CommandParser(), mock(AiParser.class)).parse("the latter"));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+            new InputParser(
+                    new CommandParser(
+                        com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                    mock(AiParser.class),
+                    com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+                .parse("the latter"));
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getRecommendations()).extracting(Recommendation::getRank).containsExactly(5);
   }
 
@@ -95,8 +120,16 @@ class ExplanationFlowTest {
     explain(99, null);
     var ai = mock(AiParser.class);
     var result =
-        service.process("session", "user", new InputParser(new CommandParser(), ai).parse("1984"));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+        service.process(
+            "session",
+            "user",
+            new InputParser(
+                    new CommandParser(
+                        com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                    ai,
+                    com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+                .parse("1984"));
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getReferenceRank()).isNull();
     assertThat(result.getRecommendations())
         .extracting(Recommendation::getTitle)
@@ -115,7 +148,12 @@ class ExplanationFlowTest {
         service.process(
             "session",
             "user",
-            new InputParser(new CommandParser(), mock(AiParser.class)).parse("2"));
+            new InputParser(
+                    new CommandParser(
+                        com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                    mock(AiParser.class),
+                    com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+                .parse("2"));
     assertThat(chosen.getRecommendations()).extracting(Recommendation::getRank).containsExactly(2);
     session = sessions.getSession("session", "user");
     session.getActiveSearch().getSearch().getRecommendations().get(0).setTitle("1984");
@@ -127,9 +165,14 @@ class ExplanationFlowTest {
                 .process(
                     "session",
                     "user",
-                    new InputParser(new CommandParser(), mock(AiParser.class)).parse("1984"))
-                .getDecision())
-        .isEqualTo(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+                    new InputParser(
+                            new CommandParser(
+                                com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                            mock(AiParser.class),
+                            com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+                        .parse("1984"))
+                .getPendingQuestion())
+        .isEqualTo(ExplainRecommendationHandler.EXPLANATION_TARGET_CLARIFICATION);
   }
 
   @ParameterizedTest
@@ -137,7 +180,7 @@ class ExplanationFlowTest {
   void aWholePageReplyExplainsEveryDisplayedBookAfterHelpAndReload(String reply) {
     search();
     explain(6, null);
-    process(ConversationAction.HELP);
+    process(HelpHandler.ACTION);
     var mapper = new ObjectMapper();
     sessions.updateSession(
         mapper.readValue(
@@ -148,14 +191,16 @@ class ExplanationFlowTest {
             "session",
             "user",
             new com.gen3.recommenderagent.inputparser.InputParser(
-                    new com.gen3.recommenderagent.inputparser.CommandParser(),
-                    mock(com.gen3.recommenderagent.inputparser.AiParser.class))
+                    new com.gen3.recommenderagent.inputparser.CommandParser(
+                        com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+                    mock(com.gen3.recommenderagent.inputparser.AiParser.class),
+                    com.gen3.recommenderagent.testsupport.TestHandlers.registry())
                 .parse(reply));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getRecommendations()).hasSize(5);
     assertThat(result.getReferenceRank()).isNull();
     assertThat(result.getReferenceTitle()).isNull();
-    assertThat(sessions.getSession("session", "user").getPendingDecision()).isNull();
+    assertThat(sessions.getSession("session", "user").getPendingQuestionKind()).isNull();
     verifyNoInteractions(workflow);
   }
 
@@ -169,10 +214,10 @@ class ExplanationFlowTest {
   void politeSelectionsWorkAfterHelpAndSessionReload(String reply) {
     search();
     explain(6, null);
-    var help = process(ConversationAction.HELP);
+    var help = process(HelpHandler.ACTION);
     assertThat(responses.generate(help.getRecommendations(), help))
-        .contains("Which one would you like me to explain?");
-    var repeated = process(ConversationAction.REPEAT);
+        .doesNotContain("Which one would you like me to explain?");
+    var repeated = process(RepeatHandler.ACTION);
     assertThat(responses.generate(repeated.getRecommendations(), repeated))
         .isEqualTo(responses.generate(help.getRecommendations(), help));
     var mapper = new ObjectMapper();
@@ -183,19 +228,20 @@ class ExplanationFlowTest {
     var client = mock(org.springframework.ai.chat.client.ChatClient.class);
     var parser =
         new InputParser(
-            new CommandParser(),
-            new AiParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
+            new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     var result = service.process("session", "user", parser.parse(reply));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getRecommendations()).extracting(Recommendation::getRank).containsExactly(2);
-    assertThat(sessions.getSession("session", "user").getPendingDecision()).isNull();
+    assertThat(sessions.getSession("session", "user").getPendingQuestionKind()).isNull();
     verifyNoInteractions(client);
     verify(workflow).recommend(any(), any());
   }
 
   @ParameterizedTest
-  @org.junit.jupiter.params.provider.EnumSource(
+  @com.gen3.recommenderagent.testsupport.ActionSource(
       value = ConversationAction.class,
       names = {"CHANGE_COUNT", "UPDATE_PREFERENCES", "RESET_PREFERENCES"})
   void settingsChangesAbandonPendingBookSelection(ConversationAction action) {
@@ -203,10 +249,10 @@ class ExplanationFlowTest {
     explain(6, null);
     var request = new ConversationDraft();
     request.setIntent(action);
-    if (action == ConversationAction.CHANGE_COUNT) {
+    if (action == ChangeCountHandler.ACTION) {
       request.setBookCount(2);
     }
-    if (action == ConversationAction.UPDATE_PREFERENCES) {
+    if (action == UpdatePreferencesHandler.ACTION) {
       var preferences = new SessionPreferences();
       var query = new SemanticQuery();
       query.setGenres(List.of("horror"));
@@ -215,15 +261,15 @@ class ExplanationFlowTest {
     }
     service.process("session", "user", request);
     var selection = new ConversationDraft();
-    selection.setIntent(ConversationAction.UNKNOWN);
+    selection.setIntent(UnknownHandler.ACTION);
     selection.setRawText("2");
     var result = service.process("session", "user", selection);
-    assertThat(result.getIntent()).isEqualTo(ConversationAction.UNKNOWN);
+    assertThat(result.getIntent()).isEqualTo(UnknownHandler.ACTION);
     assertThat(result.getRecommendations()).isEmpty();
   }
 
   @ParameterizedTest
-  @org.junit.jupiter.params.provider.EnumSource(
+  @com.gen3.recommenderagent.testsupport.ActionSource(
       value = ConversationAction.class,
       names = {
         "RECOMMENDATION",
@@ -238,19 +284,18 @@ class ExplanationFlowTest {
     explain(6, null);
     var request = new ConversationDraft();
     request.setIntent(action);
-    if (action == ConversationAction.RECOMMENDATION || action == ConversationAction.REFINE) {
-      request.setExplicitSearch(true);
+    if (action == RecommendationHandler.ACTION || action == RefineHandler.ACTION) {
+      request.setStartsNewSearch(true);
       var query = new SemanticQuery();
       query.setGenres(List.of("horror"));
       request.setPositiveSemanticQuery(query);
     }
     service.process("session", "user", request);
-    assertThat(sessions.getSession("session", "user").getPendingDecision()).isNull();
+    assertThat(sessions.getSession("session", "user").getPendingQuestionKind()).isNull();
     var selection = new ConversationDraft();
-    selection.setIntent(ConversationAction.UNKNOWN);
+    selection.setIntent(UnknownHandler.ACTION);
     selection.setRawText("2");
-    assertThat(service.process("session", "user", selection).getDecision())
-        .isEqualTo(ConversationDecision.UNKNOWN);
+    assertThat(service.process("session", "user", selection).getOutcome()).isNull();
   }
 
   @Test
@@ -271,7 +316,7 @@ class ExplanationFlowTest {
         .extracting(Recommendation::getRank)
         .containsExactly(4);
     assertThat(saved()).isEqualTo(before);
-    var more = process(ConversationAction.MORE_RESULTS);
+    var more = process(MoreResultsHandler.ACTION);
     assertThat(more.getRecommendations())
         .extracting(Recommendation::getId)
         .containsExactly("book-6", "book-7", "book-8", "book-9", "book-10");
@@ -285,11 +330,12 @@ class ExplanationFlowTest {
     var client = mock(org.springframework.ai.chat.client.ChatClient.class);
     var parser =
         new InputParser(
-            new CommandParser(),
-            new AiParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
+            new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     var result = service.process("session", "user", parser.parse(text));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getReferenceRank()).isNull();
     assertThat(result.getReferenceTitle()).isNull();
     assertThat(result.getRecommendations())
@@ -306,7 +352,7 @@ class ExplanationFlowTest {
         .thenReturn(
             List.of(new Recommendation("only-book", 1, 0.8, "Only Book", "A fantasy adventure.")));
     var request = new ConversationDraft();
-    request.setIntent(ConversationAction.RECOMMENDATION);
+    request.setIntent(RecommendationHandler.ACTION);
     request.setBookCount(requestedCount);
     var query = new SemanticQuery();
     query.setGenres(List.of("fantasy"));
@@ -317,11 +363,12 @@ class ExplanationFlowTest {
     var client = mock(org.springframework.ai.chat.client.ChatClient.class);
     var parser =
         new InputParser(
-            new CommandParser(),
-            new AiParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
+            new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     var result = service.process("session", "user", parser.parse("explain"));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getRecommendations())
         .extracting(Recommendation::getId)
         .containsExactly("only-book");
@@ -338,11 +385,12 @@ class ExplanationFlowTest {
     var client = mock(org.springframework.ai.chat.client.ChatClient.class);
     var parser =
         new InputParser(
-            new CommandParser(),
-            new AiParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
+            new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     var result = service.process("session", "user", parser.parse("explain"));
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.NOTHING_TO_EXPLAIN);
+    assertThat(result.getOutcome()).isEqualTo(ExplainRecommendationHandler.NOTHING_TO_EXPLAIN);
     verifyNoInteractions(client, workflow);
   }
 
@@ -350,12 +398,12 @@ class ExplanationFlowTest {
   void secondBooksReasonExplainsOnlyRankTwoWithoutPendingClarification() {
     search();
     var request = new ConversationDraft();
-    request.setIntent(ConversationAction.EXPLAIN_RECOMMENDATION);
+    request.setIntent(ExplainRecommendationHandler.ACTION);
     request.setRawText("the second one’s reason");
     request.setReferenceRank(2);
     request.setBookCount(2);
     var result = service.process("session", "user", request);
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getRecommendations()).extracting(Recommendation::getRank).containsExactly(2);
     assertThat(responses.generate(result.getRecommendations(), result))
         .contains("Number 2, Harry Potter 2")
@@ -370,8 +418,8 @@ class ExplanationFlowTest {
     search();
     String before = saved();
     var invalid = explain(rank, null);
-    assertThat(invalid.getDecision())
-        .isEqualTo(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+    assertThat(invalid.getPendingQuestion())
+        .isEqualTo(ExplainRecommendationHandler.EXPLANATION_TARGET_CLARIFICATION);
     assertThat(responses.generate(invalid.getRecommendations(), invalid))
         .isEqualTo(
             "I shared 5 books with you: 1. Harry Potter 1. 2. Harry Potter 2. 3. Harry Potter 3. 4. Harry Potter 4. 5. Harry Potter 5. Which one would you like me to explain?");
@@ -379,14 +427,14 @@ class ExplanationFlowTest {
         .extracting(Recommendation::getRank)
         .containsExactly(4);
     assertThat(saved()).isEqualTo(before);
-    assertThat(process(ConversationAction.REPEAT).getRecommendations())
+    assertThat(process(RepeatHandler.ACTION).getRecommendations())
         .extracting(Recommendation::getRank)
         .containsExactly(4);
     verify(workflow).recommend(any(), any());
   }
 
   @ParameterizedTest
-  @org.junit.jupiter.params.provider.EnumSource(
+  @com.gen3.recommenderagent.testsupport.ActionSource(
       value = ConversationAction.class,
       names = {"UNKNOWN", "CHANGE_COUNT", "REFINE", "RECOMMENDATION"})
   void numericClarificationReplyExplainsBookWithoutChangingCountOrQueue(
@@ -399,21 +447,21 @@ class ExplanationFlowTest {
     reply.setBookCount(1);
     reply.setRawText(" 1 ");
     var result = service.process("session", "user", reply);
-    assertThat(result.getIntent()).isEqualTo(ConversationAction.EXPLAIN_RECOMMENDATION);
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(result.getIntent()).isEqualTo(ExplainRecommendationHandler.ACTION);
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getRecommendations()).extracting(Recommendation::getRank).containsExactly(1);
     assertThat(responses.generate(result.getRecommendations(), result))
         .contains("Number 1, Harry Potter 1");
     assertThat(saved()).isEqualTo(before);
-    assertThat(process(ConversationAction.REPEAT).getRecommendations())
+    assertThat(process(RepeatHandler.ACTION).getRecommendations())
         .extracting(Recommendation::getRank)
         .containsExactly(1);
-    assertThat(process(ConversationAction.MORE_RESULTS).getRecommendations()).hasSize(5);
+    assertThat(process(MoreResultsHandler.ACTION).getRecommendations()).hasSize(5);
     verify(workflow).recommend(any(), any());
   }
 
   @ParameterizedTest
-  @org.junit.jupiter.params.provider.EnumSource(
+  @com.gen3.recommenderagent.testsupport.ActionSource(
       value = ConversationAction.class,
       names = {"UNKNOWN", "RECOMMENDATION", "REFINE"})
   void titleReplyUsesThePageRegardlessOfParserLabel(ConversationAction intent) throws Exception {
@@ -424,7 +472,7 @@ class ExplanationFlowTest {
     reply.setIntent(intent);
     reply.setRawText("Harry Potter 1");
     var result = service.process("session", "user", reply);
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getRecommendations()).extracting(Recommendation::getRank).containsExactly(1);
     assertThat(saved()).isEqualTo(before);
     verify(workflow).recommend(any(), any());
@@ -433,26 +481,32 @@ class ExplanationFlowTest {
   @ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
     "what can you do,HELP",
-    "cancel,CANCELLED",
-    "more,RECOMMENDATIONS",
+    "cancel,CANCEL",
+    "more,MORE_RESULTS",
     "repeat,EXPLANATION_TARGET_CLARIFICATION",
-    "repeat the books,RECOMMENDATIONS",
-    "please repeat the recommendations thanks,RECOMMENDATIONS",
-    "clear history,HISTORY_CLEARED"
+    "repeat the books,REPEAT_RECOMMENDATIONS",
+    "please repeat the recommendations thanks,REPEAT_RECOMMENDATIONS",
+    "clear history,CLEAR_HISTORY"
   })
   void fastCommandsUseNormalConversationHandlingWhileSelectionIsPending(
-      String text, ConversationDecision expected) {
+      String text, String expected) {
     search();
     explain(null, "Harry Potter");
     var client = mock(org.springframework.ai.chat.client.ChatClient.class);
     var parser =
         new InputParser(
-            new CommandParser(),
-            new AiParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
+            new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     var result = service.process("session", "user", parser.parse(text));
-    assertThat(result.getDecision()).isEqualTo(expected);
-    if (expected == ConversationDecision.RECOMMENDATIONS) {
+    assertThat(
+            expected.equals(ExplainRecommendationHandler.EXPLANATION_TARGET_CLARIFICATION.name())
+                ? result.getPendingQuestion().name()
+                : result.getIntent().name())
+        .isEqualTo(expected);
+    if (expected.equals(MoreResultsHandler.ACTION.name())
+        || expected.equals(RepeatRecommendationsHandler.ACTION.name())) {
       assertThat(result.getRecommendations())
           .extracting(Recommendation::getId)
           .containsExactlyElementsOf(
@@ -465,18 +519,18 @@ class ExplanationFlowTest {
   }
 
   @Test
-  void explicitSearchByTitleCanStartANewSearchDuringClarification() {
+  void startsNewSearchByTitleCanStartANewSearchDuringClarification() {
     search();
     explain(null, "Harry Potter");
     var reply = new ConversationDraft();
-    reply.setIntent(ConversationAction.RECOMMENDATION);
+    reply.setIntent(RecommendationHandler.ACTION);
     reply.setRawText("Recommend Harry Potter 1");
-    reply.setExplicitSearch(true);
+    reply.setStartsNewSearch(true);
     var criteria = new SemanticQuery();
-    criteria.setKeywords(List.of("Harry Potter 1"));
+    criteria.setTopics(List.of("Harry Potter 1"));
     reply.setPositiveSemanticQuery(criteria);
     assertThat(service.process("session", "user", reply).getIntent())
-        .isEqualTo(ConversationAction.RECOMMENDATION);
+        .isEqualTo(RecommendationHandler.ACTION);
     verify(workflow, times(2)).recommend(any(), any());
   }
 
@@ -496,10 +550,10 @@ class ExplanationFlowTest {
     String before = saved();
     explain(null, "Harry Potter");
     var reply = new ConversationDraft();
-    reply.setIntent(ConversationAction.UNKNOWN);
+    reply.setIntent(UnknownHandler.ACTION);
     reply.setRawText(text);
     var result = service.process("session", "user", reply);
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getRecommendations()).extracting(Recommendation::getRank).containsExactly(1);
     assertThat(saved()).isEqualTo(before);
     verify(workflow).recommend(any(), any());
@@ -521,10 +575,10 @@ class ExplanationFlowTest {
     String before = saved();
     explain(null, "Harry Potter");
     var reply = new ConversationDraft();
-    reply.setIntent(ConversationAction.UNKNOWN);
+    reply.setIntent(UnknownHandler.ACTION);
     reply.setRawText(text);
     var result = service.process("session", "user", reply);
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(result.getOutcome()).isNull();
     assertThat(result.getRecommendations()).extracting(Recommendation::getRank).containsExactly(2);
     assertThat(saved()).isEqualTo(before);
     verify(workflow).recommend(any(), any());
@@ -535,7 +589,7 @@ class ExplanationFlowTest {
     search();
     explain(null, "Harry Potter");
     var more = new ConversationDraft();
-    more.setIntent(ConversationAction.MORE_RESULTS);
+    more.setIntent(MoreResultsHandler.ACTION);
     more.setRawText("2 more");
     more.setBookCount(2);
     assertThat(service.process("session", "user", more).getRecommendations())
@@ -552,12 +606,12 @@ class ExplanationFlowTest {
     search();
     explain(null, "Harry Potter");
     var reply = new ConversationDraft();
-    reply.setIntent(ConversationAction.RECOMMENDATION);
+    reply.setIntent(RecommendationHandler.ACTION);
     reply.setRawText("recommend 2 books");
-    reply.setExplicitSearch(true);
+    reply.setStartsNewSearch(true);
     reply.setBookCount(2);
     var result = service.process("session", "user", reply);
-    assertThat(result.getIntent()).isEqualTo(ConversationAction.RECOMMENDATION);
+    assertThat(result.getIntent()).isEqualTo(RecommendationHandler.ACTION);
     assertThat(result.getRecommendations()).hasSize(2);
     verify(workflow, times(2)).recommend(any(), any());
   }
@@ -575,11 +629,11 @@ class ExplanationFlowTest {
     search();
     explain(null, "Harry Potter");
     var reply = new ConversationDraft();
-    reply.setIntent(ConversationAction.UNKNOWN);
+    reply.setIntent(UnknownHandler.ACTION);
     reply.setRawText(number);
     var result = service.process("session", "user", reply);
-    assertThat(result.getDecision())
-        .isEqualTo(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+    assertThat(result.getPendingQuestion())
+        .isEqualTo(ExplainRecommendationHandler.EXPLANATION_TARGET_CLARIFICATION);
     reply.setRawText("1");
     assertThat(service.process("session", "user", reply).getRecommendations())
         .extracting(Recommendation::getRank)
@@ -592,14 +646,12 @@ class ExplanationFlowTest {
   void numericReplyNeedsAQuestionAndHelpPreservesThatQuestion(String text) {
     search();
     var reply = new ConversationDraft();
-    reply.setIntent(ConversationAction.UNKNOWN);
+    reply.setIntent(UnknownHandler.ACTION);
     reply.setRawText(text);
-    assertThat(service.process("session", "user", reply).getDecision())
-        .isEqualTo(ConversationDecision.UNKNOWN);
+    assertThat(service.process("session", "user", reply).getOutcome()).isNull();
     explain(null, "Harry Potter");
-    process(ConversationAction.HELP);
-    assertThat(service.process("session", "user", reply).getDecision())
-        .isEqualTo(ConversationDecision.EXPLANATION);
+    process(HelpHandler.ACTION);
+    assertThat(service.process("session", "user", reply).getOutcome()).isNull();
     verify(workflow).recommend(any(), any());
   }
 
@@ -612,12 +664,11 @@ class ExplanationFlowTest {
             explain(null, "unknown title"),
             explain(null, "!!!"),
             explain(2, "Harry Potter 4"))) {
-      assertThat(result.getDecision())
-          .isEqualTo(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+      assertThat(result.getPendingQuestion())
+          .isEqualTo(ExplainRecommendationHandler.EXPLANATION_TARGET_CLARIFICATION);
       assertThat(result.getRecommendations()).hasSize(5);
     }
-    assertThat(explain(4, "Harry Potter 4").getDecision())
-        .isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(explain(4, "Harry Potter 4").getOutcome()).isNull();
     verify(workflow).recommend(any(), any());
   }
 
@@ -629,8 +680,9 @@ class ExplanationFlowTest {
             "I haven't recommended any books in this session yet. What kind of audiobook would you like?");
     verifyNoInteractions(workflow);
     search();
-    process(ConversationAction.CLEAR_HISTORY);
-    assertThat(explain(1, null).getDecision()).isEqualTo(ConversationDecision.NOTHING_TO_EXPLAIN);
+    process(ClearHistoryHandler.ACTION);
+    assertThat(explain(1, null).getOutcome())
+        .isEqualTo(ExplainRecommendationHandler.NOTHING_TO_EXPLAIN);
     verify(workflow).recommend(any(), any());
   }
 
@@ -638,14 +690,14 @@ class ExplanationFlowTest {
   void emptyMoreDoesNotExplainAnOlderNonemptyPage() {
     search();
     when(workflow.recommend(any(), any())).thenReturn(List.of());
-    process(ConversationAction.MORE_RESULTS);
-    process(ConversationAction.MORE_RESULTS);
+    process(MoreResultsHandler.ACTION);
+    process(MoreResultsHandler.ACTION);
     var result = explain(null, null);
-    assertThat(result.getDecision()).isEqualTo(ConversationDecision.EMPTY_EXPLANATION_PAGE);
+    assertThat(result.getOutcome()).isEqualTo(ExplainRecommendationHandler.EMPTY_EXPLANATION_PAGE);
     assertThat(responses.generate(result.getRecommendations(), result))
         .isEqualTo(
             "I didn't find any books in the latest search to explain. Would you like to try a different search?");
-    assertThat(process(ConversationAction.REPEAT).getRecommendations()).isEmpty();
+    assertThat(process(RepeatHandler.ACTION).getRecommendations()).isEmpty();
     verify(workflow, times(2)).recommend(any(), any());
   }
 
@@ -653,16 +705,16 @@ class ExplanationFlowTest {
   void explanationAbandonsPendingPreferenceQuestion() {
     search();
     var pending = new ConversationDraft();
-    pending.setIntent(ConversationAction.RECOMMENDATION);
+    pending.setIntent(RecommendationHandler.ACTION);
     pending.setPreferenceClarificationRequired(true);
     var session = sessions.getSession("session", "user");
-    session.setPendingDecision(ConversationDecision.PREFERENCE_CLARIFICATION);
+    session.setPendingQuestionKind(RecommendationHandler.PREFERENCE_CLARIFICATION);
     ((com.gen3.recommenderagent.domain.session.PendingQuestion.Preference)
             session.getPendingQuestion())
         .setRequest(ConversationDraft.toTurn(pending));
     sessions.updateSession(session);
     var explain = explain(4, null);
-    assertThat(explain.getDecision()).isEqualTo(ConversationDecision.EXPLANATION);
+    assertThat(explain.getOutcome()).isNull();
     assertThat(explain.getRecommendations()).extracting(Recommendation::getRank).containsExactly(4);
     assertThat(sessions.getSession("session", "user").getPendingQuestion()).isNull();
   }
@@ -676,7 +728,7 @@ class ExplanationFlowTest {
         .setPendingRecommendations(
             session.getActiveSearch().getPendingRecommendations().subList(0, 2));
     when(workflow.recommend(any(), any())).thenReturn(List.of());
-    process(ConversationAction.MORE_RESULTS);
+    process(MoreResultsHandler.ACTION);
     var result = explain(6, null);
     assertThat(responses.generate(result.getRecommendations(), result))
         .isEqualTo(
@@ -699,9 +751,7 @@ class ExplanationFlowTest {
               String raw = invocation.getArgument(0);
               var intent = new UserIntent();
               intent.setIntent(
-                  raw.equals("1")
-                      ? ConversationAction.UNKNOWN
-                      : ConversationAction.EXPLAIN_RECOMMENDATION);
+                  raw.equals("1") ? UnknownHandler.ACTION : ExplainRecommendationHandler.ACTION);
               intent.setReferenceRank(java.math.BigInteger.valueOf(raw.contains("sixth") ? 6 : 4));
               return intent;
             });
@@ -776,15 +826,17 @@ class ExplanationFlowTest {
                                 + "}")));
     var parser =
         new InputParser(
-            new CommandParser(),
-            new AiParser(
-                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()));
+            new CommandParser(com.gen3.recommenderagent.testsupport.TestHandlers.registry()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.ai(
+                client, com.gen3.recommenderagent.observability.AiOperationObserver.noop()),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     var gateway = new com.gen3.recommenderagent.api.RequestGateway(parser, service, responses);
     var mvc =
         org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(
                 gateway,
                 new com.gen3.recommenderagent.api.DemoWebsite(
-                    gateway, mock(com.gen3.catalogue.port.AudiobookDetailsLookup.class)))
+                    gateway,
+                    mock(com.gen3.shared.audiobookcatalogue.port.AudiobookDetailsLookup.class)))
             .build();
     String body =
         mvc.perform(
@@ -822,7 +874,7 @@ class ExplanationFlowTest {
                     })
                 .toList());
     var search = new ConversationDraft();
-    search.setIntent(ConversationAction.RECOMMENDATION);
+    search.setIntent(RecommendationHandler.ACTION);
     var query = new SemanticQuery();
     query.setGenres(List.of("fantasy"));
     search.setPositiveSemanticQuery(query);
@@ -831,7 +883,7 @@ class ExplanationFlowTest {
 
   private ConversationTurn explain(Integer rank, String title) {
     var request = new ConversationDraft();
-    request.setIntent(ConversationAction.EXPLAIN_RECOMMENDATION);
+    request.setIntent(ExplainRecommendationHandler.ACTION);
     request.setReferenceRank(rank);
     request.setReferenceTitle(title);
     return service.process("session", "user", request);

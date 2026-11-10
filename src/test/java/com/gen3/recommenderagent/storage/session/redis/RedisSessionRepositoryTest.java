@@ -13,10 +13,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.ConversationTestSupport;
+import com.gen3.recommenderagent.application.conversation.intent.MoreResultsHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.application.recommendation.RecommendationWorkflow;
-import com.gen3.recommenderagent.domain.conversation.ConversationAction;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
@@ -334,13 +335,11 @@ class RedisSessionRepositoryTest {
 
     SemanticQuery semanticQuery = new SemanticQuery();
 
-    semanticQuery.setTopics(List.of("WWI", "history"));
+    semanticQuery.setTopics(List.of("WWI", "history", "war", "Europe"));
 
     semanticQuery.setGenres(List.of("historical"));
 
     semanticQuery.setAuthors(List.of("Author One"));
-
-    semanticQuery.setKeywords(List.of("war", "Europe"));
 
     ConversationDraft request = new ConversationDraft();
 
@@ -357,13 +356,11 @@ class RedisSessionRepositoryTest {
 
     assertNotNull(retrievedSemanticQuery);
 
-    assertEquals(List.of("WWI", "history"), retrievedSemanticQuery.getTopics());
+    assertEquals(List.of("WWI", "history", "war", "Europe"), retrievedSemanticQuery.getTopics());
 
     assertEquals(List.of("historical"), retrievedSemanticQuery.getGenres());
 
     assertEquals(List.of("Author One"), retrievedSemanticQuery.getAuthors());
-
-    assertEquals(List.of("war", "Europe"), retrievedSemanticQuery.getKeywords());
   }
 
   // ============================================================
@@ -817,7 +814,7 @@ class RedisSessionRepositoryTest {
         USER_ID,
         session -> {
           ConversationDraft previous = new ConversationDraft();
-          previous.setIntent(ConversationAction.RECOMMENDATION);
+          previous.setIntent(RecommendationHandler.ACTION);
           session.getActiveSearch().setSearch(ConversationDraft.toTurn(previous));
           session
               .getActiveSearch()
@@ -857,7 +854,7 @@ class RedisSessionRepositoryTest {
     ExecutorService worker = Executors.newSingleThreadExecutor();
     try {
       ConversationDraft more = new ConversationDraft();
-      more.setIntent(ConversationAction.MORE_RESULTS);
+      more.setIntent(MoreResultsHandler.ACTION);
       Future<ConversationTurn> firstPage =
           worker.submit(() -> first.process("cached-pages", USER_ID, more));
       assertTrue(consumed.await(5, TimeUnit.SECONDS));

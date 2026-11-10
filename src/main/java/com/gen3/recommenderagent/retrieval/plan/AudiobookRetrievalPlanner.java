@@ -1,8 +1,8 @@
 package com.gen3.recommenderagent.retrieval.plan;
 
-import com.gen3.catalogue.model.AudiobookFilters;
-import com.gen3.recommenderagent.application.conversation.SessionRequest;
+import com.gen3.recommenderagent.application.conversation.model.SessionRequest;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
+import com.gen3.shared.audiobookcatalogue.model.AudiobookFilters;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,14 +15,17 @@ import org.springframework.stereotype.Component;
 public class AudiobookRetrievalPlanner {
   private final ExactFilterPolicy filterPolicy;
 
+  /** Creates the retrieval planner with the default exact-filter policy. */
   public AudiobookRetrievalPlanner() {
     this(new ExactFilterPolicy());
   }
 
+  /** Creates the retrieval planner with default or explicitly supplied exact-filter policy. */
   AudiobookRetrievalPlanner(Clock clock) {
     this(new ExactFilterPolicy(clock));
   }
 
+  /** Creates the retrieval planner with default or explicitly supplied exact-filter policy. */
   @Autowired
   public AudiobookRetrievalPlanner(ExactFilterPolicy filterPolicy) {
     this.filterPolicy = filterPolicy;
@@ -36,23 +39,10 @@ public class AudiobookRetrievalPlanner {
     String keywordText = lexicalText(positive, "");
     AudiobookFilters filters = filterPolicy.filters(request, excludedBookIds);
     return new AudiobookRetrievalPlan(
-        modeFor(positive, negative, filters), keywordText, filters, Math.max(limit, 1));
-  }
-
-  /** Derives retrieval solely from searchable request content. */
-  RetrievalMode modeFor(SemanticQuery positive, SemanticQuery negative, AudiobookFilters filters) {
-    boolean hasSemantic = hasSemanticContent(positive) || hasSemanticContent(negative);
-    boolean hasFilters = filters != null && filters.hasConditions();
-    if (hasSemantic && hasFilters) {
-      return RetrievalMode.HYBRID;
-    }
-    if (hasSemantic) {
-      return RetrievalMode.SEMANTIC;
-    }
-    if (hasFilters) {
-      return RetrievalMode.FILTER_ONLY;
-    }
-    return RetrievalMode.NONE;
+        hasSemanticContent(positive) || hasSemanticContent(negative),
+        keywordText,
+        filters,
+        Math.max(limit, 1));
   }
 
   /** Builds sparse-search input from fields intended to influence textual relevance. */
@@ -63,7 +53,6 @@ public class AudiobookRetrievalPlanner {
     List<String> terms = new ArrayList<>();
     add(terms, semanticQuery.getTopics());
     add(terms, semanticQuery.getGenres());
-    add(terms, semanticQuery.getKeywords());
     return terms.isEmpty() ? fallback : String.join(" ", terms);
   }
 
@@ -74,19 +63,12 @@ public class AudiobookRetrievalPlanner {
     }
   }
 
+  /** Reports whether the request contains semantic evidence usable by a retrieval plan. */
   private boolean hasSemanticContent(SemanticQuery query) {
-    return query != null
-        && (hasValues(query.getTopics())
-            || hasValues(query.getGenres())
-            || hasValues(query.getKeywords())
-            || hasValues(query.getAuthors())
-            || hasValues(query.getNarrators()));
+    return query != null && query.hasValues();
   }
 
-  private boolean hasValues(List<String> values) {
-    return values != null && values.stream().anyMatch(this::hasText);
-  }
-
+  /** Reports whether the supplied text contains a non-whitespace character. */
   private boolean hasText(String value) {
     return value != null && !value.isBlank();
   }

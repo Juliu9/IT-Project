@@ -3,12 +3,12 @@ package com.gen3.recommenderagent.retrieval.plan;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
-import com.gen3.recommenderagent.application.conversation.workflow.ClarificationResolver;
-import com.gen3.recommenderagent.application.conversation.workflow.SearchContextResolver;
-import com.gen3.recommenderagent.application.conversation.workflow.SearchCriteriaMerger;
-import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
+import com.gen3.recommenderagent.application.conversation.ClarificationResolver;
+import com.gen3.recommenderagent.application.conversation.intent.RecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RefineHandler;
+import com.gen3.recommenderagent.application.conversation.intent.UnknownHandler;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
+import com.gen3.recommenderagent.application.conversation.search.SearchCriteriaMerger;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
 import com.gen3.recommenderagent.domain.session.Session;
@@ -32,30 +32,47 @@ class DurationBoundsTest {
   void durationAnswersPreserveUnchangedBoundsAndConfirmExtensions(
       String duration, boolean confirmation, Integer minimum, Integer maximum) {
     var session = new Session();
-    session.setPendingDecision(ConversationDecision.SHORTER_DURATION_CLARIFICATION);
+    session.setPendingQuestionKind(RefineHandler.SHORTER_DURATION_CLARIFICATION);
     var pending = new ConversationDraft();
-    pending.setIntent(ConversationAction.REFINE);
+    pending.setIntent(RefineHandler.ACTION);
     var old = new ExactCriteria();
     old.setDuration("between 4 and 6 hours");
     pending.setMustInclude(old);
     session.setPendingRefinementRequest(ConversationDraft.toTurn(pending));
     var answer = new ConversationDraft();
-    answer.setIntent(ConversationAction.REFINE);
+    answer.setIntent(RefineHandler.ACTION);
     var updated = new ExactCriteria();
     updated.setDuration(duration);
     answer.setMustInclude(updated);
     var policy = new ExactFilterPolicy();
-    policy.validateTransition(answer, answer, session);
+    new RefineHandler()
+        .validate(
+            session,
+            answer,
+            answer,
+            policy,
+            org.mockito.Mockito.mock(
+                com.gen3.recommenderagent.application.recommendation.SimilarBookResolver.class),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     assertThat(answer.isSearchClarificationRequired()).isEqualTo(confirmation);
     if (confirmation) {
-      assertThat(answer.getDecision()).isEqualTo(ConversationDecision.DURATION_RANGE_CONFIRMATION);
-      var resolver = new ClarificationResolver();
+      assertThat(answer.getPendingQuestion()).isEqualTo(RefineHandler.DURATION_RANGE_CONFIRMATION);
+      var resolver =
+          new ClarificationResolver(com.gen3.recommenderagent.testsupport.TestHandlers.registry());
       resolver.complete(session, answer);
       var yes = new ConversationDraft();
-      yes.setIntent(ConversationAction.UNKNOWN);
+      yes.setIntent(UnknownHandler.ACTION);
       yes.setRawText("yes");
       answer = resolver.resolve(session, yes);
-      policy.validateTransition(answer, yes, session);
+      new RefineHandler()
+          .validate(
+              session,
+              answer,
+              yes,
+              policy,
+              org.mockito.Mockito.mock(
+                  com.gen3.recommenderagent.application.recommendation.SimilarBookResolver.class),
+              com.gen3.recommenderagent.testsupport.TestHandlers.registry());
       assertThat(answer.isSearchClarificationRequired()).isFalse();
     }
     var bounds = policy.filters(answer, Set.of()).mustInclude();
@@ -67,7 +84,7 @@ class DurationBoundsTest {
   @CsvSource({"4,false", "5,true"})
   void shorterPreservesTheMinimumOrConfirmsExtendingTheRange(int minimumHours, boolean confirm) {
     var previous = new ConversationDraft();
-    previous.setIntent(ConversationAction.RECOMMENDATION);
+    previous.setIntent(RecommendationHandler.ACTION);
     var criteria = new ExactCriteria();
     criteria.setDuration("between " + minimumHours + " and 6 hours");
     previous.setMustInclude(criteria);
@@ -77,23 +94,39 @@ class DurationBoundsTest {
     var session = new Session();
     session.getActiveSearch().setSearch(ConversationDraft.toTurn(previous));
     var incoming = new ConversationDraft();
-    incoming.setIntent(ConversationAction.REFINE);
+    incoming.setIntent(RefineHandler.ACTION);
     incoming.setShorter(true);
     incoming.setRawText("make them shorter");
-    var result =
-        new SearchContextResolver().resolve(session, SearchCriteriaMerger.copyOf(incoming));
+    var result = new RefineHandler().resolve(session, SearchCriteriaMerger.copyOf(incoming));
     var policy = new ExactFilterPolicy();
-    policy.validateTransition(result, incoming, session);
+    new RefineHandler()
+        .validate(
+            session,
+            result,
+            incoming,
+            policy,
+            org.mockito.Mockito.mock(
+                com.gen3.recommenderagent.application.recommendation.SimilarBookResolver.class),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     assertThat(result.isSearchClarificationRequired()).isEqualTo(confirm);
     if (confirm) {
-      assertThat(result.getDecision()).isEqualTo(ConversationDecision.DURATION_RANGE_CONFIRMATION);
-      var clarification = new ClarificationResolver();
+      assertThat(result.getPendingQuestion()).isEqualTo(RefineHandler.DURATION_RANGE_CONFIRMATION);
+      var clarification =
+          new ClarificationResolver(com.gen3.recommenderagent.testsupport.TestHandlers.registry());
       clarification.complete(session, result);
       var answer = new ConversationDraft();
-      answer.setIntent(ConversationAction.UNKNOWN);
+      answer.setIntent(UnknownHandler.ACTION);
       answer.setRawText("yes");
       result = clarification.resolve(session, answer);
-      policy.validateTransition(result, answer, session);
+      new RefineHandler()
+          .validate(
+              session,
+              result,
+              answer,
+              policy,
+              org.mockito.Mockito.mock(
+                  com.gen3.recommenderagent.application.recommendation.SimilarBookResolver.class),
+              com.gen3.recommenderagent.testsupport.TestHandlers.registry());
       assertThat(result.isSearchClarificationRequired()).isFalse();
       assertThat(policy.filters(result, Set.of()).mustInclude().minimumDurationMinutes()).isNull();
     } else {

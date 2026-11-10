@@ -5,9 +5,16 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.gen3.recommenderagent.application.conversation.ConversationDraft;
+import com.gen3.recommenderagent.application.conversation.intent.ChangeCountHandler;
+import com.gen3.recommenderagent.application.conversation.intent.ExplainRecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.intent.HelpHandler;
+import com.gen3.recommenderagent.application.conversation.intent.MoreResultsHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RecommendationHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RefineHandler;
+import com.gen3.recommenderagent.application.conversation.intent.RepeatHandler;
+import com.gen3.recommenderagent.application.conversation.intent.UpdatePreferencesHandler;
+import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.domain.conversation.ConversationAction;
-import com.gen3.recommenderagent.domain.conversation.ConversationDecision;
 import com.gen3.recommenderagent.domain.recommendation.Recommendation;
 import com.gen3.recommenderagent.domain.search.ExactCriteria;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
@@ -16,33 +23,45 @@ import org.junit.jupiter.api.Test;
 
 class ResponseGeneratorTest {
 
-  @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.CsvSource({
-    "RECENCY_EXHAUSTED,There are no newer books within your selected period.",
-    "RECENCY_RANGE_CONFIRMATION,Those years extend beyond your previous period. Would you like to use the new year range instead?"
-  })
-  void recencyOutcomesUseFixedResponses(ConversationDecision decision, String expected) {
+  @Test
+  void recencyOutcomeUsesFixedResponse() {
     var request = new ConversationDraft();
-    request.setIntent(ConversationAction.REFINE);
-    request.setDecision(decision);
+    request.setIntent(RefineHandler.ACTION);
+    request.setOutcome(RefineHandler.RECENCY_EXHAUSTED);
     var ai = org.mockito.Mockito.mock(AiResponseGenerator.class);
     assertEquals(
-        expected,
-        new ConversationResponseGenerator(ai)
+        "There are no newer books within your selected period.",
+        new ConversationResponseGenerator(
+                ai, com.gen3.recommenderagent.testsupport.TestHandlers.registry())
+            .generate(List.of(), ConversationDraft.toTurn(request)));
+    org.mockito.Mockito.verifyNoInteractions(ai);
+  }
+
+  @Test
+  void recencyQuestionUsesFixedResponse() {
+    var request = new ConversationDraft();
+    request.setIntent(RefineHandler.ACTION);
+    request.setPendingQuestion(RefineHandler.RECENCY_RANGE_CONFIRMATION);
+    request.setSearchClarificationRequired(true);
+    var ai = org.mockito.Mockito.mock(AiResponseGenerator.class);
+    assertEquals(
+        "Those years extend beyond your previous period. Would you like to use the new year range instead?",
+        new ConversationResponseGenerator(
+                ai, com.gen3.recommenderagent.testsupport.TestHandlers.registry())
             .generate(List.of(), ConversationDraft.toTurn(request)));
     org.mockito.Mockito.verifyNoInteractions(ai);
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.EnumSource(
+  @com.gen3.recommenderagent.testsupport.ActionSource(
       value = ConversationAction.class,
       names = {"RECOMMENDATION", "EXPLAIN_RECOMMENDATION", "REPEAT_RECOMMENDATIONS"})
   void finalBudgetKeepsAllBooksWithoutRestoringAbandonedPreferenceReminders(
       ConversationAction intent) {
     var request = new ConversationDraft();
     request.setIntent(intent);
-    if (intent != ConversationAction.RECOMMENDATION) {
-      request.setPendingQuestion(ConversationDecision.PREFERENCE_CLARIFICATION);
+    if (intent != RecommendationHandler.ACTION) {
+      request.setPendingQuestion(RecommendationHandler.PREFERENCE_CLARIFICATION);
     }
     var books =
         java.util.stream.IntStream.rangeClosed(1, 5)
@@ -60,29 +79,28 @@ class ResponseGeneratorTest {
                 })
             .toList();
     String originalTitle = books.getFirst().getTitle();
-    var generator = new ConversationResponseGenerator(new AiResponseGenerator(null));
+    var generator =
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(null),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     String result = generator.generate(books, ConversationDraft.toTurn(request));
     org.assertj.core.api.Assertions.assertThat(result.split("\\s+")).hasSizeLessThanOrEqualTo(150);
     for (int rank = 1; rank <= 5; rank++) {
       assertTrue(result.contains("Number " + rank + ", Title " + rank));
     }
-    if (intent != ConversationAction.RECOMMENDATION) {
+    if (intent != RecommendationHandler.ACTION) {
       assertFalse(result.contains("To continue your personalised request"));
     }
     assertEquals(originalTitle, books.getFirst().getTitle());
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.EnumSource(
-      value = ConversationDecision.class,
-      names = {"SIMILAR_BOOK_SELECTION", "EXPLANATION_TARGET_CLARIFICATION", "HELP", "NO_MATCHES"})
-  void fixedMessagesAndAppendedQuestionsRespectTheFinalBudget(ConversationDecision decision) {
+  @com.gen3.recommenderagent.testsupport.ActionSource(
+      value = ConversationAction.class,
+      names = {"HELP", "RECOMMENDATION"})
+  void fixedMessagesAndAppendedQuestionsRespectTheFinalBudget(ConversationAction action) {
     var request = new ConversationDraft();
-    request.setIntent(
-        decision == ConversationDecision.HELP
-            ? ConversationAction.HELP
-            : ConversationAction.RECOMMENDATION);
-    request.setDecision(decision);
+    request.setIntent(action);
     request.setRawText("fantasy ".repeat(200));
     var books =
         java.util.stream.IntStream.rangeClosed(1, 5)
@@ -96,33 +114,36 @@ class ResponseGeneratorTest {
         java.util.stream.IntStream.rangeClosed(1, 5)
             .mapToObj(
                 rank ->
-                    new com.gen3.catalogue.model.AudiobookTitle(
+                    new com.gen3.shared.audiobookcatalogue.model.AudiobookTitle(
                         "id-" + rank,
                         books.get(rank - 1).getTitle(),
                         List.of("author ".repeat(100))))
             .toList());
-    if (decision == ConversationDecision.HELP) {
-      request.setPendingQuestion(ConversationDecision.EXPLANATION_TARGET_CLARIFICATION);
+    if (action == HelpHandler.ACTION) {
+      request.setPendingQuestion(ExplainRecommendationHandler.EXPLANATION_TARGET_CLARIFICATION);
     }
     String result =
-        new ConversationResponseGenerator(new AiResponseGenerator(null))
+        new ConversationResponseGenerator(
+                new AiResponseGenerator(null),
+                com.gen3.recommenderagent.testsupport.TestHandlers.registry())
             .generate(books, ConversationDraft.toTurn(request));
     org.assertj.core.api.Assertions.assertThat(result.split("\\s+")).hasSizeLessThanOrEqualTo(150);
-    if (decision != ConversationDecision.NO_MATCHES) {
-      for (int rank = 1; rank <= 5; rank++) {
-        assertTrue(result.contains(rank + ". Title " + rank));
-      }
+    if (action == HelpHandler.ACTION) {
+      assertFalse(result.contains("I shared"));
+      assertFalse(result.contains("Which one would you like me to explain?"));
     }
     assertEquals("Title 1" + " long ".repeat(60), books.getFirst().getTitle());
   }
 
   @Test
-  void usesTheResolvedDecisionWithoutReinterpretingIntent() {
+  void derivesNoMoreResultsFromTheTurn() {
     var request = new ConversationDraft();
-    request.setIntent(ConversationAction.HELP);
-    request.setDecision(ConversationDecision.NO_MORE_RESULTS);
+    request.setIntent(MoreResultsHandler.ACTION);
+    request.setNoMoreRecommendations(true);
     var ai = org.mockito.Mockito.mock(AiResponseGenerator.class);
-    var generator = new ConversationResponseGenerator(ai);
+    var generator =
+        new ConversationResponseGenerator(
+            ai, com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     assertEquals(
         "There are no more audiobooks matching your current search. Would you like to try a different author, genre, or filter?",
         generator.generate(List.of(), ConversationDraft.toTurn(request)));
@@ -132,12 +153,14 @@ class ResponseGeneratorTest {
   @Test
   void emptyMoreAndItsRepeatExplicitlySayThereAreNoMoreMatches() {
     ConversationResponseGenerator generator =
-        new ConversationResponseGenerator(new AiResponseGenerator(null));
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(null),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     ConversationDraft request = new ConversationDraft();
-    request.setIntent(ConversationAction.MORE_RESULTS);
+    request.setIntent(MoreResultsHandler.ACTION);
     String more = generator.generate(List.of(), ConversationDraft.toTurn(request));
     assertTrue(more.startsWith("There are no more audiobooks matching your current search."));
-    request.setIntent(ConversationAction.REPEAT);
+    request.setIntent(RepeatHandler.ACTION);
     request.setNoMoreRecommendations(true);
     assertEquals(more, generator.generate(List.of(), ConversationDraft.toTurn(request)));
   }
@@ -145,16 +168,18 @@ class ResponseGeneratorTest {
   @Test
   void followUpPromptContainsResolvedCriteriaAndNoSearchAsksForOne() {
     ConversationResponseGenerator generator =
-        new ConversationResponseGenerator(new AiResponseGenerator(null));
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(null),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     ConversationDraft request = new ConversationDraft();
-    request.setIntent(ConversationAction.MORE_RESULTS);
+    request.setIntent(MoreResultsHandler.ACTION);
     request.setRawText("more please");
     SemanticQuery query = new SemanticQuery();
     query.setTopics(List.of("expeditions"));
     query.setAuthors(List.of("Agatha Christie"));
     request.setPositiveSemanticQuery(query);
     SemanticQuery avoided = new SemanticQuery();
-    avoided.setKeywords(List.of("violence"));
+    avoided.setTopics(List.of("violence"));
     request.setNegativeSemanticQuery(avoided);
     ExactCriteria filter = new ExactCriteria();
     filter.setLanguage("English");
@@ -185,9 +210,11 @@ class ResponseGeneratorTest {
   @Test
   void repeatRendersThePreviousBooksOrExplainsThatThereAreNone() {
     ConversationResponseGenerator generator =
-        new ConversationResponseGenerator(new AiResponseGenerator(null));
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(null),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     ConversationDraft request = new ConversationDraft();
-    request.setIntent(ConversationAction.REPEAT);
+    request.setIntent(RepeatHandler.ACTION);
     assertEquals(
         "I don't have an earlier request to repeat yet. Would you like recommendations or help getting started?",
         generator.generate(List.of(), ConversationDraft.toTurn(request)));
@@ -201,10 +228,12 @@ class ResponseGeneratorTest {
   @Test
   void shouldBuildAHumanReadableRecommendationMessage() {
     ConversationResponseGenerator generator =
-        new ConversationResponseGenerator(new AiResponseGenerator(null));
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(null),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
 
     ConversationDraft request = new ConversationDraft();
-    request.setIntent(ConversationAction.RECOMMENDATION);
+    request.setIntent(RecommendationHandler.ACTION);
     request.setRawText("Recommend me an action audiobook");
 
     SemanticQuery semanticQuery = new SemanticQuery();
@@ -230,9 +259,11 @@ class ResponseGeneratorTest {
   @Test
   void shouldIncludeStoredShortDescriptionsInFallbackResponses() {
     ConversationResponseGenerator generator =
-        new ConversationResponseGenerator(new AiResponseGenerator(null));
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(null),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     ConversationDraft request = new ConversationDraft();
-    request.setIntent(ConversationAction.RECOMMENDATION);
+    request.setIntent(RecommendationHandler.ACTION);
 
     String response =
         generator.generate(
@@ -251,10 +282,12 @@ class ResponseGeneratorTest {
   @Test
   void shouldExplainTheLimitAndReturnFiveRecommendationsWhenCountIsExplicit() {
     ConversationResponseGenerator generator =
-        new ConversationResponseGenerator(new AiResponseGenerator(null));
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(null),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
 
     ConversationDraft request = new ConversationDraft();
-    request.setIntent(ConversationAction.RECOMMENDATION);
+    request.setIntent(RecommendationHandler.ACTION);
     request.setRawText("Give me 10 recommendations");
 
     request.setBookCount(10);
@@ -280,9 +313,11 @@ class ResponseGeneratorTest {
   @Test
   void unrelatedNumbersDoNotTriggerACapNoticeForAnInRangeCount() {
     ConversationResponseGenerator generator =
-        new ConversationResponseGenerator(new AiResponseGenerator(null));
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(null),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     ConversationDraft request = new ConversationDraft();
-    request.setIntent(ConversationAction.RECOMMENDATION);
+    request.setIntent(RecommendationHandler.ACTION);
     request.setRawText("fantasy published in 1984");
     request.setBookCount(3);
 
@@ -298,9 +333,11 @@ class ResponseGeneratorTest {
   @Test
   void shouldRecognizeAnExplicitSpelledOutCount() {
     ConversationResponseGenerator generator =
-        new ConversationResponseGenerator(new AiResponseGenerator(null));
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(null),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     ConversationDraft request = new ConversationDraft();
-    request.setIntent(ConversationAction.RECOMMENDATION);
+    request.setIntent(RecommendationHandler.ACTION);
     request.setRawText("Give me ten fantasy audiobooks");
     request.setBookCount(10);
 
@@ -316,9 +353,11 @@ class ResponseGeneratorTest {
   @Test
   void shouldGiveTheAiTheLimitNoticeAndActualRecommendationCount() {
     ConversationResponseGenerator generator =
-        new ConversationResponseGenerator(new AiResponseGenerator(null));
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(null),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     ConversationDraft request = new ConversationDraft();
-    request.setIntent(ConversationAction.RECOMMENDATION);
+    request.setIntent(RecommendationHandler.ACTION);
     request.setRawText("Give me 10 recommendations");
     request.setBookCount(10);
 
@@ -336,7 +375,9 @@ class ResponseGeneratorTest {
   @Test
   void shouldReturnFriendlyFallbackWhenNoDataIsAvailable() {
     ConversationResponseGenerator generator =
-        new ConversationResponseGenerator(new AiResponseGenerator(null));
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(null),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
 
     String response = generator.generate(null, null);
 
@@ -347,9 +388,11 @@ class ResponseGeneratorTest {
   @Test
   void shouldNotBlameTheYearWhenCombinedFiltersReturnNoMatches() {
     ConversationResponseGenerator generator =
-        new ConversationResponseGenerator(new AiResponseGenerator(null));
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(null),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     ConversationDraft request = new ConversationDraft();
-    request.setIntent(ConversationAction.RECOMMENDATION);
+    request.setIntent(RecommendationHandler.ACTION);
     ExactCriteria publicationYear = new ExactCriteria();
     publicationYear.setPublicationYear("2024");
     publicationYear.setLanguage("French");
@@ -363,9 +406,12 @@ class ResponseGeneratorTest {
 
   @Test
   void personalisedNoMatchesDescribesTheCombinedSearchWithoutBlamingASingleFilter() {
-    var generator = new ConversationResponseGenerator(new AiResponseGenerator(null));
+    var generator =
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(null),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     var request = new ConversationDraft();
-    request.setIntent(ConversationAction.RECOMMENDATION);
+    request.setIntent(RecommendationHandler.ACTION);
     request.setPersonalised(true);
     request.setRawText("personalised for me");
     var exact = new ExactCriteria();
@@ -385,9 +431,11 @@ class ResponseGeneratorTest {
   @Test
   void shouldAcknowledgeChangingTheRecommendationCount() {
     ConversationResponseGenerator generator =
-        new ConversationResponseGenerator(new AiResponseGenerator(null));
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(null),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     ConversationDraft request = new ConversationDraft();
-    request.setIntent(ConversationAction.CHANGE_COUNT);
+    request.setIntent(ChangeCountHandler.ACTION);
     request.setBookCount(3);
 
     assertEquals(
@@ -405,9 +453,11 @@ class ResponseGeneratorTest {
       })
   void cappedCountNoticeUsesTheResolvedCountInsteadOfRawWording(String rawText) {
     ConversationResponseGenerator generator =
-        new ConversationResponseGenerator(new AiResponseGenerator(null));
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(null),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     ConversationDraft request = new ConversationDraft();
-    request.setIntent(ConversationAction.CHANGE_COUNT);
+    request.setIntent(ChangeCountHandler.ACTION);
     request.setRawText(rawText);
     request.setBookCount(30);
 
@@ -419,9 +469,11 @@ class ResponseGeneratorTest {
   @Test
   void shouldAcknowledgeUpdatingSessionPreferences() {
     ConversationResponseGenerator generator =
-        new ConversationResponseGenerator(new AiResponseGenerator(null));
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(null),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     ConversationDraft request = new ConversationDraft();
-    request.setIntent(ConversationAction.UPDATE_PREFERENCES);
+    request.setIntent(UpdatePreferencesHandler.ACTION);
 
     String response = generator.generate(List.of(), ConversationDraft.toTurn(request));
 
@@ -432,14 +484,36 @@ class ResponseGeneratorTest {
   @Test
   void shouldExplainSupportedActionsForHelpIntent() {
     ConversationResponseGenerator generator =
-        new ConversationResponseGenerator(new AiResponseGenerator(null));
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(null),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
     ConversationDraft request = new ConversationDraft();
-    request.setIntent(ConversationAction.HELP);
+    request.setIntent(HelpHandler.ACTION);
 
     String response = generator.generate(List.of(), ConversationDraft.toTurn(request));
 
     assertTrue(response.toLowerCase().contains("adjust your search"));
     assertTrue(response.toLowerCase().contains("explore more books"));
     assertTrue(response.toLowerCase().contains("clear"));
+  }
+
+  @Test
+  void helpDoesNotAppendAStaleExplanationQuestion() {
+    var generator =
+        new ConversationResponseGenerator(
+            new AiResponseGenerator(null),
+            com.gen3.recommenderagent.testsupport.TestHandlers.registry());
+    var request = new ConversationDraft();
+    request.setIntent(HelpHandler.ACTION);
+    request.setPendingQuestion(ExplainRecommendationHandler.EXPLANATION_TARGET_CLARIFICATION);
+
+    String response =
+        generator.generate(
+            List.of(new Recommendation("1", 1, 1.0, "Previously shown")),
+            ConversationDraft.toTurn(request));
+
+    assertTrue(response.startsWith("I can help you find audiobooks"));
+    assertFalse(response.contains("I shared"));
+    assertFalse(response.contains("Which one would you like me to explain?"));
   }
 }
