@@ -12,6 +12,7 @@ import com.gen3.recommenderagent.domain.conversation.ConversationAction;
 import com.gen3.recommenderagent.domain.conversation.ConversationOutcome;
 import com.gen3.recommenderagent.domain.conversation.ConversationQuestion;
 import com.gen3.recommenderagent.domain.conversation.ConversationTurn;
+import com.gen3.recommenderagent.domain.search.ExactCriteria;
 import com.gen3.recommenderagent.domain.search.SemanticQuery;
 import com.gen3.recommenderagent.domain.session.LastOutcome;
 import com.gen3.recommenderagent.domain.session.PendingQuestion;
@@ -21,7 +22,9 @@ import com.gen3.recommenderagent.domain.session.SessionPreferences;
 import com.gen3.recommenderagent.inputparser.ConversationText;
 import com.gen3.recommenderagent.inputparser.UserIntent;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -31,7 +34,9 @@ import org.springframework.stereotype.Component;
 @org.springframework.core.annotation.Order(10)
 public final class UpdatePreferencesHandler implements ConversationHandler {
   private static final Pattern SET_PREFERENCES =
-      Pattern.compile("^(?:update|change|set) (?:my |the )?(?:session )?preferences to .+");
+      Pattern.compile("^(?:update|change|set) (?:my |the )?(?:session )?preferences to (.+)");
+  private static final Pattern LEADING_LANGUAGE =
+      Pattern.compile("^([\\p{L} ]++)[-‐‑]language(?= |$)");
   private static final String PREFERRED_GENRES = "positiveSemanticQuery.genres";
 
   public static final ConversationAction ACTION = ConversationAction.of("UPDATE_PREFERENCES");
@@ -139,9 +144,38 @@ public final class UpdatePreferencesHandler implements ConversationHandler {
         request.setPreferenceUpdates(stated);
       }
     }
-    if (SET_PREFERENCES.matcher(ConversationText.normalizeCommand(rawText)).matches()) {
+    var set = SET_PREFERENCES.matcher(ConversationText.normalizeCommand(rawText));
+    if (set.matches()) {
+      recoverStatedLanguage(set.group(1), request);
       replaceStatedGenres(request);
     }
+  }
+
+  /** Keeps an explicit leading language qualifier when the parser leaves the exact field empty. */
+  private void recoverStatedLanguage(String criteria, SessionRequest request) {
+    var updates = request.getPreferenceUpdates();
+    var included = updates == null ? null : updates.getMustInclude();
+    if (included != null && included.getLanguage() != null && !included.getLanguage().isBlank()) {
+      return;
+    }
+    var qualifier = LEADING_LANGUAGE.matcher(criteria);
+    if (!qualifier.find()) {
+      return;
+    }
+    String stated = qualifier.group(1);
+    Arrays.stream(Locale.getISOLanguages())
+        .map(code -> Locale.of(code).getDisplayLanguage(Locale.ENGLISH))
+        .filter(stated::equalsIgnoreCase)
+        .findFirst()
+        .ifPresent(
+            language -> {
+              var exact = new ExactCriteria();
+              exact.setLanguage(language);
+              var recovered = new SessionPreferences();
+              recovered.setMustInclude(exact);
+              request.setPreferenceUpdates(
+                  updates == null ? recovered : updates.updated(recovered, null, List.of()));
+            });
   }
 
   /** Recovers misplaced genres and marks a stated preferred genre as a field replacement. */

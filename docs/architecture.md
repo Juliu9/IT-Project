@@ -141,6 +141,11 @@ from preference fields.
 
 ### Personalisation
 
+A new recommendation with explicit positive or negative semantic criteria uses those criteria
+without entering the personalised search flow. For example, “Give me some English mystery books”
+searches for mystery with English as a required language. A reply to a pending taste question can
+still complete the personalised search that prompted it.
+
 Personalised retrieval combines the current positive semantic vector with the stored user-taste
 vector, subtracts negative semantic evidence, and normalizes the result. Ranking then applies its
 configured signal weights. If only one positive source exists, it contributes at full strength.

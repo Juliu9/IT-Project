@@ -3,6 +3,7 @@ package com.gen3.recommenderagent.application.conversation.intent;
 import static com.gen3.recommenderagent.inputparser.CommandValues.intent;
 
 import com.gen3.recommenderagent.application.conversation.ConversationHistory;
+import com.gen3.recommenderagent.application.conversation.ConversationRules;
 import com.gen3.recommenderagent.application.conversation.model.ConversationDraft;
 import com.gen3.recommenderagent.application.conversation.model.SessionRequest;
 import com.gen3.recommenderagent.application.conversation.search.SearchContextResolver;
@@ -78,7 +79,7 @@ public final class RecommendationHandler extends SearchContextResolver {
       Search wording and personalisation:
       Extract the stated intent and criteria, but do not decide whether the input starts a new search, answers a pending question, or takes precedence over session state. Java owns that conversational policy.
       A bare taste or constraint with no search instruction is still RECOMMENDATION when self-contained: "horror" -> RECOMMENDATION, positiveSemanticQuery.genres=["horror"]. It is never UPDATE_PREFERENCES without explicit saved-preference wording.
-      Set personalised=true only for explicit use of preferences/favourites/history, or for a generic recommendation request with no criteria. "I want" alone, a reference book, or author/narrator style similarity does not imply personalisation.
+      A new recommendation with any positive or negative semantic criteria uses personalised=false. Otherwise, set personalised=true only for explicit use of preferences/favourites/history, or for a generic recommendation request with no criteria. "I want" alone, a reference book, or author/narrator style similarity does not imply personalisation.
       "Give me some books" -> RECOMMENDATION, personalised=true, with no invented criteria.
       Personalisation never removes stated criteria: "books I would like by Suzanne Collins" -> personalised=true, mustInclude.authors=["Suzanne Collins"].
       "Find an audiobook based on my reading preferences by Agatha Christie under six hours" -> personalised=true, mustInclude.authors=["Agatha Christie"], mustInclude.duration="under 6 hours", with no invented semantic tastes.
@@ -91,7 +92,7 @@ public final class RecommendationHandler extends SearchContextResolver {
       "Books similar to The Hunger Games by Suzanne Collins under ten hours" -> {"intent":"RECOMMENDATION","similarToTitle":"The Hunger Games","similarToAuthor":"Suzanne Collins","mustInclude":{"duration":"under 10 hours"}}. Omit positiveSemanticQuery and mustInclude.authors; the reference title and author are not inferred tastes or result filters.
       "books similar to the Hunger Games series" -> {"intent":"RECOMMENDATION","similarToClarificationRequired":true}.
       "books similar to The Hunger Games and Divergent" -> {"intent":"RECOMMENDATION","similarToClarificationRequired":true}.
-      Preserve additional criteria and explicit personalisation.
+      Preserve additional criteria and apply the personalisation rules above.
       """;
   }
 
@@ -458,10 +459,13 @@ public final class RecommendationHandler extends SearchContextResolver {
 
   @Override
   public ConversationDraft resolve(Session session, ConversationDraft effective) {
-    if (effective.getIntent() == ACTION
-        && !com.gen3.recommenderagent.application.conversation.ConversationRules.hasSearchCriteria(
-            effective)) {
-      effective.setPersonalised(true);
+    if (effective.getIntent() == ACTION) {
+      if (ConversationRules.hasQuery(effective.getPositiveSemanticQuery())
+          || ConversationRules.hasQuery(effective.getNegativeSemanticQuery())) {
+        effective.setPersonalised(false);
+      } else if (!ConversationRules.hasSearchCriteria(effective)) {
+        effective.setPersonalised(true);
+      }
     }
     return super.resolve(session, effective);
   }
