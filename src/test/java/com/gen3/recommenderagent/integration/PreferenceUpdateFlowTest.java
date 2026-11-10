@@ -469,6 +469,35 @@ class PreferenceUpdateFlowTest {
   }
 
   @Test
+  void savesAndExplainsExplicitLanguageWhenTheParserOmitsIt() {
+    String text =
+        "Please update my preferences to English-language science fiction. Do not recommend anything yet.";
+    var ai = mock(AiParser.class);
+    var parsed = new com.gen3.recommenderagent.inputparser.UserIntent();
+    parsed.setIntent(UpdatePreferencesHandler.ACTION);
+    parsed.setPreferenceUpdates(tastes("science fiction"));
+    when(ai.parse(text)).thenReturn(parsed);
+    var handlers = com.gen3.recommenderagent.testsupport.TestHandlers.registry();
+    var parser = new InputParser(new CommandParser(handlers), ai, handlers);
+
+    var updated = service.process("session", "user", parser.parse(text));
+    var explanation = service.process("session", "user", parser.parse("Show my preferences."));
+    var snapshot = new ObjectMapper().valueToTree(explanation.getSessionPreferenceSnapshot());
+
+    assertThat(updated.getRecommendations()).isEmpty();
+    assertThat(explanation.getRecommendations()).isEmpty();
+    assertThat(snapshot.path("mustInclude").path("language").asText()).isEqualTo("English");
+    assertThat(snapshot.path("positiveSemanticQuery").path("genres").get(0).asText())
+        .isEqualTo("science fiction");
+    assertThat(
+            new ConversationResponseGenerator(new AiResponseGenerator(null), handlers)
+                .generate(explanation.getRecommendations(), explanation))
+        .containsIgnoringCase("English")
+        .containsIgnoringCase("science fiction");
+    verifyNoInteractions(vectors, retriever, ranker, users);
+  }
+
+  @Test
   void updatesAddReplaceAndRemoveOnlySpecifiedValuesWithoutSearching() {
     process(update(tastes("romance")));
     var narrator = new SemanticQuery();
