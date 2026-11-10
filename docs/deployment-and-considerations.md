@@ -15,7 +15,7 @@ operations.** The items below are guidance, not features already supplied by the
 | Critical | Abuse and cost | Add per-user/IP rate limits, request-size limits, timeouts, and AI usage budgets. Provider retries and public access can otherwise multiply cost. |
 | High | Availability | Run health/readiness checks for Redis, the selected catalogue, and required AI providers. Use bounded shutdown so in-flight requests can finish. |
 | High | Data protection | Define retention and deletion rules for sessions, imported preferences, search-history tastes, logs, snapshots, and backups. Avoid logging request text, credentials, or personal reading history. |
-| High | Catalogue quality | Replace the demonstration Qdrant catalogue's fake/placeholder narrator, language, duration, and publication-date metadata with sourced values before production use. |
+| High | Catalogue quality | Replace the demonstration Qdrant catalogue's fake/placeholder narrator, language, and duration metadata with sourced values before production use. |
 | High | Operations | Alert on error rate, latency, lock conflicts, provider failures, and resource saturation. Test restoration of Redis and catalogue backups, not only backup creation. |
 
 The application should sit behind an API gateway or trusted identity-aware proxy. Authentication

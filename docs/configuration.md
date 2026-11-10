@@ -275,7 +275,7 @@ Treat that as part of the deployed collection configuration rather than an appli
 server does not enable quantisation when it connects to an existing collection.
 
 > **Data-quality warning:** the current demonstration Qdrant catalogue contains fake/placeholder
-> values for some `narrators`, `language`, `duration_minutes`, and publication-date metadata. Do not
+> values for some `narrators`, `language`, and `duration_minutes` metadata. Do not
 > treat those fields as authoritative or migrate them into production unchanged. Replace them with
 > sourced metadata and update the schema, mappings, indexes, tests, and documentation if the real
 > dataset uses different fields.
