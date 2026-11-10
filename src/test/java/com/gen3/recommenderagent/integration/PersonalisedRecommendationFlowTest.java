@@ -102,21 +102,14 @@ class PersonalisedRecommendationFlowTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(
-      strings = {"none", "constraints", "semantic", "both"})
-  void firstPersonalisedRequestNeedsSavedTasteEvenWhenCurrentRequestHasCriteria(String criteria)
-      throws Exception {
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void firstPersonalisedRequestNeedsSavedTasteWithOrWithoutExactFilters(boolean exactFilter) {
     var request = personalisedRequest();
     request.setStartsNewSearch(true);
-    if (criteria.equals("constraints") || criteria.equals("both")) {
+    if (exactFilter) {
       var include = new ExactCriteria();
       include.setAuthors(List.of("Suzanne Collins"));
       request.setMustInclude(include);
-    }
-    if (criteria.equals("semantic") || criteria.equals("both")) {
-      var query = new SemanticQuery();
-      query.setGenres(List.of("fantasy"));
-      request.setPositiveSemanticQuery(query);
     }
     var result = process(request);
     assertThat(result.isPreferenceClarificationRequired()).isTrue();
@@ -132,13 +125,40 @@ class PersonalisedRecommendationFlowTest {
     var resumed = process(answer);
     assertThat(resumed.isPreferenceClarificationRequired()).isFalse();
     assertThat(resumed.getRecommendations()).hasSize(1);
-    if (criteria.equals("constraints") || criteria.equals("both")) {
+    if (exactFilter) {
       assertThat(resumed.getMustInclude().getAuthors()).containsExactly("Suzanne Collins");
     }
-    if (criteria.equals("semantic") || criteria.equals("both")) {
-      assertThat(resumed.getPositiveSemanticQuery().getGenres()).contains("fantasy", "adventure");
-    }
     assertThat(sessions.getSession("session", "user").getPreferences()).isNotNull();
+  }
+
+  @Test
+  void englishMysteryRequestUsesStatedGenreWithoutAskingForSavedTaste() throws Exception {
+    String text = "Give me some English mystery books";
+    var ai = mock(com.gen3.recommenderagent.inputparser.AiParser.class);
+    var parsed = new com.gen3.recommenderagent.inputparser.UserIntent();
+    parsed.setIntent(RecommendationHandler.ACTION);
+    parsed.setPersonalised(true);
+    var taste = new SemanticQuery();
+    taste.setGenres(List.of("mystery"));
+    parsed.setPositiveSemanticQuery(taste);
+    var exact = new ExactCriteria();
+    exact.setLanguage("English");
+    parsed.setMustInclude(exact);
+    when(ai.parse(text)).thenReturn(parsed);
+    var handlers = com.gen3.recommenderagent.testsupport.TestHandlers.registry();
+    var parser =
+        new com.gen3.recommenderagent.inputparser.InputParser(
+            new com.gen3.recommenderagent.inputparser.CommandParser(handlers), ai, handlers);
+    when(books.searchHybrid(any(), eq("mystery"), any(), eq(50))).thenReturn(List.of());
+
+    var result = application.process("session", "user", parser.parse(text));
+
+    assertThat(result.isPersonalised()).isFalse();
+    assertThat(result.isPreferenceClarificationRequired()).isFalse();
+    var filters = ArgumentCaptor.forClass(AudiobookFilters.class);
+    verify(books).searchHybrid(any(), eq("mystery"), filters.capture(), eq(50));
+    assertThat(filters.getValue().mustInclude().language()).isEqualTo("English");
+    assertThat(result.getRecommendations()).hasSize(1);
   }
 
   @Test
@@ -465,17 +485,25 @@ class PersonalisedRecommendationFlowTest {
   }
 
   @Test
-  void knownUserBlendsBothSemanticPolaritiesAndPreservesBothExactFilterGroups() throws Exception {
+  void personalisedRefinementBlendsBothSemanticPolaritiesAndPreservesBothExactFilterGroups()
+      throws Exception {
     when(users.findEmbeddingByUserId("user"))
         .thenReturn(
             Optional.of(new UserPreferenceEmbedding("user", new float[] {1, 0, 0}, new float[0])));
+    when(ranker.rank(anyList(), eq(20), any(RankingContext.class)))
+        .thenReturn(
+            List.of(new Recommendation("original", 1, 0.9, "Original book")),
+            List.of(new Recommendation("refined", 1, 0.9, "Refined book")));
+    process(personalisedRequest());
+    org.mockito.Mockito.clearInvocations(books);
     when(embeddingModel.embedForResponse(anyList()))
         .thenReturn(
             new EmbeddingResponse(
                 List.of(
                     new Embedding(new float[] {0, 1, 0}, 0),
                     new Embedding(new float[] {0, 0, 1}, 1))));
-    ConversationDraft request = personalisedRequest();
+    ConversationDraft request = new ConversationDraft();
+    request.setIntent(RefineHandler.ACTION);
     SemanticQuery positive = new SemanticQuery();
     positive.setTopics(List.of("deserts"));
     SemanticQuery negative = new SemanticQuery();
@@ -604,13 +632,14 @@ class PersonalisedRecommendationFlowTest {
   }
 
   @Test
-  void negativeTasteInFirstRequestStillAsksForSavedPreferences() throws Exception {
+  void negativeTasteInNewRecommendationDoesNotAskForSavedPreferences() {
     var request = personalisedRequest();
     var avoided = new SemanticQuery();
     avoided.setGenres(List.of("romance"));
     request.setNegativeSemanticQuery(avoided);
-    assertThat(process(request).isPreferenceClarificationRequired()).isTrue();
-    verifyNoInteractions(books, embeddingModel, ranker);
+    var result = process(request);
+    assertThat(result.isPersonalised()).isFalse();
+    assertThat(result.isPreferenceClarificationRequired()).isFalse();
   }
 
   @Test

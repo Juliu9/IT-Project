@@ -165,7 +165,6 @@ class PreferenceUpdateFlowTest {
     var search = request(RecommendationHandler.ACTION);
     search.setPersonalised(true);
     search.setStartsNewSearch(true);
-    search.setPositiveSemanticQuery(tastes("horror").getPositiveSemanticQuery());
     assertThat(process(search).getPendingQuestion())
         .isEqualTo(RecommendationHandler.PREFERENCE_CLARIFICATION);
     org.mockito.Mockito.clearInvocations(vectors, retriever, ranker);
@@ -255,7 +254,7 @@ class PreferenceUpdateFlowTest {
   }
 
   @Test
-  void tasteReplyDoesNotPromotePendingSearchConstraintsOrSemanticsToSavedPreferences() {
+  void tasteReplyDoesNotPromoteRetainedSearchConstraintsOrSemanticsToSavedPreferences() {
     var search = request(RecommendationHandler.ACTION);
     search.setPersonalised(true);
     search.setStartsNewSearch(true);
@@ -263,8 +262,9 @@ class PreferenceUpdateFlowTest {
     filter.setAuthors(List.of("Suzanne Collins"));
     filter.setDuration("under 3 hours");
     search.setMustInclude(filter);
-    search.setPositiveSemanticQuery(tastes("fantasy").getPositiveSemanticQuery());
     process(search);
+    var pending = sessions.getSession("session", "user").getPendingPreferenceRequest();
+    pending.setPositiveSemanticQuery(tastes("fantasy").getPositiveSemanticQuery());
     var reply = request(RecommendationHandler.ACTION);
     reply.setPositiveSemanticQuery(tastes("horror").getPositiveSemanticQuery());
     var resumed = process(reply);
